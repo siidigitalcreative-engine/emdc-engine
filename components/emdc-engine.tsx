@@ -1523,6 +1523,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuNewColumn,setSkuNewColumn] = useState("");
   const [skuColumnDragIndex,setSkuColumnDragIndex] = useState<number|null>(null);
   const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
+  const [skuTableEditMode,setSkuTableEditMode] = useState(false);
   const DEFAULT_BULK_COLUMNS = [
     { key:"productName", label:"Product Name", placeholder:"Desk Organizer", locked:true },
     { key:"sku",         label:"SKU",          placeholder:"GL-DO001",        locked:true },
@@ -2014,8 +2015,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(key==="status") return "minmax(120px,.7fr)";
     return "minmax(140px,.9fr)";
   };
-  const skuGridTemplate = `48px ${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")} 90px`;
-  const skuTableMinWidth = Math.max(760,48+90+(skuTableColumns.length*140));
+  const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")}${skuTableEditMode?" 90px":""}`;
+  const skuTableMinWidth = Math.max(760,(skuTableEditMode?132:0)+(skuTableColumns.length*140));
   const renderSkuDesktopCell = (s:any, col:any, brand:any, st:any) => {
     if(col.key==="productName") return <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>;
     if(col.key==="sku") return <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>;
@@ -2023,8 +2024,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(col.key==="collection") return <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection||"Uncategorized"}</span>;
     if(col.key==="inventory") return <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>;
     if(col.key==="status") return <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>;
-    return <input value={getSkuExtraValue(s,col)} onChange={e=>setSkuExtraValue(s.id,col,e.target.value)} placeholder="—"
-      style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />;
+    const extraValue = getSkuExtraValue(s,col);
+    return skuTableEditMode
+      ? <input value={extraValue} onChange={e=>setSkuExtraValue(s.id,col,e.target.value)} placeholder="—"
+          style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />
+      : <span style={{ fontSize:12,color:extraValue?C.textSub:C.faint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{extraValue||"—"}</span>;
   };
 
   const BrandSidebar = () => (
@@ -2060,6 +2064,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
           <button onClick={()=>setShowSidebar(!showSidebar)} style={{ flex:1,padding:"9px 14px",borderRadius:9,border:`1.5px solid ${C.border}`,background:showSidebar?C.accent:C.surface,color:showSidebar?"#fff":C.textSub,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
             {activeBrandObj?<><div style={{ width:8,height:8,borderRadius:"50%",background:showSidebar?"#fff":activeBrandObj.color }} />{activeBrandObj.name}</>:"All Brands"} &#8250;
           </button>
+          <Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={()=>setSkuTableEditMode(v=>!v)}>{skuTableEditMode?"Done":"Edit"}</Btn>
           <Btn sm onClick={openBulk} variant="outline">Paste</Btn>
           <Btn sm onClick={openAdd}>+ Add SKU</Btn>
         </div>
@@ -2081,11 +2086,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                 {activeBrandObj&&<div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}><div style={{ width:12,height:12,borderRadius:"50%",background:activeBrandObj.color }} /><span style={{ fontSize:15,fontWeight:700,color:C.text }}>{activeBrandObj.name}</span></div>}
                 <span style={{ fontSize:12,color:C.muted }}>{filteredSkus.length} SKU{filteredSkus.length!==1?"s":""}</span>
               </div>
-              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
+              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={()=>setSkuTableEditMode(v=>!v)}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
             </div>
-            {!isMobile&&(
+            {!isMobile&&skuTableEditMode&&(
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
-                <span style={{ fontSize:12,color:C.muted }}>Manage table: drag column headers to rearrange, rename headers, hide columns, or drag product rows to reorder.</span>
+                <span style={{ fontSize:12,color:C.muted }}>Edit mode: use the 6-dot handles to drag columns or product rows, rename headers, hide columns, or add columns.</span>
                 <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
                   <input value={skuNewColumn} placeholder="New column name" onChange={e=>setSkuNewColumn(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addSkuTableColumn(); } }}
                     style={{ height:30,width:150,padding:"6px 9px",fontSize:12,borderRadius:7,border:`1.5px solid ${C.border}`,outline:"none",background:C.surface,color:C.text }} />
@@ -2105,28 +2110,26 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                   <div style={{ overflowX:"auto" }}>
                     <div style={{ minWidth:skuTableMinWidth }}>
                       <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-                        <span style={{ padding:"9px 10px",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",borderRight:`1px solid ${C.border}` }}>Move</span>
+                        {skuTableEditMode&&<span style={{ padding:"9px 10px",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",borderRight:`1px solid ${C.border}` }}>Move</span>}
                         {skuTableColumns.map((col:any,colIdx:number)=>(
                           <div key={col.key}
-                            draggable
-                            onDragStart={()=>setSkuColumnDragIndex(colIdx)}
-                            onDragOver={e=>e.preventDefault()}
-                            onDrop={e=>{ e.preventDefault(); if(skuColumnDragIndex!==null) moveSkuTableColumn(skuColumnDragIndex,colIdx); setSkuColumnDragIndex(null); }}
+                            draggable={skuTableEditMode}
+                            onDragStart={()=>skuTableEditMode&&setSkuColumnDragIndex(colIdx)}
+                            onDragOver={e=>{ if(skuTableEditMode) e.preventDefault(); }}
+                            onDrop={e=>{ if(!skuTableEditMode) return; e.preventDefault(); if(skuColumnDragIndex!==null) moveSkuTableColumn(skuColumnDragIndex,colIdx); setSkuColumnDragIndex(null); }}
                             onDragEnd={()=>setSkuColumnDragIndex(null)}
-                            title="Drag to rearrange this column"
-                            style={{ padding:"6px 7px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,cursor:"grab",display:"flex",alignItems:"center",gap:4,minWidth:0 }}>
-                            <span style={{ color:C.faint,fontSize:11,lineHeight:1,flexShrink:0 }}>&#8942;&#8942;</span>
-                            <button type="button" onClick={()=>moveSkuTableColumn(colIdx,colIdx-1)} disabled={colIdx===0}
-                              style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===0?C.faint:C.muted,cursor:colIdx===0?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8249;</button>
-                            <input value={col.label} onChange={e=>renameSkuTableColumn(col.key,e.target.value)} placeholder="Column"
-                              style={{ minWidth:0,width:"100%",background:"transparent",border:"none",outline:"none",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }} />
-                            <button type="button" onClick={()=>moveSkuTableColumn(colIdx,colIdx+1)} disabled={colIdx===skuTableColumns.length-1}
-                              style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===skuTableColumns.length-1?C.faint:C.muted,cursor:colIdx===skuTableColumns.length-1?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8250;</button>
-                            <button type="button" onClick={()=>removeSkuTableColumn(col)} title={col.custom?"Delete custom column":"Hide column"}
-                              style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>
+                            title={skuTableEditMode?"Drag the 6-dot handle to rearrange this column":""}
+                            style={{ padding:"7px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,cursor:skuTableEditMode?"grab":"default",display:"flex",alignItems:"center",gap:6,minWidth:0 }}>
+                            {skuTableEditMode&&<span style={{ color:C.faint,fontSize:12,lineHeight:1,flexShrink:0 }}>&#8942;&#8942;</span>}
+                            {skuTableEditMode?
+                              <input value={col.label} onChange={e=>renameSkuTableColumn(col.key,e.target.value)} placeholder="Column"
+                                style={{ minWidth:0,width:"100%",background:"transparent",border:"none",outline:"none",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }} />
+                              : <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{col.label}</span>}
+                            {skuTableEditMode&&<button type="button" onClick={()=>removeSkuTableColumn(col)} title={col.custom?"Delete custom column":"Hide column"}
+                              style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>}
                           </div>
                         ))}
-                        <span style={{ padding:"9px 10px",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right" }}>Actions</span>
+                        {skuTableEditMode&&<span style={{ padding:"9px 10px",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right" }}>Actions</span>}
                       </div>
                       {groupedSkus.map(group=>(
                         <div key={group.label}>
@@ -2141,30 +2144,24 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                             const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
                             return (
                               <div key={s.id} className="emdc-row"
-                                draggable
-                                onDragStart={()=>setSkuRowDragId(s.id)}
-                                onDragOver={e=>e.preventDefault()}
-                                onDrop={e=>{ e.preventDefault(); if(skuRowDragId&&skuRowDragId!==s.id) reorderSkuRows(skuRowDragId,s.id); setSkuRowDragId(null); }}
+                                draggable={skuTableEditMode}
+                                onDragStart={()=>skuTableEditMode&&setSkuRowDragId(s.id)}
+                                onDragOver={e=>{ if(skuTableEditMode) e.preventDefault(); }}
+                                onDrop={e=>{ if(!skuTableEditMode) return; e.preventDefault(); if(skuRowDragId&&skuRowDragId!==s.id) reorderSkuRows(skuRowDragId,s.id); setSkuRowDragId(null); }}
                                 onDragEnd={()=>setSkuRowDragId(null)}
-                                style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,alignItems:"center",background:skuRowDragId===s.id?C.surfaceAlt:C.surface }}>
-                                <div title="Drag row or use arrows to reorder" style={{ minHeight:48,padding:"8px 8px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:4,cursor:"grab",color:C.faint }}>
-                                  <span style={{ fontSize:12,lineHeight:1 }}>&#8942;&#8942;</span>
-                                  <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
-                                    <button type="button" onClick={()=>moveSkuRow(s.id,-1)} disabled={flatIndex<=0}
-                                      style={{ width:20,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:flatIndex<=0?C.faint:C.muted,cursor:flatIndex<=0?"not-allowed":"pointer",fontSize:10,padding:0,lineHeight:1 }}>&#8593;</button>
-                                    <button type="button" onClick={()=>moveSkuRow(s.id,1)} disabled={flatIndex>=filteredSkus.length-1}
-                                      style={{ width:20,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:flatIndex>=filteredSkus.length-1?C.faint:C.muted,cursor:flatIndex>=filteredSkus.length-1?"not-allowed":"pointer",fontSize:10,padding:0,lineHeight:1 }}>&#8595;</button>
-                                  </div>
-                                </div>
+                                style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,alignItems:"center",background:skuTableEditMode&&skuRowDragId===s.id?C.surfaceAlt:C.surface }}>
+                                {skuTableEditMode&&<div title="Drag the 6-dot handle to reorder this row" style={{ minHeight:48,padding:"8px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"grab",color:C.faint }}>
+                                  <span style={{ fontSize:13,lineHeight:1 }}>&#8942;&#8942;</span>
+                                </div>}
                                 {skuTableColumns.map((col:any)=>(
                                   <div key={col.key} style={{ minHeight:48,padding:"10px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",minWidth:0 }}>
                                     {renderSkuDesktopCell(s,col,brand,st)}
                                   </div>
                                 ))}
-                                <div style={{ minHeight:48,padding:"8px 10px",display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
+                                {skuTableEditMode&&<div style={{ minHeight:48,padding:"8px 10px",display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
                                   <button onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"3px 6px",borderRadius:4 }}>Edit</button>
                                   <button onClick={()=>delSku(s.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13 }}>&#215;</button>
-                                </div>
+                                </div>}
                               </div>
                             );
                           })}
@@ -2191,12 +2188,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                               <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.productName}</p>
                               <span style={{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4 }}>{s.sku}</span>
                             </div>
-                            <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0 }}>
-                              <button onClick={()=>moveSkuRow(s.id,-1)} disabled={flatIndex<=0} style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:flatIndex<=0?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700 }}>&#8593;</button>
-                              <button onClick={()=>moveSkuRow(s.id,1)} disabled={flatIndex>=filteredSkus.length-1} style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:flatIndex>=filteredSkus.length-1?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700 }}>&#8595;</button>
+                            {skuTableEditMode&&<div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center" }}>
+                              <span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint }}>&#8942;&#8942;</span>
                               <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
                               <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
-                            </div>
+                            </div>}
                           </div>
                           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                             {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
@@ -2270,16 +2266,12 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                       title="Drag to rearrange this column"
                       style={{ padding:"6px 7px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,cursor:"grab",display:"flex",alignItems:"center",gap:4,minWidth:0 }}>
                       <span style={{ color:C.faint,fontSize:11,lineHeight:1,flexShrink:0 }}>&#8942;&#8942;</span>
-                      <button type="button" onClick={()=>moveBulkColumn(colIdx,colIdx-1)} disabled={colIdx===0}
-                        style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===0?C.faint:C.muted,cursor:colIdx===0?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8249;</button>
                       {c.custom ? (
                         <input value={c.label} onChange={e=>renameBulkColumn(c.key,e.target.value)} placeholder="Column name"
                           style={{ minWidth:0,width:"100%",background:"transparent",border:"none",outline:"none",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }} />
                       ) : (
                         <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{c.label}</span>
                       )}
-                      <button type="button" onClick={()=>moveBulkColumn(colIdx,colIdx+1)} disabled={colIdx===BULK_COLUMNS.length-1}
-                        style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===BULK_COLUMNS.length-1?C.faint:C.muted,cursor:colIdx===BULK_COLUMNS.length-1?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8250;</button>
                       {c.custom&&<button type="button" onClick={()=>removeBulkColumn(c.key)} title="Remove custom column"
                         style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>}
                     </div>
