@@ -559,7 +559,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
     setF({...f, type:v, color: t?.color || f.color});
   };
 
-  const EventForm = ({ form, setForm, onSave, saveLabel="Save Event", showDelete, onDelete }: any) => (
+  const renderEventForm = ({ form, setForm, onSave, saveLabel="Save Event", showDelete, onDelete }: any) => (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
       <Field label="Title"><TI value={form.title} onChange={v=>setForm(f=>({...f,title:v}))} placeholder="e.g. 11.11 Campaign Launch" /></Field>
       <Field label="Date"><DateInput value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></Field>
@@ -741,15 +741,19 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
 
       {/* Add Modal */}
       <Modal open={addModal} onClose={()=>setAddModal(false)} title="Add Event">
-        <EventForm form={addForm} setForm={setAddForm} onSave={saveNew} saveLabel="Save Event" />
+        {renderEventForm({ form:addForm, setForm:setAddForm, onSave:saveNew, saveLabel:"Save Event" })}
       </Modal>
 
       {/* Edit Modal */}
       <Modal open={editModal&&!!editForm} onClose={()=>{setEditModal(false);setEditForm(null);}} title="Edit Event">
-        {editForm&&(
-          <EventForm form={editForm} setForm={setEditForm} onSave={saveEdit} saveLabel="Save Changes"
-            showDelete onDelete={()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editForm.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setEditModal(false); setEditForm(null); }} />
-        )}
+        {editForm&&renderEventForm({
+          form:editForm,
+          setForm:setEditForm,
+          onSave:saveEdit,
+          saveLabel:"Save Changes",
+          showDelete:true,
+          onDelete:()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editForm.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setEditModal(false); setEditForm(null); }
+        })}
       </Modal>
 
       {/* Manage Types Modal */}
