@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import type { LoadedData } from "./EMDCApp";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const C = {
@@ -92,10 +91,10 @@ const TEMPLATES = {
 };
 
 const uid = () => Math.random().toString(36).slice(2,9);
-const getDaysInMonth = (y,m) => new Date(y,m+1,0).getDate();
-const getFirstDay    = (y,m) => new Date(y,m,1).getDay();
-const pad = n => String(n).padStart(2,"0");
-const ordinalSuffix = n => { const v=+n%100; if(v>=11&&v<=13) return "th"; switch(+n%10){case 1:return "st";case 2:return "nd";case 3:return "rd";default:return "th";} };
+const getDaysInMonth = (y:number,m:number) => new Date(y,m+1,0).getDate();
+const getFirstDay    = (y:number,m:number) => new Date(y,m,1).getDay();
+const pad = (n:number) => String(n).padStart(2,"0");
+const ordinalSuffix = (n:number|string) => { const v=+n%100; if(v>=11&&v<=13) return "th"; switch(+n%10){case 1:return "st";case 2:return "nd";case 3:return "rd";default:return "th";} };
 const today = new Date();
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -564,7 +563,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup }) => {
     setF({...f, type:v, color: t?.color || f.color});
   };
 
-  const EventForm = React.useMemo(() => ({ form, setForm, onSave, saveLabel="Save Event", showDelete, onDelete }) => (
+  const EventForm = ({ form, setForm, onSave, saveLabel="Save Event", showDelete, onDelete }) => (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
       <Field label="Title"><TI value={form.title} onChange={v=>setForm(f=>({...f,title:v}))} placeholder="e.g. 11.11 Campaign Launch" /></Field>
       <Field label="Date"><DateInput value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></Field>
@@ -1594,14 +1593,13 @@ export default function App({
   initialData,
   onStateChange,
 }: {
-  initialData?: LoadedData | null;
+  initialData?: any;
   onStateChange?: (patch: Record<string, unknown>) => void;
 }) {
   const { isMobile } = useBreakpoint();
   const [tab,setTab] = useState("calendar");
-  // PERSIST: hydrate from Redis if available, else use seed data
-  const [brands,setBrands]     = useState(() => initialData?.skuBrands as typeof INITIAL_BRANDS ?? INITIAL_BRANDS);
-  const [skuStorage,setSkuStorage] = useState<unknown[]>(() => initialData?.skuItems ?? []);
+  const [brands,setBrands]     = useState<any[]>(initialData?.skuBrands ?? INITIAL_BRANDS);
+  const [skuStorage,setSkuStorage] = useState<any[]>(initialData?.skuItems ?? []);
   const [checklistCalEvents,setChecklistCalEvents] = useState([]);
   const [navigateToGroupId,setNavigateToGroupId]   = useState(null);
   const [seasonalCalEvents] = useState(()=>
@@ -1617,7 +1615,6 @@ export default function App({
     }))
   );
 
-  // PERSIST: auto-save whenever top-level shared state changes
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
 
