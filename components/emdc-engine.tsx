@@ -468,20 +468,11 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
 };
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
-const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, initialEvents, initialTypes }: any) => {
+const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
-  const [eventTypes,setEventTypes] = useState(initialTypes?.length ? initialTypes : DEFAULT_EVENT_TYPES);
   const saveEventTypes = (types: any[]) => { setEventTypes(types); if(onStateChange) onStateChange({calendarTypes:types}); };
-  const DEFAULT_MANUAL_EVENTS = [
-    { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`, title:"TikTok Production - Quencha Poply", type:"task", color:"#374151" },
-    { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(Math.min(today.getDate()+4,28))}`, title:"11.11 Campaign Go-Live", type:"launch", color:"#22C55E" },
-    { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(Math.min(today.getDate()+1,28))}`, title:"Shopee Flash Deal Deadline", type:"deadline", color:"#EF4444" },
-  ];
-  const [manualEvents,setManualEvents] = useState<any[]>(initialEvents?.length ? initialEvents : DEFAULT_MANUAL_EVENTS);
-  useEffect(() => { if(initialEvents?.length && manualEvents===DEFAULT_MANUAL_EVENTS) setManualEvents(initialEvents); }, [initialEvents]);
-  useEffect(() => { if(initialTypes?.length && eventTypes===DEFAULT_EVENT_TYPES) setEventTypes(initialTypes); }, [initialTypes]);
   const [filter,setFilter]       = useState("all");
   const [addModal,setAddModal]   = useState(false);
   const [editModal,setEditModal] = useState(false);
@@ -849,11 +840,9 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, initia
 
 
 // ─── EVENTS & SEASONS ────────────────────────────────────────────────────────
-const EventsView = ({ skuStorage, brands, onStateChange, initialEvents: initialSeasonalEvents }: any) => {
+const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: any) => {
   const [filter,setFilter]       = useState("all");
   const [expanded,setExpanded]   = useState(null);
-  const [events,setEvents]       = useState(initialSeasonalEvents?.length ? initialSeasonalEvents : INITIAL_SEASONAL);
-  useEffect(() => { if(initialSeasonalEvents?.length && events===INITIAL_SEASONAL) setEvents(initialSeasonalEvents); }, [initialSeasonalEvents]);
   const [addingTo,setAddingTo]   = useState(null);
   const [editingProd,setEditingProd] = useState(null);
   const [prodMode,setProdMode]   = useState("manual");
@@ -1068,10 +1057,9 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange, initialStatuses }: any) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange, statuses, setStatuses }: any) => {
   const { isMobile } = useBreakpoint();
-  const [statuses,setStatuses]       = useState(initialStatuses ?? DEFAULT_STATUSES);
-  const saveStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
+  const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType][dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
@@ -1318,18 +1306,14 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange }) => {
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, onGroupNavigated, onStateChange, initialGroups, initialItems, initialStatuses }: any) => {
-  const [groups,setGroups]     = useState<any[]>(initialGroups ?? []);
-  useEffect(() => { if(initialGroups?.length && groups.length===0) setGroups(initialGroups); }, [initialGroups]);
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
-  // Lifted items state — keyed by groupId so progress survives navigation and tab switches
-  const [allGroupItems,setAllGroupItems] = useState<Record<string,any>>(initialItems ?? {});
-  useEffect(() => { if(initialItems && Object.keys(allGroupItems).length===0 && Object.keys(initialItems).length>0) setAllGroupItems(initialItems); }, [initialItems]);
 
   const updateGroupItems = (groupId:string, items:any) => {
-    setAllGroupItems(p=>{ const next={...p,[groupId]:items}; if(onStateChange) onStateChange({checklistItems:{[groupId]:items}}); return next; });
+    setAllGroupItems((p:any)=>{ const next={...p,[groupId]:items}; if(onStateChange) onStateChange({checklistItems:{[groupId]:items}}); return next; });
   };
+  const updateStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
   const [templates,setTemplates]   = useState(TEMPLATES);
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
@@ -1342,11 +1326,11 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
     }
   },[navigateToGroupId]);
 
-  const createGroup = cfg=>{ const g={id:uid(),...cfg}; setGroups(p=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; }); if(onGroupCreated) onGroupCreated(g); setActive(g.id); setCreating(false); };
-  const deleteGroup = id=>{ setGroups(p=>{ const next=p.filter(g=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
-  const activeGroup = groups.find(g=>g.id===active);
+  const createGroup = cfg=>{ const g={id:uid(),...cfg}; setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; }); if(onGroupCreated) onGroupCreated(g); setActive(g.id); setCreating(false); };
+  const deleteGroup = id=>{ setGroups((p:any)=>{ const next=p.filter((g:any)=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
+  const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} initialStatuses={initialStatuses} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} />;
 
   return (
     <div>
@@ -1616,6 +1600,24 @@ export default function App({
   const [skuStorage,setSkuStorage] = useState<any[]>(initialData?.skuItems ?? []);
   const [checklistCalEvents,setChecklistCalEvents] = useState<any[]>([]);
   const [navigateToGroupId,setNavigateToGroupId]   = useState(null);
+
+  // Lifted checklist state — owned by App so it survives switching away from and back to the Checklists tab
+  const [checklistGroups,setChecklistGroups] = useState<any[]>(initialData?.checklistGroups ?? []);
+  const [checklistAllItems,setChecklistAllItems] = useState<Record<string,any>>(initialData?.checklistItems ?? {});
+  const [checklistStatuses,setChecklistStatuses] = useState<any[]>(initialData?.checklistStatuses ?? DEFAULT_STATUSES);
+
+  // Lifted calendar state — owned by App so it survives switching away from and back to the Calendar tab
+  const DEFAULT_MANUAL_EVENTS = useMemo(()=>[
+    { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`, title:"TikTok Production - Quencha Poply", type:"task", color:"#374151" },
+    { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(Math.min(today.getDate()+4,28))}`, title:"11.11 Campaign Go-Live", type:"launch", color:"#22C55E" },
+    { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(Math.min(today.getDate()+1,28))}`, title:"Shopee Flash Deal Deadline", type:"deadline", color:"#EF4444" },
+  ],[]);
+  const [calendarManualEvents,setCalendarManualEvents] = useState<any[]>(initialData?.calendarEvents?.length ? initialData.calendarEvents : DEFAULT_MANUAL_EVENTS);
+  const [calendarEventTypes,setCalendarEventTypes] = useState<any[]>(initialData?.calendarTypes?.length ? initialData.calendarTypes : DEFAULT_EVENT_TYPES);
+
+  // Lifted seasonal events state (Events & Seasons tab) — owned by App so edits survive tab switches
+  const [seasonalEvents,setSeasonalEvents] = useState<any[]>(initialData?.seasonalEvents?.length ? initialData.seasonalEvents : INITIAL_SEASONAL);
+
   const [seasonalCalEvents] = useState(()=>
     INITIAL_SEASONAL.filter(e=>e.calDate).map(e=>({
       id:"sea-"+e.id, date:e.calDate,
@@ -1687,9 +1689,9 @@ export default function App({
               {tab==="skus"       && "Product catalog by brand, SKU, inventory, and status."}
             </p>
           </div>
-          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} initialEvents={initialData?.calendarEvents} initialTypes={initialData?.calendarTypes} />}
-          {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} initialEvents={initialData?.seasonalEvents} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} initialGroups={initialData?.checklistGroups} initialItems={initialData?.checklistItems} initialStatuses={initialData?.checklistStatuses} />}
+          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
+          {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} />}
         </div>
 
