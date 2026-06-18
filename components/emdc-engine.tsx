@@ -305,7 +305,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
   const results = useMemo(() => {
     const list = query.trim() ? skuStorage.filter(s => {
       const q=query.toLowerCase();
-      return s.productName.toLowerCase().includes(q)||s.sku.toLowerCase().includes(q)||(brands.find(b=>b.id===s.brandId)?.name||"").toLowerCase().includes(q);
+      return s.productName.toLowerCase().includes(q)||s.sku.toLowerCase().includes(q)||(s.collection||"").toLowerCase().includes(q)||(brands.find(b=>b.id===s.brandId)?.name||"").toLowerCase().includes(q);
     }) : skuStorage;
     return list.slice(0,8);
   }, [query,skuStorage,brands]);
@@ -332,6 +332,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
                 <div style={{ fontSize:11,color:C.muted,display:"flex",gap:8,marginTop:2,alignItems:"center" }}>
                   <span style={{ fontFamily:"monospace",background:C.surfaceAlt,padding:"1px 5px",borderRadius:3 }}>{s.sku}</span>
                   {brand&&<span style={{ display:"flex",alignItems:"center",gap:3 }}><span style={{ width:6,height:6,borderRadius:"50%",background:brand.color,display:"inline-block",flexShrink:0 }}></span>{brand.name}</span>}
+                  {s.collection&&<span style={{ background:C.surfaceAlt,padding:"1px 5px",borderRadius:3 }}>{s.collection}</span>}
                 </div>
               </div>
               <span style={{ fontSize:11,fontWeight:600,color:s.inventory===0?"#EF4444":C.faint,flexShrink:0 }}>{s.inventory===0?"No stock":s.inventory+" u"}</span>
@@ -1491,18 +1492,34 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
   const [editSkuId,setEditSkuId]         = useState(null);
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
-  const [sForm,setSForm] = useState({brandId:"",productName:"",sku:"",inventory:"",status:"active",customStatus:""});
+  const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""});
   const filteredSkus  = activeBrand ? skuStorage.filter(s=>s.brandId===activeBrand) : skuStorage;
+  const collectionOptions = useMemo(() => Array.from(new Set(
+    skuStorage
+      .filter(s => !sForm.brandId || s.brandId===sForm.brandId)
+      .map(s => (s.collection||"").trim())
+      .filter(Boolean)
+  )).sort((a:any,b:any)=>a.localeCompare(b)), [skuStorage,sForm.brandId]);
+  const groupedSkus = useMemo(() => {
+    const groups:any[] = [];
+    const byKey:any = {};
+    filteredSkus.forEach((s:any) => {
+      const label = (s.collection||"").trim() || "Uncategorized";
+      if (!byKey[label]) { byKey[label] = { label, skus: [] }; groups.push(byKey[label]); }
+      byKey[label].skus.push(s);
+    });
+    return groups;
+  }, [filteredSkus]);
   const activeBrandObj = brands.find(b=>b.id===activeBrand);
   const addBrand  = ()=>{ if(!bForm.name.trim()) return; setBrands(p=>[...p,{id:uid(),name:bForm.name.trim(),color:"#111827"}]); setBForm({name:"",color:"#111827"}); setBrandModal(false); };
   const openEditBrand = b=>{ setEditBrandForm({...b}); setEditBrandModal(true); };
   const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; setBrands(p=>p.map(b=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
   const delBrand  = id=>{ setBrands(p=>p.filter(b=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
-  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",sku:"",inventory:"",status:"active",customStatus:""}); setEditSkuId(null); setSkuModal(true); };
-  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||""}); setEditSkuId(s.id); setSkuModal(true); };
+  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""}); setEditSkuId(null); setSkuModal(true); };
+  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||""}); setEditSkuId(s.id); setSkuModal(true); };
   const saveSku   = ()=>{
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
-    const e={id:editSkuId||uid(),brandId:sForm.brandId,productName:sForm.productName.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
+    const e={id:editSkuId||uid(),brandId:sForm.brandId,productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
     if(editSkuId) setSkuStorage(p=>p.map(s=>s.id===editSkuId?e:s)); else setSkuStorage(p=>[...p,e]);
     setSkuModal(false);
   };
@@ -1578,43 +1595,53 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
                     {["Product","SKU","Brand","Stock","Status",""].map((h,i)=>(<span key={i} style={{ fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>{h}</span>))}
                   </div>
                 )}
-                {filteredSkus.map((s,i)=>{
-                  const brand=brands.find(b=>b.id===s.brandId), st=getSD(s);
-                  // Mobile: card layout
-                  if(isMobile) return (
-                    <div key={s.id} className="emdc-row" style={{ padding:"14px 16px",borderBottom:i<filteredSkus.length-1?`1px solid ${C.border}`:"none" }}>
-                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
-                        <div style={{ minWidth:0,flex:1 }}>
-                          <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.productName}</p>
-                          <span style={{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4 }}>{s.sku}</span>
-                        </div>
-                        <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0 }}>
-                          <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
-                          <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
-                        </div>
-                      </div>
-                      <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                        {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
-                        <span style={{ fontSize:11,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:500 }}>{s.inventory.toLocaleString()} units</span>
-                        <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"2px 8px",borderRadius:4,border:`1px solid ${st.color}28` }}>{st.label}</span>
-                      </div>
+                {groupedSkus.map(group=>(
+                  <div key={group.label}>
+                    <div style={{ display:isMobile?"flex":"grid",gridTemplateColumns:isMobile?undefined:"1fr 140px 120px 80px 110px 80px",alignItems:"center",gap:isMobile?8:0,padding:isMobile?"9px 16px":"8px 16px",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
+                      <span style={{ gridColumn:isMobile?undefined:"1 / -1",fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8 }}>
+                        {group.label}
+                        <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
+                      </span>
                     </div>
-                  );
-                  // Desktop: table row
-                  return (
-                    <div key={s.id} className="emdc-row" style={{ display:"grid",gridTemplateColumns:"1fr 140px 120px 80px 110px 80px",padding:"11px 16px",borderBottom:i<filteredSkus.length-1?`1px solid ${C.border}`:"none",alignItems:"center" }}>
-                      <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>
-                      <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>
-                      <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} /><span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{brand.name}</span></div>}</div>
-                      <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>
-                      <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>
-                      <div style={{ display:"flex",gap:6,justifyContent:"flex-end" }}>
-                        <button onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"3px 6px",borderRadius:4 }}>Edit</button>
-                        <button onClick={()=>delSku(s.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13 }}>&#215;</button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    {group.skus.map((s:any,i:number)=>{
+                      const brand=brands.find(b=>b.id===s.brandId), st=getSD(s);
+                      // Mobile: card layout
+                      if(isMobile) return (
+                        <div key={s.id} className="emdc-row" style={{ padding:"14px 16px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
+                          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
+                            <div style={{ minWidth:0,flex:1 }}>
+                              <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.productName}</p>
+                              <span style={{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4 }}>{s.sku}</span>
+                            </div>
+                            <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0 }}>
+                              <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
+                              <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
+                            </div>
+                          </div>
+                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                            {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
+                            <span style={{ fontSize:11,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:500 }}>{s.inventory.toLocaleString()} units</span>
+                            <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"2px 8px",borderRadius:4,border:`1px solid ${st.color}28` }}>{st.label}</span>
+                          </div>
+                        </div>
+                      );
+                      // Desktop: table row
+                      return (
+                        <div key={s.id} className="emdc-row" style={{ display:"grid",gridTemplateColumns:"1fr 140px 120px 80px 110px 80px",padding:"11px 16px",borderBottom:`1px solid ${C.border}`,alignItems:"center" }}>
+                          <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>
+                          <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>
+                          <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} /><span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{brand.name}</span></div>}</div>
+                          <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>
+                          <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>
+                          <div style={{ display:"flex",gap:6,justifyContent:"flex-end" }}>
+                            <button onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"3px 6px",borderRadius:4 }}>Edit</button>
+                            <button onClick={()=>delSku(s.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13 }}>&#215;</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1650,6 +1677,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
             </Select>
           </Field>
           <Field label="Product Name"><TI value={sForm.productName} onChange={v=>setSForm(f=>({...f,productName:v}))} placeholder="e.g. Quencha 750ml Tumbler Horizon" /></Field>
+          <Field label="Collection" hint="select existing or type new">
+            <input list="sku-collection-options" value={sForm.collection} placeholder="e.g. Horizon Collection" onChange={e=>setSForm(f=>({...f,collection:e.target.value}))}
+              style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box" }} />
+            <datalist id="sku-collection-options">
+              {collectionOptions.map((c:any)=><option key={c} value={c} />)}
+            </datalist>
+          </Field>
           <Field label="SKU Code"><TI value={sForm.sku} onChange={v=>setSForm(f=>({...f,sku:v}))} placeholder="e.g. QNC-TBL-750-HRZ" /></Field>
           <Field label="Inventory"><TI value={sForm.inventory} onChange={v=>setSForm(f=>({...f,inventory:v}))} placeholder="0" type="number" /></Field>
           <Field label="Status">
