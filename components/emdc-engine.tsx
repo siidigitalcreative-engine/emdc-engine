@@ -1509,6 +1509,17 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [bulkColumns,setBulkColumns] = useState<any[]>(DEFAULT_BULK_COLUMNS);
   const [bulkNewColumn,setBulkNewColumn] = useState("");
   const [bulkDragIndex,setBulkDragIndex] = useState<number|null>(null);
+  const [bulkActiveCell,setBulkActiveCell] = useState<any>(null);
+  const [bulkSelection,setBulkSelection] = useState<any>(null);
+  const [bulkSelecting,setBulkSelecting] = useState(false);
+  const [bulkSelectedRows,setBulkSelectedRows] = useState<any[]>([]);
+  const [bulkLastSelectedRow,setBulkLastSelectedRow] = useState<number|null>(null);
+  const bulkCellRefs = useRef<any>({});
+  useEffect(()=>{
+    const stop = () => setBulkSelecting(false);
+    window.addEventListener("mouseup", stop);
+    return () => window.removeEventListener("mouseup", stop);
+  },[]);
   const BULK_COLUMNS = bulkColumns;
   const BULK_FIELDS = BULK_COLUMNS.map(c=>c.key);
   const newBulkRow = (data:any={}) => ({ id:uid(), productName:"", sku:"", brand:"", collection:"", inventory:"", status:"", ...data });
@@ -1607,7 +1618,128 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return next;
     });
   };
-  const resetBulkColumns = () => setBulkColumns(DEFAULT_BULK_COLUMNS);
+  const resetBulkColumns = () => { setBulkColumns(DEFAULT_BULK_COLUMNS); setBulkSelection(null); setBulkActiveCell(null); };
+  const getBulkCellKey = (rowIndex:number, colIndex:number) => `${rowIndex}:${colIndex}`;
+  const getBulkRange = (selection:any=bulkSelection) => {
+    if(!selection) return null;
+    return {
+      startRow:Math.min(selection.startRow,selection.endRow),
+      endRow:Math.max(selection.startRow,selection.endRow),
+      startCol:Math.min(selection.startCol,selection.endCol),
+      endCol:Math.max(selection.startCol,selection.endCol),
+    };
+  };
+  const isBulkCellSelected = (rowIndex:number, colIndex:number) => {
+    const rowId=bulkGridRows[rowIndex]?.id;
+    if(rowId&&bulkSelectedRows.includes(rowId)) return true;
+    const range=getBulkRange();
+    if(!range) return false;
+    return rowIndex>=range.startRow&&rowIndex<=range.endRow&&colIndex>=range.startCol&&colIndex<=range.endCol;
+  };
+  const isBulkRowSelected = (rowId:any) => bulkSelectedRows.includes(rowId);
+  const focusBulkCell = (rowIndex:number, colIndex:number, selectCell=true) => {
+    const safeRow=Math.max(0,Math.min(rowIndex,bulkGridRows.length-1));
+    const safeCol=Math.max(0,Math.min(colIndex,BULK_COLUMNS.length-1));
+    setBulkActiveCell({rowIndex:safeRow,colIndex:safeCol});
+    if(selectCell){ setBulkSelection({startRow:safeRow,startCol:safeCol,endRow:safeRow,endCol:safeCol}); setBulkSelectedRows([]); }
+    setTimeout(()=>bulkCellRefs.current[getBulkCellKey(safeRow,safeCol)]?.focus(),0);
+  };
+  const selectBulkCell = (rowIndex:number, colIndex:number, extend=false) => {
+    if(extend&&bulkActiveCell){
+      setBulkSelection({startRow:bulkActiveCell.rowIndex,startCol:bulkActiveCell.colIndex,endRow:rowIndex,endCol:colIndex});
+    } else {
+      setBulkActiveCell({rowIndex,colIndex});
+      setBulkSelection({startRow:rowIndex,startCol:colIndex,endRow:rowIndex,endCol:colIndex});
+    }
+    setBulkSelectedRows([]);
+  };
+  const handleBulkCellMouseDown = (e:any, rowIndex:number, colIndex:number) => {
+    selectBulkCell(rowIndex,colIndex,e.shiftKey);
+    setBulkSelecting(true);
+  };
+  const handleBulkCellMouseEnter = (rowIndex:number, colIndex:number) => {
+    if(!bulkSelecting||!bulkActiveCell) return;
+    setBulkSelection({startRow:bulkActiveCell.rowIndex,startCol:bulkActiveCell.colIndex,endRow:rowIndex,endCol:colIndex});
+  };
+  const selectBulkRow = (rowIndex:number, e:any) => {
+    const rowId=bulkGridRows[rowIndex]?.id;
+    if(!rowId) return;
+    setBulkSelection(null);
+    setBulkActiveCell(null);
+    if(e.shiftKey&&bulkLastSelectedRow!==null){
+      const from=Math.min(bulkLastSelectedRow,rowIndex), to=Math.max(bulkLastSelectedRow,rowIndex);
+      setBulkSelectedRows(bulkGridRows.slice(from,to+1).map((r:any)=>r.id));
+    } else if(e.metaKey||e.ctrlKey){
+      setBulkSelectedRows((p:any[])=>p.includes(rowId)?p.filter((id:any)=>id!==rowId):[...p,rowId]);
+      setBulkLastSelectedRow(rowIndex);
+    } else {
+      setBulkSelectedRows([rowId]);
+      setBulkLastSelectedRow(rowIndex);
+    }
+  };
+  const buildBulkSelectionText = () => {
+    if(bulkSelectedRows.length){
+      const selected=new Set(bulkSelectedRows);
+      return bulkGridRows.filter((r:any)=>selected.has(r.id)).map((r:any)=>BULK_COLUMNS.map((c:any)=>r[c.key]||"").join("\t")).join("\n");
+    }
+    const range=getBulkRange();
+    if(!range) return "";
+    const lines:string[]=[];
+    for(let ri=range.startRow; ri<=range.endRow; ri++){
+      const row=bulkGridRows[ri]||{};
+      const vals:string[]=[];
+      for(let ci=range.startCol; ci<=range.endCol; ci++){ vals.push(String(row[BULK_COLUMNS[ci]?.key]||"")); }
+      lines.push(vals.join("\t"));
+    }
+    return lines.join("\n");
+  };
+  const clearBulkSelectedCells = () => {
+    if(bulkSelectedRows.length){
+      const selected=new Set(bulkSelectedRows);
+      setBulkGridRows((p:any[])=>p.map((r:any)=>selected.has(r.id)?{...r,...Object.fromEntries(BULK_COLUMNS.map((c:any)=>[c.key,""]))}:r));
+      return;
+    }
+    const range=getBulkRange();
+    if(!range) return;
+    setBulkGridRows((p:any[])=>p.map((r:any,ri:number)=>{
+      if(ri<range.startRow||ri>range.endRow) return r;
+      const next={...r};
+      for(let ci=range.startCol; ci<=range.endCol; ci++){ const key=BULK_COLUMNS[ci]?.key; if(key) next[key]=""; }
+      return next;
+    }));
+  };
+  const deleteBulkSelectedRows = () => {
+    if(!bulkSelectedRows.length) return;
+    const selected=new Set(bulkSelectedRows);
+    setBulkGridRows((p:any[])=>{
+      const next=p.filter((r:any)=>!selected.has(r.id));
+      return next.length ? next : makeBulkRows(8);
+    });
+    setBulkSelectedRows([]);
+    setBulkLastSelectedRow(null);
+    setBulkSelection(null);
+  };
+  const deleteBulkEmptyRows = () => {
+    setBulkGridRows((p:any[])=>{
+      const next=p.filter(rowHasInput);
+      return next.length ? [...next,...makeBulkRows(3)] : makeBulkRows(8);
+    });
+    setBulkSelectedRows([]);
+    setBulkSelection(null);
+  };
+  const handleBulkCopy = (e:any) => {
+    const text=buildBulkSelectionText();
+    if(!text) return;
+    e.clipboardData.setData("text/plain",text);
+    e.preventDefault();
+  };
+  const handleBulkCut = (e:any) => {
+    const text=buildBulkSelectionText();
+    if(!text) return;
+    e.clipboardData.setData("text/plain",text);
+    e.preventDefault();
+    clearBulkSelectedCells();
+  };
   const parsePastedGrid = (text:string, startField:string="productName") => {
     const lines=text.replace(/\r/g,"").split("\n").filter(l=>l.trim());
     if(!lines.length) return [];
@@ -1653,13 +1785,27 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const bulkRows = useMemo(()=>parseGridRows(bulkGridRows),[bulkGridRows,bulkColumns]);
   const updateBulkCell = (rowId:any, field:string, value:string) => setBulkGridRows((p:any[])=>p.map((r:any)=>r.id===rowId?{...r,[field]:value}:r));
   const addBulkRows = (count:number=10) => setBulkGridRows((p:any[])=>[...p,...makeBulkRows(count)]);
-  const clearBulkRows = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); };
-  const handleBulkPaste = (e:any, rowIndex:number, field:string) => {
-    const text=e.clipboardData?.getData("text/plain")||"";
-    if(!text || (!text.includes("\t") && !text.includes("\n"))) return;
-    e.preventDefault();
-    const pasted=parsePastedGrid(text,field).filter(rowHasInput);
-    if(!pasted.length) return;
+  const clearBulkRows = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); setBulkSelection(null); setBulkSelectedRows([]); setBulkActiveCell(null); };
+  const pasteBulkGrid = (text:string, rowIndex:number, colIndex:number) => {
+    if(!text) return;
+    const field=BULK_COLUMNS[colIndex]?.key || "productName";
+    const range=getBulkRange();
+    const isOneValue=!text.includes("\t")&&!text.includes("\n");
+    if(isOneValue&&range&&(range.endRow>range.startRow||range.endCol>range.startCol)){
+      setBulkGridRows((prev:any[])=>prev.map((r:any,ri:number)=>{
+        if(ri<range.startRow||ri>range.endRow) return r;
+        const next={...r};
+        for(let ci=range.startCol; ci<=range.endCol; ci++){ const key=BULK_COLUMNS[ci]?.key; if(key) next[key]=text; }
+        return next;
+      }));
+      setBulkError("");
+      return;
+    }
+    const pasted=parsePastedGrid(text,field);
+    if(!pasted.length){
+      updateBulkCell(bulkGridRows[rowIndex]?.id,field,text);
+      return;
+    }
     setBulkGridRows((prev:any[])=>{
       const next=prev.map((r:any)=>({...r}));
       while(next.length<rowIndex+pasted.length) next.push(newBulkRow());
@@ -1669,7 +1815,29 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     });
     setBulkError("");
   };
-  const openBulk = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); setBulkModal(true); };
+  const handleBulkPaste = (e:any, rowIndex:number, colIndex:number) => {
+    const text=e.clipboardData?.getData("text/plain")||"";
+    if(!text) return;
+    e.preventDefault();
+    pasteBulkGrid(text,rowIndex,colIndex);
+  };
+  const handleBulkKeyDown = (e:any, rowIndex:number, colIndex:number) => {
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="a"){
+      e.preventDefault();
+      setBulkSelectedRows([]);
+      setBulkSelection({startRow:0,startCol:0,endRow:bulkGridRows.length-1,endCol:BULK_COLUMNS.length-1});
+      setBulkActiveCell({rowIndex:0,colIndex:0});
+      return;
+    }
+    if((e.key==="Delete"||e.key==="Backspace")&&(bulkSelectedRows.length||(getBulkRange()&&(getBulkRange().endRow>getBulkRange().startRow||getBulkRange().endCol>getBulkRange().startCol)))){
+      e.preventDefault();
+      clearBulkSelectedCells();
+      return;
+    }
+    if(e.key==="Enter"){ e.preventDefault(); focusBulkCell(rowIndex+(e.shiftKey?-1:1),colIndex); return; }
+    if(e.key==="Tab"){ e.preventDefault(); focusBulkCell(rowIndex,colIndex+(e.shiftKey?-1:1)); return; }
+  };
+  const openBulk = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); setBulkSelection(null); setBulkSelectedRows([]); setBulkActiveCell(null); setBulkModal(true); };
   const saveBulkSkus = () => {
     const rows=bulkRows.filter(r=>r.valid);
     if(!rows.length){ setBulkError("No valid SKU rows to import."); return; }
@@ -1857,28 +2025,31 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         )}
       </Modal>
 
-      <Modal open={bulkModal} onClose={()=>setBulkModal(false)} title="Paste SKUs from Sheet" width={760}>
+      <Modal open={bulkModal} onClose={()=>setBulkModal(false)} title="Paste SKUs from Sheet" width={860}>
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,border:`1px solid ${C.border}` }}>
             <p style={{ margin:"0 0 6px",fontSize:13,fontWeight:700,color:C.text }}>Copy from Excel or Google Sheets, then paste here.</p>
             <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Recommended columns: Product Name, SKU, Brand, Collection, Stock, Status. Header row is optional. Existing SKUs with the same SKU code will be updated.</p>
           </div>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-            <p style={{ margin:0,fontSize:12,color:C.muted }}>Use the table below like a mini sheet. Drag column headers or use the arrows to rearrange columns before pasting.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Use this like a mini spreadsheet. Click and drag cells to select, copy/paste ranges, press Delete to clear selected cells, or click row numbers to select and delete rows.</p>
             <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
               <input value={bulkNewColumn} placeholder="New column name" onChange={e=>setBulkNewColumn(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addBulkColumn(); } }}
                 style={{ height:30,width:150,padding:"6px 9px",fontSize:12,borderRadius:7,border:`1.5px solid ${C.border}`,outline:"none",background:C.surface,color:C.text }} />
               <Btn xs variant="outline" onClick={addBulkColumn}>+ Column</Btn>
               <Btn xs variant="outline" onClick={()=>addBulkRows(10)}>+ 10 Rows</Btn>
+              <Btn xs variant="outline" onClick={clearBulkSelectedCells} disabled={!bulkSelection&&!bulkSelectedRows.length}>Clear Selected</Btn>
+              <Btn xs variant="danger" onClick={deleteBulkSelectedRows} disabled={!bulkSelectedRows.length}>Delete Row{bulkSelectedRows.length!==1?"s":""}</Btn>
+              <Btn xs variant="outline" onClick={deleteBulkEmptyRows}>Remove Empty Rows</Btn>
               <Btn xs variant="outline" onClick={resetBulkColumns}>Reset Columns</Btn>
-              <Btn xs variant="outline" onClick={clearBulkRows}>Clear</Btn>
+              <Btn xs variant="outline" onClick={clearBulkRows}>Clear All</Btn>
             </div>
           </div>
-          <div style={{ border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
+          <div onCopy={handleBulkCopy} onCut={handleBulkCut} style={{ border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
             <div style={{ overflowX:"auto" }}>
               <div style={{ minWidth:bulkTableMinWidth }}>
                 <div style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-                  <span style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}` }}>#</span>
+                  <button type="button" onClick={()=>{ setBulkSelection(null); setBulkSelectedRows(bulkGridRows.map((r:any)=>r.id)); }} title="Select all rows" style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",border:"none",borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",textAlign:"left" }}>#</button>
                   {BULK_COLUMNS.map((c:any,colIdx:number)=>(
                     <div key={c.key}
                       draggable
@@ -1910,15 +2081,22 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                     const productMissing=hasAny&&!String(r.productName||"").trim();
                     const skuMissing=hasAny&&!String(r.sku||"").trim();
                     return (
-                      <div key={r.id} style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,borderBottom:`1px solid ${C.border}`,background:(productMissing||skuMissing)?"#FEF2F2":C.surface }}>
-                        <span style={{ padding:"9px 8px",fontSize:11,color:C.faint,borderRight:`1px solid ${C.border}`,background:C.bg,display:"flex",alignItems:"center" }}>{idx+1}</span>
-                        {BULK_COLUMNS.map((c:any)=>{
+                      <div key={r.id} style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,borderBottom:`1px solid ${C.border}`,background:isBulkRowSelected(r.id)?"#EFF6FF":(productMissing||skuMissing)?"#FEF2F2":C.surface }}>
+                        <button type="button" onClick={e=>selectBulkRow(idx,e)} title="Click to select row. Ctrl/Shift click for multiple rows."
+                          style={{ padding:"9px 8px",fontSize:11,color:isBulkRowSelected(r.id)?C.accent:C.faint,border:"none",borderRight:`1px solid ${C.border}`,background:isBulkRowSelected(r.id)?"#DBEAFE":C.bg,display:"flex",alignItems:"center",cursor:"pointer",fontWeight:isBulkRowSelected(r.id)?700:400,textAlign:"left" }}>{idx+1}</button>
+                        {BULK_COLUMNS.map((c:any,colIdx:number)=>{
                           const missing=(c.key==="productName"&&productMissing)||(c.key==="sku"&&skuMissing);
-                          return <input key={c.key} value={r[c.key]||""} placeholder={idx===0?c.placeholder:""}
+                          const selected=isBulkCellSelected(idx,colIdx);
+                          const active=bulkActiveCell?.rowIndex===idx&&bulkActiveCell?.colIndex===colIdx;
+                          return <input key={c.key} ref={(el:any)=>{ bulkCellRefs.current[getBulkCellKey(idx,colIdx)] = el; }} value={r[c.key]||""} placeholder={idx===0?c.placeholder:""}
+                            onFocus={()=>{ if(!bulkSelecting) selectBulkCell(idx,colIdx,false); }}
+                            onMouseDown={e=>handleBulkCellMouseDown(e,idx,colIdx)}
+                            onMouseEnter={()=>handleBulkCellMouseEnter(idx,colIdx)}
                             onChange={e=>updateBulkCell(r.id,c.key,e.target.value)}
-                            onPaste={e=>handleBulkPaste(e,idx,c.key)}
+                            onPaste={e=>handleBulkPaste(e,idx,colIdx)}
+                            onKeyDown={e=>handleBulkKeyDown(e,idx,colIdx)}
                             inputMode={c.key==="inventory"?"numeric":"text"}
-                            style={{ width:"100%",height:38,padding:"8px 9px",fontSize:12,border:"none",borderRight:`1px solid ${C.border}`,background:missing?"#FEF2F2":"transparent",color:C.text,outline:"none",fontFamily:c.key==="sku"?"ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace":"inherit",fontWeight:c.key==="productName"?600:400 }} />;
+                            style={{ width:"100%",height:38,padding:"8px 9px",fontSize:12,border:"none",borderRight:`1px solid ${C.border}`,boxShadow:active?`inset 0 0 0 2px ${C.accent}`:selected?`inset 0 0 0 2px #93C5FD`:"none",background:selected?"#EFF6FF":missing?"#FEF2F2":"transparent",color:C.text,outline:"none",fontFamily:c.key==="sku"?"ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace":"inherit",fontWeight:c.key==="productName"?600:400 }} />;
                         })}
                       </div>
                     );
