@@ -563,7 +563,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup }) => {
     setF({...f, type:v, color: t?.color || f.color});
   };
 
-  const EventForm = ({ form, setForm, onSave, saveLabel="Save Event", showDelete, onDelete }) => (
+  const EventForm = ({ form, setForm, onSave, saveLabel="Save Event", showDelete, onDelete }: any) => (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
       <Field label="Title"><TI value={form.title} onChange={v=>setForm(f=>({...f,title:v}))} placeholder="e.g. 11.11 Campaign Launch" /></Field>
       <Field label="Date"><DateInput value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></Field>
@@ -587,7 +587,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup }) => {
       <Btn onClick={onSave} full>{saveLabel}</Btn>
       {showDelete&&<Btn variant="danger" full onClick={onDelete}>Delete Event</Btn>}
     </div>
-  ), []);
+  );
 
   // Cell layout constants — consistent across all rows
   const BAND_H  = 14;   // unified height for ALL event rows (bands + chips same)
