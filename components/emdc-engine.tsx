@@ -1498,8 +1498,18 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
   const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""});
-  const [bulkText,setBulkText] = useState("");
-  const [bulkRows,setBulkRows] = useState<any[]>([]);
+  const BULK_COLUMNS = [
+    { key:"productName", label:"Product Name", placeholder:"Desk Organizer" },
+    { key:"sku",         label:"SKU",          placeholder:"GL-DO001" },
+    { key:"brand",       label:"Brand",        placeholder:"Gray Label" },
+    { key:"collection",  label:"Collection",   placeholder:"Workspace" },
+    { key:"inventory",   label:"Stock",        placeholder:"50" },
+    { key:"status",      label:"Status",       placeholder:"Active" },
+  ];
+  const BULK_FIELDS = BULK_COLUMNS.map(c=>c.key);
+  const newBulkRow = (data:any={}) => ({ id:uid(), productName:"", sku:"", brand:"", collection:"", inventory:"", status:"", ...data });
+  const makeBulkRows = (count:number=8) => Array.from({length:count},()=>newBulkRow());
+  const [bulkGridRows,setBulkGridRows] = useState<any[]>(()=>makeBulkRows(8));
   const [bulkError,setBulkError] = useState("");
   const commitSkuStorage = (updater:any) => {
     setSkuStorage((prev:any[]) => {
@@ -1546,7 +1556,6 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     setSkuModal(false);
   };
   const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id));
-  const BULK_COLUMNS = ["Product Name","SKU","Brand","Collection","Stock","Status"];
   const normalizeKey = (v:any) => String(v||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
   const parseStock = (v:any) => { const n=parseInt(String(v||"0").replace(/,/g,"")); return Number.isFinite(n)?n:0; };
   const parseStatusValue = (v:any) => {
@@ -1556,37 +1565,70 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(["nostock","nostocks","outofstock","outofstocks","soldout","zerostock","zero"].includes(key)) return {status:"nostocks",customStatus:""};
     return {status:"custom",customStatus:raw};
   };
-  const parseBulkSkus = (text:string) => {
+  const rowHasInput = (r:any) => BULK_FIELDS.some((f:any)=>String(r[f]||"").trim());
+  const splitBulkLine = (line:string) => line.includes("\t") ? line.split("\t") : line.split(",");
+  const headerMap:any = {
+    productname:"productName", product:"productName", name:"productName", item:"productName",
+    sku:"sku", skucode:"sku", code:"sku",
+    brand:"brand", brandname:"brand",
+    collection:"collection", collectionname:"collection", category:"collection",
+    stock:"inventory", inventory:"inventory", qty:"inventory", quantity:"inventory",
+    status:"status"
+  };
+  const parsePastedGrid = (text:string, startField:string="productName") => {
     const lines=text.replace(/\r/g,"").split("\n").filter(l=>l.trim());
     if(!lines.length) return [];
-    const splitLine = (line:string) => line.includes("\t") ? line.split("\t") : line.split(",");
-    const headerMap:any = {
-      productname:"productName", product:"productName", name:"productName", item:"productName",
-      sku:"sku", skucode:"sku", code:"sku",
-      brand:"brand", brandname:"brand",
-      collection:"collection", collectionname:"collection", category:"collection",
-      stock:"inventory", inventory:"inventory", qty:"inventory", quantity:"inventory",
-      status:"status"
-    };
-    let rows=lines.map(splitLine).map(r=>r.map(c=>c.trim()));
-    let columns:any = { productName:0, sku:1, brand:2, collection:3, inventory:4, status:5 };
+    let rows=lines.map(splitBulkLine).map(r=>r.map(c=>c.trim()));
     const first=rows[0]||[];
     const detected:any = {};
     first.forEach((h,i)=>{ const mapped=headerMap[normalizeKey(h)]; if(mapped) detected[mapped]=i; });
-    if(Object.keys(detected).length>=2 && (detected.productName!==undefined || detected.sku!==undefined)){ columns={...columns,...detected}; rows=rows.slice(1); }
-    return rows.map((cols,idx)=>{
-      const productName=(cols[columns.productName]||"").trim();
-      const sku=(cols[columns.sku]||"").trim();
-      const brand=(cols[columns.brand]||"").trim();
-      const collection=(cols[columns.collection]||"").trim();
-      const inventory=parseStock(cols[columns.inventory]);
-      const st=parseStatusValue(cols[columns.status]);
-      const error=!productName&&!sku?"Empty row":!productName?"Missing product name":!sku?"Missing SKU":"";
-      return { id:`bulk-${idx}`, productName, sku, brand, collection, inventory, ...st, error, valid:!error };
-    }).filter(r=>r.productName||r.sku||r.brand||r.collection||r.inventory||r.status!=="active");
+    const hasHeader=Object.keys(detected).length>=2 && (detected.productName!==undefined || detected.sku!==undefined);
+    if(hasHeader){
+      rows=rows.slice(1);
+      return rows.map(cols=>{
+        const obj:any = {};
+        BULK_COLUMNS.forEach((c:any)=>{ obj[c.key] = detected[c.key]!==undefined ? (cols[detected[c.key]]||"").trim() : ""; });
+        return obj;
+      });
+    }
+    const startIndex=Math.max(0,BULK_FIELDS.indexOf(startField));
+    return rows.map(cols=>{
+      const obj:any = {};
+      cols.forEach((v,i)=>{ const key=BULK_FIELDS[startIndex+i]; if(key) obj[key]=String(v||"").trim(); });
+      return obj;
+    });
   };
-  const openBulk = () => { setBulkText(""); setBulkRows([]); setBulkError(""); setBulkModal(true); };
-  const handleBulkText = (v:string) => { const rows=parseBulkSkus(v); setBulkText(v); setBulkRows(rows); setBulkError(rows.length?"":"Paste rows from Excel or Google Sheets to preview them here."); };
+  const parseGridRows = (rows:any[]) => rows.map((r:any,idx:number)=>{
+    const productName=String(r.productName||"").trim();
+    const sku=String(r.sku||"").trim();
+    const brand=String(r.brand||"").trim();
+    const collection=String(r.collection||"").trim();
+    const inventory=parseStock(r.inventory);
+    const st=parseStatusValue(r.status);
+    const empty=!rowHasInput(r);
+    const error=empty?"":!productName?"Missing product name":!sku?"Missing SKU":"";
+    return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, inventory, ...st, error, valid:!empty&&!error, empty };
+  }).filter((r:any)=>!r.empty);
+  const bulkRows = useMemo(()=>parseGridRows(bulkGridRows),[bulkGridRows]);
+  const updateBulkCell = (rowId:any, field:string, value:string) => setBulkGridRows((p:any[])=>p.map((r:any)=>r.id===rowId?{...r,[field]:value}:r));
+  const addBulkRows = (count:number=10) => setBulkGridRows((p:any[])=>[...p,...makeBulkRows(count)]);
+  const clearBulkRows = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); };
+  const handleBulkPaste = (e:any, rowIndex:number, field:string) => {
+    const text=e.clipboardData?.getData("text/plain")||"";
+    if(!text || (!text.includes("\t") && !text.includes("\n"))) return;
+    e.preventDefault();
+    const pasted=parsePastedGrid(text,field).filter(rowHasInput);
+    if(!pasted.length) return;
+    setBulkGridRows((prev:any[])=>{
+      const next=prev.map((r:any)=>({...r}));
+      while(next.length<rowIndex+pasted.length) next.push(newBulkRow());
+      pasted.forEach((data:any,i:number)=>{ next[rowIndex+i]={...next[rowIndex+i],...data}; });
+      if(next.slice(-3).some(rowHasInput)) next.push(...makeBulkRows(5));
+      return next;
+    });
+    setBulkError("");
+  };
+  const openBulk = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); setBulkModal(true); };
   const saveBulkSkus = () => {
     const rows=bulkRows.filter(r=>r.valid);
     if(!rows.length){ setBulkError("No valid SKU rows to import."); return; }
@@ -1611,12 +1653,12 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     commitBrands(nextBrands);
     commitSkuStorage(nextSkus);
     setBulkModal(false);
-    setBulkText("");
-    setBulkRows([]);
+    setBulkGridRows(makeBulkRows(8));
     setBulkError("");
   };
   const STATUS_OPTS=[{value:"active",label:"Active",color:"#22C55E"},{value:"nostocks",label:"No Stocks",color:"#EF4444"},{value:"custom",label:"Custom",color:"#6B7280"}];
   const getSD = s=>{ if(s.status==="active") return{label:"Active",color:"#22C55E"}; if(s.status==="nostocks") return{label:"No Stocks",color:"#EF4444"}; return{label:s.customStatus||"Custom",color:"#6B7280"}; };
+  const bulkGridTemplate = isMobile ? "36px 180px 140px 130px 130px 90px 120px" : "42px 1.5fr 1fr 1fr 1fr .7fr .9fr";
 
   const BrandSidebar = () => (
     <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -1767,44 +1809,49 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             <p style={{ margin:"0 0 6px",fontSize:13,fontWeight:700,color:C.text }}>Copy from Excel or Google Sheets, then paste here.</p>
             <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Recommended columns: Product Name, SKU, Brand, Collection, Stock, Status. Header row is optional. Existing SKUs with the same SKU code will be updated.</p>
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1.5fr 1fr 1fr 1fr .7fr .9fr",gap:6 }}>
-            {BULK_COLUMNS.map(c=><span key={c} style={{ padding:"6px 8px",borderRadius:6,background:C.bg,fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",display:isMobile?"none":"block" }}>{c}</span>)}
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Use the table below like a mini sheet. Click any cell, paste from Excel or Google Sheets, then edit before importing.</p>
+            <div style={{ display:"flex",gap:6 }}>
+              <Btn xs variant="outline" onClick={()=>addBulkRows(10)}>+ 10 Rows</Btn>
+              <Btn xs variant="outline" onClick={clearBulkRows}>Clear</Btn>
+            </div>
           </div>
-          <textarea value={bulkText} onChange={e=>handleBulkText(e.target.value)}
-            placeholder={`Product Name\tSKU\tBrand\tCollection\tStock\tStatus\nDual-Flow Insulated Tumbler\tQNH-DFT900\tQuencha\tHorizon\t50\tActive\n3 Layer Insulated Lunch Box 1400ml\tQNH-LB1400\tQuencha\tHorizon\t50\tActive`}
-            style={{ width:"100%",minHeight:150,padding:12,fontSize:13,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",fontFamily:"ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace",lineHeight:1.5 }}
-          />
-          {bulkError&&<p style={{ margin:0,fontSize:12,color:C.muted }}>{bulkError}</p>}
           <div style={{ border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1.5fr 1fr 1fr 1fr .7fr .9fr",padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-              {(isMobile?["Preview"]:BULK_COLUMNS).map(c=><span key={c} style={{ fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>{c}</span>)}
-            </div>
-            <div style={{ maxHeight:260,overflowY:"auto" }}>
-              {bulkRows.length===0 ? (
-                <div style={{ padding:"22px 14px",textAlign:"center",fontSize:12,color:C.faint }}>Pasted rows will preview here.</div>
-              ) : bulkRows.map((r:any)=>{
-                if(isMobile) return (
-                  <div key={r.id} style={{ padding:"10px 12px",borderBottom:`1px solid ${C.border}`,background:r.error?"#FEF2F2":C.surface }}>
-                    <p style={{ margin:"0 0 4px",fontSize:13,fontWeight:700,color:C.text }}>{r.productName||"Missing product name"}</p>
-                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:C.muted }}>
-                      <span>{r.sku||"Missing SKU"}</span><span>{r.brand||"Default brand"}</span><span>{r.collection||"Uncategorized"}</span><span>{r.inventory} stock</span><span>{r.status==="custom"?r.customStatus:r.status}</span>
-                    </div>
-                    {r.error&&<p style={{ margin:"6px 0 0",fontSize:11,color:"#DC2626",fontWeight:700 }}>{r.error}</p>}
-                  </div>
-                );
-                return (
-                  <div key={r.id} style={{ display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr .7fr .9fr",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,alignItems:"center",background:r.error?"#FEF2F2":C.surface,gap:6 }}>
-                    <span style={{ fontSize:12,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.productName||"—"}</span>
-                    <span style={{ fontSize:11,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.sku||"—"}</span>
-                    <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.brand||"Default"}</span>
-                    <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.collection||"Uncategorized"}</span>
-                    <span style={{ fontSize:12,color:C.textSub }}>{r.inventory}</span>
-                    <span style={{ fontSize:11,fontWeight:700,color:r.error?"#DC2626":C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.error || (r.status==="custom" ? (r.customStatus||"Custom") : (r.status==="nostocks"?"No Stocks":"Active"))}</span>
-                  </div>
-                );
-              })}
+            <div style={{ overflowX:"auto" }}>
+              <div style={{ minWidth:isMobile?820:"auto" }}>
+                <div style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                  <span style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}` }}>#</span>
+                  {BULK_COLUMNS.map((c:any)=><span key={c.key} style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}` }}>{c.label}</span>)}
+                </div>
+                <div style={{ maxHeight:390,overflowY:"auto" }}>
+                  {bulkGridRows.map((r:any,idx:number)=>{
+                    const hasAny=rowHasInput(r);
+                    const productMissing=hasAny&&!String(r.productName||"").trim();
+                    const skuMissing=hasAny&&!String(r.sku||"").trim();
+                    return (
+                      <div key={r.id} style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,borderBottom:`1px solid ${C.border}`,background:(productMissing||skuMissing)?"#FEF2F2":C.surface }}>
+                        <span style={{ padding:"9px 8px",fontSize:11,color:C.faint,borderRight:`1px solid ${C.border}`,background:C.bg,display:"flex",alignItems:"center" }}>{idx+1}</span>
+                        {BULK_COLUMNS.map((c:any)=>{
+                          const missing=(c.key==="productName"&&productMissing)||(c.key==="sku"&&skuMissing);
+                          return <input key={c.key} value={r[c.key]||""} placeholder={idx===0?c.placeholder:""}
+                            onChange={e=>updateBulkCell(r.id,c.key,e.target.value)}
+                            onPaste={e=>handleBulkPaste(e,idx,c.key)}
+                            inputMode={c.key==="inventory"?"numeric":"text"}
+                            style={{ width:"100%",height:38,padding:"8px 9px",fontSize:12,border:"none",borderRight:`1px solid ${C.border}`,background:missing?"#FEF2F2":"transparent",color:C.text,outline:"none",fontFamily:c.key==="sku"?"ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace":"inherit",fontWeight:c.key==="productName"?600:400 }} />;
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
+          {bulkError&&<p style={{ margin:0,fontSize:12,color:C.muted }}>{bulkError}</p>}
+          {bulkRows.length>0&&(
+            <p style={{ margin:0,fontSize:12,color:bulkRows.some((r:any)=>r.error)?"#DC2626":C.muted,fontWeight:bulkRows.some((r:any)=>r.error)?700:400 }}>
+              {bulkRows.filter((r:any)=>r.valid).length} valid SKU{bulkRows.filter((r:any)=>r.valid).length!==1?"s":""}{bulkRows.some((r:any)=>r.error)?" · Fix highlighted rows before importing invalid items.":" ready to import."}
+            </p>
+          )}
           <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
             <Btn variant="outline" onClick={()=>setBulkModal(false)}>Cancel</Btn>
             <Btn onClick={saveBulkSkus} disabled={bulkRows.filter(r=>r.valid).length===0}>Import {bulkRows.filter(r=>r.valid).length} SKU{bulkRows.filter(r=>r.valid).length!==1?"s":""}</Btn>
