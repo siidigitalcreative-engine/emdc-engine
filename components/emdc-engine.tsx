@@ -1498,6 +1498,31 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
   const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""});
+  const DEFAULT_SKU_TABLE_COLUMNS = [
+    { key:"productName", label:"Product",    base:true },
+    { key:"sku",         label:"SKU",        base:true },
+    { key:"brand",       label:"Brand",      base:true },
+    { key:"inventory",   label:"Stock",      base:true },
+    { key:"status",      label:"Status",     base:true },
+  ];
+  const SKU_TABLE_BASE_COLUMN_ALIASES:any = {
+    product:{ key:"productName", label:"Product", base:true },
+    productname:{ key:"productName", label:"Product", base:true },
+    name:{ key:"productName", label:"Product", base:true },
+    sku:{ key:"sku", label:"SKU", base:true },
+    skucode:{ key:"sku", label:"SKU", base:true },
+    brand:{ key:"brand", label:"Brand", base:true },
+    collection:{ key:"collection", label:"Collection", base:true },
+    category:{ key:"collection", label:"Collection", base:true },
+    stock:{ key:"inventory", label:"Stock", base:true },
+    inventory:{ key:"inventory", label:"Stock", base:true },
+    qty:{ key:"inventory", label:"Stock", base:true },
+    status:{ key:"status", label:"Status", base:true },
+  };
+  const [skuTableColumns,setSkuTableColumns] = useState<any[]>(DEFAULT_SKU_TABLE_COLUMNS);
+  const [skuNewColumn,setSkuNewColumn] = useState("");
+  const [skuColumnDragIndex,setSkuColumnDragIndex] = useState<number|null>(null);
+  const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
   const DEFAULT_BULK_COLUMNS = [
     { key:"productName", label:"Product Name", placeholder:"Desk Organizer", locked:true },
     { key:"sku",         label:"SKU",          placeholder:"GL-DO001",        locked:true },
@@ -1572,6 +1597,105 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
   const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id));
   const normalizeKey = (v:any) => String(v||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
+
+  const uniqueSkuTableColumnKey = (label:string, cols:any[]=skuTableColumns) => {
+    const base=`extra_${normalizeKey(label)||"column"}`;
+    const used=new Set(cols.map((c:any)=>c.key));
+    let key=base, n=2;
+    while(used.has(key)){ key=`${base}_${n}`; n++; }
+    return key;
+  };
+  const addSkuTableColumn = () => {
+    const label=skuNewColumn.trim()||`Extra Column ${skuTableColumns.filter((c:any)=>c.custom).length+1}`;
+    const baseCol=SKU_TABLE_BASE_COLUMN_ALIASES[normalizeKey(label)];
+    if(baseCol && !skuTableColumns.some((c:any)=>c.key===baseCol.key)){
+      setSkuTableColumns((p:any[])=>[...p,baseCol]);
+      setSkuNewColumn("");
+      return;
+    }
+    const col={ key:uniqueSkuTableColumnKey(label), label, custom:true };
+    setSkuTableColumns((p:any[])=>[...p,col]);
+    setSkuNewColumn("");
+  };
+  const renameSkuTableColumn = (key:string, label:string) => {
+    const clean=label;
+    const oldCol=skuTableColumns.find((c:any)=>c.key===key);
+    setSkuTableColumns((p:any[])=>p.map((c:any)=>c.key===key?{...c,label:clean}:c));
+    if(oldCol?.custom && oldCol.label!==clean){
+      commitSkuStorage((p:any[])=>p.map((s:any)=>{
+        const extra={...(s.extraFields||{})};
+        if(Object.prototype.hasOwnProperty.call(extra, oldCol.label)){
+          extra[clean]=extra[oldCol.label];
+          delete extra[oldCol.label];
+        }
+        return {...s,extraFields:extra};
+      }));
+    }
+  };
+  const removeSkuTableColumn = (col:any) => {
+    setSkuTableColumns((p:any[])=>p.filter((c:any)=>c.key!==col.key));
+    if(col.custom){
+      commitSkuStorage((p:any[])=>p.map((s:any)=>{
+        const extra={...(s.extraFields||{})};
+        delete extra[col.label];
+        delete extra[col.key];
+        return {...s,extraFields:extra};
+      }));
+    }
+  };
+  const moveSkuTableColumn = (from:number, to:number) => {
+    setSkuTableColumns((p:any[])=>{
+      if(to<0||to>=p.length||from===to) return p;
+      const next=[...p];
+      const [moved]=next.splice(from,1);
+      next.splice(to,0,moved);
+      return next;
+    });
+  };
+  const resetSkuTableColumns = () => setSkuTableColumns(DEFAULT_SKU_TABLE_COLUMNS);
+  useEffect(()=>{
+    const extraLabels=Array.from(new Set(skuStorage.flatMap((s:any)=>Object.keys(s.extraFields||{})))).filter(Boolean);
+    if(!extraLabels.length) return;
+    setSkuTableColumns((prev:any[])=>{
+      const used=new Set(prev.map((c:any)=>String(c.label).toLowerCase()));
+      const additions=extraLabels.filter((label:any)=>!used.has(String(label).toLowerCase())).map((label:any,idx:number)=>({
+        key:uniqueSkuTableColumnKey(String(label),[...prev,...extraLabels.slice(0,idx).map((l:any)=>({key:`extra_${normalizeKey(l)}`}))]),
+        label:String(label),
+        custom:true,
+      }));
+      return additions.length?[...prev,...additions]:prev;
+    });
+  },[skuStorage]);
+  const reorderSkuRows = (dragId:any, targetId:any, placement:"before"|"after"="before") => {
+    if(!dragId||!targetId||dragId===targetId) return;
+    commitSkuStorage((p:any[])=>{
+      const moving=p.find((s:any)=>s.id===dragId);
+      if(!moving) return p;
+      const next=p.filter((s:any)=>s.id!==dragId);
+      const targetIndex=next.findIndex((s:any)=>s.id===targetId);
+      if(targetIndex<0) return p;
+      next.splice(targetIndex+(placement==="after"?1:0),0,moving);
+      return next;
+    });
+  };
+  const moveSkuRow = (id:any, dir:number) => {
+    const order=filteredSkus.map((s:any)=>s.id);
+    const from=order.indexOf(id), to=from+dir;
+    if(from<0||to<0||to>=order.length) return;
+    reorderSkuRows(id,order[to],dir>0?"after":"before");
+  };
+  const getSkuExtraValue = (s:any, col:any) => {
+    const extra=s.extraFields||{};
+    return extra[col.label] ?? extra[col.key] ?? "";
+  };
+  const setSkuExtraValue = (id:any, col:any, value:string) => {
+    commitSkuStorage((p:any[])=>p.map((s:any)=>{
+      if(s.id!==id) return s;
+      const extra={...(s.extraFields||{})};
+      extra[col.label||col.key]=value;
+      return {...s,extraFields:extra};
+    }));
+  };
   const parseStock = (v:any) => { const n=parseInt(String(v||"0").replace(/,/g,"")); return Number.isFinite(n)?n:0; };
   const parseStatusValue = (v:any) => {
     const raw=String(v||"").trim();
@@ -1881,6 +2005,27 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
   const bulkGridTemplate = `${isMobile?"36px":"42px"} ${BULK_COLUMNS.map((c:any)=>bulkColumnWidth(c.key)).join(" ")}`;
   const bulkTableMinWidth = isMobile ? Math.max(820,36+(BULK_COLUMNS.length*140)) : Math.max(760,42+(BULK_COLUMNS.length*120));
+  const skuTableColumnWidth = (key:string) => {
+    if(key==="productName") return "minmax(220px,1.6fr)";
+    if(key==="sku") return "minmax(150px,.9fr)";
+    if(key==="brand") return "minmax(130px,.8fr)";
+    if(key==="collection") return "minmax(140px,.8fr)";
+    if(key==="inventory") return "minmax(90px,.5fr)";
+    if(key==="status") return "minmax(120px,.7fr)";
+    return "minmax(140px,.9fr)";
+  };
+  const skuGridTemplate = `48px ${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")} 90px`;
+  const skuTableMinWidth = Math.max(760,48+90+(skuTableColumns.length*140));
+  const renderSkuDesktopCell = (s:any, col:any, brand:any, st:any) => {
+    if(col.key==="productName") return <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>;
+    if(col.key==="sku") return <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>;
+    if(col.key==="brand") return <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} /><span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{brand.name}</span></div>}</div>;
+    if(col.key==="collection") return <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection||"Uncategorized"}</span>;
+    if(col.key==="inventory") return <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>;
+    if(col.key==="status") return <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>;
+    return <input value={getSkuExtraValue(s,col)} onChange={e=>setSkuExtraValue(s.id,col,e.target.value)} placeholder="—"
+      style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />;
+  };
 
   const BrandSidebar = () => (
     <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -1938,6 +2083,17 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               </div>
               {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
             </div>
+            {!isMobile&&(
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
+                <span style={{ fontSize:12,color:C.muted }}>Manage table: drag column headers to rearrange, rename headers, hide columns, or drag product rows to reorder.</span>
+                <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+                  <input value={skuNewColumn} placeholder="New column name" onChange={e=>setSkuNewColumn(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addSkuTableColumn(); } }}
+                    style={{ height:30,width:150,padding:"6px 9px",fontSize:12,borderRadius:7,border:`1.5px solid ${C.border}`,outline:"none",background:C.surface,color:C.text }} />
+                  <Btn xs variant="outline" onClick={addSkuTableColumn}>+ Column</Btn>
+                  <Btn xs variant="outline" onClick={resetSkuTableColumns}>Reset Columns</Btn>
+                </div>
+              </div>
+            )}
 
             {filteredSkus.length===0?(
               <div style={{ background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12 }}>
@@ -1945,24 +2101,90 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               </div>
             ):(
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                {/* Desktop table header */}
                 {!isMobile&&(
-                  <div style={{ display:"grid",gridTemplateColumns:"1fr 140px 120px 80px 110px 80px",padding:"9px 16px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-                    {["Product","SKU","Brand","Stock","Status",""].map((h,i)=>(<span key={i} style={{ fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>{h}</span>))}
+                  <div style={{ overflowX:"auto" }}>
+                    <div style={{ minWidth:skuTableMinWidth }}>
+                      <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                        <span style={{ padding:"9px 10px",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",borderRight:`1px solid ${C.border}` }}>Move</span>
+                        {skuTableColumns.map((col:any,colIdx:number)=>(
+                          <div key={col.key}
+                            draggable
+                            onDragStart={()=>setSkuColumnDragIndex(colIdx)}
+                            onDragOver={e=>e.preventDefault()}
+                            onDrop={e=>{ e.preventDefault(); if(skuColumnDragIndex!==null) moveSkuTableColumn(skuColumnDragIndex,colIdx); setSkuColumnDragIndex(null); }}
+                            onDragEnd={()=>setSkuColumnDragIndex(null)}
+                            title="Drag to rearrange this column"
+                            style={{ padding:"6px 7px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,cursor:"grab",display:"flex",alignItems:"center",gap:4,minWidth:0 }}>
+                            <span style={{ color:C.faint,fontSize:11,lineHeight:1,flexShrink:0 }}>&#8942;&#8942;</span>
+                            <button type="button" onClick={()=>moveSkuTableColumn(colIdx,colIdx-1)} disabled={colIdx===0}
+                              style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===0?C.faint:C.muted,cursor:colIdx===0?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8249;</button>
+                            <input value={col.label} onChange={e=>renameSkuTableColumn(col.key,e.target.value)} placeholder="Column"
+                              style={{ minWidth:0,width:"100%",background:"transparent",border:"none",outline:"none",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }} />
+                            <button type="button" onClick={()=>moveSkuTableColumn(colIdx,colIdx+1)} disabled={colIdx===skuTableColumns.length-1}
+                              style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===skuTableColumns.length-1?C.faint:C.muted,cursor:colIdx===skuTableColumns.length-1?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8250;</button>
+                            <button type="button" onClick={()=>removeSkuTableColumn(col)} title={col.custom?"Delete custom column":"Hide column"}
+                              style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>
+                          </div>
+                        ))}
+                        <span style={{ padding:"9px 10px",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right" }}>Actions</span>
+                      </div>
+                      {groupedSkus.map(group=>(
+                        <div key={group.label}>
+                          <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,alignItems:"center",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
+                            <span style={{ gridColumn:"1 / -1",fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8,padding:"8px 16px" }}>
+                              {group.label}
+                              <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
+                            </span>
+                          </div>
+                          {group.skus.map((s:any,i:number)=>{
+                            const brand=brands.find(b=>b.id===s.brandId), st=getSD(s);
+                            const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
+                            return (
+                              <div key={s.id} className="emdc-row"
+                                draggable
+                                onDragStart={()=>setSkuRowDragId(s.id)}
+                                onDragOver={e=>e.preventDefault()}
+                                onDrop={e=>{ e.preventDefault(); if(skuRowDragId&&skuRowDragId!==s.id) reorderSkuRows(skuRowDragId,s.id); setSkuRowDragId(null); }}
+                                onDragEnd={()=>setSkuRowDragId(null)}
+                                style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,alignItems:"center",background:skuRowDragId===s.id?C.surfaceAlt:C.surface }}>
+                                <div title="Drag row or use arrows to reorder" style={{ minHeight:48,padding:"8px 8px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:4,cursor:"grab",color:C.faint }}>
+                                  <span style={{ fontSize:12,lineHeight:1 }}>&#8942;&#8942;</span>
+                                  <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
+                                    <button type="button" onClick={()=>moveSkuRow(s.id,-1)} disabled={flatIndex<=0}
+                                      style={{ width:20,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:flatIndex<=0?C.faint:C.muted,cursor:flatIndex<=0?"not-allowed":"pointer",fontSize:10,padding:0,lineHeight:1 }}>&#8593;</button>
+                                    <button type="button" onClick={()=>moveSkuRow(s.id,1)} disabled={flatIndex>=filteredSkus.length-1}
+                                      style={{ width:20,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:flatIndex>=filteredSkus.length-1?C.faint:C.muted,cursor:flatIndex>=filteredSkus.length-1?"not-allowed":"pointer",fontSize:10,padding:0,lineHeight:1 }}>&#8595;</button>
+                                  </div>
+                                </div>
+                                {skuTableColumns.map((col:any)=>(
+                                  <div key={col.key} style={{ minHeight:48,padding:"10px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",minWidth:0 }}>
+                                    {renderSkuDesktopCell(s,col,brand,st)}
+                                  </div>
+                                ))}
+                                <div style={{ minHeight:48,padding:"8px 10px",display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
+                                  <button onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"3px 6px",borderRadius:4 }}>Edit</button>
+                                  <button onClick={()=>delSku(s.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13 }}>&#215;</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-                {groupedSkus.map(group=>(
+                {isMobile&&groupedSkus.map(group=>(
                   <div key={group.label}>
-                    <div style={{ display:isMobile?"flex":"grid",gridTemplateColumns:isMobile?undefined:"1fr 140px 120px 80px 110px 80px",alignItems:"center",gap:isMobile?8:0,padding:isMobile?"9px 16px":"8px 16px",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
-                      <span style={{ gridColumn:isMobile?undefined:"1 / -1",fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8 }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8 }}>
                         {group.label}
                         <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
                       </span>
                     </div>
                     {group.skus.map((s:any,i:number)=>{
                       const brand=brands.find(b=>b.id===s.brandId), st=getSD(s);
-                      // Mobile: card layout
-                      if(isMobile) return (
+                      const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
+                      return (
                         <div key={s.id} className="emdc-row" style={{ padding:"14px 16px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
                           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
                             <div style={{ minWidth:0,flex:1 }}>
@@ -1970,6 +2192,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                               <span style={{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4 }}>{s.sku}</span>
                             </div>
                             <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0 }}>
+                              <button onClick={()=>moveSkuRow(s.id,-1)} disabled={flatIndex<=0} style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:flatIndex<=0?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700 }}>&#8593;</button>
+                              <button onClick={()=>moveSkuRow(s.id,1)} disabled={flatIndex>=filteredSkus.length-1} style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:flatIndex>=filteredSkus.length-1?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700 }}>&#8595;</button>
                               <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
                               <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
                             </div>
@@ -1978,20 +2202,6 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                             {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
                             <span style={{ fontSize:11,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:500 }}>{s.inventory.toLocaleString()} units</span>
                             <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"2px 8px",borderRadius:4,border:`1px solid ${st.color}28` }}>{st.label}</span>
-                          </div>
-                        </div>
-                      );
-                      // Desktop: table row
-                      return (
-                        <div key={s.id} className="emdc-row" style={{ display:"grid",gridTemplateColumns:"1fr 140px 120px 80px 110px 80px",padding:"11px 16px",borderBottom:`1px solid ${C.border}`,alignItems:"center" }}>
-                          <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>
-                          <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>
-                          <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} /><span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{brand.name}</span></div>}</div>
-                          <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>
-                          <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>
-                          <div style={{ display:"flex",gap:6,justifyContent:"flex-end" }}>
-                            <button onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"3px 6px",borderRadius:4 }}>Edit</button>
-                            <button onClick={()=>delSku(s.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13 }}>&#215;</button>
                           </div>
                         </div>
                       );
