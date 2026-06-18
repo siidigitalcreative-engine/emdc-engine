@@ -751,7 +751,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, initia
       <Modal open={editModal&&!!editForm} onClose={()=>{setEditModal(false);setEditForm(null);}} title="Edit Event">
         {editForm&&(
           <EventForm form={editForm} setForm={setEditForm} onSave={saveEdit} saveLabel="Save Changes"
-            showDelete onDelete={()=>{ setManualEvents(p=>p.filter(e=>e.id!==editForm.id)); setEditModal(false); setEditForm(null); }} />
+            showDelete onDelete={()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editForm.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setEditModal(false); setEditForm(null); }} />
         )}
       </Modal>
 
@@ -833,7 +833,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, initia
               </div>
               <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                 {isManual&&<Btn full onClick={()=>openEdit(detailEv)}>Edit Event</Btn>}
-                {isManual&&<Btn full variant="danger" onClick={()=>{ setManualEvents(p=>p.filter(e=>e.id!==detailEv.id)); setDetailEv(null); }}>Delete Event</Btn>}
+                {isManual&&<Btn full variant="danger" onClick={()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==detailEv.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setDetailEv(null); }}>Delete Event</Btn>}
                 {isSeasonal&&onNavigateToGroup&&<Btn full variant="outline" onClick={()=>{ onNavigateToGroup("events"); setDetailEv(null); }}>Edit in Events &amp; Seasons &#8250;</Btn>}
                 {isChecklist&&onNavigateToGroup&&<Btn full variant="outline" onClick={()=>{ onNavigateToGroup(detailEv.groupId); setDetailEv(null); }}>Open Checklist Group &#8250;</Btn>}
                 <Btn full variant="ghost" onClick={()=>setDetailEv(null)}>Close</Btn>
@@ -1067,17 +1067,18 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates }) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems }: any) => {
   const { isMobile } = useBreakpoint();
   const [statuses,setStatuses]       = useState(DEFAULT_STATUSES);
+  const saveStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
   const [statusModal,setStatusModal] = useState(false);
-  const [items,setItems] = useState(()=>{ const out={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType][dept]||[]).map(t=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
+  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType][dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [skuPickDept,setSkuPickDept] = useState(null);
-  const upd    = (dept,item) => setItems(p=>({...p,[dept]:p[dept].map(i=>i.id===item.id?item:i)}));
-  const del    = (dept,id)   => setItems(p=>({...p,[dept]:p[dept].filter(i=>i.id!==id)}));
-  const addItem= dept=>{ if(!newText[dept].trim()) return; setItems(p=>({...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:""}]})); setNewText(p=>({...p,[dept]:""})); };
+  const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onStateChange) onStateChange({checklistItems:{[group.id]:next}}); return next; });
+  const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onStateChange) onStateChange({checklistItems:{[group.id]:next}}); return next; });
+  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onStateChange) onStateChange({checklistItems:{[group.id]:next}}); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
   const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems(p=>({...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:""}]})); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=LAUNCH_TYPES[group.launchType];
@@ -1145,7 +1146,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates }) => {
           );
         })}
       </div>
-      <StatusManagerModal open={statusModal} onClose={()=>setStatusModal(false)} statuses={statuses} onChange={setStatuses} />
+      <StatusManagerModal open={statusModal} onClose={()=>setStatusModal(false)} statuses={statuses} onChange={saveStatuses} />
     </div>
   );
 };
@@ -1337,7 +1338,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
   const deleteGroup = id=>{ setGroups(p=>{ const next=p.filter(g=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
   const activeGroup = groups.find(g=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={null} />;
 
   return (
     <div>
@@ -1623,9 +1624,9 @@ export default function App({
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
 
-  const handleGroupCreated = g=>{
+  const handleGroupCreated = (g:any)=>{
     if(!g.deadline) return;
-    setChecklistCalEvents(p=>[...p,{id:"cl-"+g.id,date:g.deadline,...(g.deadlineEnd?{dateEnd:g.deadlineEnd}:{}),title:g.groupName+(g.deadlineEnd?" - Date Range":" - Deadline"),type:"deadline",color:"#8B5CF6",fromChecklist:true,groupId:g.id}]);
+    setChecklistCalEvents((p:any)=>{ const next=[...p,{id:"cl-"+g.id,date:g.deadline,...(g.deadlineEnd?{dateEnd:g.deadlineEnd}:{}),title:g.groupName+(g.deadlineEnd?" - Date Range":" - Deadline"),type:"deadline",color:"#8B5CF6",fromChecklist:true,groupId:g.id}]; if(onStateChange) onStateChange({calendarEvents:next}); return next; });
   };
   const handleNavigateToGroup = target=>{
     // target can be a groupId string OR "events" to go to Events & Seasons tab
