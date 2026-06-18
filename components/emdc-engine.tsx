@@ -1599,6 +1599,41 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id));
   const normalizeKey = (v:any) => String(v||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
 
+  const BULK_PLACEHOLDERS:any = {
+    productName:"Desk Organizer",
+    sku:"GL-DO001",
+    brand:"Gray Label",
+    collection:"Workspace",
+    inventory:"50",
+    status:"Active",
+  };
+  const buildBulkColumnsFromSkuTable = (cols:any[]=skuTableColumns) => cols.map((col:any)=>({
+    key:col.key,
+    label:col.label,
+    placeholder:BULK_PLACEHOLDERS[col.key]||"",
+    locked:!col.custom,
+    custom:!!col.custom,
+    base:!!col.base,
+  }));
+  const buildBulkRowsForColumns = (cols:any[], count:number=8) => Array.from({length:count},()=>{
+    const row:any = { id:uid() };
+    cols.forEach((col:any)=>{ row[col.key] = ""; });
+    return row;
+  });
+  const syncBulkColumnsFromSkuTable = () => {
+    const nextColumns = buildBulkColumnsFromSkuTable();
+    setBulkColumns(nextColumns);
+    setBulkGridRows(buildBulkRowsForColumns(nextColumns,8));
+    setBulkError("");
+    setBulkSelection(null);
+    setBulkSelectedRows([]);
+    setBulkActiveCell(null);
+  };
+  const toggleSkuTableEditMode = () => {
+    if (skuTableEditMode) syncBulkColumnsFromSkuTable();
+    setSkuTableEditMode(v=>!v);
+  };
+
   const uniqueSkuTableColumnKey = (label:string, cols:any[]=skuTableColumns) => {
     const base=`extra_${normalizeKey(label)||"column"}`;
     const used=new Set(cols.map((c:any)=>c.key));
@@ -1743,7 +1778,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return next;
     });
   };
-  const resetBulkColumns = () => { setBulkColumns(DEFAULT_BULK_COLUMNS); setBulkSelection(null); setBulkActiveCell(null); };
+  const resetBulkColumns = () => { syncBulkColumnsFromSkuTable(); };
   const getBulkCellKey = (rowIndex:number, colIndex:number) => `${rowIndex}:${colIndex}`;
   const getBulkRange = (selection:any=bulkSelection) => {
     if(!selection) return null;
@@ -1962,7 +1997,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(e.key==="Enter"){ e.preventDefault(); focusBulkCell(rowIndex+(e.shiftKey?-1:1),colIndex); return; }
     if(e.key==="Tab"){ e.preventDefault(); focusBulkCell(rowIndex,colIndex+(e.shiftKey?-1:1)); return; }
   };
-  const openBulk = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); setBulkSelection(null); setBulkSelectedRows([]); setBulkActiveCell(null); setBulkModal(true); };
+  const openBulk = () => { syncBulkColumnsFromSkuTable(); setBulkModal(true); };
   const saveBulkSkus = () => {
     const rows=bulkRows.filter(r=>r.valid);
     if(!rows.length){ setBulkError("No valid SKU rows to import."); return; }
@@ -2064,7 +2099,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
           <button onClick={()=>setShowSidebar(!showSidebar)} style={{ flex:1,padding:"9px 14px",borderRadius:9,border:`1.5px solid ${C.border}`,background:showSidebar?C.accent:C.surface,color:showSidebar?"#fff":C.textSub,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
             {activeBrandObj?<><div style={{ width:8,height:8,borderRadius:"50%",background:showSidebar?"#fff":activeBrandObj.color }} />{activeBrandObj.name}</>:"All Brands"} &#8250;
           </button>
-          <Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={()=>setSkuTableEditMode(v=>!v)}>{skuTableEditMode?"Done":"Edit"}</Btn>
+          <Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done":"Edit"}</Btn>
           <Btn sm onClick={openBulk} variant="outline">Paste</Btn>
           <Btn sm onClick={openAdd}>+ Add SKU</Btn>
         </div>
@@ -2086,7 +2121,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                 {activeBrandObj&&<div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}><div style={{ width:12,height:12,borderRadius:"50%",background:activeBrandObj.color }} /><span style={{ fontSize:15,fontWeight:700,color:C.text }}>{activeBrandObj.name}</span></div>}
                 <span style={{ fontSize:12,color:C.muted }}>{filteredSkus.length} SKU{filteredSkus.length!==1?"s":""}</span>
               </div>
-              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={()=>setSkuTableEditMode(v=>!v)}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
+              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
             </div>
             {!isMobile&&skuTableEditMode&&(
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
@@ -2235,7 +2270,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,border:`1px solid ${C.border}` }}>
             <p style={{ margin:"0 0 6px",fontSize:13,fontWeight:700,color:C.text }}>Copy from Excel or Google Sheets, then paste here.</p>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Recommended columns: Product Name, SKU, Brand, Collection, Stock, Status. Header row is optional. Existing SKUs with the same SKU code will be updated.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>This sheet follows the current SKU Storage table columns and order. Header row is optional. Existing SKUs with the same SKU code will be updated.</p>
           </div>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
             <p style={{ margin:0,fontSize:12,color:C.muted }}>Use this like a mini spreadsheet. Click and drag cells to select, copy/paste ranges, press Delete to clear selected cells, or click row numbers to select and delete rows.</p>
