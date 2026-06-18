@@ -981,12 +981,12 @@ const EventsView = ({ skuStorage, brands, onStateChange, initialEvents: initialS
 
       <Modal open={addEventModal} onClose={()=>setAddEventModal(false)} title="Add Custom Event" width={500}>
         <EvForm form={evForm} setForm={setEvForm} saveLabel="Add Event"
-          onSave={()=>{ if(!evForm.name.trim()) return; setEvents(p=>[...p,{id:uid(),...evForm,calDate:evForm.calDate||null,calDateEnd:evForm.calDateEnd||null,products:[]}]); setEvForm({name:"",date:"",type:"holiday",color:"#374151",desc:"",calDate:"",calDateEnd:""}); setAddEventModal(false); }} />
+          onSave={()=>{ if(!evForm.name.trim()) return; setEvents((p:any)=>{ const next=[...p,{id:uid(),...evForm,calDate:evForm.calDate||null,calDateEnd:evForm.calDateEnd||null,products:[]}]; if(onStateChange) onStateChange({seasonalEvents:next}); return next; }); setEvForm({name:"",date:"",type:"holiday",color:"#374151",desc:"",calDate:"",calDateEnd:""}); setAddEventModal(false); }} />
       </Modal>
       <Modal open={editEvModal&&!!editEvForm} onClose={()=>{setEditEvModal(false);setEditEvForm(null);}} title="Edit Event" width={500}>
         {editEvForm&&<EvForm form={editEvForm} setForm={setEditEvForm} saveLabel="Save Changes"
-          onSave={()=>{ setEvents(p=>p.map(e=>e.id===editEvForm.id?editEvForm:e)); setEditEvModal(false); setEditEvForm(null); }}
-          onDelete={()=>{ setEvents(p=>p.filter(e=>e.id!==editEvForm.id)); setEditEvModal(false); setEditEvForm(null); }} />}
+          onSave={()=>{ setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===editEvForm.id?editEvForm:e); if(onStateChange) onStateChange({seasonalEvents:next}); return next; }); setEditEvModal(false); setEditEvForm(null); }}
+          onDelete={()=>{ setEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editEvForm.id); if(onStateChange) onStateChange({seasonalEvents:next}); return next; }); setEditEvModal(false); setEditEvForm(null); }} />}
       </Modal>
     </div>
   );
