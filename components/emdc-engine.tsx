@@ -1498,14 +1498,18 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
   const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""});
-  const BULK_COLUMNS = [
-    { key:"productName", label:"Product Name", placeholder:"Desk Organizer" },
-    { key:"sku",         label:"SKU",          placeholder:"GL-DO001" },
-    { key:"brand",       label:"Brand",        placeholder:"Gray Label" },
-    { key:"collection",  label:"Collection",   placeholder:"Workspace" },
-    { key:"inventory",   label:"Stock",        placeholder:"50" },
-    { key:"status",      label:"Status",       placeholder:"Active" },
+  const DEFAULT_BULK_COLUMNS = [
+    { key:"productName", label:"Product Name", placeholder:"Desk Organizer", locked:true },
+    { key:"sku",         label:"SKU",          placeholder:"GL-DO001",        locked:true },
+    { key:"brand",       label:"Brand",        placeholder:"Gray Label",      locked:true },
+    { key:"collection",  label:"Collection",   placeholder:"Workspace",       locked:true },
+    { key:"inventory",   label:"Stock",        placeholder:"50",              locked:true },
+    { key:"status",      label:"Status",       placeholder:"Active",          locked:true },
   ];
+  const [bulkColumns,setBulkColumns] = useState<any[]>(DEFAULT_BULK_COLUMNS);
+  const [bulkNewColumn,setBulkNewColumn] = useState("");
+  const [bulkDragIndex,setBulkDragIndex] = useState<number|null>(null);
+  const BULK_COLUMNS = bulkColumns;
   const BULK_FIELDS = BULK_COLUMNS.map(c=>c.key);
   const newBulkRow = (data:any={}) => ({ id:uid(), productName:"", sku:"", brand:"", collection:"", inventory:"", status:"", ...data });
   const makeBulkRows = (count:number=8) => Array.from({length:count},()=>newBulkRow());
@@ -1567,7 +1571,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
   const rowHasInput = (r:any) => BULK_FIELDS.some((f:any)=>String(r[f]||"").trim());
   const splitBulkLine = (line:string) => line.includes("\t") ? line.split("\t") : line.split(",");
-  const headerMap:any = {
+  const baseHeaderMap:any = {
     productname:"productName", product:"productName", name:"productName", item:"productName",
     sku:"sku", skucode:"sku", code:"sku",
     brand:"brand", brandname:"brand",
@@ -1575,13 +1579,44 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     stock:"inventory", inventory:"inventory", qty:"inventory", quantity:"inventory",
     status:"status"
   };
+  const uniqueBulkColumnKey = (label:string) => {
+    const base=`extra_${normalizeKey(label)||"column"}`;
+    const used=new Set(BULK_COLUMNS.map((c:any)=>c.key));
+    let key=base, n=2;
+    while(used.has(key)){ key=`${base}_${n}`; n++; }
+    return key;
+  };
+  const addBulkColumn = () => {
+    const label=bulkNewColumn.trim()||`Extra Column ${BULK_COLUMNS.filter((c:any)=>c.custom).length+1}`;
+    const col={ key:uniqueBulkColumnKey(label), label, placeholder:"", custom:true };
+    setBulkColumns((p:any[])=>[...p,col]);
+    setBulkGridRows((p:any[])=>p.map((r:any)=>({...r,[col.key]:""})));
+    setBulkNewColumn("");
+  };
+  const renameBulkColumn = (key:string, label:string) => setBulkColumns((p:any[])=>p.map((c:any)=>c.key===key?{...c,label}:c));
+  const removeBulkColumn = (key:string) => {
+    setBulkColumns((p:any[])=>p.filter((c:any)=>c.key!==key || !c.custom));
+    setBulkGridRows((p:any[])=>p.map((r:any)=>{ const next={...r}; delete next[key]; return next; }));
+  };
+  const moveBulkColumn = (from:number, to:number) => {
+    setBulkColumns((p:any[])=>{
+      if(to<0||to>=p.length||from===to) return p;
+      const next=[...p];
+      const [moved]=next.splice(from,1);
+      next.splice(to,0,moved);
+      return next;
+    });
+  };
+  const resetBulkColumns = () => setBulkColumns(DEFAULT_BULK_COLUMNS);
   const parsePastedGrid = (text:string, startField:string="productName") => {
     const lines=text.replace(/\r/g,"").split("\n").filter(l=>l.trim());
     if(!lines.length) return [];
     let rows=lines.map(splitBulkLine).map(r=>r.map(c=>c.trim()));
     const first=rows[0]||[];
     const detected:any = {};
-    first.forEach((h,i)=>{ const mapped=headerMap[normalizeKey(h)]; if(mapped) detected[mapped]=i; });
+    const dynamicHeaderMap:any = {...baseHeaderMap};
+    BULK_COLUMNS.forEach((c:any)=>{ if(c.label) dynamicHeaderMap[normalizeKey(c.label)] = c.key; });
+    first.forEach((h,i)=>{ const mapped=dynamicHeaderMap[normalizeKey(h)]; if(mapped) detected[mapped]=i; });
     const hasHeader=Object.keys(detected).length>=2 && (detected.productName!==undefined || detected.sku!==undefined);
     if(hasHeader){
       rows=rows.slice(1);
@@ -1605,11 +1640,17 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     const collection=String(r.collection||"").trim();
     const inventory=parseStock(r.inventory);
     const st=parseStatusValue(r.status);
+    const extraFields:any = {};
+    BULK_COLUMNS.filter((c:any)=>c.custom).forEach((c:any)=>{
+      const label=String(c.label||c.key).trim();
+      const value=String(r[c.key]||"").trim();
+      if(label&&value) extraFields[label]=value;
+    });
     const empty=!rowHasInput(r);
     const error=empty?"":!productName?"Missing product name":!sku?"Missing SKU":"";
-    return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, inventory, ...st, error, valid:!empty&&!error, empty };
+    return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, inventory, extraFields, ...st, error, valid:!empty&&!error, empty };
   }).filter((r:any)=>!r.empty);
-  const bulkRows = useMemo(()=>parseGridRows(bulkGridRows),[bulkGridRows]);
+  const bulkRows = useMemo(()=>parseGridRows(bulkGridRows),[bulkGridRows,bulkColumns]);
   const updateBulkCell = (rowId:any, field:string, value:string) => setBulkGridRows((p:any[])=>p.map((r:any)=>r.id===rowId?{...r,[field]:value}:r));
   const addBulkRows = (count:number=10) => setBulkGridRows((p:any[])=>[...p,...makeBulkRows(count)]);
   const clearBulkRows = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); };
@@ -1645,7 +1686,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     };
     const nextSkus=[...skuStorage];
     rows.forEach((r:any)=>{
-      const e={ id:uid(), brandId:getBrandId(r.brand), productName:r.productName.trim(), collection:r.collection.trim(), sku:r.sku.trim(), inventory:r.inventory, status:r.status, customStatus:r.customStatus||"" };
+      const e={ id:uid(), brandId:getBrandId(r.brand), productName:r.productName.trim(), collection:r.collection.trim(), sku:r.sku.trim(), inventory:r.inventory, status:r.status, customStatus:r.customStatus||"", extraFields:r.extraFields||{} };
       const existingIndex=nextSkus.findIndex((s:any)=>s.sku.toLowerCase()===e.sku.toLowerCase());
       if(existingIndex>=0) nextSkus[existingIndex]={...nextSkus[existingIndex],...e,id:nextSkus[existingIndex].id};
       else nextSkus.push(e);
@@ -1658,7 +1699,20 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
   const STATUS_OPTS=[{value:"active",label:"Active",color:"#22C55E"},{value:"nostocks",label:"No Stocks",color:"#EF4444"},{value:"custom",label:"Custom",color:"#6B7280"}];
   const getSD = s=>{ if(s.status==="active") return{label:"Active",color:"#22C55E"}; if(s.status==="nostocks") return{label:"No Stocks",color:"#EF4444"}; return{label:s.customStatus||"Custom",color:"#6B7280"}; };
-  const bulkGridTemplate = isMobile ? "36px 180px 140px 130px 130px 90px 120px" : "42px 1.5fr 1fr 1fr 1fr .7fr .9fr";
+  const bulkColumnWidth = (key:string) => {
+    if(isMobile){
+      if(key==="productName") return "180px";
+      if(key==="sku") return "140px";
+      if(key==="inventory") return "90px";
+      return "130px";
+    }
+    if(key==="productName") return "1.5fr";
+    if(key==="inventory") return ".7fr";
+    if(key==="status") return ".9fr";
+    return "1fr";
+  };
+  const bulkGridTemplate = `${isMobile?"36px":"42px"} ${BULK_COLUMNS.map((c:any)=>bulkColumnWidth(c.key)).join(" ")}`;
+  const bulkTableMinWidth = isMobile ? Math.max(820,36+(BULK_COLUMNS.length*140)) : Math.max(760,42+(BULK_COLUMNS.length*120));
 
   const BrandSidebar = () => (
     <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -1810,18 +1864,45 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Recommended columns: Product Name, SKU, Brand, Collection, Stock, Status. Header row is optional. Existing SKUs with the same SKU code will be updated.</p>
           </div>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-            <p style={{ margin:0,fontSize:12,color:C.muted }}>Use the table below like a mini sheet. Click any cell, paste from Excel or Google Sheets, then edit before importing.</p>
-            <div style={{ display:"flex",gap:6 }}>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Use the table below like a mini sheet. Drag column headers or use the arrows to rearrange columns before pasting.</p>
+            <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
+              <input value={bulkNewColumn} placeholder="New column name" onChange={e=>setBulkNewColumn(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addBulkColumn(); } }}
+                style={{ height:30,width:150,padding:"6px 9px",fontSize:12,borderRadius:7,border:`1.5px solid ${C.border}`,outline:"none",background:C.surface,color:C.text }} />
+              <Btn xs variant="outline" onClick={addBulkColumn}>+ Column</Btn>
               <Btn xs variant="outline" onClick={()=>addBulkRows(10)}>+ 10 Rows</Btn>
+              <Btn xs variant="outline" onClick={resetBulkColumns}>Reset Columns</Btn>
               <Btn xs variant="outline" onClick={clearBulkRows}>Clear</Btn>
             </div>
           </div>
           <div style={{ border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
             <div style={{ overflowX:"auto" }}>
-              <div style={{ minWidth:isMobile?820:"auto" }}>
+              <div style={{ minWidth:bulkTableMinWidth }}>
                 <div style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
                   <span style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}` }}>#</span>
-                  {BULK_COLUMNS.map((c:any)=><span key={c.key} style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}` }}>{c.label}</span>)}
+                  {BULK_COLUMNS.map((c:any,colIdx:number)=>(
+                    <div key={c.key}
+                      draggable
+                      onDragStart={()=>setBulkDragIndex(colIdx)}
+                      onDragOver={e=>e.preventDefault()}
+                      onDrop={e=>{ e.preventDefault(); if(bulkDragIndex!==null) moveBulkColumn(bulkDragIndex,colIdx); setBulkDragIndex(null); }}
+                      onDragEnd={()=>setBulkDragIndex(null)}
+                      title="Drag to rearrange this column"
+                      style={{ padding:"6px 7px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,cursor:"grab",display:"flex",alignItems:"center",gap:4,minWidth:0 }}>
+                      <span style={{ color:C.faint,fontSize:11,lineHeight:1,flexShrink:0 }}>&#8942;&#8942;</span>
+                      <button type="button" onClick={()=>moveBulkColumn(colIdx,colIdx-1)} disabled={colIdx===0}
+                        style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===0?C.faint:C.muted,cursor:colIdx===0?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8249;</button>
+                      {c.custom ? (
+                        <input value={c.label} onChange={e=>renameBulkColumn(c.key,e.target.value)} placeholder="Column name"
+                          style={{ minWidth:0,width:"100%",background:"transparent",border:"none",outline:"none",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }} />
+                      ) : (
+                        <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{c.label}</span>
+                      )}
+                      <button type="button" onClick={()=>moveBulkColumn(colIdx,colIdx+1)} disabled={colIdx===BULK_COLUMNS.length-1}
+                        style={{ width:18,height:18,borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:colIdx===BULK_COLUMNS.length-1?C.faint:C.muted,cursor:colIdx===BULK_COLUMNS.length-1?"not-allowed":"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#8250;</button>
+                      {c.custom&&<button type="button" onClick={()=>removeBulkColumn(c.key)} title="Remove custom column"
+                        style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>}
+                    </div>
+                  ))}
                 </div>
                 <div style={{ maxHeight:390,overflowY:"auto" }}>
                   {bulkGridRows.map((r:any,idx:number)=>{
