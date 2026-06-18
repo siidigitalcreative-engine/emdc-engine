@@ -585,11 +585,15 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
     </div>
   );
 
-  // Cell layout constants — consistent across all rows
-  const BAND_H  = 14;   // unified height for ALL event rows (bands + chips same)
-  const CHIP_H  = 14;   // same as BAND_H — all events identical height
-  const GAP     = 1;    // px gap between rows
-  const DATE_H  = 22;   // date number row — consistent on all sizes
+  // Cell layout constants — mobile stays compact; desktop uses more available space
+  const BAND_H  = isMobile ? 14 : 18;   // unified height for ALL event rows (bands + chips same)
+  const CHIP_H  = BAND_H;               // same as BAND_H — all events identical height
+  const GAP     = 1;                    // px gap between rows
+  const DATE_H  = isMobile ? 22 : 28;   // date number row
+  const DAY_MIN_H = isMobile ? DATE_H + 24 : "clamp(78px, 10.5vh, 104px)";
+  const DAY_NUM_SIZE = isMobile ? 18 : 22;
+  const DAY_FONT = isMobile ? 9 : 11;
+  const EVENT_FONT = isMobile ? 8 : 10;
   const dayLabels = isMobile ? DAYS_SHORT : DAYS_FULL;
 
   return (
@@ -628,10 +632,10 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
       {/* Grid */}
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
-          {dayLabels.map((d,i)=>(<div key={i} style={{ padding:isMobile?"7px 0":"9px 0",textAlign:"center",fontSize:11,fontWeight:700,color:C.faint,letterSpacing:".04em",textTransform:"uppercase" }}>{d}</div>))}
+          {dayLabels.map((d,i)=>(<div key={i} style={{ padding:isMobile?"7px 0":"12px 0",textAlign:"center",fontSize:isMobile?11:12,fontWeight:700,color:C.faint,letterSpacing:".04em",textTransform:"uppercase" }}>{d}</div>))}
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gridAutoRows:"min-content" }}>
-          {Array.from({length:firstDay}).map((_,i)=>(<div key={`b${i}`} style={{ minHeight:DATE_H+24,minWidth:0,borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,background:C.bg }} />))}
+          {Array.from({length:firstDay}).map((_,i)=>(<div key={`b${i}`} style={{ minHeight:DAY_MIN_H,minWidth:0,borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,background:C.bg }} />))}
           {Array.from({length:days}).map((_,i)=>{
             const d=i+1;
             const isToday=year===today.getFullYear()&&month===today.getMonth()&&d===today.getDate();
@@ -643,7 +647,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
             return (
               <div key={d}
                 style={{
-                  minHeight:DATE_H+24, minWidth:0, padding:0,
+                  minHeight:DAY_MIN_H, minWidth:0, padding:0,
                   borderRight:col<6?`1px solid ${C.border}`:"none",
                   borderBottom:`1px solid ${C.border}`,
                   background:isToday?"#F5FFF7":C.surface,
@@ -656,8 +660,8 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
                 <div style={{ height:DATE_H,display:"flex",alignItems:"center",paddingLeft:3,flexShrink:0 }}>
                   <span style={{
                     display:"inline-flex",alignItems:"center",justifyContent:"center",
-                    width:18, height:18, borderRadius:"50%",
-                    fontSize:9, fontWeight:isToday?700:400,
+                    width:DAY_NUM_SIZE, height:DAY_NUM_SIZE, borderRadius:"50%",
+                    fontSize:DAY_FONT, fontWeight:isToday?700:400,
                     background:isToday?C.accent:"transparent",
                     color:isToday?"#fff":C.textSub,
                   }}>{d}</span>
@@ -681,7 +685,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
                       {rs.isStart&&(
-                        <span style={{ fontSize:8,fontWeight:700,color:ec,paddingLeft:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.title}</span>
+                        <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.title}</span>
                       )}
                     </div>
                   );
@@ -704,7 +708,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
                         borderRadius: "0",
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
-                      <span style={{ fontSize:8,fontWeight:700,color:ec,paddingLeft:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.title}</span>
+                      <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.title}</span>
                     </div>
                   );
                 })}
@@ -1775,6 +1779,8 @@ export default function App({
     }
   };
   const allCalExtra = useMemo(()=>[...seasonalCalEvents,...checklistCalEvents],[seasonalCalEvents,checklistCalEvents]);
+  const pageMaxWidth = !isMobile && tab==="calendar" ? 1760 : 1280;
+  const pagePadding = isMobile ? "16px 16px 90px" : tab==="calendar" ? "28px 32px" : "28px 28px";
 
   return (
     <>
@@ -1806,7 +1812,7 @@ export default function App({
         </div>
 
         {/* ── Page content ─────────────────────────────────────────────────── */}
-        <div style={{ maxWidth:1280,margin:"0 auto",padding:isMobile?"16px 16px 90px":"28px 28px" }}>
+        <div style={{ maxWidth:pageMaxWidth,margin:"0 auto",padding:pagePadding }}>
           <div style={{ marginBottom:isMobile?16:20 }}>
             <h1 style={{ margin:"0 0 2px",fontSize:isMobile?16:18,fontWeight:700,color:C.text,letterSpacing:"-.02em" }}>{TABS.find(t=>t.id===tab)?.label}</h1>
             <p style={{ margin:0,fontSize:12,color:C.faint }}>
