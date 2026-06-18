@@ -1206,27 +1206,37 @@ const SKUSelector = ({ onNext, skuStorage, brands }) => {
 
 // ─── GROUP EDIT MODAL ────────────────────────────────────────────────────────
 const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: any) => {
+  const [skuMode,setSkuMode]     = useState("manual");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
   const [launchType,setLaunchType] = useState("introduction");
   const [skus,setSkus] = useState<any[]>([]);
+  const [pickedSkus,setPickedSkus] = useState<any[]>([]);
 
   useEffect(()=>{
     if(group){
+      const existingSkus = group.skus?.length ? group.skus : [{id:uid(),value:""}];
+      const storageMatches = (group.skus||[])
+        .map((g:any)=>skuStorage.find((s:any)=>s.id===g.id || s.sku===g.value))
+        .filter(Boolean);
+      const useStorageMode = !!group.skus?.length && storageMatches.length === group.skus.length;
+
       setGroupName(group.groupName||"");
       setDeadline(group.deadline||"");
       setDeadlineEnd(group.deadlineEnd||"");
       setLaunchType(group.launchType||"introduction");
-      setSkus(group.skus?.length ? group.skus : [{id:uid(),value:""}]);
+      setSkus(existingSkus);
+      setPickedSkus(useStorageMode ? storageMatches : []);
+      setSkuMode(useStorageMode ? "storage" : "manual");
     }
-  },[group]);
+  },[group,skuStorage]);
 
   const addSku=()=>setSkus((p:any)=>[...p,{id:uid(),value:""}]);
   const remSku=(id:string)=>setSkus((p:any)=>p.filter((s:any)=>s.id!==id));
   const updSku=(id:string,v:string)=>setSkus((p:any)=>p.map((s:any)=>s.id===id?{...s,value:v}:s));
-  const pickFromStorage=(s:any)=>{ if(!skus.find((x:any)=>x.value===s.sku)) setSkus((p:any)=>[...p.filter((x:any)=>x.value.trim()),{id:uid(),value:s.sku}]); };
-  const finalSkus = skus.filter((s:any)=>s.value.trim());
+  const pickSku=(s:any)=>{ if(!pickedSkus.find((p:any)=>p.id===s.id)) setPickedSkus((p:any)=>[...p,s]); };
+  const finalSkus = skuMode==="storage" ? pickedSkus.map((s:any)=>({id:s.id,value:s.sku})) : skus.filter((s:any)=>s.value.trim());
   const canSave = finalSkus.length>0 && groupName.trim();
 
   if(!group) return null;
@@ -1237,6 +1247,27 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: an
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
         <Field label="Start Date"><DateInput value={deadline} onChange={setDeadline} /></Field>
         <Field label="End Date"><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></Field>
+        <Field label="SKU Source">
+          <div style={{ display:"flex",gap:8 }}>
+            {["manual","storage"].map(m=>(<button key={m} onClick={()=>setSkuMode(m)} style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background:skuMode===m?C.accent:C.surface,color:skuMode===m?"#fff":C.muted,border:`1.5px solid ${skuMode===m?C.accent:C.border}` }}>{m==="manual"?"Enter Manually":"From SKU Storage"}</button>))}
+          </div>
+        </Field>
+        {skuMode==="manual"?(
+          <Field label="SKU(s)">
+            {skus.map((s:any,i:number)=>(<div key={s.id} style={{ display:"flex",gap:8,marginBottom:8 }}><TI value={s.value} onChange={(v:string)=>updSku(s.id,v)} placeholder={`SKU ${i+1}`} style={{ flex:1 }} />{skus.length>1&&<button onClick={()=>remSku(s.id)} style={{ width:40,height:40,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.faint,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>}</div>))}
+            <button onClick={addSku} style={{ padding:"7px 14px",fontSize:12,fontWeight:600,borderRadius:7,border:`1.5px dashed ${C.borderStrong}`,background:"transparent",cursor:"pointer",color:C.muted }}>+ Add SKU</button>
+          </Field>
+        ):(
+          <Field label="Search SKU Storage">
+            {skuStorage.length===0
+              ? <div style={{ padding:"14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No SKUs in storage yet. Go to SKU Storage tab first.</div>
+              : <>
+                  <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickSku} placeholder="Search by product, SKU, or brand..." />
+                  {pickedSkus.length>0&&(<div style={{ marginTop:8,display:"flex",flexWrap:"wrap",gap:6 }}>{pickedSkus.map((s:any)=>(<div key={s.id} style={{ display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}` }}><span style={{ fontSize:11,fontFamily:"monospace",fontWeight:600,color:C.text }}>{s.sku}</span><span style={{ fontSize:11,color:C.muted }}>{s.productName}</span><button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:14,lineHeight:1,padding:"0 0 0 2px" }}>&#215;</button></div>))}</div>)}
+                </>
+            }
+          </Field>
+        )}
         <Field label="Operational Type" hint="(existing checklist items won't change)">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(LAUNCH_TYPES).map(([k,v]:any)=>(
@@ -1247,15 +1278,6 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: an
             ))}
           </div>
         </Field>
-        <Field label="SKU(s)">
-          {skus.map((s:any,i:number)=>(<div key={s.id} style={{ display:"flex",gap:8,marginBottom:8 }}><TI value={s.value} onChange={(v:string)=>updSku(s.id,v)} placeholder={`SKU ${i+1}`} style={{ flex:1 }} />{skus.length>1&&<button onClick={()=>remSku(s.id)} style={{ width:40,height:40,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.faint,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>}</div>))}
-          <button onClick={addSku} style={{ padding:"7px 14px",fontSize:12,fontWeight:600,borderRadius:7,border:`1.5px dashed ${C.borderStrong}`,background:"transparent",cursor:"pointer",color:C.muted }}>+ Add SKU</button>
-        </Field>
-        {skuStorage.length>0&&(
-          <Field label="Add From SKU Storage">
-            <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickFromStorage} placeholder="Search by product, SKU, or brand..." />
-          </Field>
-        )}
         <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline,deadlineEnd,launchType,skus:finalSkus}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
