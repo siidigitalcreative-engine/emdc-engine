@@ -1486,10 +1486,11 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
 };
 
 // ─── SKU STORAGE ─────────────────────────────────────────────────────────────
-const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
+const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange }) => {
   const { isMobile } = useBreakpoint();
   const [activeBrand,setActiveBrand]     = useState(null);
   const [skuModal,setSkuModal]           = useState(false);
+  const [bulkModal,setBulkModal]         = useState(false);
   const [brandModal,setBrandModal]       = useState(false);
   const [editBrandModal,setEditBrandModal] = useState(false);
   const [editBrandForm,setEditBrandForm]   = useState(null);
@@ -1497,6 +1498,23 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
   const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""});
+  const [bulkText,setBulkText] = useState("");
+  const [bulkRows,setBulkRows] = useState<any[]>([]);
+  const [bulkError,setBulkError] = useState("");
+  const commitSkuStorage = (updater:any) => {
+    setSkuStorage((prev:any[]) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if(onStateChange) onStateChange({ skuItems: next });
+      return next;
+    });
+  };
+  const commitBrands = (updater:any) => {
+    setBrands((prev:any[]) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if(onStateChange) onStateChange({ skuBrands: next });
+      return next;
+    });
+  };
   const filteredSkus  = activeBrand ? skuStorage.filter(s=>s.brandId===activeBrand) : skuStorage;
   const collectionOptions = useMemo(() => Array.from(new Set(
     skuStorage
@@ -1515,19 +1533,88 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
     return groups;
   }, [filteredSkus]);
   const activeBrandObj = brands.find(b=>b.id===activeBrand);
-  const addBrand  = ()=>{ if(!bForm.name.trim()) return; setBrands(p=>[...p,{id:uid(),name:bForm.name.trim(),color:"#111827"}]); setBForm({name:"",color:"#111827"}); setBrandModal(false); };
+  const addBrand  = ()=>{ if(!bForm.name.trim()) return; commitBrands((p:any[])=>[...p,{id:uid(),name:bForm.name.trim(),color:"#111827"}]); setBForm({name:"",color:"#111827"}); setBrandModal(false); };
   const openEditBrand = b=>{ setEditBrandForm({...b}); setEditBrandModal(true); };
-  const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; setBrands(p=>p.map(b=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
-  const delBrand  = id=>{ setBrands(p=>p.filter(b=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
+  const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; commitBrands((p:any[])=>p.map((b:any)=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
+  const delBrand  = id=>{ commitBrands((p:any[])=>p.filter((b:any)=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
   const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""}); setEditSkuId(null); setSkuModal(true); };
   const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||""}); setEditSkuId(s.id); setSkuModal(true); };
   const saveSku   = ()=>{
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
-    const e={id:editSkuId||uid(),brandId:sForm.brandId,productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
-    if(editSkuId) setSkuStorage(p=>p.map(s=>s.id===editSkuId?e:s)); else setSkuStorage(p=>[...p,e]);
+    const e={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
+    if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s)); else commitSkuStorage((p:any[])=>[...p,e]);
     setSkuModal(false);
   };
-  const delSku = id=>setSkuStorage(p=>p.filter(s=>s.id!==id));
+  const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id));
+  const BULK_COLUMNS = ["Product Name","SKU","Brand","Collection","Stock","Status"];
+  const normalizeKey = (v:any) => String(v||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
+  const parseStock = (v:any) => { const n=parseInt(String(v||"0").replace(/,/g,"")); return Number.isFinite(n)?n:0; };
+  const parseStatusValue = (v:any) => {
+    const raw=String(v||"").trim();
+    const key=raw.toLowerCase().replace(/[\s_-]+/g,"");
+    if(!raw||key==="active") return {status:"active",customStatus:""};
+    if(["nostock","nostocks","outofstock","outofstocks","soldout","zerostock","zero"].includes(key)) return {status:"nostocks",customStatus:""};
+    return {status:"custom",customStatus:raw};
+  };
+  const parseBulkSkus = (text:string) => {
+    const lines=text.replace(/\r/g,"").split("\n").filter(l=>l.trim());
+    if(!lines.length) return [];
+    const splitLine = (line:string) => line.includes("\t") ? line.split("\t") : line.split(",");
+    const headerMap:any = {
+      productname:"productName", product:"productName", name:"productName", item:"productName",
+      sku:"sku", skucode:"sku", code:"sku",
+      brand:"brand", brandname:"brand",
+      collection:"collection", collectionname:"collection", category:"collection",
+      stock:"inventory", inventory:"inventory", qty:"inventory", quantity:"inventory",
+      status:"status"
+    };
+    let rows=lines.map(splitLine).map(r=>r.map(c=>c.trim()));
+    let columns:any = { productName:0, sku:1, brand:2, collection:3, inventory:4, status:5 };
+    const first=rows[0]||[];
+    const detected:any = {};
+    first.forEach((h,i)=>{ const mapped=headerMap[normalizeKey(h)]; if(mapped) detected[mapped]=i; });
+    if(Object.keys(detected).length>=2 && (detected.productName!==undefined || detected.sku!==undefined)){ columns={...columns,...detected}; rows=rows.slice(1); }
+    return rows.map((cols,idx)=>{
+      const productName=(cols[columns.productName]||"").trim();
+      const sku=(cols[columns.sku]||"").trim();
+      const brand=(cols[columns.brand]||"").trim();
+      const collection=(cols[columns.collection]||"").trim();
+      const inventory=parseStock(cols[columns.inventory]);
+      const st=parseStatusValue(cols[columns.status]);
+      const error=!productName&&!sku?"Empty row":!productName?"Missing product name":!sku?"Missing SKU":"";
+      return { id:`bulk-${idx}`, productName, sku, brand, collection, inventory, ...st, error, valid:!error };
+    }).filter(r=>r.productName||r.sku||r.brand||r.collection||r.inventory||r.status!=="active");
+  };
+  const openBulk = () => { setBulkText(""); setBulkRows([]); setBulkError(""); setBulkModal(true); };
+  const handleBulkText = (v:string) => { const rows=parseBulkSkus(v); setBulkText(v); setBulkRows(rows); setBulkError(rows.length?"":"Paste rows from Excel or Google Sheets to preview them here."); };
+  const saveBulkSkus = () => {
+    const rows=bulkRows.filter(r=>r.valid);
+    if(!rows.length){ setBulkError("No valid SKU rows to import."); return; }
+    const nextBrands=[...brands];
+    const getBrandId = (brandName:string) => {
+      const clean=brandName.trim();
+      const fallback=activeBrand||brands[0]?.id||"";
+      if(!clean) return fallback;
+      const existing=nextBrands.find((b:any)=>b.name.toLowerCase()===clean.toLowerCase());
+      if(existing) return existing.id;
+      const fresh={ id:uid(), name:clean, color:"#111827" };
+      nextBrands.push(fresh);
+      return fresh.id;
+    };
+    const nextSkus=[...skuStorage];
+    rows.forEach((r:any)=>{
+      const e={ id:uid(), brandId:getBrandId(r.brand), productName:r.productName.trim(), collection:r.collection.trim(), sku:r.sku.trim(), inventory:r.inventory, status:r.status, customStatus:r.customStatus||"" };
+      const existingIndex=nextSkus.findIndex((s:any)=>s.sku.toLowerCase()===e.sku.toLowerCase());
+      if(existingIndex>=0) nextSkus[existingIndex]={...nextSkus[existingIndex],...e,id:nextSkus[existingIndex].id};
+      else nextSkus.push(e);
+    });
+    commitBrands(nextBrands);
+    commitSkuStorage(nextSkus);
+    setBulkModal(false);
+    setBulkText("");
+    setBulkRows([]);
+    setBulkError("");
+  };
   const STATUS_OPTS=[{value:"active",label:"Active",color:"#22C55E"},{value:"nostocks",label:"No Stocks",color:"#EF4444"},{value:"custom",label:"Custom",color:"#6B7280"}];
   const getSD = s=>{ if(s.status==="active") return{label:"Active",color:"#22C55E"}; if(s.status==="nostocks") return{label:"No Stocks",color:"#EF4444"}; return{label:s.customStatus||"Custom",color:"#6B7280"}; };
 
@@ -1564,6 +1651,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
           <button onClick={()=>setShowSidebar(!showSidebar)} style={{ flex:1,padding:"9px 14px",borderRadius:9,border:`1.5px solid ${C.border}`,background:showSidebar?C.accent:C.surface,color:showSidebar?"#fff":C.textSub,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
             {activeBrandObj?<><div style={{ width:8,height:8,borderRadius:"50%",background:showSidebar?"#fff":activeBrandObj.color }} />{activeBrandObj.name}</>:"All Brands"} &#8250;
           </button>
+          <Btn sm onClick={openBulk} variant="outline">Paste</Btn>
           <Btn sm onClick={openAdd}>+ Add SKU</Btn>
         </div>
       )}
@@ -1584,12 +1672,12 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
                 {activeBrandObj&&<div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}><div style={{ width:12,height:12,borderRadius:"50%",background:activeBrandObj.color }} /><span style={{ fontSize:15,fontWeight:700,color:C.text }}>{activeBrandObj.name}</span></div>}
                 <span style={{ fontSize:12,color:C.muted }}>{filteredSkus.length} SKU{filteredSkus.length!==1?"s":""}</span>
               </div>
-              {!isMobile&&<Btn sm onClick={openAdd}>+ Add SKU</Btn>}
+              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
             </div>
 
             {filteredSkus.length===0?(
               <div style={{ background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12 }}>
-                <Empty title="No SKUs yet" sub={`Add your first SKU${activeBrandObj?` for ${activeBrandObj.name}`:""}.`} action={<Btn sm onClick={openAdd}>+ Add SKU</Btn>} />
+                <Empty title="No SKUs yet" sub={`Add your first SKU${activeBrandObj?` for ${activeBrandObj.name}`:""}.`} action={<div style={{ display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center" }}><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>} />
               </div>
             ):(
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -1671,6 +1759,57 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage }) => {
             <Btn full variant="danger" onClick={()=>{ delBrand(editBrandForm.id); setEditBrandModal(false); setEditBrandForm(null); }}>Delete Brand</Btn>
           </div>
         )}
+      </Modal>
+
+      <Modal open={bulkModal} onClose={()=>setBulkModal(false)} title="Paste SKUs from Sheet" width={760}>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,border:`1px solid ${C.border}` }}>
+            <p style={{ margin:"0 0 6px",fontSize:13,fontWeight:700,color:C.text }}>Copy from Excel or Google Sheets, then paste here.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Recommended columns: Product Name, SKU, Brand, Collection, Stock, Status. Header row is optional. Existing SKUs with the same SKU code will be updated.</p>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1.5fr 1fr 1fr 1fr .7fr .9fr",gap:6 }}>
+            {BULK_COLUMNS.map(c=><span key={c} style={{ padding:"6px 8px",borderRadius:6,background:C.bg,fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",display:isMobile?"none":"block" }}>{c}</span>)}
+          </div>
+          <textarea value={bulkText} onChange={e=>handleBulkText(e.target.value)}
+            placeholder={`Product Name\tSKU\tBrand\tCollection\tStock\tStatus\nDual-Flow Insulated Tumbler\tQNH-DFT900\tQuencha\tHorizon\t50\tActive\n3 Layer Insulated Lunch Box 1400ml\tQNH-LB1400\tQuencha\tHorizon\t50\tActive`}
+            style={{ width:"100%",minHeight:150,padding:12,fontSize:13,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",fontFamily:"ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace",lineHeight:1.5 }}
+          />
+          {bulkError&&<p style={{ margin:0,fontSize:12,color:C.muted }}>{bulkError}</p>}
+          <div style={{ border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1.5fr 1fr 1fr 1fr .7fr .9fr",padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+              {(isMobile?["Preview"]:BULK_COLUMNS).map(c=><span key={c} style={{ fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>{c}</span>)}
+            </div>
+            <div style={{ maxHeight:260,overflowY:"auto" }}>
+              {bulkRows.length===0 ? (
+                <div style={{ padding:"22px 14px",textAlign:"center",fontSize:12,color:C.faint }}>Pasted rows will preview here.</div>
+              ) : bulkRows.map((r:any)=>{
+                if(isMobile) return (
+                  <div key={r.id} style={{ padding:"10px 12px",borderBottom:`1px solid ${C.border}`,background:r.error?"#FEF2F2":C.surface }}>
+                    <p style={{ margin:"0 0 4px",fontSize:13,fontWeight:700,color:C.text }}>{r.productName||"Missing product name"}</p>
+                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:C.muted }}>
+                      <span>{r.sku||"Missing SKU"}</span><span>{r.brand||"Default brand"}</span><span>{r.collection||"Uncategorized"}</span><span>{r.inventory} stock</span><span>{r.status==="custom"?r.customStatus:r.status}</span>
+                    </div>
+                    {r.error&&<p style={{ margin:"6px 0 0",fontSize:11,color:"#DC2626",fontWeight:700 }}>{r.error}</p>}
+                  </div>
+                );
+                return (
+                  <div key={r.id} style={{ display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr .7fr .9fr",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,alignItems:"center",background:r.error?"#FEF2F2":C.surface,gap:6 }}>
+                    <span style={{ fontSize:12,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.productName||"—"}</span>
+                    <span style={{ fontSize:11,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.sku||"—"}</span>
+                    <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.brand||"Default"}</span>
+                    <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.collection||"Uncategorized"}</span>
+                    <span style={{ fontSize:12,color:C.textSub }}>{r.inventory}</span>
+                    <span style={{ fontSize:11,fontWeight:700,color:r.error?"#DC2626":C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.error || (r.status==="custom" ? (r.customStatus||"Custom") : (r.status==="nostocks"?"No Stocks":"Active"))}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+            <Btn variant="outline" onClick={()=>setBulkModal(false)}>Cancel</Btn>
+            <Btn onClick={saveBulkSkus} disabled={bulkRows.filter(r=>r.valid).length===0}>Import {bulkRows.filter(r=>r.valid).length} SKU{bulkRows.filter(r=>r.valid).length!==1?"s":""}</Btn>
+          </div>
+        </div>
       </Modal>
 
       <Modal open={skuModal} onClose={()=>setSkuModal(false)} title={editSkuId?"Edit SKU":"Add SKU"} width={440}>
@@ -1825,7 +1964,7 @@ export default function App({
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
         </div>
 
         {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
