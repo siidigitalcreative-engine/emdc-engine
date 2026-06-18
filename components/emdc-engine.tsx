@@ -1067,7 +1067,7 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems }: any) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange }: any) => {
   const { isMobile } = useBreakpoint();
   const [statuses,setStatuses]       = useState(DEFAULT_STATUSES);
   const saveStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
@@ -1076,9 +1076,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateC
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [skuPickDept,setSkuPickDept] = useState(null);
-  const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onStateChange) onStateChange({checklistItems:{[group.id]:next}}); return next; });
-  const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onStateChange) onStateChange({checklistItems:{[group.id]:next}}); return next; });
-  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onStateChange) onStateChange({checklistItems:{[group.id]:next}}); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
+  const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onItemsChange) onItemsChange(next); return next; });
+  const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onItemsChange) onItemsChange(next); return next; });
+  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
   const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems(p=>({...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:""}]})); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=LAUNCH_TYPES[group.launchType];
@@ -1322,6 +1322,12 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
   useEffect(() => { if(initialGroups?.length) setGroups(initialGroups); }, []);
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
+  // Lifted items state — keyed by groupId so progress survives navigation
+  const [allGroupItems,setAllGroupItems] = useState<Record<string,any>>({});
+
+  const updateGroupItems = (groupId:string, items:any) => {
+    setAllGroupItems(p=>{ const next={...p,[groupId]:items}; if(onStateChange) onStateChange({checklistItems:{[groupId]:items}}); return next; });
+  };
   const [templates,setTemplates]   = useState(TEMPLATES);
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
@@ -1338,7 +1344,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
   const deleteGroup = id=>{ setGroups(p=>{ const next=p.filter(g=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
   const activeGroup = groups.find(g=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={null} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} />;
 
   return (
     <div>
@@ -1385,7 +1391,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
                     {g.skus.length>4&&<span style={{ fontSize:10,color:C.faint }}>+{g.skus.length-4}</span>}
                   </div>
                 )}
-                <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>3 departments · tap to view</p>
+                {(()=>{ const gItems=allGroupItems[g.id]; if(gItems){ const all=Object.values(gItems).flat() as any[]; const done=all.filter((i:any)=>i.done).length; const pct=all.length?Math.round(done/all.length*100):0; return (<div style={{ marginTop:10 }}><div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}><span style={{ fontSize:10,color:C.muted }}>Progress</span><span style={{ fontSize:10,fontWeight:700,color:C.accent }}>{done}/{all.length} · {pct}%</span></div><div style={{ height:4,background:C.border,borderRadius:2,overflow:"hidden" }}><div style={{ height:"100%",width:`${pct}%`,background:pct===100?"#22C55E":C.accent,borderRadius:2,transition:"width .3s" }} /></div></div>); } return <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>3 departments · tap to view</p>; })()}
               </div>
             </div>
           );})}
