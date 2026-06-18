@@ -472,15 +472,16 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, initia
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
-  const [eventTypes,setEventTypes] = useState(DEFAULT_EVENT_TYPES);
-  useEffect(() => { if(initialEvents?.length) setManualEvents(initialEvents); }, []);
-  useEffect(() => { if(initialTypes?.length) setEventTypes(initialTypes); }, []);
+  const [eventTypes,setEventTypes] = useState(initialTypes?.length ? initialTypes : DEFAULT_EVENT_TYPES);
   const saveEventTypes = (types: any[]) => { setEventTypes(types); if(onStateChange) onStateChange({calendarTypes:types}); };
-  const [manualEvents,setManualEvents] = useState<any[]>([
+  const DEFAULT_MANUAL_EVENTS = [
     { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`, title:"TikTok Production - Quencha Poply", type:"task", color:"#374151" },
     { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(Math.min(today.getDate()+4,28))}`, title:"11.11 Campaign Go-Live", type:"launch", color:"#22C55E" },
     { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(Math.min(today.getDate()+1,28))}`, title:"Shopee Flash Deal Deadline", type:"deadline", color:"#EF4444" },
-  ]);
+  ];
+  const [manualEvents,setManualEvents] = useState<any[]>(initialEvents?.length ? initialEvents : DEFAULT_MANUAL_EVENTS);
+  useEffect(() => { if(initialEvents?.length && manualEvents===DEFAULT_MANUAL_EVENTS) setManualEvents(initialEvents); }, [initialEvents]);
+  useEffect(() => { if(initialTypes?.length && eventTypes===DEFAULT_EVENT_TYPES) setEventTypes(initialTypes); }, [initialTypes]);
   const [filter,setFilter]       = useState("all");
   const [addModal,setAddModal]   = useState(false);
   const [editModal,setEditModal] = useState(false);
@@ -851,8 +852,8 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, initia
 const EventsView = ({ skuStorage, brands, onStateChange, initialEvents: initialSeasonalEvents }: any) => {
   const [filter,setFilter]       = useState("all");
   const [expanded,setExpanded]   = useState(null);
-  const [events,setEvents]       = useState(INITIAL_SEASONAL);
-  useEffect(() => { if(initialSeasonalEvents?.length) setEvents(initialSeasonalEvents); }, []);
+  const [events,setEvents]       = useState(initialSeasonalEvents?.length ? initialSeasonalEvents : INITIAL_SEASONAL);
+  useEffect(() => { if(initialSeasonalEvents?.length && events===INITIAL_SEASONAL) setEvents(initialSeasonalEvents); }, [initialSeasonalEvents]);
   const [addingTo,setAddingTo]   = useState(null);
   const [editingProd,setEditingProd] = useState(null);
   const [prodMode,setProdMode]   = useState("manual");
@@ -1067,9 +1068,9 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange }: any) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange, initialStatuses }: any) => {
   const { isMobile } = useBreakpoint();
-  const [statuses,setStatuses]       = useState(DEFAULT_STATUSES);
+  const [statuses,setStatuses]       = useState(initialStatuses ?? DEFAULT_STATUSES);
   const saveStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
   const [statusModal,setStatusModal] = useState(false);
   const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType][dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
@@ -1079,7 +1080,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateC
   const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onItemsChange) onItemsChange(next); return next; });
   const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onItemsChange) onItemsChange(next); return next; });
   const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
-  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems(p=>({...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:""}]})); setSkuPickDept(null); };
+  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=LAUNCH_TYPES[group.launchType];
   const allItems = Object.values(items).flat();
@@ -1317,13 +1318,14 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange }) => {
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, onGroupNavigated, onStateChange, initialGroups }: any) => {
-  const [groups,setGroups]     = useState<any[]>([]);
-  useEffect(() => { if(initialGroups?.length) setGroups(initialGroups); }, []);
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, onGroupNavigated, onStateChange, initialGroups, initialItems, initialStatuses }: any) => {
+  const [groups,setGroups]     = useState<any[]>(initialGroups ?? []);
+  useEffect(() => { if(initialGroups?.length && groups.length===0) setGroups(initialGroups); }, [initialGroups]);
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
-  // Lifted items state — keyed by groupId so progress survives navigation
-  const [allGroupItems,setAllGroupItems] = useState<Record<string,any>>({});
+  // Lifted items state — keyed by groupId so progress survives navigation and tab switches
+  const [allGroupItems,setAllGroupItems] = useState<Record<string,any>>(initialItems ?? {});
+  useEffect(() => { if(initialItems && Object.keys(allGroupItems).length===0 && Object.keys(initialItems).length>0) setAllGroupItems(initialItems); }, [initialItems]);
 
   const updateGroupItems = (groupId:string, items:any) => {
     setAllGroupItems(p=>{ const next={...p,[groupId]:items}; if(onStateChange) onStateChange({checklistItems:{[groupId]:items}}); return next; });
@@ -1344,7 +1346,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
   const deleteGroup = id=>{ setGroups(p=>{ const next=p.filter(g=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
   const activeGroup = groups.find(g=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} initialStatuses={initialStatuses} />;
 
   return (
     <div>
@@ -1687,7 +1689,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} initialEvents={initialData?.calendarEvents} initialTypes={initialData?.calendarTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} initialEvents={initialData?.seasonalEvents} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} initialGroups={initialData?.checklistGroups} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} initialGroups={initialData?.checklistGroups} initialItems={initialData?.checklistItems} initialStatuses={initialData?.checklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} />}
         </div>
 
