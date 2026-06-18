@@ -1057,10 +1057,11 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange, statuses, setStatuses }: any) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup }: any) => {
   const { isMobile } = useBreakpoint();
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
+  const [groupEditModal,setGroupEditModal] = useState(false);
   const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType][dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
@@ -1089,7 +1090,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateC
               {group.skus.slice(0,3).map(s=>(<span key={s.id} style={{ fontSize:11,color:C.muted,background:C.surfaceAlt,padding:"2px 8px",borderRadius:4,border:`1px solid ${C.border}`,fontFamily:"monospace" }}>{s.value}</span>))}
             </div>
           </div>
-          <Btn sm variant="outline" onClick={()=>setStatusModal(true)}>Manage Statuses</Btn>
+          <div style={{ display:"flex",gap:8,flexShrink:0 }}>
+            <Btn sm variant="outline" onClick={()=>setGroupEditModal(true)}>Edit Group</Btn>
+            <Btn sm variant="outline" onClick={()=>setStatusModal(true)}>Manage Statuses</Btn>
+          </div>
         </div>
         <div style={{ marginTop:14,padding:"12px 14px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
@@ -1136,6 +1140,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateC
         })}
       </div>
       <StatusManagerModal open={statusModal} onClose={()=>setStatusModal(false)} statuses={statuses} onChange={saveStatuses} />
+      <GroupEditModal open={groupEditModal} group={group} onClose={()=>setGroupEditModal(false)} skuStorage={skuStorage} brands={brands}
+        onSave={(patch:any)=>{ if(onUpdateGroup) onUpdateGroup(patch); }} />
     </div>
   );
 };
@@ -1195,6 +1201,64 @@ const SKUSelector = ({ onNext, skuStorage, brands }) => {
         <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline,deadlineEnd})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
+  );
+};
+
+// ─── GROUP EDIT MODAL ────────────────────────────────────────────────────────
+const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: any) => {
+  const [groupName,setGroupName] = useState("");
+  const [deadline,setDeadline]   = useState("");
+  const [deadlineEnd,setDeadlineEnd] = useState("");
+  const [launchType,setLaunchType] = useState("introduction");
+  const [skus,setSkus] = useState<any[]>([]);
+
+  useEffect(()=>{
+    if(group){
+      setGroupName(group.groupName||"");
+      setDeadline(group.deadline||"");
+      setDeadlineEnd(group.deadlineEnd||"");
+      setLaunchType(group.launchType||"introduction");
+      setSkus(group.skus?.length ? group.skus : [{id:uid(),value:""}]);
+    }
+  },[group]);
+
+  const addSku=()=>setSkus((p:any)=>[...p,{id:uid(),value:""}]);
+  const remSku=(id:string)=>setSkus((p:any)=>p.filter((s:any)=>s.id!==id));
+  const updSku=(id:string,v:string)=>setSkus((p:any)=>p.map((s:any)=>s.id===id?{...s,value:v}:s));
+  const pickFromStorage=(s:any)=>{ if(!skus.find((x:any)=>x.value===s.sku)) setSkus((p:any)=>[...p.filter((x:any)=>x.value.trim()),{id:uid(),value:s.sku}]); };
+  const finalSkus = skus.filter((s:any)=>s.value.trim());
+  const canSave = finalSkus.length>0 && groupName.trim();
+
+  if(!group) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Group" width={520}>
+      <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
+        <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
+        <Field label="Start Date"><DateInput value={deadline} onChange={setDeadline} /></Field>
+        <Field label="End Date"><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></Field>
+        <Field label="Operational Type" hint="(existing checklist items won't change)">
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {Object.entries(LAUNCH_TYPES).map(([k,v]:any)=>(
+              <button key={k} onClick={()=>setLaunchType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${launchType===k?C.accent:C.border}`,background:launchType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
+                <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
+                <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${launchType===k?C.accent:C.border}`,background:launchType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{launchType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="SKU(s)">
+          {skus.map((s:any,i:number)=>(<div key={s.id} style={{ display:"flex",gap:8,marginBottom:8 }}><TI value={s.value} onChange={(v:string)=>updSku(s.id,v)} placeholder={`SKU ${i+1}`} style={{ flex:1 }} />{skus.length>1&&<button onClick={()=>remSku(s.id)} style={{ width:40,height:40,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.faint,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>}</div>))}
+          <button onClick={addSku} style={{ padding:"7px 14px",fontSize:12,fontWeight:600,borderRadius:7,border:`1.5px dashed ${C.borderStrong}`,background:"transparent",cursor:"pointer",color:C.muted }}>+ Add SKU</button>
+        </Field>
+        {skuStorage.length>0&&(
+          <Field label="Add From SKU Storage">
+            <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickFromStorage} placeholder="Search by product, SKU, or brand..." />
+          </Field>
+        )}
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline,deadlineEnd,launchType,skus:finalSkus}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+      </div>
+    </Modal>
   );
 };
 
@@ -1309,6 +1373,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange }) => {
 const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
+  const [editingGroup,setEditingGroup] = useState(null);
 
   const updateGroupItems = (groupId:string, items:any) => {
     setAllGroupItems((p:any)=>{ const next={...p,[groupId]:items}; if(onStateChange) onStateChange({checklistItems:{[groupId]:items}}); return next; });
@@ -1328,9 +1393,10 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
 
   const createGroup = cfg=>{ const g={id:uid(),...cfg}; setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; }); if(onGroupCreated) onGroupCreated(g); setActive(g.id); setCreating(false); };
   const deleteGroup = id=>{ setGroups((p:any)=>{ const next=p.filter((g:any)=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
+  const updateGroup = (id:string, patch:any) => { setGroups((p:any)=>{ const next=p.map((g:any)=>g.id===id?{...g,...patch}:g); if(onStateChange) onStateChange({checklistGroups:next}); return next; }); };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
 
   return (
     <div>
@@ -1343,6 +1409,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
       </div>
 
       <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={setTemplates} />
+      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands}
+        onSave={(patch:any)=>updateGroup(editingGroup.id,patch)} />
 
       {creating&&(
         <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:20 }}>
@@ -1365,7 +1433,10 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
               <div style={{ padding:"16px" }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
                   <p style={{ margin:0,fontSize:14,fontWeight:700,color:C.text,flex:1,marginRight:8 }}>{g.groupName}</p>
-                  <button onClick={e=>{e.stopPropagation();deleteGroup(g.id);}} style={{ width:24,height:24,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0 }}>&#215;</button>
+                  <div style={{ display:"flex",gap:4,flexShrink:0 }}>
+                    <button onClick={e=>{e.stopPropagation();setEditingGroup(g);}} style={{ padding:"3px 8px",borderRadius:5,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
+                    <button onClick={e=>{e.stopPropagation();deleteGroup(g.id);}} style={{ width:24,height:24,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0 }}>&#215;</button>
+                  </div>
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                   <Tag color={C.accent} sm>{lt.label}</Tag>
