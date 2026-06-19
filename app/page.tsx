@@ -2394,6 +2394,150 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   );
 };
 
+// ─── AI TEXT GENERATOR ────────────────────────────────────────────────────────
+const AITextGenerator = () => {
+  const [task,setTask] = useState("product_description");
+  const [tone,setTone] = useState("professional");
+  const [input,setInput] = useState("");
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState("");
+  const [output,setOutput] = useState("");
+
+  const taskOptions = [
+    { id:"product_description", label:"Product Description" },
+    { id:"marketplace_title", label:"Shopee/Lazada Title" },
+    { id:"tiktok_caption", label:"TikTok Caption" },
+    { id:"ad_copy", label:"Ad Copy" },
+    { id:"selling_points", label:"Selling Points" },
+    { id:"hashtags", label:"Hashtags" },
+    { id:"image_prompt", label:"Image Prompt Improver" },
+    { id:"video_prompt", label:"Video Prompt Improver" },
+  ];
+
+  const toneOptions = [
+    { id:"professional", label:"Professional" },
+    { id:"premium", label:"Premium" },
+    { id:"casual", label:"Casual" },
+    { id:"taglish", label:"Taglish" },
+    { id:"short", label:"Short & Direct" },
+  ];
+
+  const generateText = async () => {
+    if (!input.trim() || loading) return;
+    setLoading(true);
+    setError("");
+    setOutput("");
+
+    try {
+      const res = await fetch("/api/ai/generate-text", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          task,
+          tone,
+          input:input.trim(),
+        }),
+      });
+
+      const raw = await res.text();
+      let data:any = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(raw || "Text generation failed.");
+      }
+
+      if (!res.ok) {
+        const msg = data?.error || data?.message || "Text generation failed.";
+        throw new Error(typeof msg === "string" ? msg : "Text generation failed.");
+      }
+
+      setOutput(data?.text || "");
+    } catch (err:any) {
+      setError(err?.message || "Text generation failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyOutput = async () => {
+    if (!output) return;
+    try { await navigator.clipboard.writeText(output); } catch {}
+  };
+
+  return (
+    <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18 }}>
+        <div>
+          <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Text Generator</h3>
+          <p style={{ margin:0,fontSize:13,color:C.muted }}>Generate product copy, captions, prompts, titles, selling points, and hashtags using Gemini.</p>
+        </div>
+        <Tag color="#14B8A6">Gemini</Tag>
+      </div>
+
+      <div style={{ display:"grid",gridTemplateColumns:"minmax(0,360px) minmax(0,1fr)",gap:14,alignItems:"start" }}>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <Field label="Output Type">
+            <Select value={task} onChange={setTask}>
+              {taskOptions.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+            </Select>
+          </Field>
+
+          <Field label="Tone">
+            <Select value={tone} onChange={setTone}>
+              {toneOptions.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+            </Select>
+          </Field>
+
+          <Field label="Product / Instruction Input">
+            <textarea
+              value={input}
+              onChange={e=>setInput(e.target.value)}
+              placeholder="Paste product details, features, target platform, or the draft text you want improved..."
+              rows={9}
+              style={{ width:"100%",padding:"12px 14px",fontSize:14,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+              onFocus={e=>e.currentTarget.style.borderColor=C.accent}
+              onBlur={e=>e.currentTarget.style.borderColor=C.border}
+            />
+          </Field>
+
+          {error&&(
+            <div style={{ padding:"10px 12px",borderRadius:9,background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",fontSize:13,fontWeight:600 }}>
+              {error}
+            </div>
+          )}
+
+          <Btn full onClick={generateText} disabled={loading||!input.trim()}>
+            {loading ? "Generating Text..." : "Generate Text"}
+          </Btn>
+        </div>
+
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+            <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Text Result</h4>
+            <div style={{ display:"flex",gap:6 }}>
+              {output&&<Btn xs variant="outline" onClick={copyOutput}>Copy</Btn>}
+              {output&&<Btn xs variant="ghost" onClick={()=>setOutput("")}>Clear</Btn>}
+            </div>
+          </div>
+
+          <div style={{ minHeight:260,padding:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.55,color:output?C.textSub:C.muted,overflowY:"auto" }}>
+            {loading ? "Generating..." : output || "Your generated text will appear here."}
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @media(max-width:1023px){
+          div[style*="grid-template-columns: minmax(0, 360px) minmax(0, 1fr)"]{
+            grid-template-columns:1fr!important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 // ─── AI ENGINE ────────────────────────────────────────────────────────────────
 const AIEngineView = () => {
   const [prompt,setPrompt] = useState("");
@@ -2827,6 +2971,10 @@ const AIEngineView = () => {
             ))}
           </div>
         </div>
+      </div>
+
+      <div style={{ gridColumn:"1 / -1" }}>
+        <AITextGenerator />
       </div>
 
       <Modal open={!!previewOutput} onClose={()=>setPreviewOutput(null)} title="Output Preview" width={820}>
