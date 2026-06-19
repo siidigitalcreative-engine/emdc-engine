@@ -3345,26 +3345,121 @@ const AIAdTemplates = () => {
   ].join("\n")).join("\n\n");
 
   const parseCarouselCards = (raw:string) => {
+    const clean = (value:any) => String(value || "")
+      .replace(/^["'`]+|["'`]+$/g, "")
+      .replace(/^\*+|\*+$/g, "")
+      .trim();
+
+    try {
+      const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/i) || raw.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+        const cards = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.cards) ? parsed.cards : [];
+        if (cards.length) {
+          return Array.from({ length:10 }, (_,i)=>{
+            const card = cards[i] || {};
+            return {
+              id: uid(),
+              cardNumber: i + 1,
+              headline: clean(card.headline || card.title),
+              copy: clean(card.copy || card.text || card.primaryText),
+              visual: clean(card.visual || card.visualDirection || card.image),
+              cta: clean(card.cta || card.callToAction),
+            };
+          });
+        }
+      }
+    } catch {}
+
     const blocks = raw
-      .split(/(?=Card\s*\d+\s*[:\-])/i)
+      .split(/(?=(?:\*\*)?\s*Card\s*\d+\s*(?:[:\-]|\*\*))/i)
       .map(block=>block.trim())
       .filter(Boolean);
 
     return Array.from({ length:10 }, (_,i)=>{
-      const block = blocks[i] || "";
-      const pick = (label:string) => {
-        const match = block.match(new RegExp(label + "\\s*[:\\-]\\s*([^\\n]+)", "i"));
-        return match?.[1]?.trim() || "";
+      const block = blocks.find(b=>new RegExp(`(?:\\*\\*)?\\s*Card\\s*${i+1}\\s*(?:[:\\-]|\\*\\*)`, "i").test(b)) || blocks[i] || "";
+      const pick = (labels:string[]) => {
+        for (const label of labels) {
+          const pattern = new RegExp(`(?:\\*\\*)?\\s*${label}\\s*(?:\\*\\*)?\\s*[:\\-]\\s*([^\\n]+)`, "i");
+          const match = block.match(pattern);
+          if (match?.[1]) return clean(match[1]);
+        }
+        return "";
       };
+      const fallbackLines = block
+        .split("\n")
+        .map(line=>clean(line.replace(/^(?:\*\s*)?(?:Card\s*\d+\s*[:\-]?)?/i, "")))
+        .filter(Boolean);
+
       return {
         id: uid(),
         cardNumber: i + 1,
-        headline: pick("Headline") || pick("Title"),
-        copy: pick("Copy") || pick("Primary Text") || pick("Text"),
-        visual: pick("Visual") || pick("Visual Direction") || pick("Image"),
-        cta: pick("CTA") || pick("Call to Action"),
+        headline: pick(["Headline","Title"]) || fallbackLines[0] || "",
+        copy: pick(["Copy","Primary Text","Text","Caption"]) || fallbackLines[1] || "",
+        visual: pick(["Visual Direction","Visual","Image Direction","Image"]) || fallbackLines[2] || "",
+        cta: pick(["CTA","Call to Action"]) || fallbackLines[3] || "",
       };
     });
+  };
+
+  const fillMissingCarouselCards = async (currentCards:any[]) => {
+    const missingIndexes = currentCards
+      .map((card:any, index:number)=>({ card, index }))
+      .filter(({ card }:any)=>!(card?.headline || card?.copy || card?.visual || card?.cta))
+      .map(({ index }:any)=>index);
+
+    if (!isCarouselFormat || !missingIndexes.length || !adBrief.trim()) return currentCards;
+
+    const instruction = [
+      `Generate only the missing carousel cards for ${selectedPlatform?.name || "Meta"} ${selectedFormat?.name || "Carousel Ad"}.`,
+      `Missing card numbers: ${missingIndexes.map(i=>i+1).join(", ")}.`,
+      "Return compact valid JSON only, no markdown, using this exact structure: { \"cards\": [ { \"cardNumber\": 2, \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\", \"cta\": \"...\" } ] }.",
+      "Keep each field short and ecommerce-ready.",
+      selectedTemplate?.body ? `Use this custom template as the structure and inspiration:\n${selectedTemplate.body}` : "",
+    ].filter(Boolean).join("\n\n");
+
+    const res = await fetch("/api/ai/generate-text", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({
+        task:"ad_template_generator_repair",
+        taskLabel:`${selectedPlatform?.name || "Platform"} ${selectedFormat?.name || "Ad Format"} Missing Cards`,
+        instruction,
+        tone:"professional",
+        input:adBrief.trim(),
+        referenceImages:[],
+      }),
+    });
+
+    const raw = await res.text();
+    let data:any = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      return currentCards;
+    }
+
+    if (!res.ok || !data?.text) return currentCards;
+
+    const repaired = parseCarouselCards(data.text);
+    const next = [...currentCards];
+
+    missingIndexes.forEach((missingIndex:number)=>{
+      const byNumber = repaired.find((card:any)=>Number(card.cardNumber) === missingIndex + 1);
+      const fallback = repaired.find((card:any)=>card.headline || card.copy || card.visual || card.cta);
+      const picked = byNumber || fallback;
+      if (picked) {
+        next[missingIndex] = {
+          ...next[missingIndex],
+          headline:picked.headline || next[missingIndex]?.headline || "",
+          copy:picked.copy || next[missingIndex]?.copy || "",
+          visual:picked.visual || next[missingIndex]?.visual || "",
+          cta:picked.cta || next[missingIndex]?.cta || "",
+        };
+      }
+    });
+
+    return next;
   };
 
   const generateAdForFormat = async () => {
@@ -3380,7 +3475,7 @@ const AIAdTemplates = () => {
 
     try {
       const carouselInstruction = isCarouselFormat
-        ? "Because this is a carousel ad format, generate exactly 10 carousel cards. For each card, use this exact structure: Card 1, Headline, Copy, Visual, CTA. Continue until Card 10."
+        ? "Because this is a carousel ad format, generate exactly 10 carousel cards. Return compact valid JSON only, no markdown, no explanation. Use this structure: { \"cards\": [ { \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\", \"cta\": \"...\" } ] }. The cards array must contain exactly 10 items. Keep each field short so all 10 cards are completed."
         : "Generate one complete ad output for this selected ad format.";
 
       const instruction = [
@@ -3422,7 +3517,14 @@ const AIAdTemplates = () => {
       setGeneratedAdText(textOutput);
 
       if (isCarouselFormat) {
-        setGeneratedAdCards(parseCarouselCards(textOutput));
+        const parsedCards = parseCarouselCards(textOutput);
+        setGeneratedAdCards(parsedCards);
+
+        const hasMissing = parsedCards.some((card:any)=>!(card.headline || card.copy || card.visual || card.cta));
+        if (hasMissing) {
+          const completedCards = await fillMissingCarouselCards(parsedCards);
+          setGeneratedAdCards(completedCards);
+        }
       }
     } catch (err:any) {
       setAdError(err?.message || "Ad generation failed.");
@@ -3663,7 +3765,7 @@ const AIAdTemplates = () => {
                 <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "No format selected"}</p>
               </div>
               <Btn xs onClick={generateAdForFormat} disabled={!selectedFormat || adGenerating}>
-                {adGenerating ? "Generating..." : "Generate Ad"}
+                {adGenerating ? "Generating All..." : "Generate Ad"}
               </Btn>
             </div>
 
