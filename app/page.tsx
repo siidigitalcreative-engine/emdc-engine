@@ -2452,26 +2452,49 @@ const AIEngineView = () => {
 
   const imageUrl = generatedUrls[0] || "";
 
-  const handleReferenceUpload = (files: FileList|null) => {
-    if (!files?.length) return;
-    Array.from(files).forEach(file=>{
-      if (!file.type.startsWith("image/")) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = String(reader.result || "");
-        setReferenceImages(p=>[
-          ...p,
-          {
-            id:uid(),
-            name:file.name,
-            size:file.size,
-            type:file.type,
-            dataUrl,
-          }
-        ].slice(0,6));
+  const compressReferenceImage = (file: File) => new Promise<any>((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Could not load image file."));
+      img.onload = () => {
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Could not prepare image file."));
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.78);
+        resolve({
+          id:uid(),
+          name:file.name,
+          size:file.size,
+          type:"image/jpeg",
+          originalSize:file.size,
+          compressedBytes:Math.round((dataUrl.length * 3) / 4),
+          dataUrl,
+        });
       };
-      reader.readAsDataURL(file);
-    });
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const handleReferenceUpload = async (files: FileList|null) => {
+    if (!files?.length) return;
+    setError("");
+    try {
+      const validFiles = Array.from(files).filter(file=>file.type.startsWith("image/"));
+      const compressed = await Promise.all(validFiles.map(file=>compressReferenceImage(file)));
+      setReferenceImages(p=>[...p,...compressed].slice(0,6));
+    } catch (err:any) {
+      setError(err?.message || "Could not prepare reference image.");
+    }
   };
 
   const generateImage = async () => {
@@ -2495,10 +2518,17 @@ const AIEngineView = () => {
         }),
       });
 
-      const data = await res.json();
+      const raw = await res.text();
+      let data:any = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        const clean = raw || "Generation request failed.";
+        throw new Error(clean.length > 180 ? clean.slice(0,180) + "..." : clean);
+      }
 
       if (!res.ok) {
-        const msg = typeof data?.error === "string" ? data.error : data?.error?.message || "Image generation failed.";
+        const msg = typeof data?.error === "string" ? data.error : data?.error?.message || data?.message || "Image generation failed.";
         throw new Error(msg);
       }
 
@@ -2628,7 +2658,7 @@ const AIEngineView = () => {
                 + Upload Reference Image
               </label>
               <p style={{ margin:"8px 0 0",fontSize:11,color:C.muted }}>
-                References are used only for the generation request and are not stored in Saved Outputs.
+                References are compressed before sending, used only for the generation request, and are not stored in Saved Outputs.
               </p>
 
               {referenceImages.length>0&&(
@@ -2641,6 +2671,7 @@ const AIEngineView = () => {
                         ×
                       </button>
                       <div style={{ padding:"5px 6px",fontSize:10,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{img.name}</div>
+                      {img.compressedBytes&&<div style={{ padding:"0 6px 5px",fontSize:9,color:C.faint }}>{Math.max(1,Math.round(img.compressedBytes/1024))} KB</div>}
                     </div>
                   ))}
                 </div>
