@@ -2362,6 +2362,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [typesModal,setTypesModal]       = useState(false);
   const [dragEventId,setDragEventId]       = useState<any>(null);
   const [sortMode,setSortMode] = useState("date");
+  const [showSortOptions,setShowSortOptions] = useState(false);
   const [sortMenuId,setSortMenuId] = useState<any>(null);
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
@@ -2546,18 +2547,26 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
           <p style={{ margin:0,fontSize:12,color:C.muted }}>
-            Sort the event cards or use each card’s Sort button to move it up or down.
+            Use Sort to reorder cards, or move a card up/down.
           </p>
-          <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-            <select value={sortMode} onChange={e=>setSortMode(e.target.value)}
-              style={{ height:30,border:`1.5px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11,fontWeight:700,padding:"0 8px",outline:"none" }}>
-              <option value="date">Date order</option>
-              <option value="manual">Manual order</option>
-              <option value="name">Name A-Z</option>
-              <option value="tag">Tag / Type</option>
-              <option value="phaseout">Most phase-out SKUs</option>
-            </select>
-            <Btn xs variant="outline" onClick={resetEventSortToDate}>Reset Date Sort</Btn>
+          <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",position:"relative" }}>
+            <Btn xs variant={showSortOptions?"primary":"outline"} onClick={()=>setShowSortOptions(v=>!v)}>Sort</Btn>
+            {showSortOptions&&(
+              <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+                {[
+                  {id:"date",label:"Date"},
+                  {id:"manual",label:"Manual"},
+                  {id:"name",label:"Name A-Z"},
+                  {id:"tag",label:"Tag"},
+                  {id:"phaseout",label:"Phase-out"}
+                ].map((opt:any)=>(
+                  <button key={opt.id} type="button" onClick={()=>{ setSortMode(opt.id); setShowSortOptions(false); }}
+                    style={{ padding:"6px 9px",borderRadius:8,border:`1.5px solid ${sortMode===opt.id?C.accent:C.border}`,background:sortMode===opt.id?C.accent:C.surface,color:sortMode===opt.id?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -2603,12 +2612,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
               {sortMenuId===ev.id&&(
                 <div style={{ padding:"8px 12px",borderTop:`1px solid ${C.border}`,background:C.bg,display:"flex",gap:6,flexWrap:"wrap" }}
                   onClick={e=>e.stopPropagation()}>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"top")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↑ Top</button>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↑ Up</button>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"down")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↓ Down</button>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"bottom")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↓ Bottom</button>
-                  <button type="button" onClick={()=>{ setSortMode("date"); setSortMenuId(null); }} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer" }}>Date sort</button>
-                  <button type="button" onClick={()=>{ setSortMode("name"); setSortMenuId(null); }} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer" }}>Name sort</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ flex:isMobile?"1 1 120px":"0 0 auto",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>↑ Up</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"down")} style={{ flex:isMobile?"1 1 120px":"0 0 auto",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>↓ Down</button>
                 </div>
               )}
 
