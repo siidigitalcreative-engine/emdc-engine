@@ -2395,15 +2395,187 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 };
 
 // ─── AI ENGINE ────────────────────────────────────────────────────────────────
-const AIEngineView = () => (
-  <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:24 }}>
-    <Empty
-      icon="✦"
-      title="AI Engine"
-      sub="This page is ready for your AI tools, prompt builders, generators, and workflow automations."
-    />
-  </div>
-);
+const AIEngineView = () => {
+  const [prompt,setPrompt] = useState("");
+  const [size,setSize] = useState("2K");
+  const [watermark,setWatermark] = useState(true);
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState("");
+  const [result,setResult] = useState<any>(null);
+  const [history,setHistory] = useState<any[]>([]);
+
+  const imageUrl =
+    result?.data?.[0]?.url ||
+    result?.images?.[0]?.url ||
+    result?.output?.[0]?.url ||
+    result?.url ||
+    "";
+
+  const generateImage = async () => {
+    if (!prompt.trim() || loading) return;
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/ai/generate-image", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          prompt:prompt.trim(),
+          size,
+          watermark,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = typeof data?.error === "string" ? data.error : data?.error?.message || "Image generation failed.";
+        throw new Error(msg);
+      }
+
+      const url = data?.data?.[0]?.url || data?.images?.[0]?.url || data?.output?.[0]?.url || data?.url || "";
+      setResult(data);
+      setHistory(p=>[
+        { id:uid(), prompt:prompt.trim(), size, watermark, url, createdAt:new Date().toISOString() },
+        ...p,
+      ].slice(0,12));
+    } catch (err:any) {
+      setError(err?.message || "Image generation failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const promptExamples = [
+    "Hyper-realistic product lifestyle image of a premium insulated tumbler on a clean modern desk, soft morning sunlight, minimal props, elegant commercial photography, 4k detail.",
+    "Modern Filipino home kitchen scene featuring a premium lunch box as the hero product, clean countertop, warm natural light, realistic textures, commercial product ad style.",
+    "Luxury glassware collection on a black stone bar counter at midnight, crisp reflections, realistic transparent glass, cinematic lighting, premium lifestyle product photography.",
+  ];
+
+  return (
+    <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(320px,420px)",gap:16,alignItems:"start" }}>
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18 }}>
+          <div>
+            <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Image Generator</h3>
+            <p style={{ margin:0,fontSize:13,color:C.muted }}>Generate product images using BytePlus Seedream 4.5.</p>
+          </div>
+          <Tag color="#8B5CF6">Seedream 4.5</Tag>
+        </div>
+
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <Field label="Prompt">
+            <textarea
+              value={prompt}
+              onChange={e=>setPrompt(e.target.value)}
+              placeholder="Describe the product image you want to generate..."
+              rows={8}
+              style={{ width:"100%",padding:"12px 14px",fontSize:14,lineHeight:1.55,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+              onFocus={e=>e.currentTarget.style.borderColor=C.accent}
+              onBlur={e=>e.currentTarget.style.borderColor=C.border}
+            />
+          </Field>
+
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12 }}>
+            <Field label="Size">
+              <Select value={size} onChange={setSize}>
+                <option value="1K">1K</option>
+                <option value="2K">2K</option>
+              </Select>
+            </Field>
+            <Field label="Watermark">
+              <button type="button" onClick={()=>setWatermark(v=>!v)}
+                style={{ height:38,borderRadius:8,border:`1.5px solid ${watermark?C.accent:C.border}`,background:watermark?C.accent:C.surface,color:watermark?"#fff":C.textSub,fontSize:13,fontWeight:700,cursor:"pointer" }}>
+                {watermark ? "Watermark On" : "Watermark Off"}
+              </button>
+            </Field>
+          </div>
+
+          {error&&(
+            <div style={{ padding:"10px 12px",borderRadius:9,background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",fontSize:13,fontWeight:600 }}>
+              {error}
+            </div>
+          )}
+
+          <Btn full onClick={generateImage} disabled={loading||!prompt.trim()}>
+            {loading ? "Generating Image..." : "Generate Image"}
+          </Btn>
+
+          <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+            {promptExamples.map((p,i)=>(
+              <button key={i} onClick={()=>setPrompt(p)}
+                style={{ padding:"7px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                Use sample {i+1}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+        <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16,minHeight:320 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+            <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Result</h4>
+            {imageUrl&&<a href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize:12,fontWeight:700,color:C.accent,textDecoration:"none" }}>Open Image</a>}
+          </div>
+
+          {loading&&(
+            <div style={{ height:260,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:10,background:C.surfaceAlt,border:`1px dashed ${C.border}` }}>
+              <span style={{ fontSize:13,fontWeight:700,color:C.muted }}>Generating...</span>
+            </div>
+          )}
+
+          {!loading&&imageUrl&&(
+            <img src={imageUrl} alt="Generated image" style={{ width:"100%",borderRadius:10,border:`1px solid ${C.border}`,display:"block" }} />
+          )}
+
+          {!loading&&!imageUrl&&(
+            <div style={{ height:260,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",borderRadius:10,background:C.surfaceAlt,border:`1px dashed ${C.border}`,padding:20 }}>
+              <div>
+                <div style={{ fontSize:28,marginBottom:8,opacity:.5 }}>✦</div>
+                <p style={{ margin:"0 0 4px",fontSize:14,fontWeight:700,color:C.textSub }}>No image yet</p>
+                <p style={{ margin:0,fontSize:12,color:C.muted }}>Enter a prompt and generate your first image.</p>
+              </div>
+            </div>
+          )}
+
+          {!loading&&result&&!imageUrl&&(
+            <pre style={{ margin:"12px 0 0",padding:12,borderRadius:8,background:C.bg,border:`1px solid ${C.border}`,fontSize:11,color:C.textSub,overflow:"auto",maxHeight:180 }}>
+              {JSON.stringify(result,null,2)}
+            </pre>
+          )}
+        </div>
+
+        <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16 }}>
+          <h4 style={{ margin:"0 0 12px",fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Recent Generations</h4>
+          {history.length===0&&<p style={{ margin:0,fontSize:12,color:C.muted }}>Generated images will appear here during this session.</p>}
+          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+            {history.map(h=>(
+              <div key={h.id} style={{ display:"flex",gap:10,alignItems:"center",padding:8,borderRadius:9,background:C.surfaceAlt }}>
+                {h.url?<img src={h.url} alt="" style={{ width:48,height:48,objectFit:"cover",borderRadius:7,border:`1px solid ${C.border}` }} />:<div style={{ width:48,height:48,borderRadius:7,background:C.border }} />}
+                <div style={{ minWidth:0,flex:1 }}>
+                  <p style={{ margin:"0 0 2px",fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{h.prompt}</p>
+                  <p style={{ margin:0,fontSize:11,color:C.muted }}>{h.size} · {h.watermark?"Watermark on":"Watermark off"}</p>
+                </div>
+                {h.url&&<a href={h.url} target="_blank" rel="noopener noreferrer" style={{ fontSize:11,fontWeight:700,color:C.accent,textDecoration:"none" }}>Open</a>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @media(max-width:1023px){
+          div[style*="grid-template-columns: minmax(0, 1fr) minmax(320px, 420px)"]{
+            grid-template-columns:1fr!important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 // ─── APP SHELL ───────────────────────────────────────────────────────────────
 const TABS = [
