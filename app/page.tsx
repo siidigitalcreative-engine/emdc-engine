@@ -590,7 +590,7 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
 };
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
-const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
+const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
@@ -601,6 +601,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
   const [typesModal,setTypesModal] = useState(false);
   const [detailEv,setDetailEv]   = useState(null);
   const [editForm,setEditForm]   = useState(null);
+  const [seasonalEditForm,setSeasonalEditForm] = useState<any>(null);
   const [addForm,setAddForm]     = useState({ title:"",type:"task",date:"",color:"#374151" });
   const [dayView,setDayView]     = useState(null); // { date, label }
   const [prevDayView,setPrevDayView] = useState(null); // to go back from detail to day list
@@ -668,6 +669,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
 
     const seasonal = (seasonalEvents||[]).map((ev:any)=>({
       id:"seasonal-list-"+ev.id,
+      sourceId:ev.id,
+      itemKind:"seasonal",
       title:ev.name,
       type:ev.type || "seasonal",
       color:ev.color,
@@ -679,6 +682,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
 
     const manual = (manualEvents||[]).map((ev:any)=>({
       id:"manual-list-"+ev.id,
+      sourceId:ev.id,
+      itemKind:"manual",
       title:ev.title,
       type:ev.type || "task",
       color:ev.color || typeColor(ev.type),
@@ -690,6 +695,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
 
     const checklist = (extraEvents||[]).filter((ev:any)=>!ev.fromSeasonal).map((ev:any)=>({
       id:"extra-list-"+ev.id,
+      sourceId:ev.id,
+      itemKind:ev.fromChecklist ? "checklist" : "extra",
       title:ev.title,
       type:ev.type || "deadline",
       color:ev.color,
@@ -776,6 +783,54 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
   const openEdit=ev=>{ setEditForm({...ev}); setDetailEv(null); setEditModal(true); };
   const saveEdit=()=>{ if(!editForm.title||!editForm.date) return; setManualEvents(p=>{ const next=p.map(e=>e.id===editForm.id?editForm:e); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setEditModal(false); setEditForm(null); };
 
+  const openSeasonalEdit = (id:any) => {
+    const ev = (seasonalEvents||[]).find((item:any)=>item.id===id);
+    if (!ev) return;
+    setSeasonalEditForm({ ...ev, calDate:ev.calDate||"", calDateEnd:ev.calDateEnd||"", desc:ev.desc||"" });
+  };
+
+  const saveSeasonalEdit = () => {
+    if (!seasonalEditForm?.name?.trim()) return;
+    if (!setSeasonalEvents) return;
+    setSeasonalEvents((prev:any[])=>{
+      const next = prev.map((ev:any)=>ev.id===seasonalEditForm.id ? {
+        ...ev,
+        ...seasonalEditForm,
+        name:seasonalEditForm.name.trim(),
+        calDate:seasonalEditForm.calDate || null,
+        calDateEnd:seasonalEditForm.calDateEnd || null,
+      } : ev);
+      if(onStateChange) onStateChange({seasonalEvents:next});
+      return next;
+    });
+    setSeasonalEditForm(null);
+  };
+
+  const deleteSeasonalEdit = () => {
+    if (!seasonalEditForm?.id || !setSeasonalEvents) return;
+    setSeasonalEvents((prev:any[])=>{
+      const next = prev.filter((ev:any)=>ev.id!==seasonalEditForm.id);
+      if(onStateChange) onStateChange({seasonalEvents:next});
+      return next;
+    });
+    setSeasonalEditForm(null);
+  };
+
+  const openYearListItem = (item:any) => {
+    if (item.itemKind==="manual") {
+      const ev = (manualEvents||[]).find((manual:any)=>manual.id===item.sourceId);
+      if (ev) openEdit(ev);
+      return;
+    }
+    if (item.itemKind==="seasonal") {
+      openSeasonalEdit(item.sourceId);
+      return;
+    }
+    if (item.groupId) {
+      onNavigateToGroup?.(item.groupId);
+    }
+  };
+
   // When a type is selected in form, auto-fill color
   const handleFormTypeChange = (f, setF, v) => {
     const t = eventTypes.find(x=>x.id===v);
@@ -805,6 +860,38 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
       )}
       <Btn onClick={onSave} full>{saveLabel}</Btn>
       {showDelete&&<Btn variant="danger" full onClick={onDelete}>Delete Event</Btn>}
+    </div>
+  );
+
+  const renderSeasonalEditForm = () => seasonalEditForm && (
+    <div style={{ display:"flex",flexDirection:"column",gap:14,width:"100%",maxWidth:"100%",overflow:"hidden" }}>
+      <Field label="Event / Season Name">
+        <TI value={seasonalEditForm.name||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,name:v}))} placeholder="e.g. Back to School" />
+      </Field>
+      <Field label="Display Date">
+        <TI value={seasonalEditForm.date||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,date:v}))} placeholder="e.g. June - July" />
+      </Field>
+      <Field label="Calendar Date">
+        <DateInput value={seasonalEditForm.calDate||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDate:v}))} />
+      </Field>
+      <Field label="Calendar End Date">
+        <DateInput value={seasonalEditForm.calDateEnd||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDateEnd:v}))} />
+      </Field>
+      <Field label="Type">
+        <Select value={seasonalEditForm.type||"seasonal"} onChange={v=>setSeasonalEditForm((f:any)=>({...f,type:v}))}>
+          <option value="holiday">Holiday</option>
+          <option value="seasonal">Seasonal</option>
+          <option value="campaign">Campaign</option>
+        </Select>
+      </Field>
+      <Field label="Color">
+        <ColorPicker value={seasonalEditForm.color||"#374151"} onChange={v=>setSeasonalEditForm((f:any)=>({...f,color:v}))} palette={EVENT_COLORS} />
+      </Field>
+      <Field label="Description" hint="optional">
+        <TI value={seasonalEditForm.desc||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,desc:v}))} placeholder="Short description" />
+      </Field>
+      <Btn full onClick={saveSeasonalEdit} disabled={!seasonalEditForm.name?.trim()}>Save Changes</Btn>
+      <Btn full variant="danger" onClick={deleteSeasonalEdit}>Delete Event / Season</Btn>
     </div>
   );
 
@@ -981,17 +1068,25 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
                 </div>
                 <div style={{ display:"flex",flexDirection:"column" }}>
                   {group.items.map((item:any)=>(
-                    <button key={item.id} type="button"
-                      onClick={()=>item.groupId?onNavigateToGroup?.(item.groupId):undefined}
-                      style={{ textAlign:"left",padding:"8px 10px",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surface,cursor:item.groupId?"pointer":"default" }}>
-                      <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
-                        <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.title}</span>
-                        <span style={{ flexShrink:0,fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
-                      </div>
-                      <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
-                        {item.dateText || item.calDate || "No specific date"}{item.dateEnd?` → ${item.dateEnd}`:""} · {item.source}
-                      </div>
-                    </button>
+                    <div key={item.id}
+                      style={{ padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:C.surface,display:"flex",gap:8,alignItems:"flex-start" }}>
+                      <button type="button"
+                        onClick={()=>openYearListItem(item)}
+                        style={{ flex:1,minWidth:0,textAlign:"left",padding:0,border:"none",background:"transparent",cursor:"pointer" }}>
+                        <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
+                          <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.title}</span>
+                          <span style={{ flexShrink:0,fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
+                        </div>
+                        <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                          {item.dateText || item.calDate || "No specific date"}{item.dateEnd?` → ${item.dateEnd}`:""} · {item.source}
+                        </div>
+                      </button>
+                      <button type="button"
+                        onClick={()=>openYearListItem(item)}
+                        style={{ flexShrink:0,border:`1px solid ${C.border}`,background:C.surfaceAlt,borderRadius:6,padding:"4px 8px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
+                        {item.itemKind==="checklist" ? "Open" : "Edit"}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1000,6 +1095,11 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
         )}
       </div>
 
+
+      {/* Edit Events & Seasons from monthly list */}
+      <Modal open={!!seasonalEditForm} onClose={()=>setSeasonalEditForm(null)} title="Edit Event / Season" width={500}>
+        {renderSeasonalEditForm()}
+      </Modal>
 
       {/* Add Modal */}
       <Modal open={addModal} onClose={()=>setAddModal(false)} title="Add Event">
@@ -5312,7 +5412,7 @@ export default function App({
               Shared Sync: {cloudSyncStatus}
             </p>
           </div>
-          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
+          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
