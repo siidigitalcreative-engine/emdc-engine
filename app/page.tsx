@@ -2611,7 +2611,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:800,color:C.text }}>{group.groupName}</h2>
             <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
               <Tag color={C.accent}>{lt.label}</Tag>
+              {group.calendarType&&<Tag color={group.calendarColor||"#8B5CF6"}>{group.calendarType}</Tag>}
               {group.deadline&&<span style={{ fontSize:11,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"2px 8px",borderRadius:4,border:"1px solid #DDD6FE" }}>{group.deadlineEnd?`${group.deadline} → ${group.deadlineEnd}`:`Due ${group.deadline}`}</span>}
+              {!group.deadline&&Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length>0&&<span style={{ fontSize:11,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"2px 8px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(group.monthOnlyMonths)}</span>}
               {group.skus.slice(0,3).map(s=>(<span key={s.id} style={{ fontSize:11,color:C.muted,background:C.surfaceAlt,padding:"2px 8px",borderRadius:4,border:`1px solid ${C.border}`,fontFamily:"monospace" }}>{s.value}</span>))}
             </div>
             {linkedEvents.length>0&&(
@@ -2680,13 +2682,18 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 };
 
 // ─── SKU SELECTOR ────────────────────────────────────────────────────────────
-const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApplyPhaseoutAssignments }) => {
+const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DEFAULT_EVENT_TYPES, events=[], onApplyPhaseoutAssignments }) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [skus,setSkus]           = useState([{id:uid(),value:""}]);
   const [selType,setSelType]     = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
+  const [dateMode,setDateMode] = useState("specific");
+  const [monthOnlyMonths,setMonthOnlyMonths] = useState<any[]>([]);
+  const defaultCalendarType = calendarTypes.find((t:any)=>t.id==="deadline") || calendarTypes[0] || { id:"deadline", label:"Deadline", color:"#8B5CF6" };
+  const [calendarType,setCalendarType] = useState(defaultCalendarType.id);
+  const [calendarColor,setCalendarColor] = useState(defaultCalendarType.color || "#8B5CF6");
   const [linkedEventIds,setLinkedEventIds] = useState<any[]>([]);
   const [pickedSkus,setPickedSkus] = useState([]);
   const [phaseoutHelperMsg,setPhaseoutHelperMsg] = useState("");
@@ -2700,6 +2707,12 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
     ? pickedSkus
     : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
   const isPhaseoutType = selType==="phaseout" || (launchTypes?.[selType]?.label || "").toLowerCase().includes("phase-out");
+  const selectedCalendarType = calendarTypes.find((t:any)=>t.id===calendarType) || defaultCalendarType;
+  const onCalendarTypeChange = (id:any) => {
+    const selected = calendarTypes.find((t:any)=>t.id===id) || defaultCalendarType;
+    setCalendarType(selected.id);
+    setCalendarColor(selected.color || "#8B5CF6");
+  };
 
   const runPhaseoutHelper = async () => {
     if (!phaseoutSourceSkus.length) {
@@ -2734,6 +2747,14 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
+        <Field label="Calendar Tag">
+          <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
+            <Select value={calendarType} onChange={onCalendarTypeChange}>
+              {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
+            </Select>
+            <span style={{ width:38,height:38,borderRadius:10,border:`1.5px solid ${C.border}`,background:calendarColor,display:"inline-block" }} />
+          </div>
+        </Field>
         <Field label="Operational Type" hint="choose this before SKU/date">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
@@ -2744,8 +2765,24 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
             ))}
           </div>
         </Field>
-        <Field label="Start Date"><DateInput value={deadline} onChange={setDeadline} /></Field>
-        <Field label="End Date"><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></Field>
+        <Field label="Schedule">
+          <div style={{ display:"flex",gap:8,marginBottom:10 }}>
+            {[{id:"specific",label:"Specific date"},{id:"months",label:"Month/s only"}].map((opt:any)=>(
+              <button key={opt.id} type="button" onClick={()=>setDateMode(opt.id)}
+                style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:dateMode===opt.id?C.accent:C.surface,color:dateMode===opt.id?"#fff":C.muted,border:`1.5px solid ${dateMode===opt.id?C.accent:C.border}` }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {dateMode==="specific" ? (
+            <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10 }}>
+              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Start Date</p><DateInput value={deadline} onChange={setDeadline} /></div>
+              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>End Date</p><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></div>
+            </div>
+          ) : (
+            <MonthOnlyPicker value={monthOnlyMonths} onChange={setMonthOnlyMonths} />
+          )}
+        </Field>
         <Field label="SKU Source">
           <div style={{ display:"flex",gap:8 }}>
             {["manual","storage"].map(m=>(<button key={m} onClick={()=>setSkuMode(m)} style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background:skuMode===m?C.accent:C.surface,color:skuMode===m?"#fff":C.muted,border:`1.5px solid ${skuMode===m?C.accent:C.border}` }}>{m==="manual"?"Enter Manually":"From SKU Storage"}</button>))}
@@ -2801,18 +2838,23 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
           )}
         </Field>
 
-        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline,deadlineEnd,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
+        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:dateMode==="specific"?deadline:"",deadlineEnd:dateMode==="specific"?deadlineEnd:"",dateMode,monthOnlyMonths:dateMode==="months"?monthOnlyMonths:[],calendarType,calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
   );
 };
 
 // ─── GROUP EDIT MODAL ────────────────────────────────────────────────────────
-const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes, events=[], onApplyPhaseoutAssignments }: any) => {
+const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes, calendarTypes=DEFAULT_EVENT_TYPES, events=[], onApplyPhaseoutAssignments }: any) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
+  const [dateMode,setDateMode] = useState("specific");
+  const [monthOnlyMonths,setMonthOnlyMonths] = useState<any[]>([]);
+  const defaultCalendarType = calendarTypes.find((t:any)=>t.id==="deadline") || calendarTypes[0] || { id:"deadline", label:"Deadline", color:"#8B5CF6" };
+  const [calendarType,setCalendarType] = useState(defaultCalendarType.id);
+  const [calendarColor,setCalendarColor] = useState(defaultCalendarType.color || "#8B5CF6");
   const [launchType,setLaunchType] = useState("introduction");
   const [linkedEventIds,setLinkedEventIds] = useState<any[]>([]);
   const [skus,setSkus] = useState<any[]>([]);
@@ -2831,6 +2873,13 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       setGroupName(group.groupName||"");
       setDeadline(group.deadline||"");
       setDeadlineEnd(group.deadlineEnd||"");
+      const existingMonths = Array.isArray(group.monthOnlyMonths) ? group.monthOnlyMonths : (Array.isArray(group.months) ? group.months : []);
+      setMonthOnlyMonths(existingMonths);
+      setDateMode(group.dateMode || (existingMonths.length && !group.deadline ? "months" : "specific"));
+      const loadedCalendarType = group.calendarType || group.eventType || "deadline";
+      const matchedCalendarType = calendarTypes.find((t:any)=>t.id===loadedCalendarType) || defaultCalendarType;
+      setCalendarType(loadedCalendarType || matchedCalendarType.id);
+      setCalendarColor(group.calendarColor || group.color || matchedCalendarType.color || "#8B5CF6");
       setLinkedEventIds(Array.isArray(group.linkedEventIds)?group.linkedEventIds:[]);
       const availableTypes = Object.keys(launchTypes||LAUNCH_TYPES); setLaunchType((group.launchType&&availableTypes.includes(group.launchType)) ? group.launchType : (availableTypes[0]||"introduction"));
       setSkus(existingSkus);
@@ -2851,6 +2900,11 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
   const isPhaseoutType = launchType==="phaseout" || (launchTypes?.[launchType]?.label || "").toLowerCase().includes("phase-out");
   const canSave = finalSkus.length>0 && groupName.trim();
+  const onCalendarTypeChange = (id:any) => {
+    const selected = calendarTypes.find((t:any)=>t.id===id) || defaultCalendarType;
+    setCalendarType(selected.id);
+    setCalendarColor(selected.color || "#8B5CF6");
+  };
 
   const runPhaseoutHelper = async () => {
     if (!phaseoutSourceSkus.length) {
@@ -2886,8 +2940,32 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     <Modal open={open} onClose={onClose} title="Edit Group" width={520}>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
-        <Field label="Start Date"><DateInput value={deadline} onChange={setDeadline} /></Field>
-        <Field label="End Date"><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></Field>
+        <Field label="Calendar Tag">
+          <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
+            <Select value={calendarType} onChange={onCalendarTypeChange}>
+              {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
+            </Select>
+            <span style={{ width:38,height:38,borderRadius:10,border:`1.5px solid ${C.border}`,background:calendarColor,display:"inline-block" }} />
+          </div>
+        </Field>
+        <Field label="Schedule">
+          <div style={{ display:"flex",gap:8,marginBottom:10 }}>
+            {[{id:"specific",label:"Specific date"},{id:"months",label:"Month/s only"}].map((opt:any)=>(
+              <button key={opt.id} type="button" onClick={()=>setDateMode(opt.id)}
+                style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:dateMode===opt.id?C.accent:C.surface,color:dateMode===opt.id?"#fff":C.muted,border:`1.5px solid ${dateMode===opt.id?C.accent:C.border}` }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {dateMode==="specific" ? (
+            <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10 }}>
+              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Start Date</p><DateInput value={deadline} onChange={setDeadline} /></div>
+              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>End Date</p><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></div>
+            </div>
+          ) : (
+            <MonthOnlyPicker value={monthOnlyMonths} onChange={setMonthOnlyMonths} />
+          )}
+        </Field>
         <Field label="SKU Source">
           <div style={{ display:"flex",gap:8 }}>
             {["manual","storage"].map(m=>(<button key={m} onClick={()=>setSkuMode(m)} style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background:skuMode===m?C.accent:C.surface,color:skuMode===m?"#fff":C.muted,border:`1.5px solid ${skuMode===m?C.accent:C.border}` }}>{m==="manual"?"Enter Manually":"From SKU Storage"}</button>))}
@@ -2958,7 +3036,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
-        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline,deadlineEnd,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:dateMode==="specific"?deadline:"",deadlineEnd:dateMode==="specific"?deadlineEnd:"",dateMode,monthOnlyMonths:dateMode==="months"?monthOnlyMonths:[],calendarType,calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
   );
@@ -3192,7 +3270,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
@@ -3422,7 +3500,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       </div>
 
       <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={updateTemplatesAndChecklistItems} launchTypes={launchTypes} onLaunchTypesChange={updateLaunchTypesAndSync} />
-      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]} onApplyPhaseoutAssignments={applyPhaseoutAssignments}
+      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} calendarTypes={calendarTypes} events={seasonalEvents||[]} onApplyPhaseoutAssignments={applyPhaseoutAssignments}
         onSave={(patch:any)=>updateGroup(editingGroup.id,patch)} />
 
       {creating&&(
@@ -3431,7 +3509,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
             <h3 style={{ margin:0,fontSize:15,fontWeight:700,color:C.text }}>New Checklist Group</h3>
             <button onClick={()=>setCreating(false)} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>&#215;</button>
           </div>
-          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]} onApplyPhaseoutAssignments={applyPhaseoutAssignments} />
+          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} calendarTypes={calendarTypes} events={seasonalEvents||[]} onApplyPhaseoutAssignments={applyPhaseoutAssignments} />
         </div>
       )}
 
@@ -3453,7 +3531,9 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                   <Tag color={C.accent} sm>{lt.label}</Tag>
+                  {g.calendarType&&<Tag color={g.calendarColor||"#8B5CF6"} sm>{(calendarTypes.find((t:any)=>t.id===g.calendarType)?.label)||g.calendarType}</Tag>}
                   {g.deadline&&<span style={{ fontSize:10,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"1px 7px",borderRadius:4,border:"1px solid #DDD6FE" }}>{g.deadlineEnd?`${g.deadline} → ${g.deadlineEnd}`:`Due ${g.deadline}`}</span>}
+                  {!g.deadline&&Array.isArray(g.monthOnlyMonths)&&g.monthOnlyMonths.length>0&&<span style={{ fontSize:10,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"1px 7px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(g.monthOnlyMonths)}</span>}
                   {(g.linkedEventIds||[]).length>0&&<span style={{ fontSize:10,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"1px 7px",borderRadius:4,border:"1px solid #99F6E4" }}>{(g.linkedEventIds||[]).length} linked event{(g.linkedEventIds||[]).length>1?"s":""}</span>}
                 </div>
                 {g.skus.length>0&&(
@@ -6650,16 +6730,40 @@ export default function App({
   const [checklistStatuses,setChecklistStatuses] = useState<any[]>(initialData?.checklistStatuses ?? DEFAULT_STATUSES);
 
   const checklistCalEvents = useMemo(()=>
-    (checklistGroups || []).filter((g:any)=>g.deadline).map((g:any)=>({
-      id:"cl-"+g.id,
-      date:g.deadline,
-      ...(g.deadlineEnd ? { dateEnd:g.deadlineEnd } : {}),
-      title:g.groupName + (g.deadlineEnd ? " - Date Range" : " - Deadline"),
-      type:"deadline",
-      color:"#8B5CF6",
-      fromChecklist:true,
-      groupId:g.id,
-    })),
+    (checklistGroups || []).flatMap((g:any)=>{
+      const type = g.calendarType || "deadline";
+      const color = g.calendarColor || "#8B5CF6";
+
+      if(g.deadline){
+        return [{
+          id:"cl-"+g.id,
+          date:g.deadline,
+          ...(g.deadlineEnd ? { dateEnd:g.deadlineEnd } : {}),
+          title:g.groupName + (g.deadlineEnd ? " - Date Range" : " - Deadline"),
+          type,
+          color,
+          fromChecklist:true,
+          groupId:g.id,
+        }];
+      }
+
+      const months = monthOnlyValues(g.monthOnlyMonths || g.months);
+      if(months.length){
+        return months.map((monthIdx:number)=>({
+          id:`cl-month-${g.id}-${monthIdx}`,
+          date:`${today.getFullYear()}-${pad(monthIdx+1)}-01`,
+          dateEnd:`${today.getFullYear()}-${pad(monthIdx+1)}-${pad(getDaysInMonth(today.getFullYear(),monthIdx))}`,
+          title:g.groupName + " - Month",
+          type,
+          color,
+          fromChecklist:true,
+          groupId:g.id,
+          monthOnly:true,
+        }));
+      }
+
+      return [];
+    }),
     [checklistGroups]
   );
 
@@ -6958,7 +7062,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView /></div>
         </div>
