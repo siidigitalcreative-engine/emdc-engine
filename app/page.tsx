@@ -1619,10 +1619,16 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [skuPickDept,setSkuPickDept] = useState(null);
+
+  useEffect(()=>{
+    if(!initialItems) return;
+    setItems(initialItems);
+  },[initialItems]);
+
   const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onItemsChange) onItemsChange(next); return next; });
   const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onItemsChange) onItemsChange(next); return next; });
-  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
-  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setSkuPickDept(null); };
+  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
+  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(next); return next; }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
   const linkedEvents = (events||[]).filter((ev:any)=>(group.linkedEventIds||[]).includes(ev.id));
@@ -2108,7 +2114,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 
         <Divider />
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-          <span style={{ fontSize:11,color:C.faint }}>Checklist types and templates affect new checklist groups created after saving.</span>
+          <span style={{ fontSize:11,color:C.faint }}>Checklist types and default tasks autosave and update matching checklist groups.</span>
           <Btn sm variant="outline" onClick={resetToDefault}>Reset Tasks to Default</Btn>
         </div>
       </div>
@@ -2147,6 +2153,75 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, nav
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
 
+  const buildChecklistItemsFromTemplates = (launchTypeKey:string, nextTemplates:any, existingItems:any=null) => {
+    const out:any = {};
+    Object.keys(DEPTS).forEach((deptKey:string)=>{
+      const templateList = nextTemplates?.[launchTypeKey]?.[deptKey] || [];
+      const existingList = Array.isArray(existingItems?.[deptKey]) ? existingItems[deptKey] : [];
+
+      out[deptKey] = templateList.map((text:string,idx:number)=>{
+        const sameText = existingList.find((item:any)=>String(item.text||"").trim()===String(text||"").trim());
+        const sameIndex = existingList[idx];
+        const source = sameText || sameIndex || {};
+        return {
+          id: source.id || uid(),
+          text,
+          done: sameText ? !!sameText.done : false,
+          link: sameText ? (sameText.link||"") : "",
+          note: sameText ? (sameText.note||"") : "",
+          assignee: sameText ? (sameText.assignee||"") : "",
+          statusId: sameText ? (sameText.statusId||"") : "",
+        };
+      });
+
+      const customItems = existingList.filter((item:any)=>
+        item?.custom ||
+        !templateList.some((templateText:string)=>String(templateText||"").trim()===String(item.text||"").trim())
+      ).filter((item:any)=>{
+        const matchedBySameIndex = templateList.some((templateText:string,idx:number)=>
+          existingList[idx]?.id===item.id && String(existingList[idx]?.text||"").trim()!==String(templateText||"").trim()
+        );
+        return item?.custom || !matchedBySameIndex;
+      });
+
+      // Keep manually added checklist items that were not part of the old template.
+      customItems.forEach((item:any)=>{
+        if (!out[deptKey].some((nextItem:any)=>nextItem.id===item.id || nextItem.text===item.text)) {
+          out[deptKey].push({ ...item, custom:true });
+        }
+      });
+    });
+    return out;
+  };
+
+  const syncChecklistItemsForTemplates = (nextTemplates:any) => {
+    setAllGroupItems((prev:any)=>{
+      const nextItems:any = { ...prev };
+      (groups||[]).forEach((group:any)=>{
+        if(!group?.id || !group?.launchType) return;
+        nextItems[group.id] = buildChecklistItemsFromTemplates(group.launchType,nextTemplates,prev[group.id]);
+      });
+      if(onStateChange) onStateChange({checklistItems:nextItems});
+      return nextItems;
+    });
+  };
+
+  const updateTemplatesAndChecklistItems = (updater:any) => {
+    setTemplates((prev:any)=>{
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      syncChecklistItemsForTemplates(next);
+      return next;
+    });
+  };
+
+  const updateLaunchTypesAndSync = (updater:any) => {
+    setLaunchTypes((prev:any)=>{
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if(onStateChange) onStateChange({checklistLaunchTypes:next});
+      return next;
+    });
+  };
+
   useEffect(()=>{
     try {
       localStorage.setItem("emdc_checklist_launch_types_v1", JSON.stringify(launchTypes));
@@ -2161,7 +2236,17 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, nav
     } catch {}
   },[templates]);
 
-  const createGroup = cfg=>{ const g={id:uid(),...cfg}; setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; }); if(onGroupCreated) onGroupCreated(g); setActive(g.id); setCreating(false); };
+  const createGroup = cfg=>{
+    const g={id:uid(),...cfg};
+    const initialItems = buildChecklistItemsFromTemplates(g.launchType,templates,null);
+
+    setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; });
+    setAllGroupItems((p:any)=>{ const next={...p,[g.id]:initialItems}; if(onStateChange) onStateChange({checklistItems:next}); return next; });
+
+    if(onGroupCreated) onGroupCreated(g);
+    setActive(g.id);
+    setCreating(false);
+  };
   const deleteGroup = id=>{ setGroups((p:any)=>{ const next=p.filter((g:any)=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
   const updateGroup = (id:string, patch:any) => { setGroups((p:any)=>{ const next=p.map((g:any)=>g.id===id?{...g,...patch}:g); if(onStateChange) onStateChange({checklistGroups:next}); return next; }); };
   const activeGroup = groups.find((g:any)=>g.id===active);
@@ -2178,7 +2263,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, nav
         </div>
       </div>
 
-      <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={setTemplates} launchTypes={launchTypes} onLaunchTypesChange={setLaunchTypes} />
+      <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={updateTemplatesAndChecklistItems} launchTypes={launchTypes} onLaunchTypesChange={updateLaunchTypesAndSync} />
       <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]}
         onSave={(patch:any)=>updateGroup(editingGroup.id,patch)} />
 
