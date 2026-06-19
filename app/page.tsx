@@ -4355,7 +4355,6 @@ const AITextGenerator = () => {
                       <div style={{ padding:"5px 6px",fontSize:10,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{img.name}</div>
                     </div>
                   ))}
-                  </div>
                 </div>
               )}
             </div>
