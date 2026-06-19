@@ -157,7 +157,7 @@ const Tag = ({ children, color=C.muted, sm }) => (
 const Btn = ({ children, onClick, variant="primary", sm, xs, disabled, full, style={} }) => {
   const pad = xs?"4px 10px":sm?"6px 14px":"9px 20px";
   const fs  = xs?11:sm?12:13;
-  const base = { display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,padding:pad,fontSize:fs,fontWeight:600,borderRadius:7,border:"none",cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,transition:"all .15s",whiteSpace:"nowrap",width:full?"100%":"auto",...style };
+  const base = { display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,padding:pad,fontSize:fs,fontWeight:600,borderRadius:7,border:"none",cursor:disabled?"not-allowed":"pointer",opacity:disabled ? .4 : 1,transition:"all .15s",whiteSpace:"nowrap",width:full?"100%":"auto",...style };
   const v = { primary:{background:C.accent,color:"#fff"},outline:{background:"transparent",color:C.textSub,border:`1px solid ${C.border}`},ghost:{background:"transparent",color:C.muted},danger:{background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA"} };
   return <button className="emdc-btn" style={{...base,...v[variant]}} onClick={onClick} disabled={disabled}>{children}</button>;
 };
@@ -1328,12 +1328,12 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
 };
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
-const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, brands=[], onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
+const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, brands=[], onNavigateToGroup, onStateChange, manualEvents=[], setManualEvents, eventTypes=[], setEventTypes }: any) => {
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
   const saveEventTypes = (types: any[]) => {
-    setEventTypes(types);
+    if(setEventTypes) setEventTypes(types);
     if(filter!=="all" && !types.some((t:any)=>t.id===filter)) setFilter("all");
     if(onStateChange) onStateChange({calendarTypes:types});
   };
@@ -1395,9 +1395,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         monthOnly:true,
         phaseoutCount:(ev.products||[]).filter(isPhaseoutProduct).length,
       }));
-  },[seasonalEvents,year,month]);
+  },[seasonalEvents,year,month,calendarFilterTypes]);
 
-  const allEvents = useMemo(()=>[...manualEvents,...extraEvents,...monthOnlyCalendarEvents],[manualEvents,extraEvents,monthOnlyCalendarEvents]);
+  const allEvents = useMemo(()=>[...(Array.isArray(manualEvents)?manualEvents:[]),...(Array.isArray(extraEvents)?extraEvents:[]),...(Array.isArray(monthOnlyCalendarEvents)?monthOnlyCalendarEvents:[])],[manualEvents,extraEvents,monthOnlyCalendarEvents]);
 
   // Date helpers must be defined before yearly list memo uses them during prerender.
   const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
@@ -2332,7 +2332,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
               )}
 
               <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
-                {isManual&&<Btn variant="danger" onClick={()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==detailEv.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setDetailEv(null); }}>Delete</Btn>}
+                {isManual&&<Btn variant="danger" onClick={()=>{ setManualEvents((p:any)=>{ const base=Array.isArray(p)?p:[]; const next=base.filter((e:any)=>e.id!==detailEv.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setDetailEv(null); }}>Delete</Btn>}
                 <Btn variant="secondary" onClick={()=>setDetailEv(null)}>Close</Btn>
                 {isManual&&<Btn onClick={()=>openEdit(detailEv)}>Edit Event</Btn>}
                 {isSeasonal&&<Btn onClick={()=>{ setDetailEv(null); openSeasonalEdit(detailEv.sourceEventId); }}>Edit in Events & Seasons</Btn>}
@@ -2613,7 +2613,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
               onTouchEnd={clearTouchDrag}
               onTouchCancel={clearTouchDrag}
               className="emdc-card"
-              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${dragEventId===ev.id?C.accent:C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"transform .18s ease, box-shadow .18s ease, opacity .18s ease",opacity:dragEventId===ev.id?.75:1,cursor:isMobile?"grab":"grab",touchAction:touchDragActive?"none":"pan-y",transform:dragEventId===ev.id?"scale(.985)":"scale(1)",boxShadow:dragEventId===ev.id?"0 12px 30px rgba(0,0,0,.16)":"none" }}>
+              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${dragEventId===ev.id?C.accent:C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"transform .18s ease, box-shadow .18s ease, opacity .18s ease",opacity:dragEventId===ev.id ? .75 : 1,cursor:isMobile?"grab":"grab",touchAction:touchDragActive?"none":"pan-y",transform:dragEventId===ev.id?"scale(.985)":"scale(1)",boxShadow:dragEventId===ev.id?"0 12px 30px rgba(0,0,0,.16)":"none" }}>
               <div style={{ padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center" }} onClick={()=>setExpanded(isOpen?null:ev.id)}>
                 <div style={{ minWidth:0,marginRight:8 }}>
                   <p style={{ margin:"0 0 5px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.name}</p>
@@ -2761,7 +2761,7 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
   };
 
   return (
-    <div style={{ background:item.done?C.bg:C.surface,borderRadius:8,border:`1.5px solid ${item.done?"#E5E7EB":C.border}`,borderLeft:`3px solid ${item.done?"#D1D5DB":color}`,marginBottom:8,overflow:"hidden",opacity:item.done?.6:1,transition:"all .2s" }}>
+    <div style={{ background:item.done?C.bg:C.surface,borderRadius:8,border:`1.5px solid ${item.done?"#E5E7EB":C.border}`,borderLeft:`3px solid ${item.done?"#D1D5DB":color}`,marginBottom:8,overflow:"hidden",opacity:item.done ? .6 : 1,transition:"all .2s" }}>
       <div style={{ display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px" }}>
         <button onClick={toggleDone} style={{ width:18,height:18,borderRadius:4,flexShrink:0,cursor:"pointer",marginTop:1,border:`2px solid ${item.done?color:C.borderStrong}`,background:item.done?color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s" }}>
           {item.done&&<span style={{ color:"#fff",fontSize:10,lineHeight:1 }}>&#10003;</span>}
@@ -3460,8 +3460,8 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
                 <div style={{ display:"flex",alignItems:"flex-start",gap:8,padding:"9px 10px",background:C.surfaceAlt,borderRadius:8,border:`1px solid ${C.border}` }}>
                   <span style={{ flex:1,fontSize:12.5,color:C.textSub,lineHeight:1.5 }}>{t}</span>
                   <div style={{ display:"flex",gap:3,flexShrink:0 }}>
-                    <button onClick={()=>moveItem(i,-1)} disabled={i===0} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===0?"not-allowed":"pointer",color:C.muted,opacity:i===0?.4:1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8593;</button>
-                    <button onClick={()=>moveItem(i,1)} disabled={i===list.length-1} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===list.length-1?"not-allowed":"pointer",color:C.muted,opacity:i===list.length-1?.4:1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8595;</button>
+                    <button onClick={()=>moveItem(i,-1)} disabled={i===0} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===0?"not-allowed":"pointer",color:C.muted,opacity:i===0 ? .4 : 1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8593;</button>
+                    <button onClick={()=>moveItem(i,1)} disabled={i===list.length-1} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===list.length-1?"not-allowed":"pointer",color:C.muted,opacity:i===list.length-1 ? .4 : 1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8595;</button>
                     <button onClick={()=>startEdit(i)} style={{ fontSize:11,padding:"3px 8px",borderRadius:5,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.muted }}>Edit</button>
                     <button onClick={()=>removeItem(i)} style={{ width:22,height:22,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
                   </div>
