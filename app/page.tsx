@@ -272,11 +272,11 @@ const Select = ({ value, onChange, children, style={} }) => {
     ...layoutStyle,
   };
 
-  delete selectStyle.width;
   delete selectStyle.minWidth;
   delete selectStyle.maxWidth;
   delete selectStyle.flex;
   delete selectStyle.flexShrink;
+  selectStyle.width = "100%";
   selectStyle.padding = layoutStyle.padding || "0 30px 0 12px";
   selectStyle.appearance = "none";
   selectStyle.WebkitAppearance = "none";
