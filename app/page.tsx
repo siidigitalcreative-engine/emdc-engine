@@ -1811,25 +1811,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         </div>
       </div>
 
-      {/* Legend */}
-      <div style={{ display:"flex",gap:8,marginTop:12,flexWrap:"wrap" }}>
-        {eventTypes.map(t=>(
-          <div key={t.id} style={{ display:"flex",alignItems:"center",gap:4 }}>
-            <div style={{ width:8,height:8,borderRadius:2,background:t.color,flexShrink:0 }} />
-            <span style={{ fontSize:11,color:C.muted }}>{t.label}</span>
-          </div>
-        ))}
-        <div style={{ width:1,background:C.border,margin:"0 4px",alignSelf:"stretch" }} />
-        <div style={{ display:"flex",alignItems:"center",gap:4 }}>
-          <div style={{ width:8,height:8,borderRadius:2,background:"#8B5CF6",flexShrink:0 }} />
-          <span style={{ fontSize:11,color:C.muted }}>Checklist Deadline</span>
-        </div>
-        <div style={{ display:"flex",alignItems:"center",gap:4 }}>
-          <div style={{ width:8,height:8,borderRadius:2,background:"#14B8A6",flexShrink:0 }} />
-          <span style={{ fontSize:11,color:C.muted }}>Seasonal Event</span>
-        </div>
-      </div>
-
       {/* Year event list */}
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?12:16,marginTop:16 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
