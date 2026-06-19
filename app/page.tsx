@@ -3270,6 +3270,12 @@ const AIAdTemplates = () => {
   });
   const [selectedPlatformId,setSelectedPlatformId] = useState("meta");
   const [selectedFormatId,setSelectedFormatId] = useState("meta-single-image");
+  const [selectedTemplateId,setSelectedTemplateId] = useState("");
+  const [adBrief,setAdBrief] = useState("");
+  const [adGenerating,setAdGenerating] = useState(false);
+  const [adError,setAdError] = useState("");
+  const [generatedAdText,setGeneratedAdText] = useState("");
+  const [generatedAdCards,setGeneratedAdCards] = useState<any[]>([]);
 
   useEffect(()=>{
     try {
@@ -3279,6 +3285,17 @@ const AIAdTemplates = () => {
 
   const selectedPlatform = platforms.find((p:any)=>p.id===selectedPlatformId) || platforms[0];
   const selectedFormat = selectedPlatform?.formats?.find((f:any)=>f.id===selectedFormatId) || selectedPlatform?.formats?.[0];
+  const selectedTemplate = selectedFormat?.templates?.find((t:any)=>t.id===selectedTemplateId) || selectedFormat?.templates?.[0];
+  const isCarouselFormat = (selectedFormat?.name || "").toLowerCase().includes("carousel");
+
+  const makeEmptyCarouselCards = () => Array.from({ length:10 }, (_,i)=>({
+    id: uid(),
+    cardNumber: i + 1,
+    headline: "",
+    copy: "",
+    visual: "",
+    cta: "",
+  }));
 
   useEffect(()=>{
     if (!selectedPlatform) return;
@@ -3286,6 +3303,121 @@ const AIAdTemplates = () => {
       setSelectedFormatId(selectedPlatform.formats?.[0]?.id || "");
     }
   },[selectedPlatformId, platforms]);
+
+  useEffect(()=>{
+    if (!selectedFormat) return;
+    if (!selectedFormat.templates?.some((t:any)=>t.id===selectedTemplateId)) {
+      setSelectedTemplateId(selectedFormat.templates?.[0]?.id || "");
+    }
+    setGeneratedAdText("");
+    setAdError("");
+    setGeneratedAdCards((selectedFormat.name || "").toLowerCase().includes("carousel") ? makeEmptyCarouselCards() : []);
+  },[selectedFormatId]);
+
+  const updateAdCard = (index:number, patch:any) => {
+    setGeneratedAdCards((prev:any[]) => prev.map((card:any, i:number)=>i===index ? { ...card, ...patch } : card));
+  };
+
+  const formatCarouselCardsForCopy = (cards:any[]) => cards.map((card:any, i:number)=>[
+    `Card ${i + 1}`,
+    `Headline: ${card.headline || ""}`,
+    `Copy: ${card.copy || ""}`,
+    `Visual: ${card.visual || ""}`,
+    `CTA: ${card.cta || ""}`,
+  ].join("\n")).join("\n\n");
+
+  const parseCarouselCards = (raw:string) => {
+    const blocks = raw
+      .split(/(?=Card\s*\d+\s*[:\-])/i)
+      .map(block=>block.trim())
+      .filter(Boolean);
+
+    return Array.from({ length:10 }, (_,i)=>{
+      const block = blocks[i] || "";
+      const pick = (label:string) => {
+        const match = block.match(new RegExp(label + "\\s*[:\\-]\\s*([^\\n]+)", "i"));
+        return match?.[1]?.trim() || "";
+      };
+      return {
+        id: uid(),
+        cardNumber: i + 1,
+        headline: pick("Headline") || pick("Title"),
+        copy: pick("Copy") || pick("Primary Text") || pick("Text"),
+        visual: pick("Visual") || pick("Visual Direction") || pick("Image"),
+        cta: pick("CTA") || pick("Call to Action"),
+      };
+    });
+  };
+
+  const generateAdForFormat = async () => {
+    if (!selectedPlatform || !selectedFormat) return;
+    if (!adBrief.trim()) {
+      setAdError("Please enter a product, offer, or campaign brief first.");
+      return;
+    }
+
+    setAdGenerating(true);
+    setAdError("");
+    setGeneratedAdText("");
+
+    try {
+      const carouselInstruction = isCarouselFormat
+        ? "Because this is a carousel ad format, generate exactly 10 carousel cards. For each card, use this exact structure: Card 1, Headline, Copy, Visual, CTA. Continue until Card 10."
+        : "Generate one complete ad output for this selected ad format.";
+
+      const instruction = [
+        `Generate a ${selectedPlatform.name} ad for the selected format: ${selectedFormat.name}.`,
+        carouselInstruction,
+        selectedTemplate?.body ? `Use this custom template as the structure and inspiration:\n${selectedTemplate.body}` : "",
+        "Keep it clear, ecommerce-ready, and easy to copy.",
+        "Avoid em dashes.",
+        "Do not invent technical specs that are not provided.",
+      ].filter(Boolean).join("\n\n");
+
+      const res = await fetch("/api/ai/generate-text", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          task:"ad_template_generator",
+          taskLabel:`${selectedPlatform.name} ${selectedFormat.name}`,
+          instruction,
+          tone:"professional",
+          input:adBrief.trim(),
+          referenceImages:[],
+        }),
+      });
+
+      const raw = await res.text();
+      let data:any = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(raw || "Ad generation failed.");
+      }
+
+      if (!res.ok) {
+        const msg = data?.error || data?.message || "Ad generation failed.";
+        throw new Error(typeof msg === "string" ? msg : "Ad generation failed.");
+      }
+
+      const textOutput = data?.text || "";
+      setGeneratedAdText(textOutput);
+
+      if (isCarouselFormat) {
+        setGeneratedAdCards(parseCarouselCards(textOutput));
+      }
+    } catch (err:any) {
+      setAdError(err?.message || "Ad generation failed.");
+    } finally {
+      setAdGenerating(false);
+    }
+  };
+
+  const copyGeneratedAd = async () => {
+    try {
+      await navigator.clipboard.writeText(isCarouselFormat ? formatCarouselCardsForCopy(generatedAdCards) : generatedAdText);
+    } catch {}
+  };
 
   const updatePlatform = (platformId:string, updater:(platform:any)=>any) => {
     setPlatforms((prev:any[]) => prev.map((platform:any)=>platform.id===platformId ? updater(platform) : platform));
@@ -3456,59 +3588,153 @@ const AIAdTemplates = () => {
           </div>
         </div>
 
-        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-            <div>
-              <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Custom Templates</h4>
-              <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "No format selected"}</p>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+              <div>
+                <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Generate Ad</h4>
+                <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "No format selected"}</p>
+              </div>
+              <Btn xs onClick={generateAdForFormat} disabled={!selectedFormat || adGenerating}>
+                {adGenerating ? "Generating..." : "Generate Ad"}
+              </Btn>
             </div>
-            <Btn xs variant="outline" onClick={addTemplate} disabled={!selectedFormat}>+ Add Template</Btn>
+
+            <Field label="Campaign / Product Brief">
+              <textarea
+                value={adBrief}
+                onChange={e=>setAdBrief(e.target.value)}
+                placeholder="Paste the product, offer, target audience, selling points, or campaign direction..."
+                rows={4}
+                style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+              />
+            </Field>
+
+            {selectedFormat && (selectedFormat.templates || []).length>0 && (
+              <Field label="Use Template">
+                <Select value={selectedTemplate?.id || ""} onChange={setSelectedTemplateId}>
+                  {(selectedFormat.templates || []).map((template:any)=>(
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+            {adError && (
+              <div style={{ padding:"10px 12px",borderRadius:9,background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",fontSize:13,fontWeight:600 }}>
+                {adError}
+              </div>
+            )}
+
+            {selectedFormat && isCarouselFormat && (
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+                  <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>10 Carousel Cards</h4>
+                  <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy All</Btn>
+                </div>
+
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10 }}>
+                  {(generatedAdCards.length ? generatedAdCards : makeEmptyCarouselCards()).map((card:any, index:number)=>(
+                    <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:10,padding:10,background:C.surface,display:"flex",flexDirection:"column",gap:8 }}>
+                      <div style={{ fontSize:12,fontWeight:800,color:C.text }}>Card {index + 1}</div>
+                      <input
+                        value={card.headline || ""}
+                        onChange={e=>updateAdCard(index, { headline:e.target.value })}
+                        placeholder="Headline"
+                        style={{ width:"100%",height:34,padding:"0 10px",fontSize:12,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
+                      />
+                      <textarea
+                        value={card.copy || ""}
+                        onChange={e=>updateAdCard(index, { copy:e.target.value })}
+                        placeholder="Copy"
+                        rows={3}
+                        style={{ width:"100%",padding:"8px 10px",fontSize:12,lineHeight:1.4,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+                      />
+                      <input
+                        value={card.visual || ""}
+                        onChange={e=>updateAdCard(index, { visual:e.target.value })}
+                        placeholder="Visual direction"
+                        style={{ width:"100%",height:34,padding:"0 10px",fontSize:12,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
+                      />
+                      <input
+                        value={card.cta || ""}
+                        onChange={e=>updateAdCard(index, { cta:e.target.value })}
+                        placeholder="CTA"
+                        style={{ width:"100%",height:34,padding:"0 10px",fontSize:12,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedFormat && !isCarouselFormat && (
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+                  <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Output</h4>
+                  {generatedAdText&&<Btn xs variant="outline" onClick={copyGeneratedAd}>Copy</Btn>}
+                </div>
+                <div style={{ minHeight:180,padding:12,borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.5,color:generatedAdText?C.textSub:C.muted }}>
+                  {adGenerating ? "Generating..." : generatedAdText || "Your generated ad will appear here."}
+                </div>
+              </div>
+            )}
           </div>
 
-          {!selectedFormat && (
-            <div style={{ minHeight:240,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
-              <p style={{ margin:0,fontSize:13,color:C.muted }}>Select or add an ad format first.</p>
+          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+              <div>
+                <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Custom Templates</h4>
+                <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "No format selected"}</p>
+              </div>
+              <Btn xs variant="outline" onClick={addTemplate} disabled={!selectedFormat}>+ Add Template</Btn>
             </div>
-          )}
 
-          {selectedFormat && (
-            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              {(selectedFormat.templates || []).map((template:any)=>(
-                <div key={template.id} style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:12,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
-                  <Field label="Template Name">
-                    <input
-                      value={template.name}
-                      onChange={e=>updateTemplate(template.id, { name:e.target.value })}
-                      placeholder="Template name"
-                      style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
-                    />
-                  </Field>
+            {!selectedFormat && (
+              <div style={{ minHeight:240,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
+                <p style={{ margin:0,fontSize:13,color:C.muted }}>Select or add an ad format first.</p>
+              </div>
+            )}
 
-                  <Field label="Template">
-                    <textarea
-                      value={template.body}
-                      onChange={e=>updateTemplate(template.id, { body:e.target.value })}
-                      placeholder="Write your custom ad template here..."
-                      rows={7}
-                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
-                    />
-                  </Field>
+            {selectedFormat && (
+              <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                {(selectedFormat.templates || []).map((template:any)=>(
+                  <div key={template.id} style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:12,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
+                    <Field label="Template Name">
+                      <input
+                        value={template.name}
+                        onChange={e=>updateTemplate(template.id, { name:e.target.value })}
+                        placeholder="Template name"
+                        style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
+                      />
+                    </Field>
 
-                  <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
-                    <Btn xs variant="outline" onClick={()=>copyTemplate(template)}>Copy</Btn>
-                    <Btn xs variant="outline" onClick={()=>duplicateTemplate(template)}>Duplicate</Btn>
-                    <Btn xs variant="danger" onClick={()=>deleteTemplate(template.id)}>Delete</Btn>
+                    <Field label="Template">
+                      <textarea
+                        value={template.body}
+                        onChange={e=>updateTemplate(template.id, { body:e.target.value })}
+                        placeholder="Write your custom ad template here..."
+                        rows={7}
+                        style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+                      />
+                    </Field>
+
+                    <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                      <Btn xs variant="outline" onClick={()=>copyTemplate(template)}>Copy</Btn>
+                      <Btn xs variant="outline" onClick={()=>duplicateTemplate(template)}>Duplicate</Btn>
+                      <Btn xs variant="danger" onClick={()=>deleteTemplate(template.id)}>Delete</Btn>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {(!selectedFormat.templates || selectedFormat.templates.length===0) && (
-                <div style={{ minHeight:220,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
-                  <p style={{ margin:0,fontSize:13,color:C.muted }}>No templates yet. Add a custom template for this ad format.</p>
-                </div>
-              )}
-            </div>
-          )}
+                {(!selectedFormat.templates || selectedFormat.templates.length===0) && (
+                  <div style={{ minHeight:220,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
+                    <p style={{ margin:0,fontSize:13,color:C.muted }}>No templates yet. Add a custom template for this ad format.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
