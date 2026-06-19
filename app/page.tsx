@@ -506,6 +506,93 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
   );
 };
 
+const phaseoutProductLabel = (sku:any, brands:any[]=[]) => {
+  if (!sku) return "";
+  if (sku.value && !sku.sku) return `Phase-out: ${sku.value}`;
+  const brand = brands.find((b:any)=>b.id===sku.brandId)?.name || "";
+  return `Phase-out: ${[brand,sku.productName,sku.sku].filter(Boolean).join(" - ")}`;
+};
+
+const isPhaseoutProduct = (value:any) => {
+  const txt = String(value || "").toLowerCase();
+  return txt.includes("phase-out") || txt.includes("phaseout") || txt.includes("closeout") || txt.includes("clearance");
+};
+
+const getPhaseoutEventScore = (ev:any, sku:any, brands:any[]=[]) => {
+  const brand = brands.find((b:any)=>b.id===sku.brandId)?.name || "";
+  const skuText = [
+    sku.productName,
+    sku.sku,
+    sku.collection,
+    sku.category,
+    brand,
+    Object.values(sku.extraFields || {}).join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const evText = [
+    ev.name,
+    ev.date,
+    ev.type,
+    ev.desc,
+    ...(ev.products || []),
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  let score = 0;
+
+  const strongCampaignTerms = [
+    "sale","mega","payday","clearance","closeout","last chance","final stock","flash","bundle","discount",
+    "mid-year","year-end","10.10","11.11","12.12","black friday","ber months","christmas prep"
+  ];
+
+  strongCampaignTerms.forEach(term=>{
+    if (evText.includes(term)) score += 7;
+  });
+
+  if (ev.type === "campaign") score += 10;
+  if (ev.type === "seasonal") score += 4;
+
+  [brand, sku.collection, sku.category].filter(Boolean).forEach((term:any)=>{
+    const clean = String(term).toLowerCase();
+    if (clean && evText.includes(clean)) score += 8;
+  });
+
+  String(sku.productName || "").toLowerCase().split(/[^a-z0-9]+/).filter((t:string)=>t.length>=4).forEach((token:string)=>{
+    if (evText.includes(token)) score += 3;
+  });
+
+  const extraText = Object.values(sku.extraFields || {}).join(" ").toLowerCase();
+  extraText.split(/[^a-z0-9]+/).filter((t:string)=>t.length>=4).slice(0,12).forEach((token:string)=>{
+    if (evText.includes(token)) score += 2;
+  });
+
+  // Phase-out products should avoid purely emotional holidays unless a sale/campaign keyword also exists.
+  if (ev.type === "holiday" && !strongCampaignTerms.some(term=>evText.includes(term))) score -= 3;
+
+  return score;
+};
+
+const suggestPhaseoutAssignments = (skus:any[], events:any[]=[], brands:any[]=[]) => {
+  const usableEvents = (events || []).filter((ev:any)=>ev && ev.id);
+  const assignments:any = {};
+
+  skus.forEach((sku:any)=>{
+    const ranked = usableEvents
+      .map((ev:any)=>({ ev, score:getPhaseoutEventScore(ev,sku,brands) }))
+      .sort((a:any,b:any)=>b.score-a.score);
+
+    const best = ranked.filter((x:any)=>x.score>0).slice(0,2);
+    const chosen = best.length ? best : ranked.filter((x:any)=>x.ev.type==="campaign").slice(0,1);
+
+    chosen.forEach((item:any)=>{
+      if (!item?.ev?.id) return;
+      if (!assignments[item.ev.id]) assignments[item.ev.id] = [];
+      assignments[item.ev.id].push(sku);
+    });
+  });
+
+  return assignments;
+};
+
 // ─── STATUS MANAGER ──────────────────────────────────────────────────────────
 const StatusManagerModal = ({ open, onClose, statuses, onChange }) => {
   const [newLabel,setNewLabel] = useState("");
@@ -1422,6 +1509,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
             <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,340px),1fr))",gap:12 }}>
               {group.events.map((ev:any)=>{
           const isOpen=expanded===ev.id, tc=TYPE_COLORS[ev.type]||C.muted;
+          const evProducts = Array.isArray(ev.products) ? ev.products : [];
+          const phaseoutCount = evProducts.filter(isPhaseoutProduct).length;
           return (
             <div key={ev.id}
               draggable
@@ -1437,6 +1526,11 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
                   <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
                     <Tag color={ev.color||tc} sm>{ev.type}</Tag>
                     <span style={{ fontSize:11,color:C.faint }}>{ev.date}</span>
+                    {phaseoutCount>0&&(
+                      <span style={{ fontSize:10,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"2px 7px" }}>
+                        {phaseoutCount} phase-out SKU{phaseoutCount>1?"s":""}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ display:"flex",gap:4,alignItems:"center",flexShrink:0 }}>
@@ -1454,8 +1548,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
                   <div style={{ padding:"14px 16px" }}>
                     <p style={{ margin:"0 0 10px",fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>Recommended Products</p>
                     <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
-                      {ev.products.map((p,i)=>(
-                        <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,borderRadius:8,borderLeft:`2px solid ${ev.color||C.borderStrong}` }}>
+                      {evProducts.map((p,i)=>(
+                        <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:isPhaseoutProduct(p)?"#FFFBEB":C.bg,borderRadius:8,borderLeft:`2px solid ${isPhaseoutProduct(p)?"#F59E0B":(ev.color||C.borderStrong)}` }}>
                           {editingProd?.eventId===ev.id&&editingProd?.idx===i?(
                             <div style={{ display:"flex",gap:6,flex:1,alignItems:"center" }}>
                               <input value={edf} onChange={e=>setEdf(e.target.value)} style={{ flex:1,padding:"5px 8px",fontSize:12,borderRadius:6,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }} />
@@ -1471,7 +1565,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
                           )}
                         </div>
                       ))}
-                      {ev.products.length===0&&<p style={{ fontSize:12,color:C.faint,margin:"4px 0" }}>No products added yet.</p>}
+                      {evProducts.length===0&&<p style={{ fontSize:12,color:C.faint,margin:"4px 0" }}>No products added yet.</p>}
                     </div>
 
                     {/* Add product panel */}
@@ -1715,7 +1809,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 };
 
 // ─── SKU SELECTOR ────────────────────────────────────────────────────────────
-const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[] }) => {
+const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApplyPhaseoutAssignments }) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [skus,setSkus]           = useState([{id:uid(),value:""}]);
   const [selType,setSelType]     = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
@@ -1724,12 +1818,43 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[] }) => 
   const [deadlineEnd,setDeadlineEnd] = useState("");
   const [linkedEventIds,setLinkedEventIds] = useState<any[]>([]);
   const [pickedSkus,setPickedSkus] = useState([]);
+  const [phaseoutHelperMsg,setPhaseoutHelperMsg] = useState("");
   const addSku=()=>setSkus(p=>[...p,{id:uid(),value:""}]);
   const remSku=id=>setSkus(p=>p.filter(s=>s.id!==id));
   const updSku=(id,v)=>setSkus(p=>p.map(s=>s.id===id?{...s,value:v}:s));
   const pickSku=s=>{ setPickedSkus((p:any[])=>p.find((x:any)=>x.id===s.id)?p.filter((x:any)=>x.id!==s.id):[...p,s]); };
   const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
-  const finalSkus=skuMode==="storage"?pickedSkus.map(s=>({id:s.id,value:s.sku})):skus.filter(s=>s.value.trim());
+  const finalSkus=skuMode==="storage"?pickedSkus.map((s:any)=>({id:s.id,value:s.sku})):skus.filter(s=>s.value.trim());
+  const phaseoutSourceSkus:any[] = skuMode==="storage"
+    ? pickedSkus
+    : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
+  const isPhaseoutType = selType==="phaseout" || (launchTypes?.[selType]?.label || "").toLowerCase().includes("phase-out");
+
+  const runPhaseoutHelper = () => {
+    if (!phaseoutSourceSkus.length) {
+      setPhaseoutHelperMsg("Select at least one SKU first.");
+      return;
+    }
+    if (!events.length) {
+      setPhaseoutHelperMsg("No events or seasons available yet.");
+      return;
+    }
+
+    const assignments = suggestPhaseoutAssignments(phaseoutSourceSkus,events,brands);
+    const ids = Object.keys(assignments);
+
+    if (!ids.length) {
+      setPhaseoutHelperMsg("No aligned event found. You can still manually select events below.");
+      return;
+    }
+
+    setLinkedEventIds((prev:any[])=>Array.from(new Set([...prev,...ids])));
+    if (onApplyPhaseoutAssignments) onApplyPhaseoutAssignments(assignments);
+
+    const totalProducts = ids.reduce((sum:number,id:string)=>sum+(assignments[id]?.length||0),0);
+    setPhaseoutHelperMsg(`AI helper matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
+  };
+
   const canNext=finalSkus.length>0&&selType&&groupName.trim();
   return (
     <div>
@@ -1758,6 +1883,21 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[] }) => 
             }
           </Field>
         )}
+        {isPhaseoutType&&(
+          <div style={{ padding:14,background:"#FFFBEB",border:"1.5px solid #FDE68A",borderRadius:10,display:"flex",flexDirection:"column",gap:8 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+              <div>
+                <p style={{ margin:0,fontSize:12,fontWeight:800,color:"#92400E" }}>AI Phase-Out Helper</p>
+                <p style={{ margin:"3px 0 0",fontSize:11,color:"#B45309" }}>
+                  Uses selected SKUs, brand, collection/category, and campaign timing to choose matching events/seasons.
+                </p>
+              </div>
+              <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>Auto-match SKUs</Btn>
+            </div>
+            {phaseoutHelperMsg&&<p style={{ margin:0,fontSize:12,color:"#92400E",fontWeight:700 }}>{phaseoutHelperMsg}</p>}
+          </div>
+        )}
+
         <Field label="Link Events / Seasons" hint="optional">
           {events.length===0 ? (
             <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No events or seasons available yet.</div>
@@ -2123,7 +2263,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
@@ -2236,6 +2376,26 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, nav
     } catch {}
   },[templates]);
 
+  const applyPhaseoutAssignments = (assignments:any) => {
+    if(!assignments || !setSeasonalEvents) return;
+    setSeasonalEvents((prev:any[])=>{
+      const next = (prev||[]).map((ev:any)=>{
+        const matched = assignments[ev.id] || [];
+        if(!matched.length) return ev;
+
+        const existingProducts = Array.isArray(ev.products) ? ev.products : [];
+        const additions = matched
+          .map((sku:any)=>phaseoutProductLabel(sku,brands))
+          .filter(Boolean)
+          .filter((label:string)=>!existingProducts.some((p:any)=>String(p).toLowerCase()===label.toLowerCase()));
+
+        return additions.length ? { ...ev, products:[...existingProducts,...additions] } : ev;
+      });
+      if(onStateChange) onStateChange({seasonalEvents:next});
+      return next;
+    });
+  };
+
   const createGroup = cfg=>{
     const g={id:uid(),...cfg};
     const initialItems = buildChecklistItemsFromTemplates(g.launchType,templates,null);
@@ -2273,7 +2433,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, nav
             <h3 style={{ margin:0,fontSize:15,fontWeight:700,color:C.text }}>New Checklist Group</h3>
             <button onClick={()=>setCreating(false)} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>&#215;</button>
           </div>
-          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]} />
+          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]} onApplyPhaseoutAssignments={applyPhaseoutAssignments} />
         </div>
       )}
 
@@ -5799,7 +5959,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView /></div>
         </div>
