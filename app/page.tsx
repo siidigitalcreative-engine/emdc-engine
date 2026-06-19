@@ -2034,7 +2034,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       {/* Detail Modal */}
       <Modal open={!!detailEv&&!editModal} onClose={()=>{ setDetailEv(null); setPrevDayView(null); }}
         onBack={prevDayView?()=>{ setDetailEv(null); setDayView(prevDayView); setPrevDayView(null); }:undefined}
-        title="Event Details">
+        title="Event Details" width={560}>
         {detailEv&&(()=>{
           const SEASONAL_TYPE_MAP = {
             holiday:  { label:"Holiday",  color:"#F97316" },
@@ -2046,27 +2046,87 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           const isManual    = !isChecklist && !isSeasonal;
           const tLabel = isSeasonal ? (SEASONAL_TYPE_MAP[detailEv.seasonalType]?.label||"Seasonal") : isChecklist ? "Deadline" : typeLabel(detailEv.type);
           const tColor = isSeasonal ? (SEASONAL_TYPE_MAP[detailEv.seasonalType]?.color||"#14B8A6") : isChecklist ? "#8B5CF6" : typeColor(detailEv.type);
+          const seasonalSource = isSeasonal ? (seasonalEvents||[]).find((ev:any)=>ev.id===detailEv.sourceEventId) : null;
+          const products = Array.isArray(seasonalSource?.products) ? seasonalSource.products : [];
+          const phaseoutSkus = getOverviewPhaseoutSkus(seasonalSource);
+          const normalProducts = products.filter((p:any)=>!isPhaseoutProduct(p));
+          const title = seasonalSource?.name || detailEv.title;
+          const dateText = seasonalSource?.date || formatDate(detailEv.date) || "No specific date";
+          const endText = seasonalSource?.calDateEnd || detailEv.dateEnd || "";
 
           return (
-            <div>
-              <div style={{ padding:"14px 16px",background:C.surfaceAlt,borderRadius:12,borderLeft:`4px solid ${detailEv.color||tColor}`,marginBottom:16 }}>
-                <p style={{ margin:"0 0 4px",fontSize:16,fontWeight:700,color:C.text }}>{detailEv.title}</p>
-                <p style={{ margin:"0 0 8px",fontSize:12,color:C.muted }}>
-                  {formatDate(detailEv.date)}{detailEv.dateEnd&&<span> → {detailEv.dateEnd}</span>}
-                </p>
-                <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+            <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+              <div style={{ padding:14,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surfaceAlt,borderLeft:`5px solid ${detailEv.color||tColor}` }}>
+                <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                  <div style={{ minWidth:0 }}>
+                    <h3 style={{ margin:"0 0 5px",fontSize:18,fontWeight:900,color:C.text }}>{title}</h3>
+                    <p style={{ margin:0,fontSize:13,color:C.muted }}>
+                      {dateText}{endText&&<span> → {endText}</span>}
+                    </p>
+                  </div>
                   <Tag color={tColor}>{tLabel}</Tag>
+                </div>
+                <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
                   {isChecklist&&<Tag color="#8B5CF6">Checklist Deadline</Tag>}
                   {detailEv.dateEnd&&<Tag color={C.muted}>Multi-day</Tag>}
                 </div>
+                {seasonalSource?.desc&&<p style={{ margin:"10px 0 0",fontSize:13,color:C.textSub,lineHeight:1.45 }}>{seasonalSource.desc}</p>}
               </div>
-              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                {isManual&&<Btn full onClick={()=>openEdit(detailEv)}>Edit Event</Btn>}
-                {isManual&&<Btn full variant="danger" onClick={()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==detailEv.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setDetailEv(null); }}>Delete Event</Btn>}
-                {isSeasonal&&onNavigateToGroup&&<Btn full variant="outline" onClick={()=>{ onNavigateToGroup("events"); setDetailEv(null); }}>Edit in Events &amp; Seasons &#8250;</Btn>}
-                {isChecklist&&onNavigateToGroup&&<Btn full variant="outline" onClick={()=>{ onNavigateToGroup(detailEv.groupId); setDetailEv(null); }}>Open Checklist Group &#8250;</Btn>}
-                <Btn full variant="ghost" onClick={()=>setDetailEv(null)}>Close</Btn>
+
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
+                <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                  <p style={{ margin:"0 0 3px",fontSize:11,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Date</p>
+                  <p style={{ margin:0,fontSize:13,fontWeight:800,color:C.text }}>{dateText}{endText&&<span> → {endText}</span>}</p>
+                </div>
+                <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                  <p style={{ margin:"0 0 3px",fontSize:11,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Source</p>
+                  <p style={{ margin:0,fontSize:13,fontWeight:800,color:C.text }}>{isSeasonal?"Events & Seasons":isChecklist?"Checklist":"Calendar"}</p>
+                </div>
+              </div>
+
+              {phaseoutSkus.length>0&&(
+                <div style={{ border:`1.5px solid #FDE68A`,borderRadius:12,background:"#FFFBEB",overflow:"hidden" }}>
+                  <div style={{ padding:"10px 12px",borderBottom:"1px solid #FDE68A",display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
+                    <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:"#92400E" }}>Phase-Out SKUs</h4>
+                    <span style={{ fontSize:11,fontWeight:900,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"2px 8px" }}>⚑ {phaseoutSkus.length}</span>
+                  </div>
+                  <div style={{ maxHeight:220,overflowY:"auto",display:"flex",flexDirection:"column" }}>
+                    {phaseoutSkus.map((sku:any,idx:number)=>(
+                      <div key={idx} style={{ padding:"9px 12px",borderBottom:"1px solid #FDE68A" }}>
+                        <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text }}>{sku.label}</p>
+                        {sku.brand&&<p style={{ margin:"2px 0 0",fontSize:10,fontWeight:900,color:"#B45309",textTransform:"uppercase",letterSpacing:".04em" }}>{sku.brand}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {normalProducts.length>0&&(
+                <div style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
+                  <div style={{ padding:"10px 12px",borderBottom:`1px solid ${C.border}` }}>
+                    <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Products / Notes</h4>
+                  </div>
+                  <div style={{ display:"flex",flexDirection:"column" }}>
+                    {normalProducts.map((product:any,idx:number)=>(
+                      <div key={idx} style={{ padding:"8px 12px",borderBottom:`1px solid ${C.border}`,fontSize:12,color:C.textSub }}>{String(product)}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isChecklist&&(
+                <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.surfaceAlt }}>
+                  <p style={{ margin:0,fontSize:12,color:C.muted }}>This is a checklist calendar item. Open the checklist group to view SKUs, departments, and tasks.</p>
+                </div>
+              )}
+
+              <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                {isManual&&<Btn variant="danger" onClick={()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==detailEv.id); if(onStateChange) onStateChange({calendarEvents:next}); return next; }); setDetailEv(null); }}>Delete</Btn>}
+                <Btn variant="secondary" onClick={()=>setDetailEv(null)}>Close</Btn>
+                {isManual&&<Btn onClick={()=>openEdit(detailEv)}>Edit Event</Btn>}
+                {isSeasonal&&<Btn onClick={()=>{ setDetailEv(null); openSeasonalEdit(detailEv.sourceEventId); }}>Edit in Events & Seasons</Btn>}
+                {isChecklist&&onNavigateToGroup&&<Btn onClick={()=>{ onNavigateToGroup(detailEv.groupId); setDetailEv(null); }}>Open Checklist</Btn>}
               </div>
             </div>
           );
