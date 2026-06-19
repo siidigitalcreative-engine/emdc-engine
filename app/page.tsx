@@ -2081,7 +2081,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
               ? <div style={{ padding:"14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No SKUs in storage yet. Go to SKU Storage tab first.</div>
               : <>
                   <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickSku} placeholder="Search by product, SKU, or brand..." multiSelect selectedIds={pickedSkus.map((s:any)=>s.id)} />
-                  {pickedSkus.length>0&&(<div style={{ marginTop:8,display:"flex",flexWrap:"wrap",gap:6 }}>{pickedSkus.map(s=>(<div key={s.id} style={{ display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}` }}><span style={{ fontSize:11,fontFamily:"monospace",fontWeight:600,color:C.text }}>{s.sku}</span><span style={{ fontSize:11,color:C.muted }}>{s.productName}</span><button onClick={()=>setPickedSkus(p=>p.filter(x=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:14,lineHeight:1,padding:"0 0 0 2px" }}>&#215;</button></div>))}</div>)}
+                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:5,fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""}</div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map(s=>(<div key={s.id} style={{ display:"flex",alignItems:"center",gap:6,padding:"3px 7px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span><button onClick={()=>setPickedSkus(p=>p.filter(x=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>))}</div></div>)}
                 </>
             }
           </Field>
@@ -2219,7 +2219,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
               ? <div style={{ padding:"14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No SKUs in storage yet. Go to SKU Storage tab first.</div>
               : <>
                   <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickSku} placeholder="Search by product, SKU, or brand..." multiSelect selectedIds={pickedSkus.map((s:any)=>s.id)} />
-                  {pickedSkus.length>0&&(<div style={{ marginTop:8,display:"flex",flexWrap:"wrap",gap:5 }}>{pickedSkus.map((s:any)=>(<div key={s.id} title={`${s.productName} · ${s.sku}`} style={{ display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",padding:"3px 7px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span><button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>))}</div>)}
+                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:5,fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""}</div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map((s:any)=>(<div key={s.id} title={`${s.productName} · ${s.sku}`} style={{ display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",padding:"3px 7px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span><button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>))}</div>)}
                 </>
             }
           </Field>
@@ -4355,6 +4355,7 @@ const AITextGenerator = () => {
                       <div style={{ padding:"5px 6px",fontSize:10,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{img.name}</div>
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
             </div>
