@@ -241,20 +241,23 @@ const DateInput = ({ value, onChange, style={} }) => {
 };
 
 const Select = ({ value, onChange, children, style={} }) => {
+  const layoutStyle:any = style || {};
   const wrapperStyle:any = {
     position:"relative",
-    width: style?.width || "100%",
-    minWidth: style?.minWidth,
-    maxWidth: style?.maxWidth,
-    flex: style?.flex,
-    flexShrink: style?.flexShrink,
+    width:layoutStyle.width || "100%",
+    minWidth:layoutStyle.minWidth,
+    maxWidth:layoutStyle.maxWidth,
+    flex:layoutStyle.flex,
+    flexShrink:layoutStyle.flexShrink,
   };
+
   const selectStyle:any = {
     width:"100%",
-    height: style?.height || 38,
-    padding:"9px 40px 9px 12px",
+    height:layoutStyle.height || 40,
+    padding:"0 46px 0 12px",
     fontSize:14,
-    borderRadius:8,
+    fontWeight:500,
+    borderRadius:10,
     border:`1.5px solid ${C.border}`,
     background:C.surface,
     color:C.text,
@@ -264,21 +267,59 @@ const Select = ({ value, onChange, children, style={} }) => {
     WebkitAppearance:"none",
     MozAppearance:"none",
     boxSizing:"border-box",
-    ...style,
+    lineHeight:"40px",
+    transition:"border-color .15s, box-shadow .15s",
+    ...layoutStyle,
   };
+
   delete selectStyle.width;
   delete selectStyle.minWidth;
   delete selectStyle.maxWidth;
   delete selectStyle.flex;
   delete selectStyle.flexShrink;
+  selectStyle.padding = layoutStyle.padding || "0 46px 0 12px";
+  selectStyle.appearance = "none";
+  selectStyle.WebkitAppearance = "none";
+  selectStyle.MozAppearance = "none";
+  selectStyle.background = layoutStyle.background || C.surface;
 
   return (
     <div style={wrapperStyle}>
-      <select value={value} onChange={e=>onChange(e.target.value)} style={selectStyle}>
+      <select
+        value={value}
+        onChange={e=>onChange(e.target.value)}
+        style={selectStyle}
+        onFocus={e=>{
+          e.currentTarget.style.borderColor = C.accent;
+          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(17,24,39,.08)";
+        }}
+        onBlur={e=>{
+          e.currentTarget.style.borderColor = C.border;
+          e.currentTarget.style.boxShadow = "none";
+        }}
+      >
         {children}
       </select>
-      <span style={{ position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:11,color:C.muted,lineHeight:1 }}>
-        ▾
+      <span
+        aria-hidden="true"
+        style={{
+          position:"absolute",
+          right:1,
+          top:1,
+          bottom:1,
+          width:38,
+          borderLeft:`1px solid ${C.border}`,
+          borderRadius:"0 9px 9px 0",
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"center",
+          pointerEvents:"none",
+          color:C.textSub,
+          fontSize:12,
+          background:C.surface,
+        }}
+      >
+        ▼
       </span>
     </div>
   );
