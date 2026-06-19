@@ -2676,6 +2676,9 @@ const AIEngineView = () => {
           <p style={{ margin:"-4px 0 0",fontSize:11,color:C.muted }}>
             Generated images are not saved automatically. Use <b>Save Output</b> only when you want to keep a result in this browser.
           </p>
+          <p style={{ margin:"-6px 0 0",fontSize:11,color:C.muted }}>
+            Use <b>Regenerate</b> to create a fresh result using the same prompt, same reference images, and same current settings.
+          </p>
 
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
             {promptExamples.map((p,i)=>(
@@ -2690,9 +2693,14 @@ const AIEngineView = () => {
 
       <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
         <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16,minHeight:320 }}>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:12 }}>
             <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Result</h4>
-            {generatedUrls.length>1&&<Btn sm variant="outline" onClick={saveAllOutputs}>Save All</Btn>}
+            <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+              {result && !loading && (
+                <Btn sm variant="outline" onClick={generateImage}>Regenerate</Btn>
+              )}
+              {generatedUrls.length>1&&<Btn sm variant="outline" onClick={saveAllOutputs}>Save All</Btn>}
+            </div>
           </div>
 
           {loading&&(
