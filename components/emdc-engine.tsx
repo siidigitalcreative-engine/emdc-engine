@@ -2394,15 +2394,27 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   );
 };
 
+// ─── AI ENGINE ────────────────────────────────────────────────────────────────
+const AIEngineView = () => (
+  <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:24 }}>
+    <Empty
+      icon="✦"
+      title="AI Engine"
+      sub="This page is ready for your AI tools, prompt builders, generators, and workflow automations."
+    />
+  </div>
+);
+
 // ─── APP SHELL ───────────────────────────────────────────────────────────────
 const TABS = [
-  { id:"calendar",   label:"Calendar"        },
+  { id:"calendar",   label:"Calendar"         },
   { id:"events",     label:"Events & Seasons" },
   { id:"checklists", label:"Checklists"       },
   { id:"skus",       label:"SKU Storage"      },
+  { id:"ai",         label:"AI Engine"        },
 ];
-const TAB_ICONS = { calendar:"📅", events:"🗓", checklists:"✓", skus:"📦" };
-const TAB_SHORT = { calendar:"Calendar", events:"Events", checklists:"Checklists", skus:"SKUs" };
+const TAB_ICONS = { calendar:"📅", events:"🗓", checklists:"✓", skus:"📦", ai:"✦" };
+const TAB_SHORT = { calendar:"Calendar", events:"Events", checklists:"Checklists", skus:"SKUs", ai:"AI" };
 
 export default function App({
   initialData,
@@ -2485,7 +2497,7 @@ export default function App({
                   <path d="M9.4 18.7c.3.9.9 1.7 1.6 2.3.3.2.7.2 1 0 .7-.6 1.3-1.4 1.6-2.3h-4.2z" fill="#fff" opacity=".7"/>
                 </svg>
               </div>
-              <span style={{ fontSize:15,fontWeight:800,color:C.text,letterSpacing:"-.02em" }}>EMDC Engine</span>
+              <span style={{ fontSize:15,fontWeight:800,color:C.text,letterSpacing:"-.02em" }}>EMDC</span>
             </div>
             {/* Desktop nav */}
             {!isMobile&&(
@@ -2506,12 +2518,14 @@ export default function App({
               {tab==="events"     && "Seasonal events and campaigns with product recommendations."}
               {tab==="checklists" && "Operational checklists by SKU, launch type, and department."}
               {tab==="skus"       && "Product catalog by brand, SKU, inventory, and status."}
+              {tab==="ai"         && "AI tools, prompt builders, generators, and workflow automations."}
             </p>
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
+          {tab==="ai"         && <AIEngineView />}
         </div>
 
         {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
