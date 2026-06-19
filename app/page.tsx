@@ -3276,12 +3276,30 @@ const AIAdTemplates = () => {
   const [adError,setAdError] = useState("");
   const [generatedAdText,setGeneratedAdText] = useState("");
   const [generatedAdCards,setGeneratedAdCards] = useState<any[]>([]);
+  const [savedAdTemplates,setSavedAdTemplates] = useState<any[]>([]);
+  const [savedAdTemplatesHydrated,setSavedAdTemplatesHydrated] = useState(false);
 
   useEffect(()=>{
     try {
       localStorage.setItem("emdc_ad_template_platforms_v1", JSON.stringify(platforms));
     } catch {}
   },[platforms]);
+
+  useEffect(()=>{
+    try {
+      const raw = localStorage.getItem("emdc_saved_ad_templates_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) setSavedAdTemplates(parsed);
+    } catch {}
+    setSavedAdTemplatesHydrated(true);
+  },[]);
+
+  useEffect(()=>{
+    if (!savedAdTemplatesHydrated) return;
+    try {
+      localStorage.setItem("emdc_saved_ad_templates_v1", JSON.stringify(savedAdTemplates));
+    } catch {}
+  },[savedAdTemplates,savedAdTemplatesHydrated]);
 
   const selectedPlatform = platforms.find((p:any)=>p.id===selectedPlatformId) || platforms[0];
   const selectedFormat = selectedPlatform?.formats?.find((f:any)=>f.id===selectedFormatId) || selectedPlatform?.formats?.[0];
@@ -3417,6 +3435,55 @@ const AIAdTemplates = () => {
     try {
       await navigator.clipboard.writeText(isCarouselFormat ? formatCarouselCardsForCopy(generatedAdCards) : generatedAdText);
     } catch {}
+  };
+
+  const saveGeneratedAdTemplate = () => {
+    const hasCarousel = isCarouselFormat && generatedAdCards.some((card:any)=>card.headline || card.copy || card.visual || card.cta);
+    const hasText = !isCarouselFormat && generatedAdText.trim();
+
+    if (!hasCarousel && !hasText) {
+      setAdError("Generate an ad first before saving.");
+      return;
+    }
+
+    const item = {
+      id: uid(),
+      name: `${selectedPlatform?.name || "Platform"} ${selectedFormat?.name || "Ad"} - ${new Date().toLocaleDateString()}`,
+      platformId:selectedPlatform?.id || "",
+      platformName:selectedPlatform?.name || "",
+      formatId:selectedFormat?.id || "",
+      formatName:selectedFormat?.name || "",
+      templateId:selectedTemplate?.id || "",
+      templateName:selectedTemplate?.name || "",
+      brief:adBrief,
+      isCarousel:isCarouselFormat,
+      cards:isCarouselFormat ? generatedAdCards : [],
+      text:isCarouselFormat ? formatCarouselCardsForCopy(generatedAdCards) : generatedAdText,
+      createdAt:new Date().toISOString(),
+    };
+
+    setSavedAdTemplates((prev:any[]) => [item, ...prev]);
+    setAdError("");
+  };
+
+  const openSavedAdTemplate = (item:any) => {
+    if (item.platformId && platforms.some((p:any)=>p.id===item.platformId)) {
+      setSelectedPlatformId(item.platformId);
+    }
+    if (item.formatId) setSelectedFormatId(item.formatId);
+    if (item.templateId) setSelectedTemplateId(item.templateId);
+    setAdBrief(item.brief || "");
+    setGeneratedAdText(item.text || "");
+    setGeneratedAdCards(Array.isArray(item.cards) && item.cards.length ? item.cards : (item.isCarousel ? parseCarouselCards(item.text || "") : []));
+    setAdError("");
+  };
+
+  const deleteSavedAdTemplate = (id:string) => {
+    setSavedAdTemplates((prev:any[]) => prev.filter((item:any)=>item.id!==id));
+  };
+
+  const copySavedAdTemplate = async (item:any) => {
+    try { await navigator.clipboard.writeText(item?.text || ""); } catch {}
   };
 
   const updatePlatform = (platformId:string, updater:(platform:any)=>any) => {
@@ -3630,7 +3697,10 @@ const AIAdTemplates = () => {
               <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
                   <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>10 Carousel Cards</h4>
-                  <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy All</Btn>
+                  <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                    <Btn xs variant="outline" onClick={saveGeneratedAdTemplate}>Save Output</Btn>
+                    <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy All</Btn>
+                  </div>
                 </div>
 
                 <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10 }}>
@@ -3672,11 +3742,76 @@ const AIAdTemplates = () => {
               <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
                   <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Output</h4>
-                  {generatedAdText&&<Btn xs variant="outline" onClick={copyGeneratedAd}>Copy</Btn>}
+                  {generatedAdText&&(
+                    <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                      <Btn xs variant="outline" onClick={saveGeneratedAdTemplate}>Save Output</Btn>
+                      <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy</Btn>
+                    </div>
+                  )}
                 </div>
                 <div style={{ minHeight:180,padding:12,borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.5,color:generatedAdText?C.textSub:C.muted }}>
                   {adGenerating ? "Generating..." : generatedAdText || "Your generated ad will appear here."}
                 </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface,display:"flex",flexDirection:"column",gap:10 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+              <div>
+                <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Saved Ad Templates</h4>
+                <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>Saved generated ads stay in this browser.</p>
+              </div>
+              {savedAdTemplates.length>0&&(
+                <button
+                  type="button"
+                  onClick={()=>setSavedAdTemplates([])}
+                  style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            {savedAdTemplates.length===0 ? (
+              <p style={{ margin:0,fontSize:12,color:C.muted }}>Nothing saved yet. Generate an ad, then click Save Output.</p>
+            ) : (
+              <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto" }}>
+                {savedAdTemplates.map((item:any)=>(
+                  <div
+                    key={item.id}
+                    onClick={()=>openSavedAdTemplate(item)}
+                    style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start" }}
+                  >
+                    <div style={{ minWidth:0,flex:1 }}>
+                      <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:4 }}>
+                        <span style={{ fontSize:11,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".04em" }}>{item.platformName || "Platform"}</span>
+                        <span style={{ fontSize:11,color:C.muted }}>{item.formatName || "Ad Format"}</span>
+                        {item.isCarousel&&<span style={{ fontSize:11,color:C.muted }}>10 cards</span>}
+                      </div>
+                      <p style={{ margin:"0 0 4px",fontSize:12,color:C.textSub,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden" }}>
+                        {item.text}
+                      </p>
+                      {item.brief&&<p style={{ margin:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Brief: {item.brief}</p>}
+                    </div>
+                    <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={()=>copySavedAdTemplate(item)}
+                        style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={()=>deleteSavedAdTemplate(item.id)}
+                        style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
