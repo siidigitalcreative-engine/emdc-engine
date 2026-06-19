@@ -1196,6 +1196,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const [typesModal,setTypesModal] = useState(false);
   const [detailEv,setDetailEv]   = useState(null);
   const [editForm,setEditForm]   = useState(null);
+  const [yearOverview,setYearOverview] = useState<any>(null);
   const [seasonalEditForm,setSeasonalEditForm] = useState<any>(null);
   const [phaseoutBrandFilter,setPhaseoutBrandFilter] = useState("all");
   const [addForm,setAddForm]     = useState({ title:"",type:"task",date:"",color:"#374151" });
@@ -1470,6 +1471,34 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     const ev = (seasonalEvents||[]).find((item:any)=>item.id===id);
     if (!ev) return;
     setSeasonalEditForm({ ...ev, calDate:ev.calDate||"", calDateEnd:ev.calDateEnd||"", desc:ev.desc||"" });
+  };
+
+  const getOverviewPhaseoutSkus = (ev:any) => {
+    const products = Array.isArray(ev?.products) ? ev.products : [];
+    return products
+      .filter(isPhaseoutProduct)
+      .map((product:any)=>{
+        const label = cleanPhaseoutProductLabel(product);
+        const brand = (brands||[]).find((b:any)=>label.toLowerCase().startsWith(String(b.name||"").toLowerCase()+" - "))?.name || "";
+        const cleanLabel = brand && label.startsWith(brand+" - ") ? label.slice(brand.length+3) : label;
+        return { raw:product, label:cleanLabel, brand };
+      });
+  };
+
+  const openYearOverview = (item:any) => {
+    if (item.itemKind==="manual") {
+      const ev = (manualEvents||[]).find((manual:any)=>manual.id===item.sourceId);
+      setYearOverview({ item, type:"manual", event:ev || item, phaseoutSkus:[] });
+      return;
+    }
+
+    if (item.itemKind==="seasonal") {
+      const ev = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===item.sourceId);
+      setYearOverview({ item, type:"seasonal", event:ev || item, phaseoutSkus:getOverviewPhaseoutSkus(ev) });
+      return;
+    }
+
+    setYearOverview({ item, type:item.itemKind || "item", event:item, phaseoutSkus:[] });
   };
 
   const saveSeasonalEdit = () => {
@@ -1757,7 +1786,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                     <div key={item.id}
                       style={{ padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:C.surface,display:"flex",gap:8,alignItems:"flex-start" }}>
                       <button type="button"
-                        onClick={()=>openYearListItem(item)}
+                        onClick={()=>openYearOverview(item)}
                         style={{ flex:1,minWidth:0,textAlign:"left",padding:0,border:"none",background:"transparent",cursor:"pointer" }}>
                         <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
                           <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.phaseoutCount>0?"⚑ ":""}{item.title}</span>
@@ -1849,6 +1878,90 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         )}
       </div>
 
+
+      {/* Year list overview */}
+      <Modal open={!!yearOverview} onClose={()=>setYearOverview(null)} title={yearOverview?.event?.name || yearOverview?.event?.title || yearOverview?.item?.title || "Overview"} width={560}>
+        {yearOverview&&(()=>{
+          const ev:any = yearOverview.event || {};
+          const item:any = yearOverview.item || {};
+          const color = ev.color || item.color || C.accent;
+          const title = ev.name || ev.title || item.title;
+          const dateText = item.dateText || ev.date || ev.calDate || "No specific date";
+          const endText = item.dateEnd || ev.calDateEnd || ev.dateEnd || "";
+          const products = Array.isArray(ev.products) ? ev.products : [];
+          const phaseoutSkus = yearOverview.phaseoutSkus || [];
+          const normalProducts = products.filter((p:any)=>!isPhaseoutProduct(p));
+
+          return (
+            <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+              <div style={{ padding:14,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surfaceAlt,borderLeft:`5px solid ${color}` }}>
+                <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                  <div style={{ minWidth:0 }}>
+                    <h3 style={{ margin:"0 0 5px",fontSize:18,fontWeight:900,color:C.text }}>{title}</h3>
+                    <p style={{ margin:0,fontSize:13,color:C.muted }}>{dateText}{endText?` → ${endText}`:""} · {item.source || "Calendar"}</p>
+                  </div>
+                  <Tag color={color}>{ev.type || item.type || "event"}</Tag>
+                </div>
+                {ev.desc&&<p style={{ margin:"10px 0 0",fontSize:13,color:C.textSub,lineHeight:1.45 }}>{ev.desc}</p>}
+              </div>
+
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
+                <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                  <p style={{ margin:"0 0 3px",fontSize:11,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Date</p>
+                  <p style={{ margin:0,fontSize:13,fontWeight:800,color:C.text }}>{dateText}{endText?` → ${endText}`:""}</p>
+                </div>
+                <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                  <p style={{ margin:"0 0 3px",fontSize:11,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Source</p>
+                  <p style={{ margin:0,fontSize:13,fontWeight:800,color:C.text }}>{item.source || "Events & Seasons"}</p>
+                </div>
+              </div>
+
+              {phaseoutSkus.length>0&&(
+                <div style={{ border:`1.5px solid #FDE68A`,borderRadius:12,background:"#FFFBEB",overflow:"hidden" }}>
+                  <div style={{ padding:"10px 12px",borderBottom:"1px solid #FDE68A",display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
+                    <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:"#92400E" }}>Phase-Out SKUs</h4>
+                    <span style={{ fontSize:11,fontWeight:900,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"2px 8px" }}>⚑ {phaseoutSkus.length}</span>
+                  </div>
+                  <div style={{ maxHeight:220,overflowY:"auto",display:"flex",flexDirection:"column" }}>
+                    {phaseoutSkus.map((sku:any,idx:number)=>(
+                      <div key={idx} style={{ padding:"9px 12px",borderBottom:"1px solid #FDE68A" }}>
+                        <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text }}>{sku.label}</p>
+                        {sku.brand&&<p style={{ margin:"2px 0 0",fontSize:10,fontWeight:900,color:"#B45309",textTransform:"uppercase",letterSpacing:".04em" }}>{sku.brand}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {normalProducts.length>0&&(
+                <div style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
+                  <div style={{ padding:"10px 12px",borderBottom:`1px solid ${C.border}` }}>
+                    <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Products / Notes</h4>
+                  </div>
+                  <div style={{ display:"flex",flexDirection:"column" }}>
+                    {normalProducts.map((product:any,idx:number)=>(
+                      <div key={idx} style={{ padding:"8px 12px",borderBottom:`1px solid ${C.border}`,fontSize:12,color:C.textSub }}>{String(product)}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {yearOverview.type==="checklist"&&(
+                <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.surfaceAlt }}>
+                  <p style={{ margin:0,fontSize:12,color:C.muted }}>This is a checklist calendar item. Open the checklist group to view SKUs, departments, and tasks.</p>
+                </div>
+              )}
+
+              <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                <Btn variant="secondary" onClick={()=>setYearOverview(null)}>Close</Btn>
+                <Btn onClick={()=>{ const target=yearOverview.item; setYearOverview(null); openYearListItem(target); }}>
+                  {yearOverview.type==="checklist" ? "Open Checklist" : "Edit"}
+                </Btn>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
 
       {/* Edit Events & Seasons from monthly list */}
       <Modal open={!!seasonalEditForm} onClose={()=>setSeasonalEditForm(null)} title="Edit Event / Season" width={500}>
