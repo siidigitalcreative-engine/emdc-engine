@@ -2406,7 +2406,7 @@ const AIEngineView = () => {
   const [savedOutputs,setSavedOutputs] = useState<any[]>([]);
   const [savedOutputsHydrated,setSavedOutputsHydrated] = useState(false);
   const [referenceImages,setReferenceImages] = useState<any[]>([]);
-  const [outputCount,setOutputCount] = useState(1);
+  const outputCount = 1;
   const [previewOutput,setPreviewOutput] = useState<any>(null);
 
   useEffect(()=>{
@@ -2577,6 +2577,36 @@ const AIEngineView = () => {
     generatedUrls.forEach(url=>saveOutput(url));
   };
 
+  const deleteGeneratedOutput = (targetUrl:string) => {
+    setPreviewOutput((prev:any)=>prev?.url === targetUrl ? null : prev);
+    setResult((prev:any)=>{
+      if (!prev) return prev;
+
+      const cleanEntry = (entry:any) => {
+        if (!entry) return false;
+        if (typeof entry === "string") return entry !== targetUrl;
+        if (typeof entry?.url === "string") return entry.url !== targetUrl;
+        if (typeof entry?.image_url === "string") return entry.image_url !== targetUrl;
+        return true;
+      };
+
+      const next = { ...prev };
+
+      if (Array.isArray(next.data)) next.data = next.data.filter(cleanEntry);
+      if (Array.isArray(next.images)) next.images = next.images.filter(cleanEntry);
+      if (Array.isArray(next.output)) next.output = next.output.filter(cleanEntry);
+      if (next.url === targetUrl) next.url = "";
+
+      const hasAny =
+        (Array.isArray(next.data) && next.data.length > 0) ||
+        (Array.isArray(next.images) && next.images.length > 0) ||
+        (Array.isArray(next.output) && next.output.length > 0) ||
+        !!next.url;
+
+      return hasAny ? next : null;
+    });
+  };
+
   const promptExamples = [
     "Hyper-realistic product lifestyle image of a premium insulated tumbler on a clean modern desk, soft morning sunlight, minimal props, elegant commercial photography, 4k detail.",
     "Modern Filipino home kitchen scene featuring a premium lunch box as the hero product, clean countertop, warm natural light, realistic textures, commercial product ad style.",
@@ -2616,16 +2646,6 @@ const AIEngineView = () => {
               {ratioOptions.map(r=>(
                 <button key={r.value} type="button" onClick={()=>setAspectRatio(r.value)} style={{ ...togglePill(aspectRatio===r.value), padding:'6px 4px' }}>
                   {r.label}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          <Field label="Outputs">
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8 }}>
-              {[1,2,3,4].map(n=>(
-                <button key={n} type="button" onClick={()=>setOutputCount(n)} style={togglePill(outputCount===n)}>
-                  x{n}
                 </button>
               ))}
             </div>
@@ -2708,7 +2728,7 @@ const AIEngineView = () => {
             Generated images are not saved automatically. Use <b>Save Output</b> only when you want to keep a result in this browser.
           </p>
           <p style={{ margin:"-6px 0 0",fontSize:11,color:C.muted }}>
-            Use <b>Regenerate</b> to create a fresh result using the same prompt, same reference images, and same current settings.
+            Use <b>Regenerate</b> to create a fresh result using the same prompt, same reference images, and the same current settings. Output count is fixed to 1 for now.
           </p>
 
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
@@ -2730,7 +2750,6 @@ const AIEngineView = () => {
               {result && !loading && (
                 <Btn sm variant="outline" onClick={generateImage}>Regenerate</Btn>
               )}
-              {generatedUrls.length>1&&<Btn sm variant="outline" onClick={saveAllOutputs}>Save All</Btn>}
             </div>
           </div>
 
@@ -2748,9 +2767,16 @@ const AIEngineView = () => {
                   <div key={url} style={{ display:"flex",flexDirection:"column",gap:10,padding:8,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }}>
                     <img onClick={()=>setPreviewOutput({ id:"current-"+i, url, prompt:prompt.trim(), size, aspectRatio, watermark })}
                       src={url} alt={`Generated image ${i+1}`} style={{ width:"100%",borderRadius:9,border:`1px solid ${C.border}`,display:"block",cursor:"zoom-in" }} />
-                    <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8 }}>
+                    <div style={{ display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8 }}>
                       <Btn sm variant="outline" onClick={()=>downloadImage(url, `emdc-image-${Date.now()}-${i+1}.png`)}>Download</Btn>
                       <Btn sm onClick={()=>saveOutput(url)} disabled={isSaved}>{isSaved ? "Saved" : "Save Output"}</Btn>
+                      <button
+                        type="button"
+                        onClick={()=>deleteGeneratedOutput(url)}
+                        style={{ height:32,borderRadius:8,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",fontSize:12,fontWeight:700,cursor:"pointer" }}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 );
