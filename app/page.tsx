@@ -2546,27 +2546,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
 
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-          <p style={{ margin:0,fontSize:12,color:C.muted }}>
-            Use Sort to reorder cards, or move a card up/down.
-          </p>
           <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",position:"relative" }}>
-            <Btn xs variant={showSortOptions?"primary":"outline"} onClick={()=>setShowSortOptions(v=>!v)}>Sort</Btn>
-            {showSortOptions&&(
-              <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-                {[
-                  {id:"date",label:"Date"},
-                  {id:"manual",label:"Manual"},
-                  {id:"name",label:"Name A-Z"},
-                  {id:"tag",label:"Tag"},
-                  {id:"phaseout",label:"Phase-out"}
-                ].map((opt:any)=>(
-                  <button key={opt.id} type="button" onClick={()=>{ setSortMode(opt.id); setShowSortOptions(false); }}
-                    style={{ padding:"6px 9px",borderRadius:8,border:`1.5px solid ${sortMode===opt.id?C.accent:C.border}`,background:sortMode===opt.id?C.accent:C.surface,color:sortMode===opt.id?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <Btn xs variant={showSortOptions?"primary":"outline"} onClick={()=>{ setShowSortOptions(v=>!v); setSortMode("manual"); setSortMenuId(null); }}>
+              {showSortOptions ? "Done Sorting" : "Sort"}
+            </Btn>
           </div>
         </div>
 
@@ -2600,7 +2583,6 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                   </div>
                 </div>
                 <div style={{ display:"flex",gap:4,alignItems:"center",flexShrink:0,position:"relative" }}>
-                  <button onClick={e=>{e.stopPropagation();setSortMenuId(sortMenuId===ev.id?null:ev.id);}} style={{ padding:"5px 9px",borderRadius:6,background:sortMenuId===ev.id?C.accent:C.surfaceAlt,border:`1px solid ${sortMenuId===ev.id?C.accent:C.border}`,cursor:"pointer",fontSize:11,color:sortMenuId===ev.id?"#fff":C.muted,fontWeight:700 }}>Sort</button>
                   <button onClick={e=>{e.stopPropagation();setEditEvForm({...ev});setEditEvModal(true);}} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
                   <button onClick={e=>{e.stopPropagation();setExpanded(isOpen?null:ev.id);}}
                     style={{ height:28,padding:"0 10px",borderRadius:6,border:`1px solid ${isOpen?C.accent:C.border}`,background:isOpen?C.accent:C.surfaceAlt,cursor:"pointer",color:isOpen?"#fff":C.muted,fontSize:11,fontWeight:600,whiteSpace:"nowrap" }}>
@@ -2609,7 +2591,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                 </div>
               </div>
 
-              {sortMenuId===ev.id&&(
+              {showSortOptions&&(
                 <div style={{ padding:"8px 12px",borderTop:`1px solid ${C.border}`,background:C.bg,display:"flex",gap:6,flexWrap:"wrap" }}
                   onClick={e=>e.stopPropagation()}>
                   <button type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ flex:isMobile?"1 1 120px":"0 0 auto",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>↑ Up</button>
