@@ -518,6 +518,10 @@ const isPhaseoutProduct = (value:any) => {
   return txt.includes("phase-out") || txt.includes("phaseout") || txt.includes("closeout") || txt.includes("clearance");
 };
 
+const cleanPhaseoutProductLabel = (value:any) => String(value || "")
+  .replace(/^\s*(phase\s*-?\s*out|phaseout|closeout|clearance)\s*:\s*/i,"")
+  .trim();
+
 const getPhaseoutEventScore = (ev:any, sku:any, brands:any[]=[]) => {
   const brand = brands.find((b:any)=>b.id===sku.brandId)?.name || "";
   const skuText = [
@@ -801,6 +805,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
 
     const seasonal = (seasonalEvents||[]).flatMap((ev:any)=>{
       const selectedMonths = monthOnlyValues(ev.months);
+      const phaseoutCount = (ev.products||[]).filter(isPhaseoutProduct).length;
       if (selectedMonths.length) {
         return selectedMonths.map((monthIdx:number)=>({
           id:`seasonal-list-${ev.id}-${monthIdx}`,
@@ -814,6 +819,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
           dateText:ev.date || formatMonthOnlyLabel(ev.months),
           monthOnlyIndex:monthIdx,
           source:"Events & Seasons",
+          phaseoutCount,
         }));
       }
       return [{
@@ -827,6 +833,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
         dateEnd:ev.calDateEnd,
         dateText:ev.date,
         source:"Events & Seasons",
+        phaseoutCount,
       }];
     });
 
@@ -880,6 +887,28 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
     });
     return groups.sort((a:any,b:any)=>a.index-b.index);
   },[year,seasonalEvents,manualEvents,extraEvents,eventTypes]);
+
+  const phaseoutSkuLinks = useMemo(()=>{
+    const byProduct:any = {};
+    (seasonalEvents||[]).forEach((ev:any)=>{
+      const phaseProducts = (ev.products||[]).filter(isPhaseoutProduct);
+      phaseProducts.forEach((product:any)=>{
+        const label = cleanPhaseoutProductLabel(product) || String(product||"").trim();
+        if(!label) return;
+        if(!byProduct[label]) byProduct[label] = { label, events:[] };
+        if(!byProduct[label].events.some((item:any)=>item.id===ev.id)){
+          byProduct[label].events.push({
+            id:ev.id,
+            name:ev.name,
+            date:ev.date,
+            type:ev.type,
+            color:ev.color,
+          });
+        }
+      });
+    });
+    return Object.values(byProduct).sort((a:any,b:any)=>String(a.label).localeCompare(String(b.label)));
+  },[seasonalEvents]);
 
   const days=getDaysInMonth(year,month), firstDay=getFirstDay(year,month);
   const prevMo=()=>month===0?(setMonth(11),setYear(y=>y-1)):setMonth(m=>m-1);
@@ -1148,7 +1177,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
                       {rs.isStart&&(
-                        <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.title}</span>
+                        <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{ev.title}</span>
                       )}
                     </div>
                   );
@@ -1171,7 +1200,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
                         borderRadius: "0",
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
-                      <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.title}</span>
+                      <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{ev.title}</span>
                     </div>
                   );
                 })}
@@ -1227,8 +1256,15 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
                         onClick={()=>openYearListItem(item)}
                         style={{ flex:1,minWidth:0,textAlign:"left",padding:0,border:"none",background:"transparent",cursor:"pointer" }}>
                         <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
-                          <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.title}</span>
-                          <span style={{ flexShrink:0,fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
+                          <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.phaseoutCount>0?"⚑ ":""}{item.title}</span>
+                          <div style={{ display:"flex",gap:4,alignItems:"center",flexShrink:0 }}>
+                            {item.phaseoutCount>0&&(
+                              <span title="Has phase-out SKUs" style={{ fontSize:10,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"1px 6px",fontWeight:800 }}>
+                                ⚑ {item.phaseoutCount}
+                              </span>
+                            )}
+                            <span style={{ fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
+                          </div>
                         </div>
                         <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
                           {item.dateText || item.calDate || "No specific date"}{item.dateEnd?` → ${item.dateEnd}`:""} · {item.source}
@@ -1240,6 +1276,47 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
                         {item.itemKind==="checklist" ? "Open" : "Edit"}
                       </button>
                     </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?12:16,marginTop:12 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
+          <div>
+            <h3 style={{ margin:"0 0 3px",fontSize:14,fontWeight:800,color:C.text }}>Phase-Out SKU Campaign Map</h3>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Shows each phase-out SKU and the events/seasons where it is currently linked.</p>
+          </div>
+          <span style={{ fontSize:11,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"4px 9px" }}>
+            ⚑ {phaseoutSkuLinks.length} SKU{phaseoutSkuLinks.length!==1?"s":""}
+          </span>
+        </div>
+
+        {phaseoutSkuLinks.length===0 ? (
+          <p style={{ margin:0,fontSize:12,color:C.muted }}>No phase-out SKUs linked to events/seasons yet. Use the Product Phase-Out AI Helper from Checklists.</p>
+        ) : (
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(auto-fill,minmax(280px,1fr))",gap:10 }}>
+            {phaseoutSkuLinks.map((item:any)=>(
+              <div key={item.label} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                <div style={{ padding:"9px 10px",background:"#FFFBEB",borderBottom:"1px solid #FDE68A",display:"flex",gap:8,alignItems:"center" }}>
+                  <span style={{ width:22,height:22,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0 }}>⚑</span>
+                  <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.label}</p>
+                </div>
+                <div style={{ display:"flex",flexDirection:"column" }}>
+                  {item.events.map((ev:any)=>(
+                    <button key={ev.id} type="button" onClick={()=>openSeasonalEdit(ev.id)}
+                      style={{ textAlign:"left",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surface,padding:"8px 10px",cursor:"pointer" }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+                        <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.name}</span>
+                        <span style={{ flexShrink:0,fontSize:10,color:ev.color||C.faint,background:(ev.color||C.faint)+"14",border:`1px solid ${(ev.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{ev.type}</span>
+                      </div>
+                      <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                        {ev.date || "No specific date"} · Click to edit event
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -5690,6 +5767,7 @@ export default function App({
       color:e.color,
       fromSeasonal:true,
       sourceEventId:e.id,
+      phaseoutCount:(e.products||[]).filter(isPhaseoutProduct).length,
     })),
     [seasonalEvents]
   );
