@@ -1502,6 +1502,19 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     }
   },[launchType,launchTypes]);
 
+  const updateChecklistTypeField = (patch:any) => {
+    onLaunchTypesChange((prev:any)=>({
+      ...prev,
+      [launchType]: {
+        ...(prev[launchType] || {}),
+        label:typeLabel || "Checklist Type",
+        tag:typeTag || "Custom",
+        color:typeColor || "#111827",
+        ...patch,
+      },
+    }));
+  };
+
   const makeEmptyTemplateSet = () => Object.keys(DEPTS).reduce((acc:any,deptKey:string)=>({ ...acc, [deptKey]:[] }),{});
   const list = templates[launchType]?.[dept] || [];
 
@@ -1615,16 +1628,16 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
         <div style={{ padding:12,background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}`,display:"flex",flexDirection:"column",gap:10 }}>
           <p style={{ margin:0,fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Checklist Type Settings</p>
           <Field label="Name">
-            <TI value={typeLabel} onChange={setTypeLabel} placeholder="e.g. Product Launch, Monthly Campaign, Clearance Sale" />
+            <TI value={typeLabel} onChange={v=>{ setTypeLabel(v); updateChecklistTypeField({ label:v.trim() || "Checklist Type" }); }} placeholder="e.g. Product Launch, Monthly Campaign, Clearance Sale" />
           </Field>
           <Field label="Tag">
-            <TI value={typeTag} onChange={setTypeTag} placeholder="e.g. New Launch, Relaunch, Custom" />
+            <TI value={typeTag} onChange={v=>{ setTypeTag(v); updateChecklistTypeField({ tag:v.trim() || "Custom" }); }} placeholder="e.g. New Launch, Relaunch, Custom" />
           </Field>
           <Field label="Color">
-            <ColorPicker value={typeColor} onChange={setTypeColor} palette={STATUS_PALETTE} />
+            <ColorPicker value={typeColor} onChange={v=>{ setTypeColor(v); updateChecklistTypeField({ color:v }); }} palette={STATUS_PALETTE} />
           </Field>
-          <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-            <Btn sm onClick={saveChecklistType} disabled={!typeLabel.trim()}>Save Type</Btn>
+          <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
+            <span style={{ fontSize:11,color:"#16A34A",fontWeight:700 }}>Autosaved</span>
             <Btn sm variant="outline" onClick={duplicateChecklistType}>Duplicate Type</Btn>
             <Btn sm variant="danger" onClick={deleteChecklistType} disabled={typeKeys.length<=1}>Delete Type</Btn>
           </div>
@@ -1720,11 +1733,17 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, nav
   const navRef = useRef(null);
 
   useEffect(()=>{
-    try { localStorage.setItem("emdc_checklist_launch_types_v1", JSON.stringify(launchTypes)); } catch {}
+    try {
+      localStorage.setItem("emdc_checklist_launch_types_v1", JSON.stringify(launchTypes));
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
   },[launchTypes]);
 
   useEffect(()=>{
-    try { localStorage.setItem("emdc_checklist_templates_v1", JSON.stringify(templates)); } catch {}
+    try {
+      localStorage.setItem("emdc_checklist_templates_v1", JSON.stringify(templates));
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
   },[templates]);
 
   const createGroup = cfg=>{ const g={id:uid(),...cfg}; setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; }); if(onGroupCreated) onGroupCreated(g); setActive(g.id); setCreating(false); };
@@ -4783,6 +4802,7 @@ export default function App({
   const [appStateHydrated,setAppStateHydrated] = useState(false);
   const [cloudHydrated,setCloudHydrated] = useState(false);
   const [cloudSyncStatus,setCloudSyncStatus] = useState("Local");
+  const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
   const cloudApplyingRef = useRef(false);
   const cloudSaveTimerRef = useRef<any>(null);
@@ -4934,6 +4954,12 @@ export default function App({
   }, [cloudHydrated]);
 
   useEffect(() => {
+    const fn = () => setLocalSyncTick(v=>v+1);
+    window.addEventListener("emdc-local-sync", fn);
+    return () => window.removeEventListener("emdc-local-sync", fn);
+  }, []);
+
+  useEffect(() => {
     if (!appStateHydrated) return;
     try {
       localStorage.setItem("emdc_app_state_v1", JSON.stringify(makeAppStatePayload()));
@@ -4960,6 +4986,7 @@ export default function App({
   }, [
     appStateHydrated,
     cloudHydrated,
+    localSyncTick,
     brands,
     skuStorage,
     checklistGroups,
