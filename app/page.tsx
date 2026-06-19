@@ -402,23 +402,48 @@ const getSavedCustomColors = () => {
   }
 };
 
-const saveCustomColorToStorage = (color:string) => {
+const setSavedCustomColors = (colors:any[]) => {
   if (typeof window === "undefined") return [];
-  const clean = String(color || "").toUpperCase();
-  if (!/^#[0-9A-F]{6}$/i.test(clean)) return getSavedCustomColors();
+  const next = Array.from(new Set(
+    (colors||[])
+      .map((c:any)=>String(c||"").toUpperCase())
+      .filter((c:string)=>/^#[0-9A-F]{6}$/i.test(c))
+  )).slice(0,24);
 
-  const next = Array.from(new Set([clean,...getSavedCustomColors().map((c:string)=>String(c).toUpperCase())])).slice(0,24);
   localStorage.setItem(CUSTOM_COLOR_KEY, JSON.stringify(next));
   window.dispatchEvent(new CustomEvent("emdc-custom-colors-updated", { detail: next }));
   return next;
 };
 
+const saveCustomColorToStorage = (color:string, replaceColor?:string|null) => {
+  if (typeof window === "undefined") return [];
+  const clean = String(color || "").toUpperCase();
+  if (!/^#[0-9A-F]{6}$/i.test(clean)) return getSavedCustomColors();
+
+  const current = getSavedCustomColors().map((c:string)=>String(c).toUpperCase());
+  const replaceClean = replaceColor ? String(replaceColor).toUpperCase() : "";
+
+  let next = current;
+  if (replaceClean && current.includes(replaceClean)) {
+    next = current.map((c:string)=>c===replaceClean ? clean : c);
+  } else {
+    next = [clean,...current];
+  }
+
+  return setSavedCustomColors(next);
+};
+
 const ColorPicker = ({ value, onChange, palette=STATUS_PALETTE }) => {
   const [customColors,setCustomColors] = useState<any[]>(()=>getSavedCustomColors());
   const [draftColor,setDraftColor] = useState(value || "#111827");
+  const [editingSavedColor,setEditingSavedColor] = useState<any>(null);
 
   useEffect(()=>{
-    setDraftColor(value || "#111827");
+    const next = value || "#111827";
+    setDraftColor(next);
+    if (!getSavedCustomColors().map((c:string)=>String(c).toUpperCase()).includes(String(next).toUpperCase())) {
+      setEditingSavedColor(null);
+    }
   },[value]);
 
   useEffect(()=>{
@@ -432,23 +457,42 @@ const ColorPicker = ({ value, onChange, palette=STATUS_PALETTE }) => {
     };
   },[]);
 
-  const mergedPalette = Array.from(new Set([...(palette||[]),...customColors]));
+  const basePalette = palette || [];
+  const mergedPalette = Array.from(new Set([...basePalette,...customColors]));
+  const normalizedCustomColors = customColors.map((c:any)=>String(c).toUpperCase());
+  const isSavedCustom = normalizedCustomColors.includes(String(value || draftColor).toUpperCase());
+
+  const pickColor = (color:any) => {
+    const clean = String(color || "").toUpperCase();
+    setDraftColor(clean);
+    onChange(clean);
+    setEditingSavedColor(normalizedCustomColors.includes(clean) ? clean : null);
+  };
 
   const saveCurrentColor = () => {
-    const next = saveCustomColorToStorage(draftColor || value);
+    const clean = String(draftColor || value || "").toUpperCase();
+    const next = saveCustomColorToStorage(clean, editingSavedColor);
     setCustomColors(next);
-    onChange(draftColor || value);
+    setEditingSavedColor(clean);
+    onChange(clean);
+  };
+
+  const removeCurrentCustomColor = () => {
+    const clean = String(editingSavedColor || value || draftColor || "").toUpperCase();
+    const next = setSavedCustomColors(customColors.filter((c:any)=>String(c).toUpperCase()!==clean));
+    setCustomColors(next);
+    setEditingSavedColor(null);
   };
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
       <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
         {mergedPalette.map((c:any)=>(
-          <button key={c} type="button" onClick={()=>onChange(c)} title={String(c).toUpperCase()}
+          <button key={c} type="button" onClick={()=>pickColor(c)} title={String(c).toUpperCase()}
             style={{ width:28,height:28,borderRadius:6,background:c,border:String(value).toUpperCase()===String(c).toUpperCase()?`3px solid ${C.text}`:"3px solid transparent",cursor:"pointer",flexShrink:0,transition:"transform .1s",transform:String(value).toUpperCase()===String(c).toUpperCase()?"scale(1.1)":"scale(1)" }} />
         ))}
         <label style={{ width:28,height:28,borderRadius:6,border:`1.5px solid ${C.border}`,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.faint,position:"relative",flexShrink:0 }} title="Create custom color">
-          <input type="color" value={draftColor || value || "#111827"} onChange={e=>{ setDraftColor(e.target.value); onChange(e.target.value); }} style={{ width:1,height:1,opacity:0,position:"absolute" }} />
+          <input type="color" value={draftColor || value || "#111827"} onChange={e=>{ setEditingSavedColor(null); setDraftColor(e.target.value); onChange(e.target.value); }} style={{ width:1,height:1,opacity:0,position:"absolute" }} />
           +
         </label>
       </div>
@@ -457,8 +501,16 @@ const ColorPicker = ({ value, onChange, palette=STATUS_PALETTE }) => {
         <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
           <span style={{ width:24,height:24,borderRadius:6,background:draftColor,border:`1px solid ${C.border}`,display:"inline-block" }} />
           <span style={{ fontSize:11,color:C.muted,fontFamily:"monospace",fontWeight:700 }}>{String(draftColor).toUpperCase()}</span>
-          <Btn xs variant="outline" onClick={saveCurrentColor}>Save Color</Btn>
-          <Btn xs onClick={()=>onChange(draftColor)}>Done</Btn>
+          <Btn xs variant="outline" onClick={saveCurrentColor}>{editingSavedColor ? "Save Edit" : "Save Color"}</Btn>
+
+          <label style={{ height:28,padding:"0 12px",borderRadius:7,border:`1.5px solid ${C.border}`,background:C.accent,color:"#fff",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative",overflow:"hidden" }}>
+            <input type="color" value={draftColor || value || "#111827"} onChange={e=>{ setDraftColor(e.target.value); onChange(e.target.value); }} style={{ width:1,height:1,opacity:0,position:"absolute" }} />
+            Edit
+          </label>
+
+          {isSavedCustom&&(
+            <Btn xs variant="danger" onClick={removeCurrentCustomColor}>Remove</Btn>
+          )}
         </div>
       )}
     </div>
