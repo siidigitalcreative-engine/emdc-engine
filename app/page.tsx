@@ -2853,11 +2853,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                 {di.map(item=>(<ChecklistItem key={item.id} item={item} dept={dept} statuses={statuses} onUpdate={i=>upd(dept,i)} onDelete={id=>del(dept,id)} />))}
               </div>
               <div style={{ padding:"8px 12px 12px",borderTop:`1px solid ${C.border}`,background:C.bg }}>
-                {skuPickDept===dept&&skuStorage.length>0&&(<div style={{ marginBottom:8 }}><SKUPicker skuStorage={skuStorage} brands={brands} onSelect={s=>addFromSKU(dept,s)} placeholder="Pick from SKU storage..." /></div>)}
+
                 <div style={{ display:"flex",gap:6 }}>
                   <TI value={newText[dept]} onChange={v=>setNewText(p=>({...p,[dept]:v}))} placeholder="Add task..." style={{ flex:1,padding:"8px 10px",fontSize:13 }} />
                   <button onClick={()=>addItem(dept)} style={{ width:36,height:36,background:C.accent,color:"#fff",border:"none",borderRadius:7,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>+</button>
-                  {skuStorage.length>0&&<button onClick={()=>setSkuPickDept(skuPickDept===dept?null:dept)} style={{ height:36,padding:"0 10px",background:skuPickDept===dept?C.accent:C.surface,color:skuPickDept===dept?"#fff":C.muted,border:`1.5px solid ${skuPickDept===dept?C.accent:C.border}`,borderRadius:7,fontSize:11,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap" }}>SKU</button>}
+
                 </div>
               </div>
             </div>
@@ -3224,6 +3224,8 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
   const [typeLabel,setTypeLabel]   = useState("");
   const [typeTag,setTypeTag]       = useState("");
   const [typeColor,setTypeColor]   = useState("#111827");
+  const [draftTasks,setDraftTasks] = useState<any[]>([]);
+  const [tasksDirty,setTasksDirty] = useState(false);
 
   const typeKeys = Object.keys(launchTypes||LAUNCH_TYPES);
 
@@ -3242,6 +3244,14 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     }
   },[launchType,launchTypes]);
 
+  useEffect(()=>{
+    const currentList = templates?.[launchType]?.[dept] || [];
+    setDraftTasks([...currentList]);
+    setTasksDirty(false);
+    setEditIdx(null);
+    setNewText("");
+  },[open,launchType,dept,templates]);
+
   const updateChecklistTypeField = (patch:any) => {
     onLaunchTypesChange((prev:any)=>({
       ...prev,
@@ -3256,13 +3266,20 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
   };
 
   const makeEmptyTemplateSet = () => Object.keys(DEPTS).reduce((acc:any,deptKey:string)=>({ ...acc, [deptKey]:[] }),{});
-  const list = templates[launchType]?.[dept] || [];
+  const list = draftTasks;
 
   const updateList = next => {
-    onChange(prev => ({
+    setDraftTasks(next);
+    setTasksDirty(true);
+  };
+
+  const saveDefaultTasksChanges = () => {
+    onChange((prev:any) => ({
       ...prev,
-      [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: next },
+      [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: draftTasks },
     }));
+    setTasksDirty(false);
+    setEditIdx(null);
   };
 
   const saveChecklistType = () => {
@@ -3377,7 +3394,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
             <ColorPicker value={typeColor} onChange={v=>{ setTypeColor(v); updateChecklistTypeField({ color:v }); }} palette={STATUS_PALETTE} />
           </Field>
           <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
-            <span style={{ fontSize:11,color:"#16A34A",fontWeight:700 }}>Autosaved</span>
+            <span style={{ fontSize:11,color:"#16A34A",fontWeight:700 }}>Type settings autosave</span>
             <Btn sm variant="outline" onClick={duplicateChecklistType}>Duplicate Type</Btn>
             <Btn sm variant="danger" onClick={deleteChecklistType} disabled={typeKeys.length<=1}>Delete Type</Btn>
           </div>
@@ -3433,8 +3450,13 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 
         <Divider />
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-          <span style={{ fontSize:11,color:C.faint }}>Checklist types and default tasks autosave and update matching checklist groups.</span>
-          <Btn sm variant="outline" onClick={resetToDefault}>Reset Tasks to Default</Btn>
+          <span style={{ fontSize:11,color:tasksDirty?"#B45309":C.faint,fontWeight:tasksDirty?700:400 }}>
+            {tasksDirty ? "Default task changes are pending. Click Save Changes to update existing checklist groups too." : "Default tasks are saved and synced to current checklist groups."}
+          </span>
+          <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+            <Btn sm variant="outline" onClick={resetToDefault}>Reset Tasks to Default</Btn>
+            <Btn sm onClick={saveDefaultTasksChanges} disabled={!tasksDirty}>Save Changes</Btn>
+          </div>
         </div>
       </div>
     </Modal>
@@ -3485,25 +3507,18 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         return {
           id: source.id || uid(),
           text,
-          done: sameText ? !!sameText.done : false,
-          link: sameText ? (sameText.link||"") : "",
-          note: sameText ? (sameText.note||"") : "",
-          assignee: sameText ? (sameText.assignee||"") : "",
-          statusId: sameText ? (sameText.statusId||"") : "",
+          done: !!source.done,
+          link: source.link || "",
+          note: source.note || "",
+          assignee: source.assignee || "",
+          statusId: source.statusId || "",
         };
       });
 
-      const customItems = existingList.filter((item:any)=>
-        item?.custom ||
-        !templateList.some((templateText:string)=>String(templateText||"").trim()===String(item.text||"").trim())
-      ).filter((item:any)=>{
-        const matchedBySameIndex = templateList.some((templateText:string,idx:number)=>
-          existingList[idx]?.id===item.id && String(existingList[idx]?.text||"").trim()!==String(templateText||"").trim()
-        );
-        return item?.custom || !matchedBySameIndex;
-      });
+      // Only keep tasks that were manually added inside the checklist group.
+      // Default/template tasks that were removed from Manage Templates should be removed from existing checklists too.
+      const customItems = existingList.filter((item:any)=>item?.custom);
 
-      // Keep manually added checklist items that were not part of the old template.
       customItems.forEach((item:any)=>{
         if (!out[deptKey].some((nextItem:any)=>nextItem.id===item.id || nextItem.text===item.text)) {
           out[deptKey].push({ ...item, custom:true });
