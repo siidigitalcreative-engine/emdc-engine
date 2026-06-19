@@ -4530,17 +4530,21 @@ export default function App({
   // Lifted seasonal events state (Events & Seasons tab) — owned by App so edits survive tab switches
   const [seasonalEvents,setSeasonalEvents] = useState<any[]>(initialData?.seasonalEvents?.length ? initialData.seasonalEvents : INITIAL_SEASONAL);
 
-  const [seasonalCalEvents] = useState(()=>
-    INITIAL_SEASONAL.filter(e=>e.calDate).map(e=>({
-      id:"sea-"+e.id, date:e.calDate,
+  const seasonalCalEvents = useMemo(()=>
+    (seasonalEvents || []).filter((e:any)=>e.calDate).map((e:any)=>({
+      id:"sea-"+e.id,
+      date:e.calDate,
       // Pass dateEnd for multi-day/multi-month seasonal ranges
       ...(e.calDateEnd ? { dateEnd:e.calDateEnd } : {}),
       title:e.name,
       // Map seasonal type to closest DEFAULT_EVENT_TYPES id for filter
       type: e.type==="holiday" ? "holiday" : e.type==="campaign" ? "campaign" : "task",
       seasonalType:e.type,
-      color:e.color, fromSeasonal:true,
-    }))
+      color:e.color,
+      fromSeasonal:true,
+      sourceEventId:e.id,
+    })),
+    [seasonalEvents]
   );
 
   const [appStateHydrated,setAppStateHydrated] = useState(false);
@@ -4591,6 +4595,7 @@ export default function App({
 
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
+  useEffect(() => { if (onStateChange) onStateChange({ seasonalEvents }); }, [seasonalEvents]);
 
   const handleGroupCreated = (g:any)=>{
     if(!g.deadline) return;
