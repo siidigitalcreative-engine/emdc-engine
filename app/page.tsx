@@ -2321,6 +2321,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuModal,setSkuModal]           = useState(false);
   const [bulkModal,setBulkModal]         = useState(false);
   const [bulkMode,setBulkMode]           = useState<"paste"|"edit">("paste");
+  const [bulkSearch,setBulkSearch]       = useState("");
   const [brandModal,setBrandModal]       = useState(false);
   const [editBrandModal,setEditBrandModal] = useState(false);
   const [editBrandForm,setEditBrandForm]   = useState(null);
@@ -2829,6 +2830,20 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, inventory, extraFields, ...st, error, valid:!empty&&!error, empty };
   }).filter((r:any)=>!r.empty);
   const bulkRows = useMemo(()=>parseGridRows(bulkGridRows),[bulkGridRows,bulkColumns]);
+  const bulkVisibleRows = useMemo(()=>{
+    const terms = bulkSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const rows = bulkGridRows.map((row:any,idx:number)=>({ row, idx }));
+    if(bulkMode!=="edit" || !terms.length) return rows;
+
+    return rows.filter(({row}:any)=>{
+      const text = [
+        ...BULK_COLUMNS.map((c:any)=>row[c.key]),
+        ...Object.values(row||{}),
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      return terms.every((term:string)=>text.includes(term));
+    });
+  },[bulkGridRows,bulkSearch,bulkMode,bulkColumns]);
   const updateBulkCell = (rowId:any, field:string, value:string) => {
     setBulkGridRows((p:any[])=>p.map((r:any)=>r.id===rowId?{...r,[field]:value}:r));
 
@@ -2902,6 +2917,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const openBulk = () => {
     const columns=buildBulkColumnsFromSkuTable();
     setBulkMode("paste");
+    setBulkSearch("");
     setBulkColumns(columns);
     setBulkGridRows(makeBulkRows(8));
     resetBulkSheetSelection();
@@ -2910,6 +2926,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const openEditSheet = () => {
     const columns=buildBulkColumnsFromSkuTable();
     setBulkMode("edit");
+    setBulkSearch("");
     setBulkColumns(columns);
     setBulkGridRows(makeBulkRowsFromStorage(skuStorage,columns));
     resetBulkSheetSelection();
@@ -3254,6 +3271,27 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               <Btn xs variant="outline" onClick={clearBulkRows}>{bulkMode==="edit"?"Clear Sheet":"Clear All"}</Btn>
             </div>
           </div>
+          {bulkMode==="edit"&&(
+            <div style={{ display:"flex",alignItems:"center",gap:8,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px" }}>
+              <span style={{ fontSize:13,color:C.faint,flexShrink:0 }}>Search</span>
+              <input
+                value={bulkSearch}
+                onChange={e=>setBulkSearch(e.target.value)}
+                placeholder="Search product, SKU, brand, collection, category, status, stock, SRP..."
+                style={{ flex:1,minWidth:0,height:30,border:"none",outline:"none",background:"transparent",fontSize:13,color:C.text }}
+              />
+              <span style={{ fontSize:11,color:C.muted,whiteSpace:"nowrap",flexShrink:0 }}>
+                {bulkVisibleRows.length} / {bulkGridRows.length}
+              </span>
+              {bulkSearch.trim()&&(
+                <button type="button" onClick={()=>setBulkSearch("")}
+                  style={{ border:"none",background:C.surfaceAlt,borderRadius:6,padding:"5px 8px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",flexShrink:0 }}>
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
           <div onCopy={handleBulkCopy} onCut={handleBulkCut} style={{ border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
             <div style={{ overflowX:"auto" }}>
               <div style={{ minWidth:bulkTableMinWidth }}>
@@ -3281,7 +3319,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                   ))}
                 </div>
                 <div style={{ maxHeight:390,overflowY:"auto" }}>
-                  {bulkGridRows.map((r:any,idx:number)=>{
+                  {bulkVisibleRows.length===0 ? (
+                    <div style={{ padding:18,fontSize:12,color:C.muted,textAlign:"center",borderBottom:`1px solid ${C.border}` }}>
+                      No matching SKU rows. Try another keyword or clear search.
+                    </div>
+                  ) : bulkVisibleRows.map(({row:r,idx}:any)=>{
                     const hasAny=rowHasInput(r);
                     const productMissing=hasAny&&!String(r.productName||"").trim();
                     const skuMissing=hasAny&&!String(r.sku||"").trim();
@@ -3313,7 +3355,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
           {bulkError&&<p style={{ margin:0,fontSize:12,color:C.muted }}>{bulkError}</p>}
           {bulkRows.length>0&&(
             <p style={{ margin:0,fontSize:12,color:bulkRows.some((r:any)=>r.error)?"#DC2626":C.muted,fontWeight:bulkRows.some((r:any)=>r.error)?700:400 }}>
-              {bulkRows.filter((r:any)=>r.valid).length} valid SKU{bulkRows.filter((r:any)=>r.valid).length!==1?"s":""}{bulkRows.some((r:any)=>r.error) ? ` · Fix highlighted rows before ${bulkMode==="edit"?"saving":"importing"} invalid items.` : (bulkMode==="edit" ? " ready to save." : " ready to import.")}
+              {bulkRows.filter((r:any)=>r.valid).length} valid SKU{bulkRows.filter((r:any)=>r.valid).length!==1?"s":""}{bulkRows.some((r:any)=>r.error) ? ` · Fix highlighted rows before ${bulkMode==="edit"?"saving":"importing"} invalid items.` : (bulkMode==="edit" ? " ready to save." : " ready to import.")}{bulkMode==="edit"&&bulkSearch.trim()?` · Showing ${bulkVisibleRows.length} matching row${bulkVisibleRows.length!==1?"s":""}. Save still applies to the full sheet.`:""}
             </p>
           )}
           <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
