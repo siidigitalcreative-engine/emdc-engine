@@ -2395,6 +2395,38 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 };
 
 // ─── AI TEXT GENERATOR ────────────────────────────────────────────────────────
+const compressTextReferenceImage = (file: File) => new Promise<any>((resolve,reject)=>{
+  const reader = new FileReader();
+  reader.onerror = () => reject(new Error("Could not read image file."));
+  reader.onload = () => {
+    const img = new Image();
+    img.onerror = () => reject(new Error("Could not load image file."));
+    img.onload = () => {
+      const maxSide = 1280;
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Could not prepare image file."));
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+      resolve({
+        id: uid(),
+        name: file.name,
+        type: "image/jpeg",
+        originalSize: file.size,
+        compressedBytes: Math.round((dataUrl.length * 3) / 4),
+        dataUrl,
+      });
+    };
+    img.src = String(reader.result || "");
+  };
+  reader.readAsDataURL(file);
+});
+
 const AITextGenerator = () => {
   const [task,setTask] = useState("product_description");
   const [tone,setTone] = useState("professional");
@@ -2402,6 +2434,7 @@ const AITextGenerator = () => {
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
   const [output,setOutput] = useState("");
+  const [referenceImages,setReferenceImages] = useState<any[]>([]);
 
   const taskOptions = [
     { id:"product_description", label:"Product Description" },
@@ -2422,6 +2455,22 @@ const AITextGenerator = () => {
     { id:"short", label:"Short & Direct" },
   ];
 
+  const handleReferenceUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setError("");
+    try {
+      const validFiles = Array.from(files).filter(file=>file.type.startsWith("image/")).slice(0, 4);
+      const prepared = await Promise.all(validFiles.map(file=>compressTextReferenceImage(file)));
+      setReferenceImages(prev => [...prev, ...prepared].slice(0, 4));
+    } catch (err:any) {
+      setError(err?.message || "Could not prepare reference image.");
+    }
+  };
+
+  const removeReferenceImage = (id:string) => {
+    setReferenceImages(prev => prev.filter((img:any) => img.id !== id));
+  };
+
   const generateText = async () => {
     if (!input.trim() || loading) return;
     setLoading(true);
@@ -2436,6 +2485,11 @@ const AITextGenerator = () => {
           task,
           tone,
           input:input.trim(),
+          referenceImages: referenceImages.map((img:any)=>({
+            name: img.name,
+            type: img.type || "image/jpeg",
+            dataUrl: img.dataUrl,
+          })),
         }),
       });
 
@@ -2499,6 +2553,46 @@ const AITextGenerator = () => {
               onFocus={e=>e.currentTarget.style.borderColor=C.accent}
               onBlur={e=>e.currentTarget.style.borderColor=C.border}
             />
+          </Field>
+
+          <Field label="Reference Images">
+            <div style={{ display:"flex",flexDirection:"column",gap:10,padding:10,borderRadius:10,border:`1.5px dashed ${C.borderStrong}`,background:C.bg }}>
+              <label style={{ display:"inline-flex",justifyContent:"center",alignItems:"center",height:40,padding:"0 14px",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,fontSize:14,fontWeight:700,cursor:"pointer" }}>
+                + Upload Reference Image
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display:"none" }}
+                  onChange={e=>{
+                    handleReferenceUpload(e.target.files);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </label>
+
+              <p style={{ margin:0,fontSize:11,color:C.muted }}>
+                Optional. Add up to 4 images so Gemini can use the visible product details as context. These are temporary only and are not saved.
+              </p>
+
+              {referenceImages.length>0 && (
+                <div style={{ display:"flex",flexWrap:"wrap",gap:10 }}>
+                  {referenceImages.map((img:any)=>(
+                    <div key={img.id} style={{ width:88,border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden",position:"relative" }}>
+                      <button
+                        type="button"
+                        onClick={()=>removeReferenceImage(img.id)}
+                        style={{ position:"absolute",top:4,right:4,width:18,height:18,borderRadius:999,border:"none",background:"rgba(255,255,255,.92)",color:"#DC2626",fontSize:12,fontWeight:800,cursor:"pointer",lineHeight:1 }}
+                      >
+                        ×
+                      </button>
+                      <img src={img.dataUrl} alt={img.name} style={{ display:"block",width:"100%",height:70,objectFit:"cover",background:"#fff" }} />
+                      <div style={{ padding:"5px 6px",fontSize:10,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{img.name}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </Field>
 
           {error&&(
