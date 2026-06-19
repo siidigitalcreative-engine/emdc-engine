@@ -722,7 +722,7 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
 };
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
-const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
+const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, brands=[], onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
@@ -734,6 +734,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
   const [detailEv,setDetailEv]   = useState(null);
   const [editForm,setEditForm]   = useState(null);
   const [seasonalEditForm,setSeasonalEditForm] = useState<any>(null);
+  const [phaseoutBrandFilter,setPhaseoutBrandFilter] = useState("all");
   const [addForm,setAddForm]     = useState({ title:"",type:"task",date:"",color:"#374151" });
   const [dayView,setDayView]     = useState(null); // { date, label }
   const [prevDayView,setPrevDayView] = useState(null); // to go back from detail to day list
@@ -889,15 +890,29 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
   },[year,seasonalEvents,manualEvents,extraEvents,eventTypes]);
 
   const phaseoutSkuLinks = useMemo(()=>{
+    const knownBrands = (brands||[]).map((b:any)=>String(b.name||"").trim()).filter(Boolean);
     const byProduct:any = {};
+
+    const detectBrand = (label:string) => {
+      const lower = label.toLowerCase();
+      const matched = knownBrands.find((brand:string)=>lower.startsWith(brand.toLowerCase()+" - ") || lower.includes(" - "+brand.toLowerCase()+" - "));
+      if (matched) return matched;
+      const firstChunk = label.split(" - ")[0]?.trim();
+      return firstChunk || "Unbranded";
+    };
+
     (seasonalEvents||[]).forEach((ev:any)=>{
       const phaseProducts = (ev.products||[]).filter(isPhaseoutProduct);
       phaseProducts.forEach((product:any)=>{
         const label = cleanPhaseoutProductLabel(product) || String(product||"").trim();
         if(!label) return;
-        if(!byProduct[label]) byProduct[label] = { label, events:[] };
-        if(!byProduct[label].events.some((item:any)=>item.id===ev.id)){
-          byProduct[label].events.push({
+
+        const brandName = detectBrand(label);
+        const key = `${brandName}__${label}`;
+
+        if(!byProduct[key]) byProduct[key] = { label, brandName, events:[] };
+        if(!byProduct[key].events.some((item:any)=>item.id===ev.id)){
+          byProduct[key].events.push({
             id:ev.id,
             name:ev.name,
             date:ev.date,
@@ -907,8 +922,34 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
         }
       });
     });
-    return Object.values(byProduct).sort((a:any,b:any)=>String(a.label).localeCompare(String(b.label)));
-  },[seasonalEvents]);
+
+    return Object.values(byProduct).sort((a:any,b:any)=>
+      String(a.brandName).localeCompare(String(b.brandName)) || String(a.label).localeCompare(String(b.label))
+    );
+  },[seasonalEvents,brands]);
+
+  const phaseoutBrandTabs = useMemo(()=>{
+    const byBrand:any = {};
+    phaseoutSkuLinks.forEach((item:any)=>{
+      const brand = item.brandName || "Unbranded";
+      if(!byBrand[brand]) byBrand[brand] = { brandName:brand, count:0 };
+      byBrand[brand].count += 1;
+    });
+
+    return Object.values(byBrand).sort((a:any,b:any)=>String(a.brandName).localeCompare(String(b.brandName)));
+  },[phaseoutSkuLinks]);
+
+  const filteredPhaseoutSkuLinks = useMemo(()=>{
+    if(phaseoutBrandFilter==="all") return phaseoutSkuLinks;
+    return phaseoutSkuLinks.filter((item:any)=>item.brandName===phaseoutBrandFilter);
+  },[phaseoutSkuLinks,phaseoutBrandFilter]);
+
+  useEffect(()=>{
+    if(phaseoutBrandFilter==="all") return;
+    if(!phaseoutBrandTabs.some((tab:any)=>tab.brandName===phaseoutBrandFilter)) {
+      setPhaseoutBrandFilter("all");
+    }
+  },[phaseoutBrandFilter,phaseoutBrandTabs]);
 
   const days=getDaysInMonth(year,month), firstDay=getFirstDay(year,month);
   const prevMo=()=>month===0?(setMonth(11),setYear(y=>y-1)):setMonth(m=>m-1);
@@ -1288,22 +1329,42 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
           <div>
             <h3 style={{ margin:"0 0 3px",fontSize:14,fontWeight:800,color:C.text }}>Phase-Out SKU Campaign Map</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted }}>Shows each phase-out SKU and the events/seasons where it is currently linked.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Filter by brand to see which phase-out SKUs are linked to each event/season.</p>
           </div>
           <span style={{ fontSize:11,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"4px 9px" }}>
-            ⚑ {phaseoutSkuLinks.length} SKU{phaseoutSkuLinks.length!==1?"s":""}
+            ⚑ {filteredPhaseoutSkuLinks.length} / {phaseoutSkuLinks.length} SKU{phaseoutSkuLinks.length!==1?"s":""}
           </span>
         </div>
 
+        {phaseoutSkuLinks.length>0&&(
+          <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
+            <button type="button" onClick={()=>setPhaseoutBrandFilter("all")}
+              style={{ height:30,padding:"0 12px",borderRadius:999,border:`1.5px solid ${phaseoutBrandFilter==="all"?C.accent:C.border}`,background:phaseoutBrandFilter==="all"?C.accent:C.surface,color:phaseoutBrandFilter==="all"?"#fff":C.textSub,fontSize:12,fontWeight:800,cursor:"pointer" }}>
+              All Brands <span style={{ opacity:.75 }}>({phaseoutSkuLinks.length})</span>
+            </button>
+            {phaseoutBrandTabs.map((tab:any)=>(
+              <button key={tab.brandName} type="button" onClick={()=>setPhaseoutBrandFilter(tab.brandName)}
+                style={{ height:30,padding:"0 12px",borderRadius:999,border:`1.5px solid ${phaseoutBrandFilter===tab.brandName?C.accent:C.border}`,background:phaseoutBrandFilter===tab.brandName?C.accent:C.surface,color:phaseoutBrandFilter===tab.brandName?"#fff":C.textSub,fontSize:12,fontWeight:800,cursor:"pointer" }}>
+                {tab.brandName} <span style={{ opacity:.75 }}>({tab.count})</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {phaseoutSkuLinks.length===0 ? (
           <p style={{ margin:0,fontSize:12,color:C.muted }}>No phase-out SKUs linked to events/seasons yet. Use the Product Phase-Out AI Helper from Checklists.</p>
+        ) : filteredPhaseoutSkuLinks.length===0 ? (
+          <p style={{ margin:0,fontSize:12,color:C.muted }}>No phase-out SKUs found for this brand.</p>
         ) : (
           <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(auto-fill,minmax(280px,1fr))",gap:10 }}>
-            {phaseoutSkuLinks.map((item:any)=>(
-              <div key={item.label} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+            {filteredPhaseoutSkuLinks.map((item:any)=>(
+              <div key={`${item.brandName}-${item.label}`} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                 <div style={{ padding:"9px 10px",background:"#FFFBEB",borderBottom:"1px solid #FDE68A",display:"flex",gap:8,alignItems:"center" }}>
                   <span style={{ width:22,height:22,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0 }}>⚑</span>
-                  <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.label}</p>
+                  <div style={{ minWidth:0,flex:1 }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.label}</p>
+                    <p style={{ margin:"2px 0 0",fontSize:10,color:"#B45309",fontWeight:800,textTransform:"uppercase",letterSpacing:".04em" }}>{item.brandName}</p>
+                  </div>
                 </div>
                 <div style={{ display:"flex",flexDirection:"column" }}>
                   {item.events.map((ev:any)=>(
@@ -6035,7 +6096,7 @@ export default function App({
               Shared Sync: {cloudSyncStatus}
             </p>
           </div>
-          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
+          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
