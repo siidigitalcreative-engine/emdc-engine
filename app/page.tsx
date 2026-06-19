@@ -852,44 +852,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
         ))}
       </div>
 
-      {/* Year event list */}
-      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?12:16,marginBottom:12 }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
-          <div>
-            <h3 style={{ margin:"0 0 3px",fontSize:14,fontWeight:800,color:C.text }}>{year} Events & Seasons</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted }}>Monthly list includes calendar events, checklist dates, events/seasons, and items without specific dates.</p>
-          </div>
-        </div>
-        {yearListGroups.length===0 ? (
-          <p style={{ margin:0,fontSize:12,color:C.muted }}>No events listed for this year yet.</p>
-        ) : (
-          <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(auto-fill,minmax(260px,1fr))",gap:10 }}>
-            {yearListGroups.map((group:any)=>(
-              <div key={group.key} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".04em" }}>
-                  {group.label} <span style={{ color:C.faint,fontWeight:700 }}>({group.items.length})</span>
-                </div>
-                <div style={{ display:"flex",flexDirection:"column" }}>
-                  {group.items.map((item:any)=>(
-                    <button key={item.id} type="button"
-                      onClick={()=>item.groupId?onNavigateToGroup?.(item.groupId):undefined}
-                      style={{ textAlign:"left",padding:"8px 10px",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surface,cursor:item.groupId?"pointer":"default" }}>
-                      <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
-                        <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.title}</span>
-                        <span style={{ flexShrink:0,fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
-                      </div>
-                      <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
-                        {item.dateText || item.calDate || "No specific date"}{item.dateEnd?` → ${item.dateEnd}`:""} · {item.source}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Grid */}
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
@@ -999,6 +961,45 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
           <span style={{ fontSize:11,color:C.muted }}>Seasonal Event</span>
         </div>
       </div>
+
+      {/* Year event list */}
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?12:16,marginTop:16 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
+          <div>
+            <h3 style={{ margin:"0 0 3px",fontSize:14,fontWeight:800,color:C.text }}>{year} Events & Seasons</h3>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Monthly list includes calendar events, checklist dates, events/seasons, and items without specific dates.</p>
+          </div>
+        </div>
+        {yearListGroups.length===0 ? (
+          <p style={{ margin:0,fontSize:12,color:C.muted }}>No events listed for this year yet.</p>
+        ) : (
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(auto-fill,minmax(260px,1fr))",gap:10 }}>
+            {yearListGroups.map((group:any)=>(
+              <div key={group.key} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".04em" }}>
+                  {group.label} <span style={{ color:C.faint,fontWeight:700 }}>({group.items.length})</span>
+                </div>
+                <div style={{ display:"flex",flexDirection:"column" }}>
+                  {group.items.map((item:any)=>(
+                    <button key={item.id} type="button"
+                      onClick={()=>item.groupId?onNavigateToGroup?.(item.groupId):undefined}
+                      style={{ textAlign:"left",padding:"8px 10px",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surface,cursor:item.groupId?"pointer":"default" }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
+                        <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.title}</span>
+                        <span style={{ flexShrink:0,fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
+                      </div>
+                      <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                        {item.dateText || item.calDate || "No specific date"}{item.dateEnd?` → ${item.dateEnd}`:""} · {item.source}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
 
       {/* Add Modal */}
       <Modal open={addModal} onClose={()=>setAddModal(false)} title="Add Event">
