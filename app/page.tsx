@@ -2402,7 +2402,7 @@ const AIEngineView = () => {
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
   const [result,setResult] = useState<any>(null);
-  const [history,setHistory] = useState<any[]>([]);
+  const [savedOutputs,setSavedOutputs] = useState<any[]>([]);
 
   const imageUrl =
     result?.data?.[0]?.url ||
@@ -2410,6 +2410,15 @@ const AIEngineView = () => {
     result?.output?.[0]?.url ||
     result?.url ||
     "";
+
+  const currentOutput = imageUrl ? {
+    id:"current",
+    prompt:prompt.trim(),
+    size,
+    watermark,
+    url:imageUrl,
+    createdAt:new Date().toISOString(),
+  } : null;
 
   const generateImage = async () => {
     if (!prompt.trim() || loading) return;
@@ -2435,18 +2444,46 @@ const AIEngineView = () => {
         throw new Error(msg);
       }
 
-      const url = data?.data?.[0]?.url || data?.images?.[0]?.url || data?.output?.[0]?.url || data?.url || "";
       setResult(data);
-      setHistory(p=>[
-        { id:uid(), prompt:prompt.trim(), size, watermark, url, createdAt:new Date().toISOString() },
-        ...p,
-      ].slice(0,12));
     } catch (err:any) {
       setError(err?.message || "Image generation failed.");
     } finally {
       setLoading(false);
     }
   };
+
+  const downloadImage = async (url:string, name="emdc-generated-image.png") => {
+    if (!url) return;
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const saveCurrentOutput = () => {
+    if (!imageUrl) return;
+    const saved = {
+      id:uid(),
+      prompt:prompt.trim(),
+      size,
+      watermark,
+      url:imageUrl,
+      createdAt:new Date().toISOString(),
+    };
+    setSavedOutputs(p=>[saved,...p]);
+  };
+
+  const isCurrentSaved = !!imageUrl && savedOutputs.some(o=>o.url===imageUrl);
 
   const promptExamples = [
     "Hyper-realistic product lifestyle image of a premium insulated tumbler on a clean modern desk, soft morning sunlight, minimal props, elegant commercial photography, 4k detail.",
@@ -2503,6 +2540,10 @@ const AIEngineView = () => {
             {loading ? "Generating Image..." : "Generate Image"}
           </Btn>
 
+          <p style={{ margin:"-4px 0 0",fontSize:11,color:C.muted }}>
+            Generated images are not saved automatically. Use <b>Save Output</b> only when you want to keep a result in this session.
+          </p>
+
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
             {promptExamples.map((p,i)=>(
               <button key={i} onClick={()=>setPrompt(p)}
@@ -2518,7 +2559,7 @@ const AIEngineView = () => {
         <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16,minHeight:320 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
             <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Result</h4>
-            {imageUrl&&<a href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize:12,fontWeight:700,color:C.accent,textDecoration:"none" }}>Open Image</a>}
+            {imageUrl&&<Tag color="#22C55E" sm>Not auto-saved</Tag>}
           </div>
 
           {loading&&(
@@ -2528,7 +2569,17 @@ const AIEngineView = () => {
           )}
 
           {!loading&&imageUrl&&(
-            <img src={imageUrl} alt="Generated image" style={{ width:"100%",borderRadius:10,border:`1px solid ${C.border}`,display:"block" }} />
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <img src={imageUrl} alt="Generated image" style={{ width:"100%",borderRadius:10,border:`1px solid ${C.border}`,display:"block" }} />
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8 }}>
+                <Btn sm variant="outline" onClick={()=>downloadImage(imageUrl, `emdc-image-${Date.now()}.png`)}>Download</Btn>
+                <Btn sm onClick={saveCurrentOutput} disabled={isCurrentSaved}>{isCurrentSaved ? "Saved" : "Save Output"}</Btn>
+              </div>
+              <button onClick={()=>window.open(imageUrl,"_blank","noopener,noreferrer")}
+                style={{ border:"none",background:"transparent",padding:0,fontSize:12,fontWeight:700,color:C.accent,cursor:"pointer",textAlign:"center" }}>
+                Open image in new tab
+              </button>
+            </div>
           )}
 
           {!loading&&!imageUrl&&(
@@ -2549,17 +2600,23 @@ const AIEngineView = () => {
         </div>
 
         <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16 }}>
-          <h4 style={{ margin:"0 0 12px",fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Recent Generations</h4>
-          {history.length===0&&<p style={{ margin:0,fontSize:12,color:C.muted }}>Generated images will appear here during this session.</p>}
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:12 }}>
+            <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Saved Outputs</h4>
+            {savedOutputs.length>0&&<button onClick={()=>setSavedOutputs([])} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}>Clear All</button>}
+          </div>
+          {savedOutputs.length===0&&<p style={{ margin:0,fontSize:12,color:C.muted }}>Nothing saved yet. Generated images only appear here after clicking Save Output.</p>}
           <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-            {history.map(h=>(
+            {savedOutputs.map(h=>(
               <div key={h.id} style={{ display:"flex",gap:10,alignItems:"center",padding:8,borderRadius:9,background:C.surfaceAlt }}>
-                {h.url?<img src={h.url} alt="" style={{ width:48,height:48,objectFit:"cover",borderRadius:7,border:`1px solid ${C.border}` }} />:<div style={{ width:48,height:48,borderRadius:7,background:C.border }} />}
+                <img src={h.url} alt="" style={{ width:54,height:54,objectFit:"cover",borderRadius:7,border:`1px solid ${C.border}` }} />
                 <div style={{ minWidth:0,flex:1 }}>
                   <p style={{ margin:"0 0 2px",fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{h.prompt}</p>
                   <p style={{ margin:0,fontSize:11,color:C.muted }}>{h.size} · {h.watermark?"Watermark on":"Watermark off"}</p>
                 </div>
-                {h.url&&<a href={h.url} target="_blank" rel="noopener noreferrer" style={{ fontSize:11,fontWeight:700,color:C.accent,textDecoration:"none" }}>Open</a>}
+                <div style={{ display:"flex",gap:4,flexShrink:0 }}>
+                  <button onClick={()=>downloadImage(h.url, `emdc-saved-${h.id}.png`)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Download</button>
+                  <button onClick={()=>setSavedOutputs(p=>p.filter(x=>x.id!==h.id))} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
+                </div>
               </div>
             ))}
           </div>
