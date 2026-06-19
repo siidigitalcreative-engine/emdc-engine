@@ -3323,30 +3323,21 @@ const AIEngineView = () => {
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
-      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
-          <div>
-            <h3 style={{ margin:"0 0 4px",fontSize:20,fontWeight:800,color:C.text }}>AI Engine</h3>
-            <p style={{ margin:0,fontSize:13,color:C.muted }}>AI tools, prompt builders, generators, and workflow automations.</p>
-          </div>
-        </div>
-
-        <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
-          <button
-            type="button"
-            onClick={()=>setAiPage("image")}
-            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="image" ? C.accent : C.border}`,background:aiPage==="image" ? C.accent : C.surface,color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
-          >
-            Image Generation
-          </button>
-          <button
-            type="button"
-            onClick={()=>setAiPage("text")}
-            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="text" ? C.accent : C.border}`,background:aiPage==="text" ? C.accent : C.surface,color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
-          >
-            Text Generation
-          </button>
-        </div>
+      <div style={{ display:"flex",gap:10,flexWrap:"wrap",justifyContent:"flex-start" }}>
+        <button
+          type="button"
+          onClick={()=>setAiPage("image")}
+          style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="image" ? C.accent : C.border}`,background:aiPage==="image" ? C.accent : C.surface,color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+        >
+          Image Generation
+        </button>
+        <button
+          type="button"
+          onClick={()=>setAiPage("text")}
+          style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="text" ? C.accent : C.border}`,background:aiPage==="text" ? C.accent : C.surface,color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+        >
+          Text Generation
+        </button>
       </div>
 
       {aiPage==="image" && (
