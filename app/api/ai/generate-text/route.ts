@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     const input = typeof body?.input === "string" ? body.input.trim() : "";
     const task = typeof body?.task === "string" ? body.task : "product_description";
     const tone = typeof body?.tone === "string" ? body.tone : "professional";
+    const referenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages.slice(0, 4) : [];
 
     if (!input) {
       return NextResponse.json({ error: "Input is required." }, { status: 400 });
@@ -61,10 +62,27 @@ export async function POST(req: NextRequest) {
       "Avoid em dashes.",
       "Do not invent technical specs that are not provided.",
       "Use clear formatting that is easy to copy.",
+      "If reference images are attached, use them as additional visual context for the product.",
+      "Only mention visual details that are clearly visible in the image or explicitly stated in the user input.",
       "",
       "User input:",
       input,
     ].join("\\n");
+
+    const imageParts = referenceImages
+      .map((img: any) => {
+        const dataUrl = typeof img?.dataUrl === "string" ? img.dataUrl : "";
+        const type = typeof img?.type === "string" ? img.type : "image/jpeg";
+        const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
+        if (!match) return null;
+        return {
+          inlineData: {
+            mimeType: match[1] || type || "image/jpeg",
+            data: match[2],
+          },
+        };
+      })
+      .filter(Boolean);
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -78,7 +96,7 @@ export async function POST(req: NextRequest) {
           contents: [
             {
               role: "user",
-              parts: [{ text: prompt }],
+              parts: [{ text: prompt }, ...imageParts],
             },
           ],
           generationConfig: {
