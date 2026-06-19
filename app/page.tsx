@@ -1139,7 +1139,7 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTypes, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup }: any) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTypes, events, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup }: any) => {
   const { isMobile } = useBreakpoint();
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
@@ -1154,6 +1154,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
+  const linkedEvents = (events||[]).filter((ev:any)=>(group.linkedEventIds||[]).includes(ev.id));
   const allItems = Object.values(items).flat();
   const overallDone = allItems.filter(i=>i.done).length;
   const overallPct  = allItems.length ? Math.round(overallDone/allItems.length*100) : 0;
@@ -1171,6 +1172,14 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               {group.deadline&&<span style={{ fontSize:11,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"2px 8px",borderRadius:4,border:"1px solid #DDD6FE" }}>{group.deadlineEnd?`${group.deadline} → ${group.deadlineEnd}`:`Due ${group.deadline}`}</span>}
               {group.skus.slice(0,3).map(s=>(<span key={s.id} style={{ fontSize:11,color:C.muted,background:C.surfaceAlt,padding:"2px 8px",borderRadius:4,border:`1px solid ${C.border}`,fontFamily:"monospace" }}>{s.value}</span>))}
             </div>
+            {linkedEvents.length>0&&(
+              <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:8 }}>
+                <span style={{ fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em" }}>Linked:</span>
+                {linkedEvents.map((ev:any)=>(
+                  <span key={ev.id} style={{ fontSize:11,color:ev.color||C.muted,background:(ev.color||C.accent)+"12",padding:"2px 8px",borderRadius:4,border:`1px solid ${(ev.color||C.accent)}33` }}>{ev.name}</span>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ display:"flex",gap:8,flexShrink:0 }}>
             <Btn sm variant="outline" onClick={()=>setGroupEditModal(true)}>Edit Group</Btn>
@@ -1222,25 +1231,27 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         })}
       </div>
       <StatusManagerModal open={statusModal} onClose={()=>setStatusModal(false)} statuses={statuses} onChange={saveStatuses} />
-      <GroupEditModal open={groupEditModal} group={group} onClose={()=>setGroupEditModal(false)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes}
+      <GroupEditModal open={groupEditModal} group={group} onClose={()=>setGroupEditModal(false)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={events}
         onSave={(patch:any)=>{ if(onUpdateGroup) onUpdateGroup(patch); }} />
     </div>
   );
 };
 
 // ─── SKU SELECTOR ────────────────────────────────────────────────────────────
-const SKUSelector = ({ onNext, skuStorage, brands, launchTypes }) => {
+const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[] }) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [skus,setSkus]           = useState([{id:uid(),value:""}]);
   const [selType,setSelType]     = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
+  const [linkedEventIds,setLinkedEventIds] = useState<any[]>([]);
   const [pickedSkus,setPickedSkus] = useState([]);
   const addSku=()=>setSkus(p=>[...p,{id:uid(),value:""}]);
   const remSku=id=>setSkus(p=>p.filter(s=>s.id!==id));
   const updSku=(id,v)=>setSkus(p=>p.map(s=>s.id===id?{...s,value:v}:s));
   const pickSku=s=>{ if(!pickedSkus.find(p=>p.id===s.id)) setPickedSkus(p=>[...p,s]); };
+  const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   const finalSkus=skuMode==="storage"?pickedSkus.map(s=>({id:s.id,value:s.sku})):skus.filter(s=>s.value.trim());
   const canNext=finalSkus.length>0&&selType&&groupName.trim();
   return (
@@ -1270,6 +1281,25 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes }) => {
             }
           </Field>
         )}
+        <Field label="Link Events / Seasons" hint="optional">
+          {events.length===0 ? (
+            <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No events or seasons available yet.</div>
+          ) : (
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,220px),1fr))",gap:8 }}>
+              {events.map((ev:any)=>{ const active=linkedEventIds.includes(ev.id); return (
+                <button key={ev.id} type="button" onClick={()=>toggleLinkedEvent(ev.id)}
+                  style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,textAlign:"left",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${active?(ev.color||C.accent):C.border}`,background:active?(ev.color||C.accent)+"12":C.surface,cursor:"pointer" }}>
+                  <div style={{ minWidth:0 }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</p>
+                    <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{ev.date || ev.type}</p>
+                  </div>
+                  <div style={{ width:18,height:18,borderRadius:"50%",border:`2px solid ${active?(ev.color||C.accent):C.border}`,background:active?(ev.color||C.accent):"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{active&&<span style={{ color:"#fff",fontSize:9 }}>&#10003;</span>}</div>
+                </button>
+              );})}
+            </div>
+          )}
+        </Field>
+
         <Field label="Operational Type">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
@@ -1280,19 +1310,20 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes }) => {
             ))}
           </div>
         </Field>
-        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline,deadlineEnd})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
+        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline,deadlineEnd,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
   );
 };
 
 // ─── GROUP EDIT MODAL ────────────────────────────────────────────────────────
-const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes }: any) => {
+const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes, events=[] }: any) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
   const [launchType,setLaunchType] = useState("introduction");
+  const [linkedEventIds,setLinkedEventIds] = useState<any[]>([]);
   const [skus,setSkus] = useState<any[]>([]);
   const [pickedSkus,setPickedSkus] = useState<any[]>([]);
 
@@ -1307,6 +1338,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       setGroupName(group.groupName||"");
       setDeadline(group.deadline||"");
       setDeadlineEnd(group.deadlineEnd||"");
+      setLinkedEventIds(Array.isArray(group.linkedEventIds)?group.linkedEventIds:[]);
       const availableTypes = Object.keys(launchTypes||LAUNCH_TYPES); setLaunchType((group.launchType&&availableTypes.includes(group.launchType)) ? group.launchType : (availableTypes[0]||"introduction"));
       setSkus(existingSkus);
       setPickedSkus(useStorageMode ? storageMatches : []);
@@ -1318,6 +1350,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const remSku=(id:string)=>setSkus((p:any)=>p.filter((s:any)=>s.id!==id));
   const updSku=(id:string,v:string)=>setSkus((p:any)=>p.map((s:any)=>s.id===id?{...s,value:v}:s));
   const pickSku=(s:any)=>{ if(!pickedSkus.find((p:any)=>p.id===s.id)) setPickedSkus((p:any)=>[...p,s]); };
+  const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   const finalSkus = skuMode==="storage" ? pickedSkus.map((s:any)=>({id:s.id,value:s.sku})) : skus.filter((s:any)=>s.value.trim());
   const canSave = finalSkus.length>0 && groupName.trim();
 
@@ -1350,6 +1383,25 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             }
           </Field>
         )}
+        <Field label="Linked Events / Seasons" hint="optional">
+          {events.length===0 ? (
+            <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No events or seasons available yet.</div>
+          ) : (
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,220px),1fr))",gap:8 }}>
+              {events.map((ev:any)=>{ const active=linkedEventIds.includes(ev.id); return (
+                <button key={ev.id} type="button" onClick={()=>toggleLinkedEvent(ev.id)}
+                  style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,textAlign:"left",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${active?(ev.color||C.accent):C.border}`,background:active?(ev.color||C.accent)+"12":C.surface,cursor:"pointer" }}>
+                  <div style={{ minWidth:0 }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</p>
+                    <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{ev.date || ev.type}</p>
+                  </div>
+                  <div style={{ width:18,height:18,borderRadius:"50%",border:`2px solid ${active?(ev.color||C.accent):C.border}`,background:active?(ev.color||C.accent):"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{active&&<span style={{ color:"#fff",fontSize:9 }}>&#10003;</span>}</div>
+                </button>
+              );})}
+            </div>
+          )}
+        </Field>
+
         <Field label="Operational Type" hint="(existing checklist items won't change)">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
@@ -1360,7 +1412,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             ))}
           </div>
         </Field>
-        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline,deadlineEnd,launchType,skus:finalSkus}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline,deadlineEnd,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
   );
@@ -1577,7 +1629,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
@@ -1620,7 +1672,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
   const updateGroup = (id:string, patch:any) => { setGroups((p:any)=>{ const next=p.map((g:any)=>g.id===id?{...g,...patch}:g); if(onStateChange) onStateChange({checklistGroups:next}); return next; }); };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
 
   return (
     <div>
@@ -1633,7 +1685,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
       </div>
 
       <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={setTemplates} launchTypes={launchTypes} onLaunchTypesChange={setLaunchTypes} />
-      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes}
+      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]}
         onSave={(patch:any)=>updateGroup(editingGroup.id,patch)} />
 
       {creating&&(
@@ -1642,7 +1694,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
             <h3 style={{ margin:0,fontSize:15,fontWeight:700,color:C.text }}>New Checklist Group</h3>
             <button onClick={()=>setCreating(false)} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>&#215;</button>
           </div>
-          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} />
+          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]} />
         </div>
       )}
 
@@ -1665,6 +1717,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                   <Tag color={C.accent} sm>{lt.label}</Tag>
                   {g.deadline&&<span style={{ fontSize:10,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"1px 7px",borderRadius:4,border:"1px solid #DDD6FE" }}>{g.deadlineEnd?`${g.deadline} → ${g.deadlineEnd}`:`Due ${g.deadline}`}</span>}
+                  {(g.linkedEventIds||[]).length>0&&<span style={{ fontSize:10,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"1px 7px",borderRadius:4,border:"1px solid #99F6E4" }}>{(g.linkedEventIds||[]).length} linked event{(g.linkedEventIds||[]).length>1?"s":""}</span>}
                 </div>
                 {g.skus.length>0&&(
                   <div style={{ marginTop:8,display:"flex",gap:4,flexWrap:"wrap" }}>
@@ -4777,7 +4830,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView /></div>
         </div>
