@@ -2053,6 +2053,16 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
+        <Field label="Operational Type" hint="choose this before SKU/date">
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
+              <button key={k} onClick={()=>setSelType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
+                <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
+                <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{selType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
+              </button>
+            ))}
+          </div>
+        </Field>
         <Field label="Start Date"><DateInput value={deadline} onChange={setDeadline} /></Field>
         <Field label="End Date"><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></Field>
         <Field label="SKU Source">
@@ -2110,16 +2120,6 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
           )}
         </Field>
 
-        <Field label="Operational Type">
-          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
-              <button key={k} onClick={()=>setSelType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
-                <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
-                <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{selType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
-              </button>
-            ))}
-          </div>
-        </Field>
         <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline,deadlineEnd,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
