@@ -611,6 +611,19 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
 
   const allEvents = useMemo(()=>[...manualEvents,...extraEvents],[manualEvents,extraEvents]);
 
+  // Date helpers must be defined before yearly list memo uses them during prerender.
+  const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
+  const parseDate = s => s ? new Date(s+"T00:00:00") : null;
+  const formatDate = s => {
+    if (typeof s === "string" && s.startsWith("monthly:")) {
+      const labels = { first:"first day", last:"last day" };
+      const tokens = s.replace("monthly:","").split(",").filter(Boolean)
+        .map(t => labels[t] || `the ${t}${ordinalSuffix(t)}`);
+      return `Monthly on ${tokens.join(" & ")}`;
+    }
+    return s;
+  };
+
   const getMonthFromText = (value:any) => {
     const txt = String(value || "").toLowerCase();
     if (!txt) return null;
@@ -716,18 +729,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, on
   const nextMo=()=>month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1);
 
   // For each day: point events (single date) + range events (multi-day spanning this date)
-  const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
-  const parseDate = s => s ? new Date(s+"T00:00:00") : null;
-  const formatDate = s => {
-    if (typeof s === "string" && s.startsWith("monthly:")) {
-      const labels = { first:"first day", last:"last day" };
-      const tokens = s.replace("monthly:","").split(",").filter(Boolean)
-        .map(t => labels[t] || `the ${t}${ordinalSuffix(t)}`);
-      return `Monthly on ${tokens.join(" & ")}`;
-    }
-    return s;
-  };
-
   const eventsFor = d => {
     const key = dateKey(year,month,d);
     const dt  = new Date(`${key}T00:00:00`);
