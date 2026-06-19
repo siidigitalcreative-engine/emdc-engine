@@ -4762,13 +4762,26 @@ export default function App({
   const [tab,setTab] = useState("calendar");
   const [brands,setBrands]     = useState<any[]>(initialData?.skuBrands ?? INITIAL_BRANDS);
   const [skuStorage,setSkuStorage] = useState<any[]>(initialData?.skuItems ?? []);
-  const [checklistCalEvents,setChecklistCalEvents] = useState<any[]>([]);
   const [navigateToGroupId,setNavigateToGroupId]   = useState(null);
 
   // Lifted checklist state — owned by App so it survives switching away from and back to the Checklists tab
   const [checklistGroups,setChecklistGroups] = useState<any[]>(initialData?.checklistGroups ?? []);
   const [checklistAllItems,setChecklistAllItems] = useState<Record<string,any>>(initialData?.checklistItems ?? {});
   const [checklistStatuses,setChecklistStatuses] = useState<any[]>(initialData?.checklistStatuses ?? DEFAULT_STATUSES);
+
+  const checklistCalEvents = useMemo(()=>
+    (checklistGroups || []).filter((g:any)=>g.deadline).map((g:any)=>({
+      id:"cl-"+g.id,
+      date:g.deadline,
+      ...(g.deadlineEnd ? { dateEnd:g.deadlineEnd } : {}),
+      title:g.groupName + (g.deadlineEnd ? " - Date Range" : " - Deadline"),
+      type:"deadline",
+      color:"#8B5CF6",
+      fromChecklist:true,
+      groupId:g.id,
+    })),
+    [checklistGroups]
+  );
 
   // Lifted calendar state — owned by App so it survives switching away from and back to the Calendar tab
   const DEFAULT_MANUAL_EVENTS = useMemo(()=>[
@@ -5001,9 +5014,9 @@ export default function App({
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
   useEffect(() => { if (onStateChange) onStateChange({ seasonalEvents }); }, [seasonalEvents]);
 
-  const handleGroupCreated = (g:any)=>{
-    if(!g.deadline) return;
-    setChecklistCalEvents((p:any)=>{ const next=[...p,{id:"cl-"+g.id,date:g.deadline,...(g.deadlineEnd?{dateEnd:g.deadlineEnd}:{}),title:g.groupName+(g.deadlineEnd?" - Date Range":" - Deadline"),type:"deadline",color:"#8B5CF6",fromChecklist:true,groupId:g.id}]; if(onStateChange) onStateChange({calendarEvents:next}); return next; });
+  const handleGroupCreated = (_g:any)=>{
+    // Calendar checklist events are derived from checklistGroups,
+    // so new and edited group dates reflect on the Calendar automatically.
   };
   const handleNavigateToGroup = target=>{
     // target can be a groupId string OR "events" to go to Events & Seasons tab
