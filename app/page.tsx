@@ -1546,9 +1546,14 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     <Modal open={open} onClose={()=>{onClose();setEditIdx(null);}} title="Manage Checklist Templates" width={660}>
       <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
         <Field label="Checklist Type">
-          <Select value={launchType} onChange={v=>{setLaunchType(v);setEditIdx(null);}}>
-            {typeKeys.map(k=><option key={k} value={k}>{(launchTypes||LAUNCH_TYPES)[k]?.label || k}</option>)}
-          </Select>
+          <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+            <div style={{ flex:1 }}>
+              <Select value={launchType} onChange={v=>{setLaunchType(v);setEditIdx(null);}}>
+                {typeKeys.map(k=><option key={k} value={k}>{(launchTypes||LAUNCH_TYPES)[k]?.label || k}</option>)}
+              </Select>
+            </div>
+            <Btn sm variant="outline" onClick={addChecklistType}>+ Add Type</Btn>
+          </div>
         </Field>
 
         <div style={{ padding:12,background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}`,display:"flex",flexDirection:"column",gap:10 }}>
@@ -1564,7 +1569,6 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
           </Field>
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
             <Btn sm onClick={saveChecklistType} disabled={!typeLabel.trim()}>Save Type</Btn>
-            <Btn sm variant="outline" onClick={addChecklistType}>+ Add Type</Btn>
             <Btn sm variant="outline" onClick={duplicateChecklistType}>Duplicate Type</Btn>
             <Btn sm variant="danger" onClick={deleteChecklistType} disabled={typeKeys.length<=1}>Delete Type</Btn>
           </div>
@@ -4721,41 +4725,185 @@ export default function App({
   );
 
   const [appStateHydrated,setAppStateHydrated] = useState(false);
+  const [cloudHydrated,setCloudHydrated] = useState(false);
+  const [cloudSyncStatus,setCloudSyncStatus] = useState("Local");
+  const cloudLastUpdatedAtRef = useRef("");
+  const cloudApplyingRef = useRef(false);
+  const cloudSaveTimerRef = useRef<any>(null);
+  const cloudClientIdRef = useRef("");
+
+  const EMDC_SYNC_LOCAL_KEYS = [
+    "emdc_app_state_v1",
+    "emdc_ai_saved_outputs",
+    "emdc_text_output_types_v1",
+    "emdc_text_saved_outputs_v1",
+    "emdc_ad_template_platforms_v1",
+    "emdc_saved_ad_templates_v1",
+    "emdc_checklist_launch_types_v1",
+    "emdc_checklist_templates_v1",
+  ];
+
+  const makeAppStatePayload = () => ({
+    skuBrands: brands,
+    skuItems: skuStorage,
+    checklistGroups,
+    checklistItems: checklistAllItems,
+    checklistStatuses,
+    calendarEvents: calendarManualEvents,
+    calendarTypes: calendarEventTypes,
+    seasonalEvents,
+  });
+
+  const readLocalSnapshot = () => {
+    const snapshot:any = {};
+    try {
+      EMDC_SYNC_LOCAL_KEYS.forEach(key=>{
+        const value = localStorage.getItem(key);
+        if (value !== null) snapshot[key] = value;
+      });
+    } catch {}
+    return snapshot;
+  };
+
+  const writeLocalSnapshot = (snapshot:any) => {
+    if (!snapshot || typeof snapshot !== "object") return;
+    try {
+      Object.entries(snapshot).forEach(([key,value]:any)=>{
+        if (EMDC_SYNC_LOCAL_KEYS.includes(key) && typeof value === "string") {
+          localStorage.setItem(key, value);
+        }
+      });
+    } catch {}
+  };
+
+  const applyAppState = (parsed:any) => {
+    if (!parsed || typeof parsed !== "object") return;
+    if (Array.isArray(parsed?.skuBrands)) setBrands(parsed.skuBrands);
+    if (Array.isArray(parsed?.skuItems)) setSkuStorage(parsed.skuItems);
+    if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(parsed.checklistGroups);
+    if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(parsed.checklistItems);
+    if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
+    if (Array.isArray(parsed?.calendarEvents)) setCalendarManualEvents(parsed.calendarEvents);
+    if (Array.isArray(parsed?.calendarTypes)) setCalendarEventTypes(parsed.calendarTypes);
+    if (Array.isArray(parsed?.seasonalEvents)) setSeasonalEvents(parsed.seasonalEvents);
+  };
+
+  const applyCloudState = (cloud:any) => {
+    if (!cloud || typeof cloud !== "object") return;
+    cloudApplyingRef.current = true;
+    try {
+      writeLocalSnapshot(cloud.localStorage || {});
+      applyAppState(cloud.appState || cloud);
+      if (cloud.updatedAt) cloudLastUpdatedAtRef.current = cloud.updatedAt;
+      setCloudSyncStatus("Synced");
+    } finally {
+      setTimeout(()=>{ cloudApplyingRef.current = false; }, 350);
+    }
+  };
+
+  const fetchCloudState = async (mode:"initial"|"poll"="poll") => {
+    try {
+      const res = await fetch("/api/emdc-state", { cache:"no-store" });
+      if (!res.ok) throw new Error("Cloud sync unavailable");
+      const payload = await res.json();
+      const cloud = payload?.data;
+      if (cloud?.updatedAt && cloud.updatedAt !== cloudLastUpdatedAtRef.current) {
+        applyCloudState(cloud);
+      }
+      if (mode==="initial") setCloudSyncStatus(cloud ? "Synced" : "Ready");
+      return cloud;
+    } catch {
+      if (mode==="initial") setCloudSyncStatus("Local fallback");
+      return null;
+    }
+  };
+
+  const saveCloudState = async () => {
+    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
+
+    const updatedAt = new Date().toISOString();
+    const payload = {
+      version: 1,
+      clientId: cloudClientIdRef.current,
+      updatedAt,
+      appState: makeAppStatePayload(),
+      localStorage: readLocalSnapshot(),
+    };
+
+    try {
+      setCloudSyncStatus("Saving...");
+      const res = await fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const data = await res.json().catch(()=>({}));
+      cloudLastUpdatedAtRef.current = data?.data?.updatedAt || updatedAt;
+      setCloudSyncStatus("Synced");
+    } catch {
+      setCloudSyncStatus("Cloud save failed");
+    }
+  };
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("emdc_app_state_v1");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed?.skuBrands)) setBrands(parsed.skuBrands);
-        if (Array.isArray(parsed?.skuItems)) setSkuStorage(parsed.skuItems);
-        if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(parsed.checklistGroups);
-        if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(parsed.checklistItems);
-        if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
-        if (Array.isArray(parsed?.calendarEvents)) setCalendarManualEvents(parsed.calendarEvents);
-        if (Array.isArray(parsed?.calendarTypes)) setCalendarEventTypes(parsed.calendarTypes);
-        if (Array.isArray(parsed?.seasonalEvents)) setSeasonalEvents(parsed.seasonalEvents);
+      let clientId = localStorage.getItem("emdc_cloud_client_id");
+      if (!clientId) {
+        clientId = uid();
+        localStorage.setItem("emdc_cloud_client_id", clientId);
       }
+      cloudClientIdRef.current = clientId;
+
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      if (raw) applyAppState(JSON.parse(raw));
     } catch {}
+
     setAppStateHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!appStateHydrated) return;
+    (async()=>{
+      const cloud = await fetchCloudState("initial");
+      if (cloud?.updatedAt) cloudLastUpdatedAtRef.current = cloud.updatedAt;
+      setCloudHydrated(true);
+    })();
+  }, [appStateHydrated]);
+
+  useEffect(() => {
+    if (!cloudHydrated) return;
+    const timer = setInterval(()=>fetchCloudState("poll"), 8000);
+    return () => clearInterval(timer);
+  }, [cloudHydrated]);
+
+  useEffect(() => {
+    if (!appStateHydrated) return;
     try {
-      localStorage.setItem("emdc_app_state_v1", JSON.stringify({
-        skuBrands: brands,
-        skuItems: skuStorage,
-        checklistGroups,
-        checklistItems: checklistAllItems,
-        checklistStatuses,
-        calendarEvents: calendarManualEvents,
-        calendarTypes: calendarEventTypes,
-        seasonalEvents,
-      }));
+      localStorage.setItem("emdc_app_state_v1", JSON.stringify(makeAppStatePayload()));
     } catch {}
   }, [
     appStateHydrated,
+    brands,
+    skuStorage,
+    checklistGroups,
+    checklistAllItems,
+    checklistStatuses,
+    calendarManualEvents,
+    calendarEventTypes,
+    seasonalEvents,
+  ]);
+
+  useEffect(() => {
+    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
+    if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
+    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), 900);
+    return () => {
+      if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
+    };
+  }, [
+    appStateHydrated,
+    cloudHydrated,
     brands,
     skuStorage,
     checklistGroups,
@@ -4826,6 +4974,9 @@ export default function App({
               {tab==="checklists" && "Operational checklists by SKU, launch type, and department."}
               {tab==="skus"       && "Product catalog by brand, SKU, inventory, and status."}
               {tab==="ai"         && "AI tools, prompt builders, generators, and workflow automations."}
+            </p>
+            <p style={{ margin:"6px 0 0",fontSize:11,color:cloudSyncStatus==="Cloud save failed" ? "#DC2626" : C.faint }}>
+              Cloud Sync: {cloudSyncStatus}
             </p>
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
