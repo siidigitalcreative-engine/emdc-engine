@@ -519,7 +519,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
         onFocus={()=>setOpen(true)}
       />
       {open&&(
-        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,.12)",zIndex:400,maxHeight:360,overflowY:"auto" }}>
+        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,.12)",zIndex:400,maxHeight:420,overflowY:"auto" }}>
           <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
             <span style={{ fontSize:11,color:C.muted,fontWeight:700 }}>
               {results.length} SKU{results.length===1?"":"s"} found{categoryFilter!=="all"?` · ${categoryFilter}`:""}
@@ -555,6 +555,21 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
               <span style={{ fontSize:11,fontWeight:600,color:s.inventory===0?"#EF4444":C.faint,flexShrink:0 }}>{s.inventory===0?"No stock":s.inventory+" u"}</span>
             </div>
           );})}
+
+          {multiSelect&&(
+            <div style={{ position:"sticky",bottom:0,zIndex:2,background:C.surface,borderTop:`1px solid ${C.border}`,padding:10,display:"flex",alignItems:"center",gap:8 }}>
+              <div style={{ flex:1,minWidth:0,fontSize:11,color:C.muted,fontWeight:700 }}>
+                {selectedSet.size} selected SKU{selectedSet.size!==1?"s":""}
+              </div>
+              <button
+                type="button"
+                onMouseDown={e=>{ e.preventDefault(); setOpen(false); }}
+                style={{ height:34,padding:"0 16px",border:"none",borderRadius:8,background:C.accent,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",flexShrink:0 }}
+              >
+                Done
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
