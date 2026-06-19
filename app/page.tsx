@@ -2786,6 +2786,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(next); return next; }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
+  const groupColor = group.calendarColor || lt?.color || C.accent;
   const linkedEvents = (events||[]).filter((ev:any)=>(group.linkedEventIds||[]).includes(ev.id));
   const allItems = Object.values(items).flat();
   const overallDone = allItems.filter(i=>i.done).length;
@@ -2800,8 +2801,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
           <div>
             <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:800,color:C.text }}>{group.groupName}</h2>
             <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-              <Tag color={C.accent}>{lt.label}</Tag>
-              {group.calendarType&&<Tag color={group.calendarColor||"#8B5CF6"}>{group.calendarType}</Tag>}
+              <Tag color={groupColor}>{lt.label}</Tag>
+              {group.calendarType&&<Tag color={groupColor}>{group.calendarType}</Tag>}
               {group.deadline&&<span style={{ fontSize:11,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"2px 8px",borderRadius:4,border:"1px solid #DDD6FE" }}>{group.deadlineEnd?`${group.deadline} → ${group.deadlineEnd}`:`Due ${group.deadline}`}</span>}
               {!group.deadline&&Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length>0&&<span style={{ fontSize:11,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"2px 8px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(group.monthOnlyMonths)}</span>}
               {group.skus.slice(0,3).map(s=>(<span key={s.id} style={{ fontSize:11,color:C.muted,background:C.surfaceAlt,padding:"2px 8px",borderRadius:4,border:`1px solid ${C.border}`,fontFamily:"monospace" }}>{s.value}</span>))}
@@ -2825,7 +2826,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             <span style={{ fontSize:12,fontWeight:700,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Overall Progress</span>
             <span style={{ fontSize:13,fontWeight:800,color:C.accent,fontVariantNumeric:"tabular-nums" }}>{overallPct}%</span>
           </div>
-          <div style={{ height:6,background:C.border,borderRadius:3,overflow:"hidden" }}><div style={{ height:"100%",width:`${overallPct}%`,background:C.accent,borderRadius:3,transition:"width .4s" }} /></div>
+          <div style={{ height:6,background:C.border,borderRadius:3,overflow:"hidden" }}><div style={{ height:"100%",width:`${overallPct}%`,background:groupColor,borderRadius:3,transition:"width .4s" }} /></div>
         </div>
       </div>
 
@@ -3757,8 +3758,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         </div>
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
-          {groups.map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; return (
-            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${lt?.color||C.accent}`,cursor:"pointer",transition:"box-shadow .2s" }} onClick={()=>setActive(g.id)}>
+          {groups.map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; return (
+            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s" }} onClick={()=>setActive(g.id)}>
               <div style={{ padding:"16px" }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
                   <p style={{ margin:0,fontSize:14,fontWeight:700,color:C.text,flex:1,marginRight:8 }}>{g.groupName}</p>
@@ -3768,19 +3769,13 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
                   </div>
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
-                  <Tag color={C.accent} sm>{lt.label}</Tag>
-                  {g.calendarType&&<Tag color={g.calendarColor||"#8B5CF6"} sm>{(calendarTypes.find((t:any)=>t.id===g.calendarType)?.label)||g.calendarType}</Tag>}
+                  <Tag color={groupColor} sm>{lt.label}</Tag>
+                  {g.calendarType&&<Tag color={groupColor} sm>{(calendarTypes.find((t:any)=>t.id===g.calendarType)?.label)||g.calendarType}</Tag>}
                   {g.deadline&&<span style={{ fontSize:10,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"1px 7px",borderRadius:4,border:"1px solid #DDD6FE" }}>{g.deadlineEnd?`${g.deadline} → ${g.deadlineEnd}`:`Due ${g.deadline}`}</span>}
                   {!g.deadline&&Array.isArray(g.monthOnlyMonths)&&g.monthOnlyMonths.length>0&&<span style={{ fontSize:10,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"1px 7px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(g.monthOnlyMonths)}</span>}
                   {(g.linkedEventIds||[]).length>0&&<span style={{ fontSize:10,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"1px 7px",borderRadius:4,border:"1px solid #99F6E4" }}>{(g.linkedEventIds||[]).length} linked event{(g.linkedEventIds||[]).length>1?"s":""}</span>}
                 </div>
-                {g.skus.length>0&&(
-                  <div style={{ marginTop:8,display:"flex",gap:4,flexWrap:"wrap" }}>
-                    {g.skus.slice(0,4).map(s=>(<span key={s.id} style={{ fontSize:10,color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4,border:`1px solid ${C.border}`,fontFamily:"monospace" }}>{s.value}</span>))}
-                    {g.skus.length>4&&<span style={{ fontSize:10,color:C.faint }}>+{g.skus.length-4}</span>}
-                  </div>
-                )}
-                {(()=>{ const gItems=allGroupItems[g.id]; if(gItems){ const all=Object.values(gItems).flat() as any[]; const done=all.filter((i:any)=>i.done).length; const pct=all.length?Math.round(done/all.length*100):0; return (<div style={{ marginTop:10 }}><div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}><span style={{ fontSize:10,color:C.muted }}>Progress</span><span style={{ fontSize:10,fontWeight:700,color:C.accent }}>{done}/{all.length} · {pct}%</span></div><div style={{ height:4,background:C.border,borderRadius:2,overflow:"hidden" }}><div style={{ height:"100%",width:`${pct}%`,background:pct===100?"#22C55E":C.accent,borderRadius:2,transition:"width .3s" }} /></div></div>); } return <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>3 departments · tap to view</p>; })()}
+                {(()=>{ const gItems=allGroupItems[g.id]; if(gItems){ const all=Object.values(gItems).flat() as any[]; const done=all.filter((i:any)=>i.done).length; const pct=all.length?Math.round(done/all.length*100):0; return (<div style={{ marginTop:10 }}><div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}><span style={{ fontSize:10,color:C.muted }}>Progress</span><span style={{ fontSize:10,fontWeight:700,color:C.accent }}>{done}/{all.length} · {pct}%</span></div><div style={{ height:4,background:C.border,borderRadius:2,overflow:"hidden" }}><div style={{ height:"100%",width:`${pct}%`,background:pct===100?"#22C55E":groupColor,borderRadius:2,transition:"width .3s" }} /></div></div>); } return <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>3 departments · tap to view</p>; })()}
               </div>
             </div>
           );})}
@@ -6977,7 +6972,7 @@ export default function App({
           id:"cl-"+g.id,
           date:g.deadline,
           ...(g.deadlineEnd ? { dateEnd:g.deadlineEnd } : {}),
-          title:g.groupName + (g.deadlineEnd ? " - Date Range" : " - Deadline"),
+          title:g.groupName,
           type,
           color,
           fromChecklist:true,
@@ -6991,7 +6986,7 @@ export default function App({
           id:`cl-month-${g.id}-${monthIdx}`,
           date:`${today.getFullYear()}-${pad(monthIdx+1)}-01`,
           dateEnd:`${today.getFullYear()}-${pad(monthIdx+1)}-${pad(getDaysInMonth(today.getFullYear(),monthIdx))}`,
-          title:g.groupName + " - Month",
+          title:g.groupName,
           type,
           color,
           fromChecklist:true,
