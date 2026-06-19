@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
 
     const input = typeof body?.input === "string" ? body.input.trim() : "";
     const task = typeof body?.task === "string" ? body.task : "product_description";
+    const taskLabel = typeof body?.taskLabel === "string" ? body.taskLabel.trim() : "Output";
+    const customInstruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
     const tone = typeof body?.tone === "string" ? body.tone : "professional";
     const referenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages.slice(0, 4) : [];
 
@@ -52,11 +54,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const instruction = taskInstructions[task] || taskInstructions.product_description;
+    const instruction = customInstruction || taskInstructions[task] || taskInstructions.product_description;
     const toneInstruction = toneInstructions[tone] || toneInstructions.professional;
 
     const prompt = [
       "You are EMDC's marketing and ecommerce copy assistant for product content.",
+      `Output type: ${taskLabel || "Output"}.`,
       instruction,
       toneInstruction,
       "Avoid em dashes.",
