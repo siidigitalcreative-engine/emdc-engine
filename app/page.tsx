@@ -254,9 +254,9 @@ const Select = ({ value, onChange, children, style={} }) => {
   const selectStyle:any = {
     width:"100%",
     height:layoutStyle.height || 40,
-    padding:"0 46px 0 12px",
+    padding:layoutStyle.padding || "0 30px 0 12px",
     fontSize:14,
-    fontWeight:500,
+    fontWeight:400,
     borderRadius:10,
     border:`1.5px solid ${C.border}`,
     background:C.surface,
@@ -277,11 +277,12 @@ const Select = ({ value, onChange, children, style={} }) => {
   delete selectStyle.maxWidth;
   delete selectStyle.flex;
   delete selectStyle.flexShrink;
-  selectStyle.padding = layoutStyle.padding || "0 46px 0 12px";
+  selectStyle.padding = layoutStyle.padding || "0 30px 0 12px";
   selectStyle.appearance = "none";
   selectStyle.WebkitAppearance = "none";
   selectStyle.MozAppearance = "none";
   selectStyle.background = layoutStyle.background || C.surface;
+  selectStyle.fontWeight = layoutStyle.fontWeight || 400;
 
   return (
     <div style={wrapperStyle}>
@@ -291,7 +292,7 @@ const Select = ({ value, onChange, children, style={} }) => {
         style={selectStyle}
         onFocus={e=>{
           e.currentTarget.style.borderColor = C.accent;
-          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(17,24,39,.08)";
+          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(17,24,39,.06)";
         }}
         onBlur={e=>{
           e.currentTarget.style.borderColor = C.border;
@@ -304,22 +305,16 @@ const Select = ({ value, onChange, children, style={} }) => {
         aria-hidden="true"
         style={{
           position:"absolute",
-          right:1,
-          top:1,
-          bottom:1,
-          width:38,
-          borderLeft:`1px solid ${C.border}`,
-          borderRadius:"0 9px 9px 0",
-          display:"flex",
-          alignItems:"center",
-          justifyContent:"center",
+          right:12,
+          top:"50%",
+          transform:"translateY(-50%)",
           pointerEvents:"none",
-          color:C.textSub,
-          fontSize:12,
-          background:C.surface,
+          color:C.muted,
+          fontSize:10,
+          lineHeight:1,
         }}
       >
-        ▼
+        ▾
       </span>
     </div>
   );
