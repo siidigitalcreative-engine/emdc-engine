@@ -2269,6 +2269,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuColumnDragIndex,setSkuColumnDragIndex] = useState<number|null>(null);
   const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
   const [skuTableEditMode,setSkuTableEditMode] = useState(false);
+  const [skuSearch,setSkuSearch] = useState("");
   const DEFAULT_BULK_COLUMNS = [
     { key:"productName", label:"Product Name", placeholder:"Desk Organizer", locked:true },
     { key:"sku",         label:"SKU",          placeholder:"GL-DO001",        locked:true },
@@ -2311,7 +2312,31 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return next;
     });
   };
-  const filteredSkus  = activeBrand ? skuStorage.filter(s=>s.brandId===activeBrand) : skuStorage;
+  const filteredSkus = useMemo(() => {
+    const brandFiltered = activeBrand ? skuStorage.filter((s:any)=>s.brandId===activeBrand) : skuStorage;
+    const terms = skuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if(!terms.length) return brandFiltered;
+
+    return brandFiltered.filter((s:any)=>{
+      const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
+      const statusLabel = s.status==="active" ? "active" : s.status==="nostocks" ? "no stocks out of stock sold out" : (s.customStatus || "custom");
+      const extraText = Object.values(s.extraFields || {}).join(" ");
+      const searchable = [
+        s.productName,
+        s.sku,
+        brandName,
+        s.collection,
+        s.category,
+        s.inventory,
+        s.srp,
+        s.status,
+        statusLabel,
+        extraText,
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      return terms.every((term:string)=>searchable.includes(term));
+    });
+  }, [activeBrand,skuStorage,skuSearch,brands]);
   const collectionOptions = useMemo(() => Array.from(new Set(
     skuStorage
       .filter(s => !sForm.brandId || s.brandId===sForm.brandId)
@@ -2960,6 +2985,23 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               </div>
               {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm variant="outline" onClick={openEditSheet} disabled={!skuStorage.length}>Edit Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
             </div>
+
+            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:12,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px" }}>
+              <span style={{ fontSize:13,color:C.faint,flexShrink:0 }}>Search</span>
+              <input
+                value={skuSearch}
+                onChange={e=>setSkuSearch(e.target.value)}
+                placeholder="Search SKU, product, brand, collection, category, stock, status..."
+                style={{ flex:1,minWidth:0,height:30,border:"none",outline:"none",background:"transparent",fontSize:13,color:C.text }}
+              />
+              {skuSearch.trim()&&(
+                <button type="button" onClick={()=>setSkuSearch("")}
+                  style={{ border:"none",background:C.surfaceAlt,borderRadius:6,padding:"5px 8px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",flexShrink:0 }}>
+                  Clear
+                </button>
+              )}
+            </div>
+
             {!isMobile&&skuTableEditMode&&(
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
                 <span style={{ fontSize:12,color:C.muted }}>Edit mode: use the 6-dot handles to drag columns or product rows, rename headers, hide columns, or add columns.</span>
@@ -2974,7 +3016,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
             {filteredSkus.length===0?(
               <div style={{ background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12 }}>
-                <Empty title="No SKUs yet" sub={`Add your first SKU${activeBrandObj?` for ${activeBrandObj.name}`:""}.`} action={<div style={{ display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center" }}><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>} />
+                <Empty
+                  title={skuSearch.trim()?"No matching SKUs":"No SKUs yet"}
+                  sub={skuSearch.trim()?`No SKU matched "${skuSearch.trim()}". Try another keyword or clear search.`:`Add your first SKU${activeBrandObj?` for ${activeBrandObj.name}`:""}.`}
+                  action={skuSearch.trim()?<Btn sm variant="outline" onClick={()=>setSkuSearch("")}>Clear Search</Btn>:<div style={{ display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center" }}><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>}
+                />
               </div>
             ):(
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
