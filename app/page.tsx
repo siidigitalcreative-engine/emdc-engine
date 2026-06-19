@@ -3418,8 +3418,29 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
               {editIdx===i ? (
                 <div style={{ padding:10,background:C.bg,borderRadius:9,border:`1.5px solid ${C.border}` }}>
                   <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                    <TI value={editText} onChange={setEditText} placeholder="Task description" />
-                    <div style={{ display:"flex",gap:8 }}>
+                    <textarea
+                      value={editText}
+                      onChange={e=>setEditText(e.target.value)}
+                      onInput={(e:any)=>{ e.currentTarget.style.height="auto"; e.currentTarget.style.height=e.currentTarget.scrollHeight+"px"; }}
+                      placeholder="Task description"
+                      rows={3}
+                      style={{
+                        width:"100%",
+                        minHeight:96,
+                        resize:"vertical",
+                        overflow:"hidden",
+                        padding:"12px 14px",
+                        fontSize:14,
+                        lineHeight:1.5,
+                        borderRadius:9,
+                        border:`1.8px solid ${C.borderStrong}`,
+                        background:C.surface,
+                        color:C.text,
+                        outline:"none",
+                        whiteSpace:"pre-wrap",
+                      }}
+                    />
+                    <div style={{ display:"flex",gap:8,justifyContent:"flex-start",flexWrap:"wrap" }}>
                       <Btn sm onClick={saveEdit} disabled={!editText.trim()}>Save</Btn>
                       <Btn sm variant="outline" onClick={()=>setEditIdx(null)}>Cancel</Btn>
                     </div>
@@ -3427,7 +3448,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
                 </div>
               ) : (
                 <div style={{ display:"flex",alignItems:"flex-start",gap:8,padding:"9px 10px",background:C.surfaceAlt,borderRadius:8,border:`1px solid ${C.border}` }}>
-                  <span style={{ flex:1,fontSize:12.5,color:C.textSub,lineHeight:1.5 }}>{t}</span>
+                  <span style={{ flex:1,fontSize:12.5,color:C.textSub,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word" }}>{t}</span>
                   <div style={{ display:"flex",gap:3,flexShrink:0 }}>
                     <button onClick={()=>moveItem(i,-1)} disabled={i===0} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===0?"not-allowed":"pointer",color:C.muted,opacity:i===0 ? .4 : 1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8593;</button>
                     <button onClick={()=>moveItem(i,1)} disabled={i===list.length-1} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===list.length-1?"not-allowed":"pointer",color:C.muted,opacity:i===list.length-1 ? .4 : 1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8595;</button>
@@ -3442,9 +3463,32 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
         </div>
 
         <div style={{ padding:12,background:C.bg,borderRadius:10,border:`1.5px dashed ${C.border}` }}>
-          <div style={{ display:"flex",gap:8 }}>
-            <TI value={newText} onChange={setNewText} placeholder="Add a new default task..." />
-            <Btn sm onClick={addItem} disabled={!newText.trim()}>Add</Btn>
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            <textarea
+              value={newText}
+              onChange={e=>setNewText(e.target.value)}
+              onInput={(e:any)=>{ e.currentTarget.style.height="auto"; e.currentTarget.style.height=e.currentTarget.scrollHeight+"px"; }}
+              placeholder="Add a new default task..."
+              rows={2}
+              style={{
+                width:"100%",
+                minHeight:72,
+                resize:"vertical",
+                overflow:"hidden",
+                padding:"12px 14px",
+                fontSize:14,
+                lineHeight:1.5,
+                borderRadius:9,
+                border:`1.5px solid ${C.border}`,
+                background:C.surface,
+                color:C.text,
+                outline:"none",
+                whiteSpace:"pre-wrap",
+              }}
+            />
+            <div style={{ display:"flex",justifyContent:"flex-end" }}>
+              <Btn sm onClick={addItem} disabled={!newText.trim()}>Add</Btn>
+            </div>
           </div>
         </div>
 
