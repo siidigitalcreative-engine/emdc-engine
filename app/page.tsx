@@ -2730,6 +2730,9 @@ const AIEngineView = () => {
           <p style={{ margin:"-6px 0 0",fontSize:11,color:C.muted }}>
             Use <b>Regenerate</b> to create a fresh result using the same prompt, same reference images, and the same current settings. Output count is fixed to 1 for now.
           </p>
+          <p style={{ margin:"-6px 0 0",fontSize:11,color:C.muted }}>
+            Generation keeps running while you switch to other EMDC tabs, as long as you stay on this same browser session.
+          </p>
 
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
             {promptExamples.map((p,i)=>(
@@ -2911,6 +2914,52 @@ export default function App({
     }))
   );
 
+  const [appStateHydrated,setAppStateHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.skuBrands)) setBrands(parsed.skuBrands);
+        if (Array.isArray(parsed?.skuItems)) setSkuStorage(parsed.skuItems);
+        if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(parsed.checklistGroups);
+        if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(parsed.checklistItems);
+        if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
+        if (Array.isArray(parsed?.calendarEvents)) setCalendarManualEvents(parsed.calendarEvents);
+        if (Array.isArray(parsed?.calendarTypes)) setCalendarEventTypes(parsed.calendarTypes);
+        if (Array.isArray(parsed?.seasonalEvents)) setSeasonalEvents(parsed.seasonalEvents);
+      }
+    } catch {}
+    setAppStateHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!appStateHydrated) return;
+    try {
+      localStorage.setItem("emdc_app_state_v1", JSON.stringify({
+        skuBrands: brands,
+        skuItems: skuStorage,
+        checklistGroups,
+        checklistItems: checklistAllItems,
+        checklistStatuses,
+        calendarEvents: calendarManualEvents,
+        calendarTypes: calendarEventTypes,
+        seasonalEvents,
+      }));
+    } catch {}
+  }, [
+    appStateHydrated,
+    brands,
+    skuStorage,
+    checklistGroups,
+    checklistAllItems,
+    checklistStatuses,
+    calendarManualEvents,
+    calendarEventTypes,
+    seasonalEvents,
+  ]);
+
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
 
@@ -2976,7 +3025,7 @@ export default function App({
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
-          {tab==="ai"         && <AIEngineView />}
+          <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView /></div>
         </div>
 
         {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
