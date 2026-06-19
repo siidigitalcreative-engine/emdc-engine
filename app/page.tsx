@@ -2770,7 +2770,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
-  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
+  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [skuPickDept,setSkuPickDept] = useState(null);
@@ -3277,7 +3277,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     onChange((prev:any) => ({
       ...prev,
       [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: draftTasks },
-    }));
+    }), launchType);
     setTasksDirty(false);
     setEditIdx(null);
   };
@@ -3499,11 +3499,13 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     Object.keys(DEPTS).forEach((deptKey:string)=>{
       const templateList = nextTemplates?.[launchTypeKey]?.[deptKey] || [];
       const existingList = Array.isArray(existingItems?.[deptKey]) ? existingItems[deptKey] : [];
+      const oldTemplateItems = existingList.filter((item:any)=>!item?.custom);
 
       out[deptKey] = templateList.map((text:string,idx:number)=>{
-        const sameText = existingList.find((item:any)=>String(item.text||"").trim()===String(text||"").trim());
-        const sameIndex = existingList[idx];
+        const sameText = oldTemplateItems.find((item:any)=>String(item.text||"").trim()===String(text||"").trim());
+        const sameIndex = oldTemplateItems[idx];
         const source = sameText || sameIndex || {};
+
         return {
           id: source.id || uid(),
           text,
@@ -3512,15 +3514,15 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
           note: source.note || "",
           assignee: source.assignee || "",
           statusId: source.statusId || "",
+          custom:false,
         };
       });
 
-      // Only keep tasks that were manually added inside the checklist group.
-      // Default/template tasks that were removed from Manage Templates should be removed from existing checklists too.
+      // Leave only tasks that were added inside the checklist group unchanged.
+      // Everything from the default template is replaced by the latest saved default task list.
       const customItems = existingList.filter((item:any)=>item?.custom);
-
       customItems.forEach((item:any)=>{
-        if (!out[deptKey].some((nextItem:any)=>nextItem.id===item.id || nextItem.text===item.text)) {
+        if (!out[deptKey].some((nextItem:any)=>nextItem.id===item.id)) {
           out[deptKey].push({ ...item, custom:true });
         }
       });
@@ -3528,22 +3530,27 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     return out;
   };
 
-  const syncChecklistItemsForTemplates = (nextTemplates:any) => {
+  const syncChecklistItemsForTemplates = (nextTemplates:any, targetLaunchType:any=null) => {
     setAllGroupItems((prev:any)=>{
-      const nextItems:any = { ...prev };
+      const nextItems:any = { ...(prev||{}) };
       (groups||[]).forEach((group:any)=>{
         if(!group?.id || !group?.launchType) return;
-        nextItems[group.id] = buildChecklistItemsFromTemplates(group.launchType,nextTemplates,prev[group.id]);
+        if(targetLaunchType && group.launchType!==targetLaunchType) return;
+        nextItems[group.id] = buildChecklistItemsFromTemplates(group.launchType,nextTemplates,nextItems[group.id] || prev?.[group.id]);
       });
       if(onStateChange) onStateChange({checklistItems:nextItems});
+      try {
+        window.dispatchEvent(new Event("emdc-local-sync"));
+      } catch {}
       return nextItems;
     });
   };
 
-  const updateTemplatesAndChecklistItems = (updater:any) => {
+  const updateTemplatesAndChecklistItems = (updater:any,targetLaunchType:any=null) => {
     setTemplates((prev:any)=>{
       const next = typeof updater === "function" ? updater(prev) : updater;
-      syncChecklistItemsForTemplates(next);
+      // Do the checklist-item sync from the same saved template payload.
+      syncChecklistItemsForTemplates(next,targetLaunchType);
       return next;
     });
   };
