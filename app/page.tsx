@@ -1905,7 +1905,16 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 </div>
                 <div style={{ display:"flex",flexDirection:"column" }}>
                   {item.events.map((ev:any)=>(
-                    <button key={ev.id} type="button" onClick={()=>openSeasonalEdit(ev.id)}
+                    <button key={ev.id} type="button" onClick={()=>{
+                        const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
+                        setYearOverview({
+                          item:{ sourceId:ev.id,itemKind:"seasonal",title:fullEv.name||ev.name,type:fullEv.type||ev.type,color:fullEv.color||ev.color,dateText:fullEv.date||ev.date,source:"Events & Seasons" },
+                          type:"seasonal",
+                          event:fullEv,
+                          phaseoutSkus:getOverviewPhaseoutSkus(fullEv),
+                          focusedPhaseoutSku:item,
+                        });
+                      }}
                       style={{ textAlign:"left",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surface,padding:"8px 10px",cursor:"pointer" }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
                         <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.name}</span>
@@ -1949,6 +1958,18 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 </div>
                 {ev.desc&&<p style={{ margin:"10px 0 0",fontSize:13,color:C.textSub,lineHeight:1.45 }}>{ev.desc}</p>}
               </div>
+
+              {yearOverview.focusedPhaseoutSku&&(
+                <div style={{ padding:12,border:`1.5px solid #FDE68A`,borderRadius:12,background:"#FFFBEB",display:"flex",gap:10,alignItems:"center" }}>
+                  <span style={{ width:24,height:24,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0 }}>⚑</span>
+                  <div style={{ minWidth:0 }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                      {String(yearOverview.focusedPhaseoutSku.label||"").startsWith(String(yearOverview.focusedPhaseoutSku.brandName||"")+" - ")?String(yearOverview.focusedPhaseoutSku.label||"").slice(String(yearOverview.focusedPhaseoutSku.brandName||"").length+3):yearOverview.focusedPhaseoutSku.label}
+                    </p>
+                    <p style={{ margin:"2px 0 0",fontSize:10,fontWeight:900,color:"#B45309",textTransform:"uppercase",letterSpacing:".04em" }}>{yearOverview.focusedPhaseoutSku.brandName}</p>
+                  </div>
+                </div>
+              )}
 
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
                 <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
