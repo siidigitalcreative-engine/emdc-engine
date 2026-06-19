@@ -2427,7 +2427,59 @@ const compressTextReferenceImage = (file: File) => new Promise<any>((resolve,rej
   reader.readAsDataURL(file);
 });
 
+const DEFAULT_TEXT_OUTPUT_TYPES = [
+  {
+    id: "product_description",
+    label: "Product Description",
+    instruction: "Write a marketplace-ready product description. Make it clear, benefit-led, SEO-friendly, and easy to understand.",
+  },
+  {
+    id: "marketplace_title",
+    label: "Shopee/Lazada Title",
+    instruction: "Create 5 Shopee/Lazada-ready product title options. Keep them searchable, concise, and keyword-rich without sounding spammy.",
+  },
+  {
+    id: "tiktok_caption",
+    label: "TikTok Caption",
+    instruction: "Write 5 TikTok caption options. Keep them scroll-stopping, natural, and conversion-focused. Add light emojis only when useful.",
+  },
+  {
+    id: "ad_copy",
+    label: "Ad Copy",
+    instruction: "Write paid ad copy for Meta/TikTok. Include hook, benefit, and CTA. Provide 5 options.",
+  },
+  {
+    id: "selling_points",
+    label: "Selling Points",
+    instruction: "Extract and improve the strongest product selling points. Write them as short bullet points for live selling or product listing use.",
+  },
+  {
+    id: "hashtags",
+    label: "Hashtags",
+    instruction: "Generate relevant hashtags for the product. Group them into branded, product, marketplace, and lifestyle hashtags.",
+  },
+  {
+    id: "image_prompt",
+    label: "Image Prompt Improver",
+    instruction: "Improve this into a detailed image generation prompt for realistic commercial product photography. Keep product accuracy, scene, lighting, camera, and composition clear.",
+  },
+  {
+    id: "video_prompt",
+    label: "Video Prompt Improver",
+    instruction: "Improve this into a cinematic image-to-video or text-to-video prompt. Include camera motion, subject action, pacing, lighting, and product hero focus.",
+  },
+];
+
 const AITextGenerator = () => {
+  const [taskOptions,setTaskOptions] = useState<any[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_TEXT_OUTPUT_TYPES;
+    try {
+      const raw = localStorage.getItem("emdc_text_output_types_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    } catch {}
+    return DEFAULT_TEXT_OUTPUT_TYPES;
+  });
   const [task,setTask] = useState("product_description");
   const [tone,setTone] = useState("professional");
   const [input,setInput] = useState("");
@@ -2435,17 +2487,8 @@ const AITextGenerator = () => {
   const [error,setError] = useState("");
   const [output,setOutput] = useState("");
   const [referenceImages,setReferenceImages] = useState<any[]>([]);
-
-  const taskOptions = [
-    { id:"product_description", label:"Product Description" },
-    { id:"marketplace_title", label:"Shopee/Lazada Title" },
-    { id:"tiktok_caption", label:"TikTok Caption" },
-    { id:"ad_copy", label:"Ad Copy" },
-    { id:"selling_points", label:"Selling Points" },
-    { id:"hashtags", label:"Hashtags" },
-    { id:"image_prompt", label:"Image Prompt Improver" },
-    { id:"video_prompt", label:"Video Prompt Improver" },
-  ];
+  const [manageTypesOpen,setManageTypesOpen] = useState(false);
+  const [draftTaskOptions,setDraftTaskOptions] = useState<any[]>([]);
 
   const toneOptions = [
     { id:"professional", label:"Professional" },
@@ -2454,6 +2497,74 @@ const AITextGenerator = () => {
     { id:"taglish", label:"Taglish" },
     { id:"short", label:"Short & Direct" },
   ];
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("emdc_text_output_types_v1", JSON.stringify(taskOptions));
+    } catch {}
+  }, [taskOptions]);
+
+  useEffect(() => {
+    if (!taskOptions.length) return;
+    if (!taskOptions.some((item:any) => item.id === task)) {
+      setTask(taskOptions[0].id);
+    }
+  }, [taskOptions, task]);
+
+  const selectedTask = taskOptions.find((item:any) => item.id === task) || taskOptions[0];
+
+  const openManageTypes = () => {
+    setDraftTaskOptions(taskOptions.map((item:any) => ({ ...item })));
+    setManageTypesOpen(true);
+  };
+
+  const addDraftTaskType = () => {
+    setDraftTaskOptions((prev:any[]) => [
+      ...prev,
+      {
+        id: uid(),
+        label: `New Output Type ${prev.length + 1}`,
+        instruction: "Write clear, useful output based on the user input.",
+      },
+    ]);
+  };
+
+  const updateDraftTaskType = (id:string, patch:any) => {
+    setDraftTaskOptions((prev:any[]) => prev.map((item:any) => item.id === id ? { ...item, ...patch } : item));
+  };
+
+  const deleteDraftTaskType = (id:string) => {
+    setDraftTaskOptions((prev:any[]) => prev.length <= 1 ? prev : prev.filter((item:any) => item.id !== id));
+  };
+
+  const saveTaskTypes = () => {
+    const cleaned = draftTaskOptions
+      .map((item:any) => ({
+        ...item,
+        label: String(item?.label || "").trim(),
+        instruction: String(item?.instruction || "").trim(),
+      }))
+      .filter((item:any) => item.label);
+
+    if (!cleaned.length) {
+      setError("At least one output type is required.");
+      return;
+    }
+
+    const normalized = cleaned.map((item:any, index:number) => ({
+      id: item.id || uid(),
+      label: item.label || `Output Type ${index + 1}`,
+      instruction: item.instruction || "Write clear, useful output based on the user input.",
+    }));
+
+    setTaskOptions(normalized);
+    if (!normalized.some((item:any) => item.id === task)) setTask(normalized[0].id);
+    setManageTypesOpen(false);
+  };
+
+  const resetDefaultTaskTypes = () => {
+    setDraftTaskOptions(DEFAULT_TEXT_OUTPUT_TYPES.map((item:any) => ({ ...item })));
+  };
 
   const handleReferenceUpload = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -2483,6 +2594,8 @@ const AITextGenerator = () => {
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({
           task,
+          taskLabel: selectedTask?.label || "Output",
+          instruction: selectedTask?.instruction || "",
           tone,
           input:input.trim(),
           referenceImages: referenceImages.map((img:any)=>({
@@ -2532,9 +2645,25 @@ const AITextGenerator = () => {
       <div style={{ display:"grid",gridTemplateColumns:"minmax(0,360px) minmax(0,1fr)",gap:14,alignItems:"start" }}>
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <Field label="Output Type">
-            <Select value={task} onChange={setTask}>
-              {taskOptions.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-            </Select>
+            <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+              <div style={{ flex:1 }}>
+                <Select value={task} onChange={setTask}>
+                  {taskOptions.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
+                </Select>
+              </div>
+              <button
+                type="button"
+                onClick={openManageTypes}
+                style={{ height:42,padding:"0 12px",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}
+              >
+                Manage
+              </button>
+            </div>
+            {selectedTask?.instruction && (
+              <div style={{ marginTop:8,padding:"8px 10px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,fontSize:12,lineHeight:1.45,color:C.muted }}>
+                {selectedTask.instruction}
+              </div>
+            )}
           </Field>
 
           <Field label="Tone">
@@ -2628,6 +2757,64 @@ const AITextGenerator = () => {
           }
         }
       `}</style>
+
+      <Modal open={manageTypesOpen} onClose={()=>setManageTypesOpen(false)} title="Manage Output Types" width={860}>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+            <p style={{ margin:0,fontSize:13,color:C.muted }}>
+              Add, edit, delete, and customize the instructions for each output type. These settings are saved in this browser.
+            </p>
+            <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+              <Btn sm variant="outline" onClick={resetDefaultTaskTypes}>Reset Default</Btn>
+              <Btn sm variant="outline" onClick={addDraftTaskType}>+ Add Output Type</Btn>
+            </div>
+          </div>
+
+          <div style={{ display:"flex",flexDirection:"column",gap:12,maxHeight:"65vh",overflowY:"auto",paddingRight:4 }}>
+            {draftTaskOptions.map((item:any, index:number)=>(
+              <div key={item.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,padding:12,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10 }}>
+                  <div style={{ fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>
+                    Output Type {index + 1}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={()=>deleteDraftTaskType(item.id)}
+                    disabled={draftTaskOptions.length <= 1}
+                    style={{ height:32,padding:"0 10px",borderRadius:8,border:"1px solid #FECACA",background:draftTaskOptions.length <= 1 ? "#F9FAFB" : "#FEF2F2",color:draftTaskOptions.length <= 1 ? "#9CA3AF" : "#DC2626",fontSize:12,fontWeight:700,cursor:draftTaskOptions.length <= 1 ? "not-allowed" : "pointer" }}
+                  >
+                    Delete
+                  </button>
+                </div>
+
+                <Field label="Label">
+                  <input
+                    value={item.label}
+                    onChange={e=>updateDraftTaskType(item.id, { label: e.target.value })}
+                    placeholder="e.g. Product Description"
+                    style={{ width:"100%",height:42,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
+                  />
+                </Field>
+
+                <Field label="Instruction">
+                  <textarea
+                    value={item.instruction}
+                    onChange={e=>updateDraftTaskType(item.id, { instruction: e.target.value })}
+                    placeholder="Tell Gemini exactly what to generate for this output type..."
+                    rows={4}
+                    style={{ width:"100%",padding:"12px 14px",fontSize:14,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+                  />
+                </Field>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display:"flex",justifyContent:"flex-end",gap:8 }}>
+            <Btn sm variant="ghost" onClick={()=>setManageTypesOpen(false)}>Cancel</Btn>
+            <Btn sm onClick={saveTaskTypes}>Save Output Types</Btn>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
