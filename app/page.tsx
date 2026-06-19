@@ -2398,6 +2398,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 const AIEngineView = () => {
   const [prompt,setPrompt] = useState("");
   const [size,setSize] = useState("2K");
+  const [aspectRatio,setAspectRatio] = useState("3:4");
   const [watermark,setWatermark] = useState(false);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
@@ -2441,6 +2442,14 @@ const AIEngineView = () => {
     return [...new Set(list.filter(Boolean))];
   },[result]);
 
+  const ratioOptions = [
+    { value:"16:9", label:"16:9", icon:"▭" },
+    { value:"4:3", label:"4:3", icon:"▯" },
+    { value:"1:1", label:"1:1", icon:"□" },
+    { value:"3:4", label:"3:4", icon:"▮" },
+    { value:"9:16", label:"9:16", icon:"▯" },
+  ];
+
   const imageUrl = generatedUrls[0] || "";
 
   const handleReferenceUpload = (files: FileList|null) => {
@@ -2480,6 +2489,7 @@ const AIEngineView = () => {
           prompt:prompt.trim(),
           size,
           watermark,
+          aspectRatio,
           referenceImages:references,
           outputCount,
         }),
@@ -2525,6 +2535,7 @@ const AIEngineView = () => {
       id:uid(),
       prompt:prompt.trim(),
       size,
+      aspectRatio,
       watermark,
       url,
       createdAt:new Date().toISOString(),
@@ -2542,6 +2553,17 @@ const AIEngineView = () => {
     "Luxury glassware collection on a black stone bar counter at midnight, crisp reflections, realistic transparent glass, cinematic lighting, premium lifestyle product photography.",
   ];
 
+  const togglePill = (active:boolean) => ({
+    height:42,
+    borderRadius:12,
+    border:`1px solid ${active ? C.accent : C.border}`,
+    background:active ? C.accent : C.surface,
+    color:active ? '#fff' : C.textSub,
+    fontSize:13,
+    fontWeight:800,
+    cursor:'pointer' as const,
+  });
+
   return (
     <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(320px,420px)",gap:16,alignItems:"start" }}>
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
@@ -2554,6 +2576,32 @@ const AIEngineView = () => {
         </div>
 
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8 }}>
+            <button type="button" style={togglePill(true)}>🖼 Image</button>
+            <button type="button" disabled style={{ ...togglePill(false), opacity:.5, cursor:'not-allowed' }}>▶ Video</button>
+          </div>
+
+          <Field label="Output Ratio">
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:8 }}>
+              {ratioOptions.map(r=>(
+                <button key={r.value} type="button" onClick={()=>setAspectRatio(r.value)} style={{ ...togglePill(aspectRatio===r.value), display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:2,padding:'6px 4px' }}>
+                  <span style={{ fontSize:16, lineHeight:1 }}>{r.icon}</span>
+                  <span>{r.label}</span>
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Outputs">
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8 }}>
+              {[1,2,3,4].map(n=>(
+                <button key={n} type="button" onClick={()=>setOutputCount(n)} style={togglePill(outputCount===n)}>
+                  x{n}
+                </button>
+              ))}
+            </div>
+          </Field>
+
           <Field label="Prompt">
             <textarea
               value={prompt}
@@ -2601,19 +2649,11 @@ const AIEngineView = () => {
             </div>
           </Field>
 
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:12 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12 }}>
             <Field label="Size">
               <Select value={size} onChange={setSize}>
                 <option value="1K">1K</option>
                 <option value="2K">2K</option>
-              </Select>
-            </Field>
-            <Field label="Outputs">
-              <Select value={String(outputCount)} onChange={v=>setOutputCount(Math.max(1,Math.min(4,parseInt(v)||1)))}>
-                <option value="1">1 image</option>
-                <option value="2">2 images</option>
-                <option value="3">3 images</option>
-                <option value="4">4 images</option>
               </Select>
             </Field>
             <Field label="Watermark">
@@ -2653,7 +2693,7 @@ const AIEngineView = () => {
         <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16,minHeight:320 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
             <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Result</h4>
-            {generatedUrls.length>1&&<Btn xs variant="outline" onClick={saveAllOutputs}>Save All</Btn>}
+            {generatedUrls.length>1&&<Btn sm variant="outline" onClick={saveAllOutputs}>Save All</Btn>}
           </div>
 
           {loading&&(
@@ -2668,7 +2708,7 @@ const AIEngineView = () => {
                 const isSaved = savedOutputs.some(o=>o.url===url);
                 return (
                   <div key={url} style={{ display:"flex",flexDirection:"column",gap:10,padding:8,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }}>
-                    <img onClick={()=>setPreviewOutput({ id:"current-"+i, url, prompt:prompt.trim(), size, watermark })}
+                    <img onClick={()=>setPreviewOutput({ id:"current-"+i, url, prompt:prompt.trim(), size, aspectRatio, watermark })}
                       src={url} alt={`Generated image ${i+1}`} style={{ width:"100%",borderRadius:9,border:`1px solid ${C.border}`,display:"block",cursor:"zoom-in" }} />
                     <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8 }}>
                       <Btn sm variant="outline" onClick={()=>downloadImage(url, `emdc-image-${Date.now()}-${i+1}.png`)}>Download</Btn>
@@ -2710,7 +2750,7 @@ const AIEngineView = () => {
                 <img src={h.url} alt="" style={{ width:54,height:54,objectFit:"cover",borderRadius:7,border:`1px solid ${C.border}`,flexShrink:0 }} />
                 <div style={{ minWidth:0,flex:1 }}>
                   <p style={{ margin:"0 0 2px",fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{h.prompt}</p>
-                  <p style={{ margin:0,fontSize:11,color:C.muted }}>{h.size} · {h.watermark?"Watermark on":"Watermark off"}</p>
+                  <p style={{ margin:0,fontSize:11,color:C.muted }}>{h.aspectRatio || '—'} · {h.size} · {h.watermark?"Watermark on":"Watermark off"}</p>
                 </div>
                 <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
                   <button onClick={()=>downloadImage(h.url, `emdc-saved-${h.id}.png`)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Download</button>
@@ -2726,9 +2766,12 @@ const AIEngineView = () => {
         {previewOutput&&(
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
             <img src={previewOutput.url} alt="Saved output preview" style={{ width:"100%",maxHeight:"70vh",objectFit:"contain",borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }} />
-            <div style={{ padding:12,borderRadius:10,background:C.surfaceAlt }}>
-              <p style={{ margin:"0 0 6px",fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Prompt</p>
-              <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.45 }}>{previewOutput.prompt || "No prompt saved."}</p>
+            <div style={{ padding:12,borderRadius:10,background:C.surfaceAlt,display:'grid',gap:8 }}>
+              <div>
+                <p style={{ margin:"0 0 6px",fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Prompt</p>
+                <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.45 }}>{previewOutput.prompt || "No prompt saved."}</p>
+              </div>
+              <p style={{ margin:0,fontSize:11,color:C.muted }}>Ratio: {previewOutput.aspectRatio || aspectRatio} · Size: {previewOutput.size || size} · {previewOutput.watermark ? 'Watermark on' : 'Watermark off'}</p>
             </div>
             <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
               <Btn variant="outline" onClick={()=>window.open(previewOutput.url,"_blank","noopener,noreferrer")}>Open in New Tab</Btn>
