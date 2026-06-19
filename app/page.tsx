@@ -2361,6 +2361,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [editEvForm,setEditEvForm]       = useState(null);
   const [typesModal,setTypesModal]       = useState(false);
   const [dragEventId,setDragEventId]       = useState<any>(null);
+  const [touchDragActive,setTouchDragActive] = useState(false);
+  const [sortMode,setSortMode] = useState("date");
+  const [sortMenuId,setSortMenuId] = useState<any>(null);
+  const touchDragTimer = useRef<any>(null);
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
   const normalizeTagLabel = (id:any) => String(id || "event")
@@ -2417,12 +2421,24 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     return { index:14, label:"No Specific Date", day:99 };
   };
 
-  const sortedFiltered = useMemo(()=>[...filtered].sort((a:any,b:any)=>{
+  const dateSort = (a:any,b:any) => {
     const am=getEventMonthInfo(a), bm=getEventMonthInfo(b);
-    const ao = a.manualOrder ?? am.day;
-    const bo = b.manualOrder ?? bm.day;
+    const ao = sortMode==="manual" ? (a.manualOrder ?? 9999) : (a.manualOrder ?? am.day);
+    const bo = sortMode==="manual" ? (b.manualOrder ?? 9999) : (b.manualOrder ?? bm.day);
     return (am.index-bm.index) || (ao-bo) || (am.day-bm.day) || String(a.name).localeCompare(String(b.name));
-  }),[filtered]);
+  };
+
+  const sortedFiltered = useMemo(()=>[...filtered].sort((a:any,b:any)=>{
+    if (sortMode==="name") return String(a.name||"").localeCompare(String(b.name||"")) || dateSort(a,b);
+    if (sortMode==="tag") return String(eventTypeLabel(a.type)).localeCompare(String(eventTypeLabel(b.type))) || dateSort(a,b);
+    if (sortMode==="phaseout") {
+      const ap = (Array.isArray(a.products)?a.products:[]).filter(isPhaseoutProduct).length;
+      const bp = (Array.isArray(b.products)?b.products:[]).filter(isPhaseoutProduct).length;
+      return (bp-ap) || dateSort(a,b);
+    }
+    if (sortMode==="manual") return dateSort(a,b);
+    return dateSort(a,b);
+  }),[filtered,sortMode,eventFilterTypes]);
 
   const groupedEvents = useMemo(()=>{
     const groups:any[] = [];
@@ -2445,6 +2461,15 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     return groups.sort((a:any,b:any)=>a.index-b.index);
   },[sortedFiltered]);
 
+  const applyManualOrder = (nextIds:any[]) => {
+    setSortMode("manual");
+    setEvents((prev:any[])=>{
+      const next = prev.map((ev:any)=>nextIds.includes(ev.id)?{...ev,manualOrder:nextIds.indexOf(ev.id)}:ev);
+      if(onStateChange) onStateChange({seasonalEvents:next});
+      return next;
+    });
+  };
+
   const reorderEventCards = (fromId:any,toId:any) => {
     if (!fromId || !toId || fromId===toId) return;
     const ids = sortedFiltered.map((e:any)=>e.id);
@@ -2454,19 +2479,58 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     const nextIds = [...ids];
     const [moved] = nextIds.splice(fromIndex,1);
     nextIds.splice(toIndex,0,moved);
-    setEvents((prev:any[])=>{
-      const next = prev.map((ev:any)=>nextIds.includes(ev.id)?{...ev,manualOrder:nextIds.indexOf(ev.id)}:ev);
-      if(onStateChange) onStateChange({seasonalEvents:next});
-      return next;
-    });
+    applyManualOrder(nextIds);
+  };
+
+  const moveEventCard = (id:any,action:any) => {
+    const ids = sortedFiltered.map((e:any)=>e.id);
+    const current = ids.indexOf(id);
+    if (current<0) return;
+    const nextIds = [...ids];
+    const [moved] = nextIds.splice(current,1);
+    let target = current;
+    if (action==="top") target = 0;
+    if (action==="up") target = Math.max(0,current-1);
+    if (action==="down") target = Math.min(nextIds.length,current+1);
+    if (action==="bottom") target = nextIds.length;
+    nextIds.splice(target,0,moved);
+    applyManualOrder(nextIds);
+    setSortMenuId(null);
   };
 
   const resetEventSortToDate = () => {
+    setSortMode("date");
     setEvents((prev:any[])=>{
       const next = prev.map((ev:any)=>{ const copy={...ev}; delete copy.manualOrder; return copy; });
       if(onStateChange) onStateChange({seasonalEvents:next});
       return next;
     });
+  };
+
+  const clearTouchDrag = () => {
+    if (touchDragTimer.current) clearTimeout(touchDragTimer.current);
+    touchDragTimer.current = null;
+    setTouchDragActive(false);
+    setDragEventId(null);
+  };
+
+  const startTouchDrag = (event:any,id:any) => {
+    if (touchDragTimer.current) clearTimeout(touchDragTimer.current);
+    touchDragTimer.current = setTimeout(()=>{
+      setDragEventId(id);
+      setTouchDragActive(true);
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(18);
+    },380);
+  };
+
+  const moveTouchDrag = (event:any) => {
+    if (!touchDragActive || !dragEventId) return;
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    event.preventDefault();
+    const target = document.elementFromPoint(touch.clientX,touch.clientY)?.closest?.("[data-event-card-id]");
+    const targetId = target?.getAttribute?.("data-event-card-id");
+    if (targetId && targetId!==dragEventId) reorderEventCards(dragEventId,targetId);
   };
 
   const updProds = (id:any,fn:any) => setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===id?{...e,products:fn(e.products)}:e); if(onStateChange) onStateChange({seasonalEvents:next}); return next; });
@@ -2510,9 +2574,19 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
           <p style={{ margin:0,fontSize:12,color:C.muted }}>
-            Sorted from start to end of year, grouped by month. Drag cards to manually rearrange within the list.
+            Sort the event cards or long-press a card on mobile to drag and rearrange.
           </p>
-          <Btn xs variant="outline" onClick={resetEventSortToDate}>Sort by Date</Btn>
+          <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+            <select value={sortMode} onChange={e=>setSortMode(e.target.value)}
+              style={{ height:30,border:`1.5px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11,fontWeight:700,padding:"0 8px",outline:"none" }}>
+              <option value="date">Date order</option>
+              <option value="manual">Manual order</option>
+              <option value="name">Name A-Z</option>
+              <option value="tag">Tag / Type</option>
+              <option value="phaseout">Most phase-out SKUs</option>
+            </select>
+            <Btn xs variant="outline" onClick={resetEventSortToDate}>Reset Date Sort</Btn>
+          </div>
         </div>
 
         {groupedEvents.map((group:any)=>(
@@ -2528,13 +2602,18 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
           const phaseoutCount = evProducts.filter(isPhaseoutProduct).length;
           return (
             <div key={ev.id}
-              draggable
+              data-event-card-id={ev.id}
+              draggable={!isMobile}
               onDragStart={()=>setDragEventId(ev.id)}
               onDragOver={e=>e.preventDefault()}
               onDrop={e=>{ e.preventDefault(); reorderEventCards(dragEventId,ev.id); setDragEventId(null); }}
               onDragEnd={()=>setDragEventId(null)}
+              onTouchStart={e=>startTouchDrag(e,ev.id)}
+              onTouchMove={moveTouchDrag}
+              onTouchEnd={clearTouchDrag}
+              onTouchCancel={clearTouchDrag}
               className="emdc-card"
-              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${dragEventId===ev.id?C.accent:C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"box-shadow .2s",opacity:dragEventId===ev.id?.75:1,cursor:"grab" }}>
+              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${dragEventId===ev.id?C.accent:C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"transform .18s ease, box-shadow .18s ease, opacity .18s ease",opacity:dragEventId===ev.id?.75:1,cursor:isMobile?"grab":"grab",touchAction:touchDragActive?"none":"pan-y",transform:dragEventId===ev.id?"scale(.985)":"scale(1)",boxShadow:dragEventId===ev.id?"0 12px 30px rgba(0,0,0,.16)":"none" }}>
               <div style={{ padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center" }} onClick={()=>setExpanded(isOpen?null:ev.id)}>
                 <div style={{ minWidth:0,marginRight:8 }}>
                   <p style={{ margin:"0 0 5px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.name}</p>
@@ -2548,7 +2627,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                     )}
                   </div>
                 </div>
-                <div style={{ display:"flex",gap:4,alignItems:"center",flexShrink:0 }}>
+                <div style={{ display:"flex",gap:4,alignItems:"center",flexShrink:0,position:"relative" }}>
+                  <button onClick={e=>{e.stopPropagation();setSortMenuId(sortMenuId===ev.id?null:ev.id);}} style={{ padding:"5px 9px",borderRadius:6,background:sortMenuId===ev.id?C.accent:C.surfaceAlt,border:`1px solid ${sortMenuId===ev.id?C.accent:C.border}`,cursor:"pointer",fontSize:11,color:sortMenuId===ev.id?"#fff":C.muted,fontWeight:700 }}>Sort</button>
                   <button onClick={e=>{e.stopPropagation();setEditEvForm({...ev});setEditEvModal(true);}} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
                   <button onClick={e=>{e.stopPropagation();setExpanded(isOpen?null:ev.id);}}
                     style={{ height:28,padding:"0 10px",borderRadius:6,border:`1px solid ${isOpen?C.accent:C.border}`,background:isOpen?C.accent:C.surfaceAlt,cursor:"pointer",color:isOpen?"#fff":C.muted,fontSize:11,fontWeight:600,whiteSpace:"nowrap" }}>
@@ -2556,6 +2636,18 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                   </button>
                 </div>
               </div>
+
+              {sortMenuId===ev.id&&(
+                <div style={{ padding:"8px 12px",borderTop:`1px solid ${C.border}`,background:C.bg,display:"flex",gap:6,flexWrap:"wrap" }}
+                  onClick={e=>e.stopPropagation()}>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"top")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Top</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Up</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"down")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Down</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"bottom")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Bottom</button>
+                  <button type="button" onClick={()=>{ setSortMode("date"); setSortMenuId(null); }} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer" }}>Date sort</button>
+                  <button type="button" onClick={()=>{ setSortMode("name"); setSortMenuId(null); }} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer" }}>Name sort</button>
+                </div>
+              )}
 
               {isOpen&&(
                 <div style={{ borderTop:`1px solid ${C.border}` }}>
