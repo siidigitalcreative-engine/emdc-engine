@@ -2443,11 +2443,11 @@ const AIEngineView = () => {
   },[result]);
 
   const ratioOptions = [
-    { value:"16:9", label:"16:9", icon:"▭" },
-    { value:"4:3", label:"4:3", icon:"▯" },
-    { value:"1:1", label:"1:1", icon:"□" },
-    { value:"3:4", label:"3:4", icon:"▮" },
-    { value:"9:16", label:"9:16", icon:"▯" },
+    { value:"16:9", label:"16:9" },
+    { value:"4:3", label:"4:3" },
+    { value:"1:1", label:"1:1" },
+    { value:"3:4", label:"3:4" },
+    { value:"9:16", label:"9:16" },
   ];
 
   const imageUrl = generatedUrls[0] || "";
@@ -2577,16 +2577,15 @@ const AIEngineView = () => {
 
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8 }}>
-            <button type="button" style={togglePill(true)}>🖼 Image</button>
-            <button type="button" disabled style={{ ...togglePill(false), opacity:.5, cursor:'not-allowed' }}>▶ Video</button>
+            <button type="button" style={togglePill(true)}>Image</button>
+            <button type="button" disabled style={{ ...togglePill(false), opacity:.5, cursor:'not-allowed' }}>Video</button>
           </div>
 
           <Field label="Output Ratio">
             <div style={{ display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:8 }}>
               {ratioOptions.map(r=>(
-                <button key={r.value} type="button" onClick={()=>setAspectRatio(r.value)} style={{ ...togglePill(aspectRatio===r.value), display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:2,padding:'6px 4px' }}>
-                  <span style={{ fontSize:16, lineHeight:1 }}>{r.icon}</span>
-                  <span>{r.label}</span>
+                <button key={r.value} type="button" onClick={()=>setAspectRatio(r.value)} style={{ ...togglePill(aspectRatio===r.value), padding:'6px 4px' }}>
+                  {r.label}
                 </button>
               ))}
             </div>
