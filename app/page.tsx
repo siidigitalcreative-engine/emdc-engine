@@ -102,13 +102,13 @@ const DAYS_SHORT = ["S","M","T","W","T","F","S"];
 const DAYS_FULL  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 // EVENT_TYPES is now live state inside CalendarView; this is the seed
 const DEFAULT_EVENT_TYPES = [
-  { id:"task",     label:"Task",     color:"#374151" },
-  { id:"campaign", label:"Campaign", color:"#F59E0B" },
-  { id:"deadline", label:"Deadline", color:"#EF4444" },
-  { id:"launch",   label:"Launch",   color:"#22C55E" },
-  { id:"meeting",  label:"Meeting",  color:"#3B82F6" },
-  { id:"seasonal", label:"Seasonal", color:"#3B82F6" },
-  { id:"holiday",  label:"Holiday",  color:"#9CA3AF" },
+  { id:"task",     label:"Task",     color:"#374151", useColor:false },
+  { id:"campaign", label:"Campaign", color:"#F59E0B", useColor:false },
+  { id:"deadline", label:"Deadline", color:"#EF4444", useColor:false },
+  { id:"launch",   label:"Launch",   color:"#22C55E", useColor:false },
+  { id:"meeting",  label:"Meeting",  color:"#3B82F6", useColor:false },
+  { id:"seasonal", label:"Seasonal", color:"#3B82F6", useColor:false },
+  { id:"holiday",  label:"Holiday",  color:"#9CA3AF", useColor:false },
 ];
 const EVENT_COLORS = ["#111827","#374151","#6B7280","#9CA3AF","#EF4444","#F97316","#F59E0B","#22C55E","#14B8A6","#3B82F6","#8B5CF6","#EC4899"];
 const INITIAL_BRANDS = [
@@ -1186,45 +1186,65 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
   const [editId,setEditId]     = useState(null);
   const [editLabel,setEditLabel] = useState("");
   const [editColor,setEditColor] = useState("#374151");
+  const [editUseColor,setEditUseColor] = useState(false);
   const [newLabel,setNewLabel] = useState("");
   const [newColor,setNewColor] = useState("#3B82F6");
+  const [newUseColor,setNewUseColor] = useState(false);
 
-  const startEdit = t => { setEditId(t.id); setEditLabel(t.label); setEditColor(t.color); };
+  const startEdit = (t:any) => {
+    setEditId(t.id);
+    setEditLabel(t.label);
+    setEditColor(t.color || "#374151");
+    setEditUseColor(!!t.useColor);
+  };
+
   const saveEdit  = () => {
     if (!editLabel.trim()) return;
-    onChange(eventTypes.map(t => t.id===editId ? {...t, label:editLabel.trim(), color:editColor} : t));
+    onChange(eventTypes.map((t:any) => t.id===editId ? {...t, label:editLabel.trim(), color:editColor, useColor:editUseColor} : t));
     setEditId(null);
   };
+
   const addType = () => {
     if (!newLabel.trim()) return;
-    onChange([...eventTypes, { id:uid(), label:newLabel.trim(), color:newColor }]);
-    setNewLabel(""); setNewColor("#3B82F6");
+    onChange([...eventTypes, { id:uid(), label:newLabel.trim(), color:newColor, useColor:newUseColor }]);
+    setNewLabel("");
+    setNewColor("#3B82F6");
+    setNewUseColor(false);
   };
-  const removeType = id => onChange(eventTypes.filter(t => t.id!==id));
+
+  const removeType = (id:any) => onChange(eventTypes.filter((t:any) => t.id!==id));
 
   return (
     <Modal open={open} onClose={()=>{onClose();setEditId(null);}} title="Manage Calendar Tags" width={460}>
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
         <p style={{ margin:"0 0 4px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Current Types</p>
-        {eventTypes.map(t => (
+        {eventTypes.map((t:any) => (
           <div key={t.id}>
             {editId===t.id ? (
               <div style={{ padding:14,background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}` }}>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <Field label="Label"><TI value={editLabel} onChange={setEditLabel} placeholder="Type name" /></Field>
-                  <Field label="Color"><ColorPicker value={editColor} onChange={setEditColor} palette={EVENT_COLORS} /></Field>
-                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+
+                  <label style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:800,color:C.text,cursor:"pointer" }}>
+                    <input type="checkbox" checked={editUseColor} onChange={e=>setEditUseColor(e.target.checked)} />
+                    Use tag color for matching events
+                  </label>
+
+                  {editUseColor&&<Field label="Color"><ColorPicker value={editColor} onChange={setEditColor} palette={EVENT_COLORS} /></Field>}
+
+                  <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
                     <Btn sm onClick={saveEdit} disabled={!editLabel.trim()}>Save</Btn>
                     <Btn sm variant="outline" onClick={()=>setEditId(null)}>Cancel</Btn>
-                    <span style={{ padding:"3px 10px",borderRadius:5,background:editColor+"18",border:`1px solid ${editColor}28`,fontSize:12,fontWeight:600,color:editColor }}>{editLabel||"Preview"}</span>
+                    <span style={{ padding:"3px 10px",borderRadius:5,background:editUseColor?editColor+"18":C.surface,border:`1px solid ${editUseColor?editColor+"28":C.border}`,fontSize:12,fontWeight:600,color:editUseColor?editColor:C.muted }}>{editLabel||"Preview"}</span>
                   </div>
                 </div>
               </div>
             ) : (
               <div style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.surfaceAlt,borderRadius:9,border:`1px solid ${C.border}` }}>
-                <div style={{ width:12,height:12,borderRadius:3,background:t.color,flexShrink:0 }} />
+                {t.useColor&&<div style={{ width:12,height:12,borderRadius:3,background:t.color,flexShrink:0 }} />}
                 <span style={{ flex:1,fontSize:13,fontWeight:600,color:C.text }}>{t.label}</span>
-                <span style={{ padding:"2px 8px",borderRadius:4,background:t.color+"18",color:t.color,border:`1px solid ${t.color}28`,fontSize:11,fontWeight:700 }}>{t.label}</span>
+                {t.useColor&&<span style={{ padding:"2px 8px",borderRadius:4,background:t.color+"18",color:t.color,border:`1px solid ${t.color}28`,fontSize:11,fontWeight:700 }}>{t.label}</span>}
+                {!t.useColor&&<span style={{ padding:"2px 8px",borderRadius:4,background:C.surface,border:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>No tag color</span>}
                 <button onClick={()=>startEdit(t)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"4px 8px",borderRadius:5 }}>Edit</button>
                 <button onClick={()=>removeType(t.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>
               </div>
@@ -1236,10 +1256,17 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
           <p style={{ margin:"0 0 12px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Add New Type</p>
           <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
             <Field label="Label"><TI value={newLabel} onChange={setNewLabel} placeholder="e.g. Content Shoot" /></Field>
-            <Field label="Color"><ColorPicker value={newColor} onChange={setNewColor} palette={EVENT_COLORS} /></Field>
-            <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+
+            <label style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:800,color:C.text,cursor:"pointer" }}>
+              <input type="checkbox" checked={newUseColor} onChange={e=>setNewUseColor(e.target.checked)} />
+              Use tag color for matching events
+            </label>
+
+            {newUseColor&&<Field label="Color"><ColorPicker value={newColor} onChange={setNewColor} palette={EVENT_COLORS} /></Field>}
+
+            <div style={{ display:"flex",alignItems:"center",gap:10,flexWrap:"wrap" }}>
               <Btn sm onClick={addType} disabled={!newLabel.trim()}>Add Type</Btn>
-              {newLabel&&<span style={{ padding:"3px 10px",borderRadius:5,background:newColor+"18",border:`1px solid ${newColor}28`,fontSize:12,fontWeight:600,color:newColor }}>{newLabel}</span>}
+              {newLabel&&<span style={{ padding:"3px 10px",borderRadius:5,background:newUseColor?newColor+"18":C.surface,border:`1px solid ${newUseColor?newColor+"28":C.border}`,fontSize:12,fontWeight:600,color:newUseColor?newColor:C.muted }}>{newLabel}</span>}
             </div>
           </div>
         </div>
@@ -1282,11 +1309,15 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       ...t,
       label:t.label || normalizeTagLabel(t.id),
       color:t.color || "#9CA3AF",
+      useColor:!!t.useColor,
     }));
   },[eventTypes]);
 
   // Helper: look up type color from current Manage Tags list
-  const typeColor = id => calendarFilterTypes.find((t:any)=>t.id===id)?.color || "#9CA3AF";
+  const typeColor = id => {
+    const found = calendarFilterTypes.find((t:any)=>t.id===id);
+    return found?.useColor ? found.color : "#9CA3AF";
+  };
   const typeLabel = id => calendarFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
 
   const monthOnlyCalendarEvents = useMemo(()=>{
@@ -1303,7 +1334,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         id:`month-only-${ev.id}-${year}-${month}`,
         title:ev.name,
         type:ev.type || "seasonal",
-        color:ev.color || "#14B8A6",
+        color:(calendarFilterTypes.find((t:any)=>t.id===(ev.type || "seasonal"))?.useColor ? typeColor(ev.type || "seasonal") : (ev.color || "#14B8A6")),
         date:monthStart,
         dateEnd:monthEnd,
         fromSeasonal:true,
@@ -1702,7 +1733,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       <Field label="Tag / Filter Type">
         <Select value={seasonalEditForm.type||"campaign"} onChange={v=>{
           const selectedType = calendarFilterTypes.find((t:any)=>t.id===v);
-          setSeasonalEditForm((f:any)=>({...f,type:v,color:selectedType?.color || f.color}));
+          setSeasonalEditForm((f:any)=>({...f,type:v,color:selectedType?.useColor ? selectedType.color : f.color}));
         }}>
           {calendarFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
@@ -1753,9 +1784,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         {[{id:"all",label:"All",color:C.accent},...calendarFilterTypes].map(t=>(
           <button key={t.id} onClick={()=>setFilter(t.id)}
             style={{ padding:"4px 11px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",
-              background:filter===t.id?t.color:C.surface,
+              background:filter===t.id?(t.useColor?t.color:C.accent):C.surface,
               color:filter===t.id?"#fff":C.muted,
-              border:`1.5px solid ${filter===t.id?t.color:C.border}`,
+              border:`1.5px solid ${filter===t.id?(t.useColor?t.color:C.accent):C.border}`,
               whiteSpace:"nowrap",flexShrink:0,letterSpacing:".01em" }}>
             {t.label}
           </button>
@@ -2291,10 +2322,14 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       ...t,
       label:t.label || normalizeTagLabel(t.id),
       color:t.color || "#6B7280",
+      useColor:!!t.useColor,
     }));
   },[eventTypes]);
 
-  const eventTypeColor = (id:any) => eventFilterTypes.find((t:any)=>t.id===id)?.color || "#6B7280";
+  const eventTypeColor = (id:any) => {
+    const found = eventFilterTypes.find((t:any)=>t.id===id);
+    return found?.useColor ? found.color : "#6B7280";
+  };
   const eventTypeLabel = (id:any) => eventFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
   const saveEventTypesLocal = (types:any[]) => {
     if(setEventTypes) setEventTypes(types);
@@ -2396,7 +2431,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       <Field label="Tag / Filter Type">
         <Select value={form.type} onChange={v=>{
           const selectedType = eventFilterTypes.find((t:any)=>t.id===v);
-          setForm((f:any)=>({...f,type:v,color:selectedType?.color || f.color}));
+          setForm((f:any)=>({...f,type:v,color:selectedType?.useColor ? selectedType.color : f.color}));
         }}>
           {eventFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
@@ -2412,7 +2447,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     <div>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10 }}>
         <div style={{ display:"flex",gap:6,overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2 }}>
-          {[{id:"all",label:"All",color:C.accent},...eventFilterTypes].map((t:any)=>(<button key={t.id} onClick={()=>setFilter(t.id)} style={{ padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",background:filter===t.id?t.color:C.surface,color:filter===t.id?"#fff":C.muted,border:`1.5px solid ${filter===t.id?t.color:C.border}`,whiteSpace:"nowrap",flexShrink:0 }}>{t.label}</button>))}
+          {[{id:"all",label:"All",color:C.accent},...eventFilterTypes].map((t:any)=>(<button key={t.id} onClick={()=>setFilter(t.id)} style={{ padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",background:filter===t.id?(t.useColor?t.color:C.accent):C.surface,color:filter===t.id?"#fff":C.muted,border:`1.5px solid ${filter===t.id?(t.useColor?t.color:C.accent):C.border}`,whiteSpace:"nowrap",flexShrink:0 }}>{t.label}</button>))}
         </div>
         <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
           <Btn sm variant="outline" onClick={()=>setTypesModal(true)}>Manage Tags</Btn>
@@ -2770,7 +2805,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
   const onCalendarTypeChange = (id:any) => {
     const selected = calendarTypes.find((t:any)=>t.id===id) || defaultCalendarType;
     setCalendarType(selected.id);
-    setCalendarColor(selected.color || "#8B5CF6");
+    if(selected.useColor) setCalendarColor(selected.color || "#8B5CF6");
   };
 
   const runPhaseoutHelper = async () => {
@@ -2953,7 +2988,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const onCalendarTypeChange = (id:any) => {
     const selected = calendarTypes.find((t:any)=>t.id===id) || defaultCalendarType;
     setCalendarType(selected.id);
-    setCalendarColor(selected.color || "#8B5CF6");
+    if(selected.useColor) setCalendarColor(selected.color || "#8B5CF6");
   };
 
   const runPhaseoutHelper = async () => {
