@@ -390,17 +390,80 @@ const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
   );
 };
 
-const ColorPicker = ({ value, onChange, palette=STATUS_PALETTE }) => (
-  <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
-    {palette.map(c=>(
-      <button key={c} onClick={()=>onChange(c)} style={{ width:28,height:28,borderRadius:6,background:c,border:value===c?`3px solid ${C.text}`:"3px solid transparent",cursor:"pointer",flexShrink:0,transition:"transform .1s",transform:value===c?"scale(1.1)":"scale(1)" }} />
-    ))}
-    <label style={{ width:28,height:28,borderRadius:6,border:`1.5px solid ${C.border}`,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.faint }} title="Custom">
-      <input type="color" value={value} onChange={e=>onChange(e.target.value)} style={{ width:1,height:1,opacity:0,position:"absolute" }} />
-      +
-    </label>
-  </div>
-);
+const CUSTOM_COLOR_KEY = "emdc_custom_colors_v1";
+
+const getSavedCustomColors = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CUSTOM_COLOR_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((c:any)=>/^#[0-9A-F]{6}$/i.test(String(c))) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveCustomColorToStorage = (color:string) => {
+  if (typeof window === "undefined") return [];
+  const clean = String(color || "").toUpperCase();
+  if (!/^#[0-9A-F]{6}$/i.test(clean)) return getSavedCustomColors();
+
+  const next = Array.from(new Set([clean,...getSavedCustomColors().map((c:string)=>String(c).toUpperCase())])).slice(0,24);
+  localStorage.setItem(CUSTOM_COLOR_KEY, JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent("emdc-custom-colors-updated", { detail: next }));
+  return next;
+};
+
+const ColorPicker = ({ value, onChange, palette=STATUS_PALETTE }) => {
+  const [customColors,setCustomColors] = useState<any[]>(()=>getSavedCustomColors());
+  const [draftColor,setDraftColor] = useState(value || "#111827");
+
+  useEffect(()=>{
+    setDraftColor(value || "#111827");
+  },[value]);
+
+  useEffect(()=>{
+    if (typeof window === "undefined") return;
+    const sync = () => setCustomColors(getSavedCustomColors());
+    window.addEventListener("storage", sync);
+    window.addEventListener("emdc-custom-colors-updated", sync as any);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("emdc-custom-colors-updated", sync as any);
+    };
+  },[]);
+
+  const mergedPalette = Array.from(new Set([...(palette||[]),...customColors]));
+
+  const saveCurrentColor = () => {
+    const next = saveCustomColorToStorage(draftColor || value);
+    setCustomColors(next);
+    onChange(draftColor || value);
+  };
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+      <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
+        {mergedPalette.map((c:any)=>(
+          <button key={c} type="button" onClick={()=>onChange(c)} title={String(c).toUpperCase()}
+            style={{ width:28,height:28,borderRadius:6,background:c,border:String(value).toUpperCase()===String(c).toUpperCase()?`3px solid ${C.text}`:"3px solid transparent",cursor:"pointer",flexShrink:0,transition:"transform .1s",transform:String(value).toUpperCase()===String(c).toUpperCase()?"scale(1.1)":"scale(1)" }} />
+        ))}
+        <label style={{ width:28,height:28,borderRadius:6,border:`1.5px solid ${C.border}`,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.faint,position:"relative",flexShrink:0 }} title="Create custom color">
+          <input type="color" value={draftColor || value || "#111827"} onChange={e=>{ setDraftColor(e.target.value); onChange(e.target.value); }} style={{ width:1,height:1,opacity:0,position:"absolute" }} />
+          +
+        </label>
+      </div>
+
+      {draftColor&&(
+        <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+          <span style={{ width:24,height:24,borderRadius:6,background:draftColor,border:`1px solid ${C.border}`,display:"inline-block" }} />
+          <span style={{ fontSize:11,color:C.muted,fontFamily:"monospace",fontWeight:700 }}>{String(draftColor).toUpperCase()}</span>
+          <Btn xs variant="outline" onClick={saveCurrentColor}>Save Color</Btn>
+          <Btn xs onClick={()=>onChange(draftColor)}>Done</Btn>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Empty state component
 const Empty = ({ icon="", title, sub, action }) => (
@@ -2747,14 +2810,6 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
-        <Field label="Calendar Tag">
-          <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
-            <Select value={calendarType} onChange={onCalendarTypeChange}>
-              {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
-            </Select>
-            <span style={{ width:38,height:38,borderRadius:10,border:`1.5px solid ${C.border}`,background:calendarColor,display:"inline-block" }} />
-          </div>
-        </Field>
         <Field label="Operational Type" hint="choose this before SKU/date">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
@@ -2765,23 +2820,22 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
             ))}
           </div>
         </Field>
-        <Field label="Schedule">
-          <div style={{ display:"flex",gap:8,marginBottom:10 }}>
-            {[{id:"specific",label:"Specific date"},{id:"months",label:"Month/s only"}].map((opt:any)=>(
-              <button key={opt.id} type="button" onClick={()=>setDateMode(opt.id)}
-                style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:dateMode===opt.id?C.accent:C.surface,color:dateMode===opt.id?"#fff":C.muted,border:`1.5px solid ${dateMode===opt.id?C.accent:C.border}` }}>
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {dateMode==="specific" ? (
-            <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10 }}>
-              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Start Date</p><DateInput value={deadline} onChange={setDeadline} /></div>
-              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>End Date</p><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></div>
-            </div>
-          ) : (
-            <MonthOnlyPicker value={monthOnlyMonths} onChange={setMonthOnlyMonths} />
-          )}
+        <Field label="Month Only" hint="optional, no specific date needed">
+          <MonthOnlyPicker value={monthOnlyMonths} onChange={(months:any[])=>{ setMonthOnlyMonths(months); setDateMode(months.length?"months":"specific"); if(months.length){ setDeadline(""); setDeadlineEnd(""); } }} />
+        </Field>
+        <Field label="Calendar Date">
+          <DateInput value={deadline} onChange={v=>{ setDeadline(v); if(v){ setDateMode("specific"); setMonthOnlyMonths([]); } }} />
+        </Field>
+        <Field label="Calendar End Date">
+          <DateInput value={deadlineEnd} onChange={v=>{ setDeadlineEnd(v); if(v){ setDateMode("specific"); setMonthOnlyMonths([]); } }} />
+        </Field>
+        <Field label="Tag / Filter Type">
+          <Select value={calendarType} onChange={onCalendarTypeChange}>
+            {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
+          </Select>
+        </Field>
+        <Field label="Color">
+          <ColorPicker value={calendarColor} onChange={setCalendarColor} palette={EVENT_COLORS} />
         </Field>
         <Field label="SKU Source">
           <div style={{ display:"flex",gap:8 }}>
@@ -2838,7 +2892,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
           )}
         </Field>
 
-        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:dateMode==="specific"?deadline:"",deadlineEnd:dateMode==="specific"?deadlineEnd:"",dateMode,monthOnlyMonths:dateMode==="months"?monthOnlyMonths:[],calendarType,calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
+        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType,calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
   );
@@ -2940,31 +2994,22 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     <Modal open={open} onClose={onClose} title="Edit Group" width={520}>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
-        <Field label="Calendar Tag">
-          <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
-            <Select value={calendarType} onChange={onCalendarTypeChange}>
-              {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
-            </Select>
-            <span style={{ width:38,height:38,borderRadius:10,border:`1.5px solid ${C.border}`,background:calendarColor,display:"inline-block" }} />
-          </div>
+        <Field label="Month Only" hint="optional, no specific date needed">
+          <MonthOnlyPicker value={monthOnlyMonths} onChange={(months:any[])=>{ setMonthOnlyMonths(months); setDateMode(months.length?"months":"specific"); if(months.length){ setDeadline(""); setDeadlineEnd(""); } }} />
         </Field>
-        <Field label="Schedule">
-          <div style={{ display:"flex",gap:8,marginBottom:10 }}>
-            {[{id:"specific",label:"Specific date"},{id:"months",label:"Month/s only"}].map((opt:any)=>(
-              <button key={opt.id} type="button" onClick={()=>setDateMode(opt.id)}
-                style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:dateMode===opt.id?C.accent:C.surface,color:dateMode===opt.id?"#fff":C.muted,border:`1.5px solid ${dateMode===opt.id?C.accent:C.border}` }}>
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {dateMode==="specific" ? (
-            <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10 }}>
-              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>Start Date</p><DateInput value={deadline} onChange={setDeadline} /></div>
-              <div><p style={{ margin:"0 0 5px",fontSize:11,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }}>End Date</p><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></div>
-            </div>
-          ) : (
-            <MonthOnlyPicker value={monthOnlyMonths} onChange={setMonthOnlyMonths} />
-          )}
+        <Field label="Calendar Date">
+          <DateInput value={deadline} onChange={v=>{ setDeadline(v); if(v){ setDateMode("specific"); setMonthOnlyMonths([]); } }} />
+        </Field>
+        <Field label="Calendar End Date">
+          <DateInput value={deadlineEnd} onChange={v=>{ setDeadlineEnd(v); if(v){ setDateMode("specific"); setMonthOnlyMonths([]); } }} />
+        </Field>
+        <Field label="Tag / Filter Type">
+          <Select value={calendarType} onChange={onCalendarTypeChange}>
+            {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
+          </Select>
+        </Field>
+        <Field label="Color">
+          <ColorPicker value={calendarColor} onChange={setCalendarColor} palette={EVENT_COLORS} />
         </Field>
         <Field label="SKU Source">
           <div style={{ display:"flex",gap:8 }}>
@@ -3036,7 +3081,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
-        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:dateMode==="specific"?deadline:"",deadlineEnd:dateMode==="specific"?deadlineEnd:"",dateMode,monthOnlyMonths:dateMode==="months"?monthOnlyMonths:[],calendarType,calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType,calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
   );
