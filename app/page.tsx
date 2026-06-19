@@ -2361,10 +2361,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [editEvForm,setEditEvForm]       = useState(null);
   const [typesModal,setTypesModal]       = useState(false);
   const [dragEventId,setDragEventId]       = useState<any>(null);
-  const [touchDragActive,setTouchDragActive] = useState(false);
   const [sortMode,setSortMode] = useState("date");
   const [sortMenuId,setSortMenuId] = useState<any>(null);
-  const touchDragTimer = useRef<any>(null);
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
   const normalizeTagLabel = (id:any) => String(id || "event")
@@ -2507,32 +2505,6 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     });
   };
 
-  const clearTouchDrag = () => {
-    if (touchDragTimer.current) clearTimeout(touchDragTimer.current);
-    touchDragTimer.current = null;
-    setTouchDragActive(false);
-    setDragEventId(null);
-  };
-
-  const startTouchDrag = (event:any,id:any) => {
-    if (touchDragTimer.current) clearTimeout(touchDragTimer.current);
-    touchDragTimer.current = setTimeout(()=>{
-      setDragEventId(id);
-      setTouchDragActive(true);
-      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(18);
-    },380);
-  };
-
-  const moveTouchDrag = (event:any) => {
-    if (!touchDragActive || !dragEventId) return;
-    const touch = event.touches?.[0];
-    if (!touch) return;
-    event.preventDefault();
-    const target = document.elementFromPoint(touch.clientX,touch.clientY)?.closest?.("[data-event-card-id]");
-    const targetId = target?.getAttribute?.("data-event-card-id");
-    if (targetId && targetId!==dragEventId) reorderEventCards(dragEventId,targetId);
-  };
-
   const updProds = (id:any,fn:any) => setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===id?{...e,products:fn(e.products)}:e); if(onStateChange) onStateChange({seasonalEvents:next}); return next; });
 
   const renderEvForm = ({ form, setForm, onSave, onDelete, saveLabel }) => (
@@ -2574,7 +2546,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
           <p style={{ margin:0,fontSize:12,color:C.muted }}>
-            Sort the event cards or long-press a card on mobile to drag and rearrange.
+            Sort the event cards or use each card’s Sort button to move it up or down.
           </p>
           <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
             <select value={sortMode} onChange={e=>setSortMode(e.target.value)}
@@ -2603,17 +2575,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
           return (
             <div key={ev.id}
               data-event-card-id={ev.id}
-              draggable={!isMobile}
-              onDragStart={()=>setDragEventId(ev.id)}
-              onDragOver={e=>e.preventDefault()}
-              onDrop={e=>{ e.preventDefault(); reorderEventCards(dragEventId,ev.id); setDragEventId(null); }}
-              onDragEnd={()=>setDragEventId(null)}
-              onTouchStart={e=>startTouchDrag(e,ev.id)}
-              onTouchMove={moveTouchDrag}
-              onTouchEnd={clearTouchDrag}
-              onTouchCancel={clearTouchDrag}
               className="emdc-card"
-              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${dragEventId===ev.id?C.accent:C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"transform .18s ease, box-shadow .18s ease, opacity .18s ease",opacity:dragEventId===ev.id ? .75 : 1,cursor:isMobile?"grab":"grab",touchAction:touchDragActive?"none":"pan-y",transform:dragEventId===ev.id?"scale(.985)":"scale(1)",boxShadow:dragEventId===ev.id?"0 12px 30px rgba(0,0,0,.16)":"none" }}>
+              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"box-shadow .18s ease",cursor:"default" }}>
               <div style={{ padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center" }} onClick={()=>setExpanded(isOpen?null:ev.id)}>
                 <div style={{ minWidth:0,marginRight:8 }}>
                   <p style={{ margin:"0 0 5px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.name}</p>
@@ -2640,10 +2603,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
               {sortMenuId===ev.id&&(
                 <div style={{ padding:"8px 12px",borderTop:`1px solid ${C.border}`,background:C.bg,display:"flex",gap:6,flexWrap:"wrap" }}
                   onClick={e=>e.stopPropagation()}>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"top")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Top</button>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Up</button>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"down")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Down</button>
-                  <button type="button" onClick={()=>moveEventCard(ev.id,"bottom")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Bottom</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"top")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↑ Top</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↑ Up</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"down")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↓ Down</button>
+                  <button type="button" onClick={()=>moveEventCard(ev.id,"bottom")} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>↓ Bottom</button>
                   <button type="button" onClick={()=>{ setSortMode("date"); setSortMenuId(null); }} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer" }}>Date sort</button>
                   <button type="button" onClick={()=>{ setSortMode("name"); setSortMenuId(null); }} style={{ padding:"6px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer" }}>Name sort</button>
                 </div>
