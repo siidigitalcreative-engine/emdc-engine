@@ -2415,6 +2415,14 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return {...s,extraFields:extra};
     }));
   };
+  const isCollectionColumn = (col:any) => {
+    const key = normalizeKey(col?.key);
+    const label = normalizeKey(col?.label);
+    return key==="collection" || label==="collection" || label==="category";
+  };
+  const setSkuCollectionValue = (id:any, value:string) => {
+    commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===id?{...s,collection:value}:s));
+  };
   const parseStock = (v:any) => { const n=parseInt(String(v||"0").replace(/,/g,"")); return Number.isFinite(n)?n:0; };
   const parseStatusValue = (v:any) => {
     const raw=String(v||"").trim();
@@ -2626,7 +2634,16 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, inventory, extraFields, ...st, error, valid:!empty&&!error, empty };
   }).filter((r:any)=>!r.empty);
   const bulkRows = useMemo(()=>parseGridRows(bulkGridRows),[bulkGridRows,bulkColumns]);
-  const updateBulkCell = (rowId:any, field:string, value:string) => setBulkGridRows((p:any[])=>p.map((r:any)=>r.id===rowId?{...r,[field]:value}:r));
+  const updateBulkCell = (rowId:any, field:string, value:string) => {
+    setBulkGridRows((p:any[])=>p.map((r:any)=>r.id===rowId?{...r,[field]:value}:r));
+
+    if(bulkMode==="edit"){
+      const col = BULK_COLUMNS.find((c:any)=>c.key===field);
+      if(isCollectionColumn(col)){
+        setSkuCollectionValue(rowId,value);
+      }
+    }
+  };
   const addBulkRows = (count:number=10) => setBulkGridRows((p:any[])=>[...p,...makeBulkRows(count)]);
   const clearBulkRows = () => { setBulkGridRows(makeBulkRows(8)); setBulkError(""); setBulkSelection(null); setBulkSelectedRows([]); setBulkActiveCell(null); };
   const pasteBulkGrid = (text:string, rowIndex:number, colIndex:number) => {
@@ -2788,7 +2805,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(col.key==="productName") return <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>;
     if(col.key==="sku") return <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>;
     if(col.key==="brand") return <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} /><span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{brand.name}</span></div>}</div>;
-    if(col.key==="collection") return <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection||"Uncategorized"}</span>;
+    if(col.key==="collection") return skuTableEditMode
+      ? <input value={s.collection||""} onChange={e=>setSkuCollectionValue(s.id,e.target.value)} placeholder="Uncategorized"
+          style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />
+      : <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection||"Uncategorized"}</span>;
     if(col.key==="inventory") return <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>;
     if(col.key==="status") return <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>;
     const extraValue = getSkuExtraValue(s,col);
@@ -3002,7 +3022,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,border:`1px solid ${C.border}` }}>
             <p style={{ margin:"0 0 6px",fontSize:13,fontWeight:700,color:C.text }}>{bulkMode==="edit"?"Edit all existing SKU Storage rows in one sheet.":"Copy from Excel or Google Sheets, then paste here."}</p>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>{bulkMode==="edit"?"Changes saved here will update the whole SKU Storage table. Deleting rows in this sheet and saving will remove those SKUs.":"This sheet follows the current SKU Storage table columns and order. Header row is optional. Existing SKUs with the same SKU code will be updated."}</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>{bulkMode==="edit"?"Collection changes autosave while typing. Other sheet changes are applied when you click Save. Deleting rows in this sheet and saving will remove those SKUs.":"This sheet follows the current SKU Storage table columns and order. Header row is optional. Existing SKUs with the same SKU code will be updated."}</p>
           </div>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
             <p style={{ margin:0,fontSize:12,color:C.muted }}>Use this like a mini spreadsheet. Click and drag cells to select, copy/paste ranges, press Delete to clear selected cells, or click row numbers to select and delete rows.</p>
