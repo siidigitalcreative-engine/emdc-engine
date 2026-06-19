@@ -241,51 +241,40 @@ const DateInput = ({ value, onChange, style={} }) => {
 };
 
 const Select = ({ value, onChange, children, style={} }) => {
-  const {
-    width,
-    minWidth,
-    maxWidth,
-    flex,
-    flexShrink,
-    flexGrow,
-    alignSelf,
-    ...selectOverrides
-  }: any = style || {};
-
   const wrapperStyle:any = {
     position:"relative",
-    width: width || "100%",
-    minWidth,
-    maxWidth,
-    flex,
-    flexShrink,
-    flexGrow,
-    alignSelf,
+    width: style?.width || "100%",
+    minWidth: style?.minWidth,
+    maxWidth: style?.maxWidth,
+    flex: style?.flex,
+    flexShrink: style?.flexShrink,
   };
+  const selectStyle:any = {
+    width:"100%",
+    height: style?.height || 38,
+    padding:"9px 40px 9px 12px",
+    fontSize:14,
+    borderRadius:8,
+    border:`1.5px solid ${C.border}`,
+    background:C.surface,
+    color:C.text,
+    outline:"none",
+    cursor:"pointer",
+    appearance:"none",
+    WebkitAppearance:"none",
+    MozAppearance:"none",
+    boxSizing:"border-box",
+    ...style,
+  };
+  delete selectStyle.width;
+  delete selectStyle.minWidth;
+  delete selectStyle.maxWidth;
+  delete selectStyle.flex;
+  delete selectStyle.flexShrink;
 
   return (
     <div style={wrapperStyle}>
-      <select
-        value={value}
-        onChange={e=>onChange(e.target.value)}
-        style={{
-          width:"100%",
-          height:38,
-          padding:"9px 40px 9px 12px",
-          fontSize:14,
-          borderRadius:8,
-          border:`1.5px solid ${C.border}`,
-          background:C.surface,
-          color:C.text,
-          outline:"none",
-          cursor:"pointer",
-          appearance:"none",
-          WebkitAppearance:"none",
-          MozAppearance:"none",
-          boxSizing:"border-box",
-          ...selectOverrides,
-        }}
-      >
+      <select value={value} onChange={e=>onChange(e.target.value)} style={selectStyle}>
         {children}
       </select>
       <span style={{ position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:11,color:C.muted,lineHeight:1 }}>
@@ -2534,6 +2523,8 @@ const AITextGenerator = () => {
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
   const [output,setOutput] = useState("");
+  const [savedTextOutputs,setSavedTextOutputs] = useState<any[]>([]);
+  const [savedTextOutputsHydrated,setSavedTextOutputsHydrated] = useState(false);
   const [referenceImages,setReferenceImages] = useState<any[]>([]);
   const [manageTypesOpen,setManageTypesOpen] = useState(false);
   const [draftTaskOptions,setDraftTaskOptions] = useState<any[]>([]);
@@ -2553,6 +2544,22 @@ const AITextGenerator = () => {
       localStorage.setItem("emdc_text_output_types_v1", JSON.stringify(taskOptions));
     } catch {}
   }, [taskOptions]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("emdc_text_saved_outputs_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) setSavedTextOutputs(parsed);
+    } catch {}
+    setSavedTextOutputsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!savedTextOutputsHydrated) return;
+    try {
+      localStorage.setItem("emdc_text_saved_outputs_v1", JSON.stringify(savedTextOutputs));
+    } catch {}
+  }, [savedTextOutputs, savedTextOutputsHydrated]);
 
   useEffect(() => {
     if (!taskOptions.length) return;
@@ -2758,9 +2765,35 @@ const AITextGenerator = () => {
     }
   };
 
-  const copyOutput = async () => {
-    if (!output) return;
-    try { await navigator.clipboard.writeText(output); } catch {}
+  const copyOutput = async (textToCopy = output) => {
+    if (!textToCopy) return;
+    try { await navigator.clipboard.writeText(textToCopy); } catch {}
+  };
+
+  const saveTextOutput = () => {
+    if (!output.trim()) return;
+    const item = {
+      id: uid(),
+      text: output,
+      input,
+      task,
+      taskLabel: selectedTask?.label || "Output",
+      instruction: selectedTask?.instruction || "",
+      tone,
+      createdAt: new Date().toISOString(),
+    };
+    setSavedTextOutputs((prev:any[]) => [item, ...prev]);
+  };
+
+  const openSavedTextOutput = (item:any) => {
+    setOutput(item.text || "");
+    if (item.input) setInput(item.input);
+    if (item.tone) setTone(item.tone);
+    if (item.task && taskOptions.some((t:any)=>t.id===item.task)) setTask(item.task);
+  };
+
+  const deleteSavedTextOutput = (id:string) => {
+    setSavedTextOutputs((prev:any[]) => prev.filter((item:any) => item.id !== id));
   };
 
   return (
@@ -2790,11 +2823,6 @@ const AITextGenerator = () => {
                 Manage
               </button>
             </div>
-            {selectedTask?.instruction && (
-              <div style={{ marginTop:8,padding:"8px 10px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,fontSize:12,lineHeight:1.45,color:C.muted }}>
-                {selectedTask.instruction}
-              </div>
-            )}
           </Field>
 
           <Field label="Tone">
@@ -2869,14 +2897,73 @@ const AITextGenerator = () => {
         <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
             <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Text Result</h4>
-            <div style={{ display:"flex",gap:6 }}>
-              {output&&<Btn xs variant="outline" onClick={copyOutput}>Copy</Btn>}
+            <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+              {output&&<Btn xs variant="outline" onClick={saveTextOutput}>Save Output</Btn>}
+              {output&&<Btn xs variant="outline" onClick={()=>copyOutput(output)}>Copy</Btn>}
               {output&&<Btn xs variant="ghost" onClick={()=>setOutput("")}>Clear</Btn>}
             </div>
           </div>
 
           <div style={{ minHeight:260,padding:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.55,color:output?C.textSub:C.muted,overflowY:"auto" }}>
             {loading ? "Generating..." : output || "Your generated text will appear here."}
+          </div>
+
+          <div style={{ marginTop:10,padding:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10 }}>
+              <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Saved Text Outputs</h4>
+              {savedTextOutputs.length>0&&(
+                <button
+                  type="button"
+                  onClick={()=>setSavedTextOutputs([])}
+                  style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            {savedTextOutputs.length===0 ? (
+              <p style={{ margin:0,fontSize:12,color:C.muted }}>
+                Nothing saved yet. Click Save Output after generating text to keep it in this browser.
+              </p>
+            ) : (
+              <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto" }}>
+                {savedTextOutputs.map((item:any)=>(
+                  <div
+                    key={item.id}
+                    onClick={()=>openSavedTextOutput(item)}
+                    style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start" }}
+                  >
+                    <div style={{ minWidth:0,flex:1 }}>
+                      <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:4 }}>
+                        <span style={{ fontSize:11,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".04em" }}>{item.taskLabel || "Output"}</span>
+                        <span style={{ fontSize:11,color:C.muted }}>{item.tone || ""}</span>
+                      </div>
+                      <p style={{ margin:"0 0 4px",fontSize:12,color:C.textSub,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden" }}>
+                        {item.text}
+                      </p>
+                      {item.input&&<p style={{ margin:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Input: {item.input}</p>}
+                    </div>
+                    <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={()=>copyOutput(item.text)}
+                        style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={()=>deleteSavedTextOutput(item.id)}
+                        style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -3236,29 +3323,29 @@ const AIEngineView = () => {
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
-      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:14 }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap" }}>
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
           <div>
-            <p style={{ margin:"0 0 3px",fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".08em" }}>AI Tool</p>
-            <p style={{ margin:0,fontSize:13,color:C.textSub }}>Choose a generator to open below.</p>
+            <h3 style={{ margin:"0 0 4px",fontSize:20,fontWeight:800,color:C.text }}>AI Engine</h3>
+            <p style={{ margin:0,fontSize:13,color:C.muted }}>AI tools, prompt builders, generators, and workflow automations.</p>
           </div>
+        </div>
 
-          <div style={{ display:"inline-flex",gap:6,padding:4,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }}>
-            <button
-              type="button"
-              onClick={()=>setAiPage("image")}
-              style={{ height:38,padding:"0 16px",borderRadius:9,border:"none",background:aiPage==="image" ? C.accent : "transparent",color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
-            >
-              Image Generation
-            </button>
-            <button
-              type="button"
-              onClick={()=>setAiPage("text")}
-              style={{ height:38,padding:"0 16px",borderRadius:9,border:"none",background:aiPage==="text" ? C.accent : "transparent",color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
-            >
-              Text Generation
-            </button>
-          </div>
+        <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
+          <button
+            type="button"
+            onClick={()=>setAiPage("image")}
+            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="image" ? C.accent : C.border}`,background:aiPage==="image" ? C.accent : C.surface,color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+          >
+            Image Generation
+          </button>
+          <button
+            type="button"
+            onClick={()=>setAiPage("text")}
+            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="text" ? C.accent : C.border}`,background:aiPage==="text" ? C.accent : C.surface,color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+          >
+            Text Generation
+          </button>
         </div>
       </div>
 
