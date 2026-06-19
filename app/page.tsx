@@ -878,7 +878,10 @@ const getAiPhaseoutAssignments = async (skus:any[], events:any[]=[], brands:any[
     "3. Do NOT put SKUs into unrelated holidays just because the date is near.",
     "4. If product has no strong thematic event, use the strongest sale/campaign event.",
     "5. One SKU may be assigned to 1 to 3 events only.",
-    "6. Return only JSON. No markdown. No explanation outside JSON.",
+    "6. IMPORTANT: Do not force distribution. Only match SKUs to events/seasons where they have strong sales potential.",
+    "7. Think by shopper demand: school items sell best in Back to School, gifting/home/kitchen/glassware sell best in Ber Months/Christmas/Year-End, generic clearance SKUs sell best in double-digit/payday/mega sale campaigns, fitness sells best in New Year/Summer/fitness-related campaigns.",
+    "8. If only 1 or 2 events are truly high-sales matches, that is okay. If 5 events are relevant, use 5. Quality is more important than spreading.",
+    "9. Return only JSON. No markdown. No explanation outside JSON.",
     "",
     "JSON format:",
     "{\"assignments\":[{\"skuId\":\"...\",\"eventIds\":[\"eventId1\",\"eventId2\"],\"reason\":\"short reason\"}]}",
@@ -948,17 +951,112 @@ const getAiPhaseoutAssignments = async (skus:any[], events:any[]=[], brands:any[
   return assignments;
 };
 
+const countAssignmentEvents = (assignments:any) => Object.keys(assignments || {}).filter((id:string)=>(assignments[id]||[]).length>0).length;
+
+const assignmentSkuCount = (assignments:any) => Object.values(assignments || {}).reduce((sum:number,items:any)=>sum + (Array.isArray(items) ? items.length : 0),0);
+
+const diversifyPhaseoutAssignments = (assignments:any, skus:any[], events:any[]=[], brands:any[]=[]) => {
+  // High-sales fit cleanup.
+  // This does NOT force equal distribution. It only keeps or adds event links that make sales sense.
+  const usableEvents = (events || []).filter((ev:any)=>ev && ev.id);
+  if(!usableEvents.length || !skus.length) return assignments || {};
+
+  const selected:any = {};
+  const skuKeys = (sku:any,index:number) => [
+    String(sku.id || ""),
+    String(sku.sku || ""),
+    String(sku.value || ""),
+    String(sku.id || sku.sku || sku.value || `sku_${index}`),
+  ].filter(Boolean);
+
+  const eventRankForSku = (sku:any) => usableEvents
+    .map((ev:any)=>{
+      const result:any = getPhaseoutEventScore(ev,sku,brands);
+      const profile = getEventPhaseoutProfile(ev);
+      let score = typeof result === "number" ? result : result.score;
+      const reasons = typeof result === "number" ? [] : result.reasons;
+
+      // Sales-potential boosts.
+      if(profile.isSale) score += 28;
+      if(profile.isCampaign) score += 22;
+
+      const text = profile.text;
+      if(text.includes("11 11") || text.includes("12 12") || text.includes("payday") || text.includes("mid year") || text.includes("year end")) score += 18;
+      if(text.includes("ber months") || text.includes("christmas prep") || text.includes("christmas")) score += 10;
+      if(text.includes("back to school")) score += 10;
+
+      // Avoid weak holidays unless the SKU/category really fits.
+      if(profile.weakHolidayOnly && score < 70) score -= 35;
+
+      return { ev, score, reasons };
+    })
+    .sort((a:any,b:any)=>b.score-a.score);
+
+  // Convert AI assignments back per SKU, but remove weak matches.
+  const aiSkuToEvents:any = {};
+  Object.keys(assignments || {}).forEach((eventId:string)=>{
+    (assignments[eventId] || []).forEach((sku:any,index:number)=>{
+      const key = String(sku.id || sku.sku || sku.value || `sku_${index}`);
+      if(!aiSkuToEvents[key]) aiSkuToEvents[key] = [];
+      aiSkuToEvents[key].push(eventId);
+    });
+  });
+
+  skus.forEach((sku:any,index:number)=>{
+    const ranked = eventRankForSku(sku);
+    const bestScore = ranked[0]?.score || 0;
+
+    // High-sales threshold. This prevents random event matching.
+    const threshold = Math.max(62,bestScore - 18);
+
+    const keys = skuKeys(sku,index);
+    const aiEventIds = keys.flatMap((key:string)=>aiSkuToEvents[key] || []);
+    const aiKept = ranked.filter((item:any)=>
+      aiEventIds.includes(String(item.ev.id)) &&
+      item.score >= threshold
+    );
+
+    let chosen = aiKept.slice(0,3);
+
+    // If Gemini chose weak events only, use best high-sales ranked events.
+    if(!chosen.length){
+      chosen = ranked.filter((item:any)=>item.score >= threshold).slice(0,2);
+    }
+
+    // Always keep at least the top sales-fit event if available.
+    if(!chosen.length && ranked[0]) chosen = [ranked[0]];
+
+    chosen.forEach((item:any)=>{
+      const eventId = item.ev.id;
+      if(!selected[eventId]) selected[eventId] = [];
+      const exists = selected[eventId].some((existing:any)=>
+        String(existing.id || existing.sku || existing.value) === String(sku.id || sku.sku || sku.value)
+      );
+      if(!exists){
+        selected[eventId].push({
+          ...sku,
+          phaseoutMatchScore:item.score,
+          phaseoutMatchReasons:[...(item.reasons || []),"high sales fit"],
+        });
+      }
+    });
+  });
+
+  return selected;
+};
+
 const getPhaseoutAssignmentsSmart = async (skus:any[], events:any[]=[], brands:any[]=[]) => {
   try {
     const aiAssignments = await getAiPhaseoutAssignments(skus,events,brands);
     if(Object.keys(aiAssignments || {}).length) {
-      return { assignments:aiAssignments, usedAi:true };
+      return { assignments:diversifyPhaseoutAssignments(aiAssignments,skus,events,brands), usedAi:true };
     }
   } catch (err) {
     console.warn("[EMDC] AI phase-out matcher fallback:", err);
   }
 
-  return { assignments:suggestPhaseoutAssignments(skus,events,brands), usedAi:false };
+  const fallbackAssignments = suggestPhaseoutAssignments(skus,events,brands);
+  return { assignments:diversifyPhaseoutAssignments(fallbackAssignments,skus,events,brands), usedAi:false };
 };
 
 
@@ -2358,7 +2456,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
     if (onApplyPhaseoutAssignments) onApplyPhaseoutAssignments(assignments);
 
     const totalProducts = ids.reduce((sum:number,id:string)=>sum+(assignments[id]?.length||0),0);
-    setPhaseoutHelperMsg(`${result.usedAi?"Gemini AI":"Fallback helper"} matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
+    setPhaseoutHelperMsg(`${result.usedAi?"Gemini AI":"Fallback helper"} matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} to ${ids.length} high-sales event/season card${ids.length>1?"s":""}.`);
   };
 
   const canNext=finalSkus.length>0&&selType&&groupName.trim();
@@ -2405,7 +2503,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
               <div>
                 <p style={{ margin:0,fontSize:12,fontWeight:800,color:"#92400E" }}>AI Phase-Out Helper</p>
                 <p style={{ margin:"3px 0 0",fontSize:11,color:"#B45309" }}>
-                  Uses brand, product keywords, collection/category, campaign intent, and seasonal fit to choose stronger event/season matches.
+                  Uses sales potential, brand, product type, category, campaign intent, and seasonality to choose high-sales event matches.
                 </p>
               </div>
               <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>AI Match SKUs</Btn>
@@ -2509,7 +2607,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     if (onApplyPhaseoutAssignments) onApplyPhaseoutAssignments(assignments);
 
     const totalProducts = ids.reduce((sum:number,id:string)=>sum+(assignments[id]?.length||0),0);
-    setPhaseoutHelperMsg(`${result.usedAi?"Gemini AI":"Fallback helper"} matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
+    setPhaseoutHelperMsg(`${result.usedAi?"Gemini AI":"Fallback helper"} matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} to ${ids.length} high-sales event/season card${ids.length>1?"s":""}.`);
   };
 
   if(!group) return null;
@@ -2547,7 +2645,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
               <div>
                 <p style={{ margin:0,fontSize:12,fontWeight:800,color:"#92400E" }}>AI Phase-Out Helper</p>
                 <p style={{ margin:"3px 0 0",fontSize:11,color:"#B45309" }}>
-                  New SKUs show a green NEW badge. Auto-match uses brand, category, campaign intent, and seasonal fit to place them better.
+                  New SKUs show a green NEW badge. AI Match uses sales potential, brand, category, campaign intent, and seasonality. It will not force SKUs into unrelated events.
                 </p>
               </div>
               <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>AI Match SKUs</Btn>
