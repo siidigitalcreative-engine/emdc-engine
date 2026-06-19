@@ -1825,7 +1825,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 <div style={{ padding:"9px 10px",background:"#FFFBEB",borderBottom:"1px solid #FDE68A",display:"flex",gap:8,alignItems:"center" }}>
                   <span style={{ width:22,height:22,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0 }}>⚑</span>
                   <div style={{ minWidth:0,flex:1 }}>
-                    <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.label}</p>
+                    <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{String(item.label||"").startsWith(String(item.brandName||"")+" - ")?String(item.label||"").slice(String(item.brandName||"").length+3):item.label}</p>
                     <p style={{ margin:"2px 0 0",fontSize:10,color:"#B45309",fontWeight:800,textTransform:"uppercase",letterSpacing:".04em" }}>{item.brandName}</p>
                   </div>
                 </div>
