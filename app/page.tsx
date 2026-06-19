@@ -415,28 +415,66 @@ const Empty = ({ icon="", title, sub, action }) => (
 const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU storage...", multiSelect=false, selectedIds=[] }) => {
   const [query,setQuery] = useState("");
   const [open,setOpen]   = useState(false);
+  const [categoryFilter,setCategoryFilter] = useState("all");
   const ref = useRef(null);
 
   const selectedSet = useMemo(()=>new Set(selectedIds || []),[selectedIds]);
 
+  const getPickerCollection = (s:any) => {
+    const direct = [s.collection,s.category,s.productCategory].map(v=>String(v||"").trim()).find(Boolean);
+    if(direct) return direct;
+
+    const extra = s.extraFields || {};
+    const normalize = (value:any) => String(value||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
+    const key = Object.keys(extra).find((k:string)=>{
+      const clean = normalize(k);
+      return clean==="collection" || clean==="category" || clean.includes("collection") || clean.includes("category");
+    });
+    return key ? String(extra[key]||"").trim() : "";
+  };
+
+  const categoryOptions = useMemo(()=>{
+    const set = new Set<string>();
+    (skuStorage||[]).forEach((s:any)=>{
+      const value = getPickerCollection(s);
+      if(value) set.add(value);
+    });
+    return Array.from(set).sort((a:string,b:string)=>a.localeCompare(b));
+  },[skuStorage]);
+
+  useEffect(()=>{
+    if(categoryFilter==="all") return;
+    if(!categoryOptions.includes(categoryFilter)) setCategoryFilter("all");
+  },[categoryFilter,categoryOptions]);
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q ? skuStorage.filter((s:any) => {
+    const list = (skuStorage||[]).filter((s:any) => {
       const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
+      const collectionName = getPickerCollection(s);
+
+      if(categoryFilter!=="all" && collectionName !== categoryFilter) return false;
+
+      if(!q) return true;
+
       const searchable = [
         s.productName,
         s.sku,
+        collectionName,
         s.collection,
+        s.category,
+        s.productCategory,
         s.inventory,
         s.status,
         brandName,
+        Object.values(s.extraFields || {}).join(" "),
       ].filter(Boolean).join(" ").toLowerCase();
 
       return searchable.includes(q);
-    }) : skuStorage;
+    });
 
     return list;
-  }, [query,skuStorage,brands]);
+  }, [query,skuStorage,brands,categoryFilter]);
 
   useEffect(()=>{
     const fn = e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
@@ -460,7 +498,22 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
   };
 
   return (
-    <div ref={ref} style={{ position:"relative" }}>
+    <div ref={ref} style={{ position:"relative",display:"flex",flexDirection:"column",gap:8 }}>
+      {categoryOptions.length>0&&(
+        <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
+          <Select value={categoryFilter} onChange={v=>{ setCategoryFilter(v); setOpen(true); }}>
+            <option value="all">All Collections / Categories</option>
+            {categoryOptions.map((option:string)=><option key={option} value={option}>{option}</option>)}
+          </Select>
+          {categoryFilter!=="all"&&(
+            <button type="button" onClick={()=>setCategoryFilter("all")}
+              style={{ height:40,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,borderRadius:8,padding:"0 10px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",whiteSpace:"nowrap" }}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       <TI value={query} onChange={v=>{setQuery(v);setOpen(true);}} placeholder={placeholder}
         style={{ paddingLeft:12 }}
         onFocus={()=>setOpen(true)}
@@ -468,7 +521,9 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       {open&&(
         <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,.12)",zIndex:400,maxHeight:360,overflowY:"auto" }}>
           <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
-            <span style={{ fontSize:11,color:C.muted,fontWeight:700 }}>{results.length} SKU{results.length===1?"":"s"} found</span>
+            <span style={{ fontSize:11,color:C.muted,fontWeight:700 }}>
+              {results.length} SKU{results.length===1?"":"s"} found{categoryFilter!=="all"?` · ${categoryFilter}`:""}
+            </span>
             {multiSelect&&results.length>0&&(
               <button type="button" onMouseDown={e=>{e.preventDefault();selectAllVisible();}} style={{ border:`1px solid ${C.border}`,background:C.surfaceAlt,borderRadius:6,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
                 Select all visible
@@ -480,7 +535,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
             <div style={{ padding:16,fontSize:12,color:C.muted,textAlign:"center" }}>No matching SKUs found.</div>
           )}
 
-          {results.map((s:any)=>{ const brand=brands.find((b:any)=>b.id===s.brandId); const checked=selectedSet.has(s.id); return (
+          {results.map((s:any)=>{ const brand=brands.find((b:any)=>b.id===s.brandId); const checked=selectedSet.has(s.id); const collectionName=getPickerCollection(s); return (
             <div key={s.id} onMouseDown={e=>{ e.preventDefault(); handlePick(s); }}
               className="emdc-row"
               style={{ padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,background:checked?C.surfaceAlt:C.surface }}>
@@ -494,7 +549,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
                 <div style={{ fontSize:11,color:C.muted,display:"flex",gap:8,marginTop:2,alignItems:"center",flexWrap:"wrap" }}>
                   <span style={{ fontFamily:"monospace",background:C.surfaceAlt,padding:"1px 5px",borderRadius:3 }}>{s.sku}</span>
                   {brand&&<span style={{ display:"flex",alignItems:"center",gap:3 }}><span style={{ width:6,height:6,borderRadius:"50%",background:brand.color,display:"inline-block",flexShrink:0 }}></span>{brand.name}</span>}
-                  {s.collection&&<span style={{ background:C.surfaceAlt,padding:"1px 5px",borderRadius:3 }}>{s.collection}</span>}
+                  {collectionName&&<span style={{ background:C.surfaceAlt,padding:"1px 5px",borderRadius:3 }}>{collectionName}</span>}
                 </div>
               </div>
               <span style={{ fontSize:11,fontWeight:600,color:s.inventory===0?"#EF4444":C.faint,flexShrink:0 }}>{s.inventory===0?"No stock":s.inventory+" u"}</span>
@@ -1998,16 +2053,6 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
-        <Field label="Operational Type" hint="choose this before selecting SKU/date">
-          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
-              <button key={k} onClick={()=>setSelType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
-                <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
-                <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{selType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
-              </button>
-            ))}
-          </div>
-        </Field>
         <Field label="Start Date"><DateInput value={deadline} onChange={setDeadline} /></Field>
         <Field label="End Date"><DateInput value={deadlineEnd} onChange={setDeadlineEnd} /></Field>
         <Field label="SKU Source">
@@ -2065,6 +2110,16 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
           )}
         </Field>
 
+        <Field label="Operational Type">
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
+              <button key={k} onClick={()=>setSelType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
+                <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
+                <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{selType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
+              </button>
+            ))}
+          </div>
+        </Field>
         <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline,deadlineEnd,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
@@ -2539,6 +2594,35 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     });
   };
 
+  const cleanupPhaseoutProductsForGroup = (group:any) => {
+    if(!group || !setSeasonalEvents) return;
+
+    const typeLabel = (launchTypes?.[group.launchType]?.label || group.launchType || "").toLowerCase();
+    const isDeletedPhaseoutGroup = group.launchType==="phaseout" || typeLabel.includes("phase-out") || typeLabel.includes("phaseout");
+    if(!isDeletedPhaseoutGroup) return;
+
+    const labelsToRemove = new Set(
+      (group.skus || [])
+        .map((item:any)=>{
+          const matchedSku = skuStorage.find((sku:any)=>sku.id===item.id || sku.sku===item.value || sku.sku===item.sku);
+          return phaseoutProductLabel(matchedSku || { value:item.value || item.sku || item.productName }, brands).toLowerCase().trim();
+        })
+        .filter(Boolean)
+    );
+
+    if(!labelsToRemove.size) return;
+
+    setSeasonalEvents((prev:any[])=>{
+      const next = (prev||[]).map((ev:any)=>{
+        const products = Array.isArray(ev.products) ? ev.products : [];
+        const cleaned = products.filter((product:any)=>!labelsToRemove.has(String(product||"").toLowerCase().trim()));
+        return cleaned.length === products.length ? ev : { ...ev, products:cleaned };
+      });
+      if(onStateChange) onStateChange({seasonalEvents:next});
+      return next;
+    });
+  };
+
   const createGroup = cfg=>{
     const g={id:uid(),...cfg};
     const initialItems = buildChecklistItemsFromTemplates(g.launchType,templates,null);
@@ -2550,7 +2634,26 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     setActive(g.id);
     setCreating(false);
   };
-  const deleteGroup = id=>{ setGroups((p:any)=>{ const next=p.filter((g:any)=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
+  const deleteGroup = id=>{
+    const groupToDelete = groups.find((g:any)=>g.id===id);
+    cleanupPhaseoutProductsForGroup(groupToDelete);
+
+    setGroups((p:any)=>{
+      const next=p.filter((g:any)=>g.id!==id);
+      if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]});
+      return next;
+    });
+
+    setAllGroupItems((prev:any)=>{
+      if(!prev || !prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      if(onStateChange) onStateChange({checklistItems:next});
+      return next;
+    });
+
+    if(active===id) setActive(null);
+  };
 
   const updateGroup = (id:string, patch:any) => {
     const currentGroup = groups.find((g:any)=>g.id===id);
@@ -2563,6 +2666,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     });
 
     if(typeChanged){
+      cleanupPhaseoutProductsForGroup(currentGroup);
+
       const freshItems = buildChecklistItemsFromTemplates(patch.launchType,templates,null);
       setAllGroupItems((prev:any)=>{
         const next = { ...prev, [id]: freshItems };
