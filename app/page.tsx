@@ -240,6 +240,47 @@ const DateInput = ({ value, onChange, style={} }) => {
   </div>);
 };
 
+const monthOnlyValues = (value:any) => Array.isArray(value)
+  ? value.map((v:any)=>Number(v)).filter((n:number)=>Number.isFinite(n)&&n>=0&&n<12)
+  : [];
+
+const formatMonthOnlyLabel = (months:any[]) => {
+  const vals = monthOnlyValues(months).sort((a:number,b:number)=>a-b);
+  if (!vals.length) return "";
+  return vals.map((m:number)=>MONTHS_SHORT[m]).join(" / ");
+};
+
+const MonthOnlyPicker = ({ value=[], onChange }: any) => {
+  const selected = monthOnlyValues(value);
+  const toggle = (idx:number) => {
+    const exists = selected.includes(idx);
+    const next = exists ? selected.filter((m:number)=>m!==idx) : [...selected,idx];
+    onChange(next.sort((a:number,b:number)=>a-b));
+  };
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(72px,1fr))",gap:6 }}>
+        {MONTHS_SHORT.map((month:string,idx:number)=>{
+          const active = selected.includes(idx);
+          return (
+            <button key={month} type="button" onClick={()=>toggle(idx)}
+              style={{ height:32,borderRadius:8,border:`1.5px solid ${active?C.accent:C.border}`,background:active?C.accent:C.surface,color:active?"#fff":C.textSub,fontSize:12,fontWeight:700,cursor:"pointer" }}>
+              {month}
+            </button>
+          );
+        })}
+      </div>
+      {selected.length>0&&(
+        <button type="button" onClick={()=>onChange([])}
+          style={{ alignSelf:"flex-start",border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",padding:0 }}>
+          Clear month-only selection
+        </button>
+      )}
+    </div>
+  );
+};
+
 const Select = ({ value, onChange, children, style={} }) => {
   const layoutStyle:any = style || {};
   const wrapperStyle:any = {
@@ -641,6 +682,10 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
   };
 
   const getListMonthInfo = (item:any) => {
+    if (Number.isFinite(Number(item.monthOnlyIndex))) {
+      const idx = Number(item.monthOnlyIndex);
+      return { index:idx, label:MONTHS[idx], day:1 };
+    }
     const rawDate = item.calDate || item.date;
     if (typeof rawDate === "string" && rawDate.startsWith("monthly:")) {
       return { index:13, label:"Monthly / Recurring", day:1 };
@@ -667,18 +712,36 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
       return s <= yearEnd && e >= yearStart;
     };
 
-    const seasonal = (seasonalEvents||[]).map((ev:any)=>({
-      id:"seasonal-list-"+ev.id,
-      sourceId:ev.id,
-      itemKind:"seasonal",
-      title:ev.name,
-      type:ev.type || "seasonal",
-      color:ev.color,
-      calDate:ev.calDate,
-      dateEnd:ev.calDateEnd,
-      dateText:ev.date,
-      source:"Events & Seasons",
-    }));
+    const seasonal = (seasonalEvents||[]).flatMap((ev:any)=>{
+      const selectedMonths = monthOnlyValues(ev.months);
+      if (selectedMonths.length) {
+        return selectedMonths.map((monthIdx:number)=>({
+          id:`seasonal-list-${ev.id}-${monthIdx}`,
+          sourceId:ev.id,
+          itemKind:"seasonal",
+          title:ev.name,
+          type:ev.type || "seasonal",
+          color:ev.color,
+          calDate:null,
+          dateEnd:null,
+          dateText:ev.date || formatMonthOnlyLabel(ev.months),
+          monthOnlyIndex:monthIdx,
+          source:"Events & Seasons",
+        }));
+      }
+      return [{
+        id:"seasonal-list-"+ev.id,
+        sourceId:ev.id,
+        itemKind:"seasonal",
+        title:ev.name,
+        type:ev.type || "seasonal",
+        color:ev.color,
+        calDate:ev.calDate,
+        dateEnd:ev.calDateEnd,
+        dateText:ev.date,
+        source:"Events & Seasons",
+      }];
+    });
 
     const manual = (manualEvents||[]).map((ev:any)=>({
       id:"manual-list-"+ev.id,
@@ -871,8 +934,11 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
       <Field label="Display Date">
         <TI value={seasonalEditForm.date||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,date:v}))} placeholder="e.g. June - July" />
       </Field>
+      <Field label="Month Only" hint="optional, no specific date needed">
+        <MonthOnlyPicker value={seasonalEditForm.months||[]} onChange={(months:any[])=>setSeasonalEditForm((f:any)=>({...f,months,date:months.length?formatMonthOnlyLabel(months):f.date,calDate:months.length?"":f.calDate,calDateEnd:months.length?"":f.calDateEnd}))} />
+      </Field>
       <Field label="Calendar Date">
-        <DateInput value={seasonalEditForm.calDate||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDate:v}))} />
+        <DateInput value={seasonalEditForm.calDate||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDate:v,months:v?[]:(f.months||[])}))} />
       </Field>
       <Field label="Calendar End Date">
         <DateInput value={seasonalEditForm.calDateEnd||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDateEnd:v}))} />
@@ -981,7 +1047,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, on
                 {rangeEvs.map(ev=>{
                   const rs=getRangeStyle(ev,d), ec=ev.color||"#9CA3AF";
                   return (
-                    <div key={ev.id}
+                    <div key={ev._monthOnlyCloneId||ev.id}
                       onClick={e=>{e.stopPropagation();setDetailEv(ev);}}
                       style={{
                         height:BAND_H, flexShrink:0, marginBottom:GAP,
@@ -1223,12 +1289,21 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
   const [editEvModal,setEditEvModal]     = useState(false);
   const [editEvForm,setEditEvForm]       = useState(null);
   const [dragEventId,setDragEventId]       = useState<any>(null);
-  const [evForm,setEvForm] = useState({ name:"",date:"",type:"holiday",color:"#374151",desc:"",calDate:"",calDateEnd:"" });
+  const [evForm,setEvForm] = useState({ name:"",date:"",type:"holiday",color:"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
   const TYPE_COLORS = { holiday:"#374151",seasonal:"#111827",campaign:"#6B7280" };
   const filtered = filter==="all" ? events : events.filter((e:any)=>e.type===filter);
 
   const getEventMonthInfo = (ev:any) => {
+    if (Number.isFinite(Number(ev._monthOnlyIndex))) {
+      const idx = Number(ev._monthOnlyIndex);
+      return { index:idx, label:MONTHS[idx], day:1 };
+    }
+    const selectedMonths = monthOnlyValues(ev.months);
+    if (selectedMonths.length) {
+      const idx = selectedMonths[0];
+      return { index:idx, label:MONTHS[idx], day:1 };
+    }
     if (ev.calDate && /^\d{4}-\d{2}-\d{2}$/.test(String(ev.calDate))) {
       const d = new Date(ev.calDate+"T00:00:00");
       if (!Number.isNaN(d.getTime())) return { index:d.getMonth(), label:MONTHS[d.getMonth()], day:d.getDate() };
@@ -1256,13 +1331,20 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
   const groupedEvents = useMemo(()=>{
     const groups:any[] = [];
     sortedFiltered.forEach((ev:any)=>{
-      const info = getEventMonthInfo(ev);
-      let group = groups.find((g:any)=>g.label===info.label);
-      if (!group) {
-        group = { label:info.label, index:info.index, events:[] };
-        groups.push(group);
-      }
-      group.events.push(ev);
+      const selectedMonths = monthOnlyValues(ev.months);
+      const expanded = selectedMonths.length
+        ? selectedMonths.map((m:number)=>({...ev,_monthOnlyIndex:m,_monthOnlyCloneId:`${ev.id}-${m}`}))
+        : [ev];
+
+      expanded.forEach((item:any)=>{
+        const info = getEventMonthInfo(item);
+        let group = groups.find((g:any)=>g.label===info.label);
+        if (!group) {
+          group = { label:info.label, index:info.index, events:[] };
+          groups.push(group);
+        }
+        group.events.push(item);
+      });
     });
     return groups.sort((a:any,b:any)=>a.index-b.index);
   },[sortedFiltered]);
@@ -1297,8 +1379,11 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
     <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
       <Field label="Event Name"><TI value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="e.g. Brand Anniversary Sale" /></Field>
       <Field label="Display Date"><TI value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} placeholder="e.g. Oct 15 or Q4" /></Field>
-      <Field label="Calendar Date"><DateInput value={form.calDate||""} onChange={v=>setForm(f=>({...f,calDate:v}))} /></Field>
-      <Field label="Calendar End Date"><DateInput value={form.calDateEnd||""} onChange={v=>setForm(f=>({...f,calDateEnd:v}))} /></Field>
+      <Field label="Month Only" hint="optional, no specific date needed">
+        <MonthOnlyPicker value={form.months||[]} onChange={(months:any[])=>setForm((f:any)=>({...f,months,date:months.length?formatMonthOnlyLabel(months):f.date,calDate:months.length?"":f.calDate,calDateEnd:months.length?"":f.calDateEnd}))} />
+      </Field>
+      <Field label="Calendar Date"><DateInput value={form.calDate||""} onChange={v=>setForm(f=>({...f,calDate:v,months:v?[]:(f.months||[])}))} /></Field>
+      <Field label="Calendar End Date"><DateInput value={form.calDateEnd||""} onChange={v=>setForm(f=>({...f,calDateEnd:v,months:v?[]:(f.months||[])}))} /></Field>
       <Field label="Type">
         <Select value={form.type} onChange={v=>setForm(f=>({...f,type:v}))}>
           <option value="holiday">Holiday</option><option value="seasonal">Seasonal</option><option value="campaign">Campaign</option>
@@ -1434,7 +1519,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
           form: evForm,
           setForm: setEvForm,
           saveLabel: "Add Event",
-          onSave: ()=>{ if(!evForm.name.trim()) return; setEvents((p:any)=>{ const next=[...p,{id:uid(),...evForm,calDate:evForm.calDate||null,calDateEnd:evForm.calDateEnd||null,products:[]}]; if(onStateChange) onStateChange({seasonalEvents:next}); return next; }); setEvForm({name:"",date:"",type:"holiday",color:"#374151",desc:"",calDate:"",calDateEnd:""}); setAddEventModal(false); },
+          onSave: ()=>{ if(!evForm.name.trim()) return; setEvents((p:any)=>{ const next=[...p,{id:uid(),...evForm,calDate:evForm.calDate||null,calDateEnd:evForm.calDateEnd||null,products:[]}]; if(onStateChange) onStateChange({seasonalEvents:next}); return next; }); setEvForm({name:"",date:"",type:"holiday",color:"#374151",desc:"",calDate:"",calDateEnd:"",months:[]}); setAddEventModal(false); },
         })}
       </Modal>
       <Modal open={editEvModal&&!!editEvForm} onClose={()=>{setEditEvModal(false);setEditEvForm(null);}} title="Edit Event" width={500}>
