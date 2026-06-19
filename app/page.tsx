@@ -2157,7 +2157,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
           )}
         </Field>
 
-        <Field label="Operational Type" hint="(existing checklist items won't change)">
+        <Field label="Operational Type" hint="changing this will load the default tasks for the selected type">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
               <button key={k} onClick={()=>setLaunchType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${launchType===k?C.accent:C.border}`,background:launchType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
@@ -2167,6 +2167,11 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             ))}
           </div>
         </Field>
+        {group?.launchType!==launchType&&(
+          <div style={{ padding:"10px 12px",borderRadius:9,background:"#FFFBEB",border:"1px solid #FDE68A",fontSize:12,color:"#92400E",lineHeight:1.45 }}>
+            Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
+          </div>
+        )}
         <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline,deadlineEnd,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
@@ -2546,7 +2551,26 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     setCreating(false);
   };
   const deleteGroup = id=>{ setGroups((p:any)=>{ const next=p.filter((g:any)=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
-  const updateGroup = (id:string, patch:any) => { setGroups((p:any)=>{ const next=p.map((g:any)=>g.id===id?{...g,...patch}:g); if(onStateChange) onStateChange({checklistGroups:next}); return next; }); };
+
+  const updateGroup = (id:string, patch:any) => {
+    const currentGroup = groups.find((g:any)=>g.id===id);
+    const typeChanged = !!patch?.launchType && currentGroup?.launchType !== patch.launchType;
+
+    setGroups((p:any)=>{
+      const next=p.map((g:any)=>g.id===id?{...g,...patch}:g);
+      if(onStateChange) onStateChange({checklistGroups:next});
+      return next;
+    });
+
+    if(typeChanged){
+      const freshItems = buildChecklistItemsFromTemplates(patch.launchType,templates,null);
+      setAllGroupItems((prev:any)=>{
+        const next = { ...prev, [id]: freshItems };
+        if(onStateChange) onStateChange({checklistItems:next});
+        return next;
+      });
+    }
+  };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
   if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
