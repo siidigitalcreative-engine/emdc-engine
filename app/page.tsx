@@ -681,7 +681,7 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
   };
 
   const renderEventForm = ({ form, setForm, onSave, saveLabel="Save Event", showDelete, onDelete }: any) => (
-    <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+    <div style={{ display:"flex",flexDirection:"column",gap:16,width:"100%",maxWidth:"100%",overflow:"hidden" }}>
       <Field label="Title"><TI value={form.title} onChange={v=>setForm(f=>({...f,title:v}))} placeholder="e.g. 11.11 Campaign Launch" /></Field>
       <Field label="Date"><DateInput value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></Field>
       <Field label="End Date">
@@ -2576,7 +2576,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
       {/* Modals */}
       <Modal open={brandModal} onClose={()=>setBrandModal(false)} title="Add Brand" width={360}>
-        <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+        <div style={{ display:"flex",flexDirection:"column",gap:16,minWidth:0 }}>
           <Field label="Brand Name"><TI value={bForm.name} onChange={v=>setBForm(f=>({...f,name:v}))} placeholder="e.g. My Brand" /></Field>
           {bForm.name&&<div style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:C.surfaceAlt,borderRadius:9 }}><div style={{ width:12,height:12,borderRadius:"50%",background:"#111827" }} /><span style={{ fontSize:14,fontWeight:600,color:C.text }}>{bForm.name}</span></div>}
           <Btn full onClick={addBrand} disabled={!bForm.name.trim()}>Add Brand</Btn>
@@ -2796,6 +2796,7 @@ const DEFAULT_TEXT_OUTPUT_TYPES = [
 ];
 
 const AITextGenerator = () => {
+  const { isMobile } = useBreakpoint();
   const [taskOptions,setTaskOptions] = useState<any[]>(() => {
     if (typeof window === "undefined") return DEFAULT_TEXT_OUTPUT_TYPES;
     try {
@@ -3085,8 +3086,8 @@ const AITextGenerator = () => {
   };
 
   return (
-    <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18 }}>
+    <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?14:20,maxWidth:"100%",overflow:"hidden" }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
         <div>
           <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Text Generator</h3>
           <p style={{ margin:0,fontSize:13,color:C.muted }}>Generate product copy, captions, prompts, titles, selling points, and hashtags using Gemini.</p>
@@ -3094,10 +3095,10 @@ const AITextGenerator = () => {
         <Tag color="#14B8A6">Gemini</Tag>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"minmax(0,360px) minmax(0,1fr)",gap:14,alignItems:"start" }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,360px) minmax(0,1fr)",gap:14,alignItems:"start",width:"100%" }}>
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <Field label="Output Type">
-            <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr) auto":"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
               <div style={{ flex:1 }}>
                 <Select value={task} onChange={setTask}>
                   {taskOptions.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
@@ -3192,7 +3193,7 @@ const AITextGenerator = () => {
             </div>
           </div>
 
-          <div style={{ minHeight:260,padding:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.55,color:output?C.textSub:C.muted,overflowY:"auto" }}>
+          <div style={{ minHeight:isMobile?180:260,padding:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.55,color:output?C.textSub:C.muted,overflowY:"auto",maxWidth:"100%" }}>
             {loading ? "Generating..." : output || "Your generated text will appear here."}
           </div>
 
@@ -3257,6 +3258,10 @@ const AITextGenerator = () => {
       </div>
 
       <style>{`
+        @media(max-width:639px){
+          textarea,input,select,button{max-width:100%;}
+          img{max-width:100%;}
+        }
         @media(max-width:1023px){
           div[style*="grid-template-columns: minmax(0, 360px) minmax(0, 1fr)"]{
             grid-template-columns:1fr!important;
@@ -3511,6 +3516,7 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
 ];
 
 const AIAdTemplates = () => {
+  const { isMobile } = useBreakpoint();
   const [platforms,setPlatforms] = useState<any[]>(() => {
     if (typeof window === "undefined") return DEFAULT_AD_TEMPLATE_PLATFORMS;
     try {
@@ -3953,7 +3959,7 @@ const AIAdTemplates = () => {
   };
 
   return (
-    <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
+    <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?14:20,maxWidth:"100%",overflow:"hidden" }}>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
         <div>
           <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Ad Template Builder</h3>
@@ -3962,7 +3968,7 @@ const AIAdTemplates = () => {
         <Btn sm variant="outline" onClick={resetAdTemplates}>Reset Default</Btn>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"220px 300px minmax(0,1fr)",gap:14,alignItems:"start" }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"220px 300px minmax(0,1fr)",gap:14,alignItems:"start",width:"100%" }}>
         <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
           <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Platforms</h4>
           {platforms.map((platform:any)=>(
@@ -4057,7 +4063,7 @@ const AIAdTemplates = () => {
                   </div>
                 </div>
 
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10 }}>
+                <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(2,minmax(0,1fr))",gap:10 }}>
                   {(generatedAdCards.length ? generatedAdCards : makeEmptyCarouselCards()).map((card:any, index:number)=>(
                     <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:10,padding:10,background:C.surface,display:"flex",flexDirection:"column",gap:8 }}>
                       <div style={{ fontSize:12,fontWeight:800,color:C.text }}>Card {index + 1}</div>
@@ -4239,6 +4245,7 @@ const AIAdTemplates = () => {
 };
 
 const AIEngineView = () => {
+  const { isMobile } = useBreakpoint();
   const [prompt,setPrompt] = useState("");
   const [size,setSize] = useState("2K");
   const [aspectRatio,setAspectRatio] = useState("3:4");
@@ -4470,34 +4477,34 @@ const AIEngineView = () => {
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
-      <div style={{ display:"flex",gap:10,flexWrap:"wrap",justifyContent:"flex-start" }}>
+      <div style={{ display:isMobile?"grid":"flex",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":undefined,gap:10,flexWrap:"wrap",justifyContent:"flex-start",width:"100%" }}>
         <button
           type="button"
           onClick={()=>setAiPage("image")}
-          style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="image" ? C.accent : C.border}`,background:aiPage==="image" ? C.accent : C.surface,color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+          style={{ height:42,padding:isMobile?"0 8px":"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="image" ? C.accent : C.border}`,background:aiPage==="image" ? C.accent : C.surface,color:aiPage==="image" ? "#fff" : C.textSub,fontSize:isMobile?11:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap" }}
         >
           Image Generation
         </button>
         <button
           type="button"
           onClick={()=>setAiPage("text")}
-          style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="text" ? C.accent : C.border}`,background:aiPage==="text" ? C.accent : C.surface,color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+          style={{ height:42,padding:isMobile?"0 8px":"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="text" ? C.accent : C.border}`,background:aiPage==="text" ? C.accent : C.surface,color:aiPage==="text" ? "#fff" : C.textSub,fontSize:isMobile?11:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap" }}
         >
           Text Generation
         </button>
         <button
           type="button"
           onClick={()=>setAiPage("ads")}
-          style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="ads" ? C.accent : C.border}`,background:aiPage==="ads" ? C.accent : C.surface,color:aiPage==="ads" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+          style={{ height:42,padding:isMobile?"0 8px":"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="ads" ? C.accent : C.border}`,background:aiPage==="ads" ? C.accent : C.surface,color:aiPage==="ads" ? "#fff" : C.textSub,fontSize:isMobile?11:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap" }}
         >
           Ad Templates
         </button>
       </div>
 
       {aiPage==="image" && (
-      <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(320px,420px)",gap:16,alignItems:"start" }}>
-      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18 }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1fr) minmax(320px,420px)",gap:16,alignItems:"start",width:"100%" }}>
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?14:20,maxWidth:"100%",overflow:"hidden" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
           <div>
             <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Image Generator</h3>
             <p style={{ margin:0,fontSize:13,color:C.muted }}>Generate product images using BytePlus Seedream 4.5.</p>
@@ -4512,7 +4519,7 @@ const AIEngineView = () => {
           </div>
 
           <Field label="Output Ratio">
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:8 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:isMobile?5:8 }}>
               {ratioOptions.map(r=>(
                 <button key={r.value} type="button" onClick={()=>setAspectRatio(r.value)} style={{ ...togglePill(aspectRatio===r.value), padding:'6px 4px' }}>
                   {r.label}
@@ -4569,7 +4576,7 @@ const AIEngineView = () => {
             </div>
           </Field>
 
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12 }}>
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(2,minmax(0,1fr))",gap:12 }}>
             <Field label="Size">
               <Select value={size} onChange={setSize}>
                 <option value="1K">1K</option>
@@ -4616,7 +4623,7 @@ const AIEngineView = () => {
       </div>
 
       <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
-        <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16,minHeight:320 }}>
+        <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?14:16,minHeight:isMobile?240:320,maxWidth:"100%",overflow:"hidden" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:12 }}>
             <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Result</h4>
             <div style={{ display:"flex",gap:8,alignItems:"center" }}>
@@ -4640,7 +4647,7 @@ const AIEngineView = () => {
                   <div key={url} style={{ display:"flex",flexDirection:"column",gap:10,padding:8,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }}>
                     <img onClick={()=>setPreviewOutput({ id:"current-"+i, url, prompt:prompt.trim(), size, aspectRatio, watermark })}
                       src={url} alt={`Generated image ${i+1}`} style={{ width:"100%",borderRadius:9,border:`1px solid ${C.border}`,display:"block",cursor:"zoom-in" }} />
-                    <div style={{ display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8 }}>
+                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(3,minmax(0,1fr))",gap:8 }}>
                       <Btn sm variant="outline" onClick={()=>downloadImage(url, `emdc-image-${Date.now()}-${i+1}.png`)}>Download</Btn>
                       <Btn sm onClick={()=>saveOutput(url)} disabled={isSaved}>{isSaved ? "Saved" : "Save Output"}</Btn>
                       <button
@@ -4674,7 +4681,7 @@ const AIEngineView = () => {
           )}
         </div>
 
-        <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16 }}>
+        <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?14:16,maxWidth:"100%",overflow:"hidden" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:12 }}>
             <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Saved Outputs</h4>
             {savedOutputs.length>0&&<button onClick={()=>setSavedOutputs([])} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}>Clear All</button>}
