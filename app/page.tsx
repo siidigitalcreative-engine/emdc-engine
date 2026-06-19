@@ -3177,19 +3177,35 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
 
         <Field label="Linked Events / Seasons" hint="optional">
           {events.length===0 ? (
-            <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No events or seasons available yet.</div>
+            <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No events or seasons available yet.</div>
           ) : (
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,220px),1fr))",gap:8 }}>
-              {events.map((ev:any)=>{ const active=linkedEventIds.includes(ev.id); return (
-                <button key={ev.id} type="button" onClick={()=>toggleLinkedEvent(ev.id)}
-                  style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,textAlign:"left",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${active?(ev.color||C.accent):C.border}`,background:active?(ev.color||C.accent)+"12":C.surface,cursor:"pointer" }}>
-                  <div style={{ minWidth:0 }}>
-                    <p style={{ margin:0,fontSize:12,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</p>
-                    <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{ev.date || ev.type}</p>
-                  </div>
-                  <div style={{ width:18,height:18,borderRadius:"50%",border:`2px solid ${active?(ev.color||C.accent):C.border}`,background:active?(ev.color||C.accent):"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{active&&<span style={{ color:"#fff",fontSize:9 }}>&#10003;</span>}</div>
-                </button>
-              );})}
+            <div style={{
+              maxHeight:240,
+              overflowY:"auto",
+              border:`1.5px solid ${C.border}`,
+              borderRadius:10,
+              background:C.surface,
+              WebkitOverflowScrolling:"touch"
+            }}>
+              <div style={{ position:"sticky",top:0,zIndex:1,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".04em" }}>{linkedEventIds.length} selected</span>
+                <span style={{ fontSize:11,color:C.faint }}>{events.length} events/seasons</span>
+              </div>
+              <div style={{ display:"flex",flexDirection:"column" }}>
+                {events.map((ev:any)=>{ const active=linkedEventIds.includes(ev.id); const evColor=ev.color||C.accent; return (
+                  <button key={ev.id} type="button" onClick={()=>toggleLinkedEvent(ev.id)}
+                    style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,textAlign:"left",padding:"8px 10px",border:"none",borderBottom:`1px solid ${C.border}`,background:active?evColor+"10":C.surface,cursor:"pointer" }}>
+                    <div style={{ minWidth:0,display:"flex",alignItems:"center",gap:8,flex:1 }}>
+                      <span style={{ width:6,height:26,borderRadius:999,background:active?evColor:C.border,flexShrink:0 }} />
+                      <div style={{ minWidth:0,flex:1 }}>
+                        <p style={{ margin:0,fontSize:12,fontWeight:750,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</p>
+                        <p style={{ margin:"1px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || ev.type || "No date"}</p>
+                      </div>
+                    </div>
+                    <div style={{ width:17,height:17,borderRadius:"50%",border:`2px solid ${active?evColor:C.border}`,background:active?evColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{active&&<span style={{ color:"#fff",fontSize:9 }}>&#10003;</span>}</div>
+                  </button>
+                );})}
+              </div>
             </div>
           )}
         </Field>
