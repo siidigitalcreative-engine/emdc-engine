@@ -240,12 +240,49 @@ const DateInput = ({ value, onChange, style={} }) => {
   </div>);
 };
 
-const Select = ({ value, onChange, children, style={} }) => (
-  <select value={value} onChange={e=>onChange(e.target.value)}
-    style={{ width:"100%",padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",cursor:"pointer",...style }}>
-    {children}
-  </select>
-);
+const Select = ({ value, onChange, children, style={} }) => {
+  const wrapperStyle:any = {
+    position:"relative",
+    width: style?.width || "100%",
+    minWidth: style?.minWidth,
+    maxWidth: style?.maxWidth,
+    flex: style?.flex,
+    flexShrink: style?.flexShrink,
+  };
+  const selectStyle:any = {
+    width:"100%",
+    height: style?.height || 38,
+    padding:"9px 40px 9px 12px",
+    fontSize:14,
+    borderRadius:8,
+    border:`1.5px solid ${C.border}`,
+    background:C.surface,
+    color:C.text,
+    outline:"none",
+    cursor:"pointer",
+    appearance:"none",
+    WebkitAppearance:"none",
+    MozAppearance:"none",
+    boxSizing:"border-box",
+    ...style,
+  };
+  delete selectStyle.width;
+  delete selectStyle.minWidth;
+  delete selectStyle.maxWidth;
+  delete selectStyle.flex;
+  delete selectStyle.flexShrink;
+
+  return (
+    <div style={wrapperStyle}>
+      <select value={value} onChange={e=>onChange(e.target.value)} style={selectStyle}>
+        {children}
+      </select>
+      <span style={{ position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:11,color:C.muted,lineHeight:1 }}>
+        ▾
+      </span>
+    </div>
+  );
+};
 
 const Divider = ({ my=16 }) => <div style={{ height:1,background:C.border,margin:`${my}px 0` }} />;
 
@@ -2489,6 +2526,8 @@ const AITextGenerator = () => {
   const [referenceImages,setReferenceImages] = useState<any[]>([]);
   const [manageTypesOpen,setManageTypesOpen] = useState(false);
   const [draftTaskOptions,setDraftTaskOptions] = useState<any[]>([]);
+  const [dragTaskId,setDragTaskId] = useState<string | null>(null);
+  const importTypesInputRef = useRef<HTMLInputElement | null>(null);
 
   const toneOptions = [
     { id:"professional", label:"Professional" },
@@ -2564,6 +2603,87 @@ const AITextGenerator = () => {
 
   const resetDefaultTaskTypes = () => {
     setDraftTaskOptions(DEFAULT_TEXT_OUTPUT_TYPES.map((item:any) => ({ ...item })));
+  };
+
+  const moveDraftTaskType = (fromId:string, toId:string) => {
+    setDraftTaskOptions((prev:any[]) => {
+      const fromIndex = prev.findIndex((item:any) => item.id === fromId);
+      const toIndex = prev.findIndex((item:any) => item.id === toId);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const duplicateDraftTaskType = (id:string) => {
+    setDraftTaskOptions((prev:any[]) => {
+      const index = prev.findIndex((item:any) => item.id === id);
+      if (index < 0) return prev;
+      const item = prev[index];
+      const copy = {
+        ...item,
+        id: uid(),
+        label: `${item.label} Copy`,
+      };
+      const next = [...prev];
+      next.splice(index + 1, 0, copy);
+      return next;
+    });
+  };
+
+  const exportTaskTypePresets = () => {
+    try {
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        outputTypes: draftTaskOptions,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "emdc-text-output-types.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not export presets.");
+    }
+  };
+
+  const importTaskTypePresets = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onerror = () => setError("Could not read preset file.");
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || "{}"));
+        const list = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.outputTypes)
+            ? parsed.outputTypes
+            : [];
+
+        if (!list.length) throw new Error("No output types found in the preset file.");
+
+        const normalized = list.map((item:any, index:number) => ({
+          id: item?.id || uid(),
+          label: String(item?.label || `Output Type ${index + 1}`).trim(),
+          instruction: String(item?.instruction || "Write clear, useful output based on the user input.").trim(),
+        })).filter((item:any) => item.label);
+
+        if (!normalized.length) throw new Error("Preset file is empty.");
+
+        setDraftTaskOptions(normalized);
+        setError("");
+      } catch (err:any) {
+        setError(err?.message || "Invalid preset file.");
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleReferenceUpload = async (files: FileList | null) => {
@@ -2762,9 +2882,21 @@ const AITextGenerator = () => {
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
             <p style={{ margin:0,fontSize:13,color:C.muted }}>
-              Add, edit, delete, and customize the instructions for each output type. These settings are saved in this browser.
+              Add, edit, delete, duplicate, reorder, import, and export output types. These settings are saved in this browser.
             </p>
             <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+              <input
+                ref={importTypesInputRef}
+                type="file"
+                accept=".json,application/json"
+                style={{ display:"none" }}
+                onChange={e=>{
+                  importTaskTypePresets(e.currentTarget.files?.[0] || null);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <Btn sm variant="outline" onClick={exportTaskTypePresets}>Export Presets</Btn>
+              <Btn sm variant="outline" onClick={()=>importTypesInputRef.current?.click()}>Import Presets</Btn>
               <Btn sm variant="outline" onClick={resetDefaultTaskTypes}>Reset Default</Btn>
               <Btn sm variant="outline" onClick={addDraftTaskType}>+ Add Output Type</Btn>
             </div>
@@ -2772,19 +2904,60 @@ const AITextGenerator = () => {
 
           <div style={{ display:"flex",flexDirection:"column",gap:12,maxHeight:"65vh",overflowY:"auto",paddingRight:4 }}>
             {draftTaskOptions.map((item:any, index:number)=>(
-              <div key={item.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,padding:12,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10 }}>
-                  <div style={{ fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>
-                    Output Type {index + 1}
+              <div
+                key={item.id}
+                draggable
+                onDragStart={()=>setDragTaskId(item.id)}
+                onDragOver={e=>e.preventDefault()}
+                onDrop={e=>{
+                  e.preventDefault();
+                  if (dragTaskId && dragTaskId !== item.id) moveDraftTaskType(dragTaskId, item.id);
+                  setDragTaskId(null);
+                }}
+                onDragEnd={()=>setDragTaskId(null)}
+                style={{
+                  border:`1px solid ${dragTaskId === item.id ? C.accent : C.border}`,
+                  borderRadius:12,
+                  padding:12,
+                  background:dragTaskId === item.id ? "#F0F9FF" : C.bg,
+                  display:"flex",
+                  flexDirection:"column",
+                  gap:10
+                }}
+              >
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                    <div
+                      title="Drag to reorder"
+                      style={{ width:28,height:28,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,display:"flex",alignItems:"center",justifyContent:"center",cursor:"grab",color:C.muted,fontSize:15,fontWeight:700,flexShrink:0 }}
+                    >
+                      ⋮⋮
+                    </div>
+                    <div>
+                      <div style={{ fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>
+                        Output Type {index + 1}
+                      </div>
+                      <div style={{ fontSize:11,color:C.muted }}>Drag this card to reorder in the dropdown.</div>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={()=>deleteDraftTaskType(item.id)}
-                    disabled={draftTaskOptions.length <= 1}
-                    style={{ height:32,padding:"0 10px",borderRadius:8,border:"1px solid #FECACA",background:draftTaskOptions.length <= 1 ? "#F9FAFB" : "#FEF2F2",color:draftTaskOptions.length <= 1 ? "#9CA3AF" : "#DC2626",fontSize:12,fontWeight:700,cursor:draftTaskOptions.length <= 1 ? "not-allowed" : "pointer" }}
-                  >
-                    Delete
-                  </button>
+
+                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                    <button
+                      type="button"
+                      onClick={()=>duplicateDraftTaskType(item.id)}
+                      style={{ height:32,padding:"0 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:12,fontWeight:700,cursor:"pointer" }}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={()=>deleteDraftTaskType(item.id)}
+                      disabled={draftTaskOptions.length <= 1}
+                      style={{ height:32,padding:"0 10px",borderRadius:8,border:"1px solid #FECACA",background:draftTaskOptions.length <= 1 ? "#F9FAFB" : "#FEF2F2",color:draftTaskOptions.length <= 1 ? "#9CA3AF" : "#DC2626",fontSize:12,fontWeight:700,cursor:draftTaskOptions.length <= 1 ? "not-allowed" : "pointer" }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
 
                 <Field label="Label">
@@ -2833,6 +3006,7 @@ const AIEngineView = () => {
   const [referenceImages,setReferenceImages] = useState<any[]>([]);
   const outputCount = 1;
   const [previewOutput,setPreviewOutput] = useState<any>(null);
+  const [aiPage,setAiPage] = useState("image");
 
   useEffect(()=>{
     try {
@@ -3050,7 +3224,35 @@ const AIEngineView = () => {
   });
 
   return (
-    <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(320px,420px)",gap:16,alignItems:"start" }}>
+    <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
+          <div>
+            <h3 style={{ margin:"0 0 4px",fontSize:20,fontWeight:800,color:C.text }}>AI Engine</h3>
+            <p style={{ margin:0,fontSize:13,color:C.muted }}>AI tools, prompt builders, generators, and workflow automations.</p>
+          </div>
+        </div>
+
+        <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
+          <button
+            type="button"
+            onClick={()=>setAiPage("image")}
+            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="image" ? C.accent : C.border}`,background:aiPage==="image" ? C.accent : C.surface,color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+          >
+            Image Generation
+          </button>
+          <button
+            type="button"
+            onClick={()=>setAiPage("text")}
+            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="text" ? C.accent : C.border}`,background:aiPage==="text" ? C.accent : C.surface,color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+          >
+            Text Generation
+          </button>
+        </div>
+      </div>
+
+      {aiPage==="image" && (
+      <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(320px,420px)",gap:16,alignItems:"start" }}>
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18 }}>
           <div>
@@ -3254,9 +3456,12 @@ const AIEngineView = () => {
         </div>
       </div>
 
-      <div style={{ gridColumn:"1 / -1" }}>
-        <AITextGenerator />
       </div>
+      )}
+
+      {aiPage==="text" && (
+        <AITextGenerator />
+      )}
 
       <Modal open={!!previewOutput} onClose={()=>setPreviewOutput(null)} title="Output Preview" width={820}>
         {previewOutput&&(
