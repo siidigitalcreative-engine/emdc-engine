@@ -4842,7 +4842,7 @@ export default function App({
       cloudLastUpdatedAtRef.current = data?.data?.updatedAt || updatedAt;
       setCloudSyncStatus("Synced");
     } catch {
-      setCloudSyncStatus("Cloud save failed");
+      setCloudSyncStatus("Sync save failed");
     }
   };
 
@@ -4873,7 +4873,7 @@ export default function App({
 
   useEffect(() => {
     if (!cloudHydrated) return;
-    const timer = setInterval(()=>fetchCloudState("poll"), 8000);
+    const timer = setInterval(()=>fetchCloudState("poll"), 3000);
     return () => clearInterval(timer);
   }, [cloudHydrated]);
 
@@ -4897,7 +4897,7 @@ export default function App({
   useEffect(() => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
     if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), 900);
+    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), 600);
     return () => {
       if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
     };
@@ -4975,8 +4975,8 @@ export default function App({
               {tab==="skus"       && "Product catalog by brand, SKU, inventory, and status."}
               {tab==="ai"         && "AI tools, prompt builders, generators, and workflow automations."}
             </p>
-            <p style={{ margin:"6px 0 0",fontSize:11,color:cloudSyncStatus==="Cloud save failed" ? "#DC2626" : C.faint }}>
-              Cloud Sync: {cloudSyncStatus}
+            <p style={{ margin:"6px 0 0",fontSize:11,color:cloudSyncStatus==="Sync save failed" ? "#DC2626" : C.faint }}>
+              Shared Sync: {cloudSyncStatus}
             </p>
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
