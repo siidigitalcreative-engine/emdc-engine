@@ -786,11 +786,8 @@ const suggestPhaseoutAssignments = (skus:any[], events:any[]=[], brands:any[]=[]
       .sort((a:any,b:any)=>b.score-a.score);
 
     const bestScore = ranked[0]?.score || 0;
-
-    // Only take strong matches. This prevents random holidays from getting SKUs.
     let chosen = ranked.filter((item:any)=>item.score >= Math.max(45,bestScore-12)).slice(0,3);
 
-    // If nothing is strong enough, use the best ecommerce campaign/sale as fallback.
     if (!chosen.length) {
       chosen = ranked
         .filter((item:any)=>{
@@ -800,7 +797,6 @@ const suggestPhaseoutAssignments = (skus:any[], events:any[]=[], brands:any[]=[]
         .slice(0,2);
     }
 
-    // Final safety fallback so the SKU does not disappear.
     if (!chosen.length && ranked[0]) chosen = [ranked[0]];
 
     chosen.forEach((item:any)=>{
@@ -816,6 +812,155 @@ const suggestPhaseoutAssignments = (skus:any[], events:any[]=[], brands:any[]=[]
 
   return assignments;
 };
+
+const parsePhaseoutJson = (value:string) => {
+  const raw = String(value || "").trim();
+  if(!raw) throw new Error("Empty AI response.");
+
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const cleaned = fenced ? fenced[1].trim() : raw;
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if(start>=0 && end>start) return JSON.parse(cleaned.slice(start,end+1));
+    throw new Error("AI response was not valid JSON.");
+  }
+};
+
+const buildPhaseoutAiPayload = (skus:any[], events:any[]=[], brands:any[]=[]) => {
+  const skuRows = (skus || []).map((sku:any,index:number)=>{
+    const brand = brands.find((b:any)=>b.id===sku.brandId)?.name || "";
+    const collection = sku.collection || sku.category || sku.productCategory || "";
+    const extra = sku.extraFields || {};
+    return {
+      id:String(sku.id || sku.sku || sku.value || `sku_${index}`),
+      sku:String(sku.sku || sku.value || ""),
+      productName:String(sku.productName || sku.value || sku.sku || ""),
+      brand:String(brand || ""),
+      collection:String(collection || ""),
+      category:String(sku.category || sku.productCategory || ""),
+      stock:sku.inventory ?? "",
+      extra:Object.fromEntries(Object.entries(extra).slice(0,8)),
+    };
+  });
+
+  const eventRows = (events || []).filter((ev:any)=>ev?.id).map((ev:any)=>({
+    id:String(ev.id),
+    name:String(ev.name || ""),
+    type:String(ev.type || ""),
+    date:String(ev.date || ""),
+    startDate:String(ev.calDate || ""),
+    endDate:String(ev.calDateEnd || ""),
+    months:Array.isArray(ev.months) ? ev.months : [],
+    description:String(ev.desc || ""),
+    currentProducts:(ev.products || []).slice(0,20),
+  }));
+
+  return { skus:skuRows, events:eventRows };
+};
+
+const getAiPhaseoutAssignments = async (skus:any[], events:any[]=[], brands:any[]=[]) => {
+  const payload = buildPhaseoutAiPayload(skus,events,brands);
+
+  if(!payload.skus.length || !payload.events.length) return {};
+
+  const instruction = [
+    "You are an ecommerce campaign planner for a Philippine marketplace brand portfolio.",
+    "Your job is to match phase-out SKUs to the best existing events/seasons.",
+    "Think like a merchandiser, not a keyword bot.",
+    "",
+    "Rules:",
+    "1. Prefer sale/campaign events for phase-out SKUs: mid-year sale, payday, 10.10, 11.11, 12.12, year-end, Black Friday, Ber Months, Christmas prep.",
+    "2. Use brand, product type, collection/category, seasonality, and shopper intent.",
+    "3. Do NOT put SKUs into unrelated holidays just because the date is near.",
+    "4. If product has no strong thematic event, use the strongest sale/campaign event.",
+    "5. One SKU may be assigned to 1 to 3 events only.",
+    "6. Return only JSON. No markdown. No explanation outside JSON.",
+    "",
+    "JSON format:",
+    "{\"assignments\":[{\"skuId\":\"...\",\"eventIds\":[\"eventId1\",\"eventId2\"],\"reason\":\"short reason\"}]}",
+  ].join("\\n");
+
+  const res = await fetch("/api/ai/generate-text", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({
+      task:"phaseout_matcher",
+      taskLabel:"Phase-Out Event Matcher",
+      tone:"professional",
+      instruction,
+      input:JSON.stringify(payload,null,2),
+      referenceImages:[],
+    }),
+  });
+
+  const raw = await res.text();
+  let data:any = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(raw || "AI phase-out matching failed.");
+  }
+
+  if(!res.ok) {
+    const msg = data?.error || data?.message || "AI phase-out matching failed.";
+    throw new Error(typeof msg === "string" ? msg : "AI phase-out matching failed.");
+  }
+
+  const parsed = parsePhaseoutJson(data?.text || "");
+  const rows = Array.isArray(parsed?.assignments) ? parsed.assignments : [];
+
+  const skuByKey = new Map<string,any>();
+  skus.forEach((sku:any,index:number)=>{
+    const keys = [
+      sku.id,
+      sku.sku,
+      sku.value,
+      String(sku.id || sku.sku || sku.value || `sku_${index}`),
+    ].filter(Boolean).map((v:any)=>String(v));
+    keys.forEach((key:string)=>skuByKey.set(key,sku));
+  });
+
+  const eventIds = new Set((events||[]).map((ev:any)=>String(ev.id)));
+  const assignments:any = {};
+
+  rows.forEach((row:any)=>{
+    const sku = skuByKey.get(String(row?.skuId || ""));
+    if(!sku) return;
+
+    const ids = Array.isArray(row?.eventIds)
+      ? row.eventIds.map((id:any)=>String(id)).filter((id:string)=>eventIds.has(id)).slice(0,3)
+      : [];
+
+    ids.forEach((eventId:string)=>{
+      if(!assignments[eventId]) assignments[eventId] = [];
+      assignments[eventId].push({
+        ...sku,
+        phaseoutMatchScore:999,
+        phaseoutMatchReasons:[row?.reason || "Gemini AI match"],
+      });
+    });
+  });
+
+  return assignments;
+};
+
+const getPhaseoutAssignmentsSmart = async (skus:any[], events:any[]=[], brands:any[]=[]) => {
+  try {
+    const aiAssignments = await getAiPhaseoutAssignments(skus,events,brands);
+    if(Object.keys(aiAssignments || {}).length) {
+      return { assignments:aiAssignments, usedAi:true };
+    }
+  } catch (err) {
+    console.warn("[EMDC] AI phase-out matcher fallback:", err);
+  }
+
+  return { assignments:suggestPhaseoutAssignments(skus,events,brands), usedAi:false };
+};
+
 
 // ─── STATUS MANAGER ──────────────────────────────────────────────────────────
 const StatusManagerModal = ({ open, onClose, statuses, onChange }) => {
@@ -2188,7 +2333,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
     : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
   const isPhaseoutType = selType==="phaseout" || (launchTypes?.[selType]?.label || "").toLowerCase().includes("phase-out");
 
-  const runPhaseoutHelper = () => {
+  const runPhaseoutHelper = async () => {
     if (!phaseoutSourceSkus.length) {
       setPhaseoutHelperMsg("Select at least one SKU first.");
       return;
@@ -2198,7 +2343,10 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
       return;
     }
 
-    const assignments = suggestPhaseoutAssignments(phaseoutSourceSkus,events,brands);
+    setPhaseoutHelperMsg("AI is thinking and matching SKUs to the best campaigns...");
+
+    const result = await getPhaseoutAssignmentsSmart(phaseoutSourceSkus,events,brands);
+    const assignments = result.assignments || {};
     const ids = Object.keys(assignments);
 
     if (!ids.length) {
@@ -2210,7 +2358,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
     if (onApplyPhaseoutAssignments) onApplyPhaseoutAssignments(assignments);
 
     const totalProducts = ids.reduce((sum:number,id:string)=>sum+(assignments[id]?.length||0),0);
-    setPhaseoutHelperMsg(`AI helper matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
+    setPhaseoutHelperMsg(`${result.usedAi?"Gemini AI":"Fallback helper"} matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
   };
 
   const canNext=finalSkus.length>0&&selType&&groupName.trim();
@@ -2260,7 +2408,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
                   Uses brand, product keywords, collection/category, campaign intent, and seasonal fit to choose stronger event/season matches.
                 </p>
               </div>
-              <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>Auto-match SKUs</Btn>
+              <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>AI Match SKUs</Btn>
             </div>
             {phaseoutHelperMsg&&<p style={{ margin:0,fontSize:12,color:"#92400E",fontWeight:700 }}>{phaseoutHelperMsg}</p>}
           </div>
@@ -2336,7 +2484,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const isPhaseoutType = launchType==="phaseout" || (launchTypes?.[launchType]?.label || "").toLowerCase().includes("phase-out");
   const canSave = finalSkus.length>0 && groupName.trim();
 
-  const runPhaseoutHelper = () => {
+  const runPhaseoutHelper = async () => {
     if (!phaseoutSourceSkus.length) {
       setPhaseoutHelperMsg("Select at least one SKU first.");
       return;
@@ -2346,7 +2494,10 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       return;
     }
 
-    const assignments = suggestPhaseoutAssignments(phaseoutSourceSkus,events,brands);
+    setPhaseoutHelperMsg("AI is thinking and matching SKUs to the best campaigns...");
+
+    const result = await getPhaseoutAssignmentsSmart(phaseoutSourceSkus,events,brands);
+    const assignments = result.assignments || {};
     const ids = Object.keys(assignments);
 
     if (!ids.length) {
@@ -2358,7 +2509,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     if (onApplyPhaseoutAssignments) onApplyPhaseoutAssignments(assignments);
 
     const totalProducts = ids.reduce((sum:number,id:string)=>sum+(assignments[id]?.length||0),0);
-    setPhaseoutHelperMsg(`AI helper matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
+    setPhaseoutHelperMsg(`${result.usedAi?"Gemini AI":"Fallback helper"} matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
   };
 
   if(!group) return null;
@@ -2399,7 +2550,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
                   New SKUs show a green NEW badge. Auto-match uses brand, category, campaign intent, and seasonal fit to place them better.
                 </p>
               </div>
-              <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>Auto-match SKUs</Btn>
+              <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>AI Match SKUs</Btn>
             </div>
             {phaseoutHelperMsg&&<p style={{ margin:0,fontSize:12,color:"#92400E",fontWeight:700 }}>{phaseoutHelperMsg}</p>}
           </div>
