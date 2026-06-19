@@ -592,57 +592,181 @@ const cleanPhaseoutProductLabel = (value:any) => String(value || "")
   .replace(/^\s*(phase\s*-?\s*out|phaseout|closeout|clearance)\s*:\s*/i,"")
   .trim();
 
-const getPhaseoutEventScore = (ev:any, sku:any, brands:any[]=[]) => {
+const normalizePhaseoutText = (value:any) => String(value || "")
+  .toLowerCase()
+  .replace(/&/g," and ")
+  .replace(/[^a-z0-9]+/g," ")
+  .trim();
+
+const phaseoutTokens = (value:any) => normalizePhaseoutText(value)
+  .split(/\s+/)
+  .filter((token:string)=>token.length>=3)
+  .filter((token:string)=>!["the","and","for","with","from","into","product","item","sku"].includes(token));
+
+const phaseoutHasAny = (text:string, terms:string[]) => terms.some((term:string)=>text.includes(term));
+
+const getSkuPhaseoutProfile = (sku:any, brands:any[]=[]) => {
   const brand = brands.find((b:any)=>b.id===sku.brandId)?.name || "";
-  const skuText = [
+  const extraText = Object.entries(sku.extraFields || {})
+    .map(([key,value]:any)=>`${key} ${value}`)
+    .join(" ");
+
+  const rawText = [
     sku.productName,
     sku.sku,
     sku.collection,
     sku.category,
+    sku.productCategory,
     brand,
-    Object.values(sku.extraFields || {}).join(" "),
-  ].filter(Boolean).join(" ").toLowerCase();
+    extraText,
+    sku.value,
+  ].filter(Boolean).join(" ");
 
-  const evText = [
+  const text = normalizePhaseoutText(rawText);
+  const tokens = Array.from(new Set(phaseoutTokens(rawText)));
+
+  const categoryHints = [
+    {
+      id:"school",
+      terms:["school","student","kids","kid","lunch","lunchbox","bag","bottle","tumbler","food container","food jar","cutlery"],
+      eventTerms:["back to school","school","student","campus","graduation","recognition"]
+    },
+    {
+      id:"hydration",
+      terms:["tumbler","bottle","hydration","water","juice","blender","mug","cup","flask"],
+      eventTerms:["summer","back to school","campus","gym","fitness","sports","payday","sale","11 11","12 12"]
+    },
+    {
+      id:"bath",
+      terms:["bath","bathroom","toilet","brush","soap","dish","lotion","dispenser","tumbler","vanity","accessories"],
+      eventTerms:["home","christmas","ber","mother","women","sale","11 11","12 12","payday","year end"]
+    },
+    {
+      id:"kitchen",
+      terms:["kitchen","cookware","pan","pot","bake","glass","dining","serve","serveware","food","container","jar"],
+      eventTerms:["christmas","ber","mother","women","home","payday","sale","11 11","12 12","year end"]
+    },
+    {
+      id:"home",
+      terms:["home","decor","storage","organizer","clock","furniture","basket","bin","rack"],
+      eventTerms:["christmas","ber","home","mother","women","sale","11 11","12 12","year end"]
+    },
+    {
+      id:"fitness",
+      terms:["fitness","gym","dumbbell","roller","massage","yoga","exercise","sport"],
+      eventTerms:["new year","summer","fitness","health","payday","sale","11 11","12 12"]
+    },
+    {
+      id:"tools",
+      terms:["tool","tools","drill","diy","hardware","repair","vanquish"],
+      eventTerms:["father","new year","sale","payday","11 11","12 12","black friday"]
+    },
+    {
+      id:"glassware",
+      terms:["glass","glassware","cup","mug","wine","drinking","union","crysalis"],
+      eventTerms:["christmas","ber","party","holiday","gift","sale","11 11","12 12","year end"]
+    },
+  ];
+
+  const matchedCategories = categoryHints.filter((cat:any)=>phaseoutHasAny(text,cat.terms));
+
+  return { brand, rawText, text, tokens, matchedCategories };
+};
+
+const getEventPhaseoutProfile = (ev:any) => {
+  const rawText = [
     ev.name,
     ev.date,
     ev.type,
     ev.desc,
+    ev.source,
     ...(ev.products || []),
-  ].filter(Boolean).join(" ").toLowerCase();
+  ].filter(Boolean).join(" ");
 
-  let score = 0;
+  const text = normalizePhaseoutText(rawText);
+  const tokens = Array.from(new Set(phaseoutTokens(rawText)));
 
-  const strongCampaignTerms = [
+  const saleTerms = [
     "sale","mega","payday","clearance","closeout","last chance","final stock","flash","bundle","discount",
-    "mid-year","year-end","10.10","11.11","12.12","black friday","ber months","christmas prep"
+    "mid year","midyear","year end","yearend","10 10","11 11","12 12","black friday","cyber","campaign",
+    "go live","launch","ber months","christmas prep"
   ];
 
-  strongCampaignTerms.forEach(term=>{
-    if (evText.includes(term)) score += 7;
+  const weakHolidayOnly = ev.type === "holiday" && !phaseoutHasAny(text,saleTerms);
+
+  return {
+    rawText,
+    text,
+    tokens,
+    isCampaign: ev.type === "campaign",
+    isSeasonal: ev.type === "seasonal",
+    isHoliday: ev.type === "holiday",
+    isSale: phaseoutHasAny(text,saleTerms),
+    weakHolidayOnly,
+  };
+};
+
+const getPhaseoutEventScore = (ev:any, sku:any, brands:any[]=[]) => {
+  const skuProfile = getSkuPhaseoutProfile(sku,brands);
+  const eventProfile = getEventPhaseoutProfile(ev);
+
+  let score = 0;
+  const reasons:string[] = [];
+
+  // Phase-out should strongly prefer sale/campaign windows first.
+  if (eventProfile.isSale) { score += 35; reasons.push("sale/campaign event"); }
+  if (eventProfile.isCampaign) { score += 25; reasons.push("campaign type"); }
+  if (eventProfile.isSeasonal) { score += 8; reasons.push("seasonal event"); }
+  if (eventProfile.weakHolidayOnly) { score -= 18; reasons.push("holiday without sale intent"); }
+
+  // Exact brand match is a strong signal, but should not be required.
+  if (skuProfile.brand) {
+    const brandText = normalizePhaseoutText(skuProfile.brand);
+    if (brandText && eventProfile.text.includes(brandText)) {
+      score += 40;
+      reasons.push("brand match");
+    }
+  }
+
+  // Collection/category direct text match.
+  [sku.collection, sku.category, sku.productCategory].filter(Boolean).forEach((term:any)=>{
+    const clean = normalizePhaseoutText(term);
+    if (clean && clean.length>=3 && eventProfile.text.includes(clean)) {
+      score += 30;
+      reasons.push("collection/category match");
+    }
   });
 
-  if (ev.type === "campaign") score += 10;
-  if (ev.type === "seasonal") score += 4;
-
-  [brand, sku.collection, sku.category].filter(Boolean).forEach((term:any)=>{
-    const clean = String(term).toLowerCase();
-    if (clean && evText.includes(clean)) score += 8;
+  // Product token match, but avoid over-scoring very generic product words.
+  const genericTokens = new Set(["set","pcs","with","new","small","large","medium","color","black","white","gray","grey","green","pink","blue","red"]);
+  skuProfile.tokens.forEach((token:string)=>{
+    if (genericTokens.has(token)) return;
+    if (eventProfile.text.includes(token)) {
+      score += token.length >= 5 ? 8 : 4;
+      reasons.push("product keyword match");
+    }
   });
 
-  String(sku.productName || "").toLowerCase().split(/[^a-z0-9]+/).filter((t:string)=>t.length>=4).forEach((token:string)=>{
-    if (evText.includes(token)) score += 3;
+  // Category-to-season logic so items go to more sensible events.
+  skuProfile.matchedCategories.forEach((cat:any)=>{
+    if (phaseoutHasAny(eventProfile.text,cat.eventTerms.map((t:string)=>normalizePhaseoutText(t)))) {
+      score += 18;
+      reasons.push(`${cat.id} seasonal fit`);
+    }
   });
 
-  const extraText = Object.values(sku.extraFields || {}).join(" ").toLowerCase();
-  extraText.split(/[^a-z0-9]+/).filter((t:string)=>t.length>=4).slice(0,12).forEach((token:string)=>{
-    if (evText.includes(token)) score += 2;
-  });
+  // Big ecommerce sale events are acceptable fallback for any phase-out SKU.
+  if (phaseoutHasAny(eventProfile.text,["11 11","12 12","10 10","payday","mid year","year end","black friday"])) {
+    score += 14;
+    reasons.push("ecommerce sale fallback");
+  }
 
-  // Phase-out products should avoid purely emotional holidays unless a sale/campaign keyword also exists.
-  if (ev.type === "holiday" && !strongCampaignTerms.some(term=>evText.includes(term))) score -= 3;
+  // Avoid putting everything into soft occasions unless product/event really matches.
+  if (eventProfile.isHoliday && !eventProfile.isSale && reasons.length < 3) {
+    score -= 10;
+  }
 
-  return score;
+  return { score, reasons };
 };
 
 const suggestPhaseoutAssignments = (skus:any[], events:any[]=[], brands:any[]=[]) => {
@@ -651,16 +775,42 @@ const suggestPhaseoutAssignments = (skus:any[], events:any[]=[], brands:any[]=[]
 
   skus.forEach((sku:any)=>{
     const ranked = usableEvents
-      .map((ev:any)=>({ ev, score:getPhaseoutEventScore(ev,sku,brands) }))
+      .map((ev:any)=>{
+        const result:any = getPhaseoutEventScore(ev,sku,brands);
+        return {
+          ev,
+          score: typeof result === "number" ? result : result.score,
+          reasons: typeof result === "number" ? [] : result.reasons,
+        };
+      })
       .sort((a:any,b:any)=>b.score-a.score);
 
-    const best = ranked.filter((x:any)=>x.score>0).slice(0,2);
-    const chosen = best.length ? best : ranked.filter((x:any)=>x.ev.type==="campaign").slice(0,1);
+    const bestScore = ranked[0]?.score || 0;
+
+    // Only take strong matches. This prevents random holidays from getting SKUs.
+    let chosen = ranked.filter((item:any)=>item.score >= Math.max(45,bestScore-12)).slice(0,3);
+
+    // If nothing is strong enough, use the best ecommerce campaign/sale as fallback.
+    if (!chosen.length) {
+      chosen = ranked
+        .filter((item:any)=>{
+          const eventProfile = getEventPhaseoutProfile(item.ev);
+          return eventProfile.isSale || eventProfile.isCampaign;
+        })
+        .slice(0,2);
+    }
+
+    // Final safety fallback so the SKU does not disappear.
+    if (!chosen.length && ranked[0]) chosen = [ranked[0]];
 
     chosen.forEach((item:any)=>{
       if (!item?.ev?.id) return;
       if (!assignments[item.ev.id]) assignments[item.ev.id] = [];
-      assignments[item.ev.id].push(sku);
+      assignments[item.ev.id].push({
+        ...sku,
+        phaseoutMatchScore:item.score,
+        phaseoutMatchReasons:item.reasons,
+      });
     });
   });
 
@@ -2107,7 +2257,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
               <div>
                 <p style={{ margin:0,fontSize:12,fontWeight:800,color:"#92400E" }}>AI Phase-Out Helper</p>
                 <p style={{ margin:"3px 0 0",fontSize:11,color:"#B45309" }}>
-                  Uses selected SKUs, brand, collection/category, and campaign timing to choose matching events/seasons.
+                  Uses brand, product keywords, collection/category, campaign intent, and seasonal fit to choose stronger event/season matches.
                 </p>
               </div>
               <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>Auto-match SKUs</Btn>
@@ -2152,6 +2302,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const [skus,setSkus] = useState<any[]>([]);
   const [pickedSkus,setPickedSkus] = useState<any[]>([]);
   const [phaseoutHelperMsg,setPhaseoutHelperMsg] = useState("");
+  const originalSkuIds = useMemo(()=>new Set((group?.skus || []).map((item:any)=>item.id || item.value || item.sku).filter(Boolean)),[group]);
 
   useEffect(()=>{
     if(group){
@@ -2234,7 +2385,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
               ? <div style={{ padding:"14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No SKUs in storage yet. Go to SKU Storage tab first.</div>
               : <>
                   <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickSku} placeholder="Search by product, SKU, or brand..." multiSelect selectedIds={pickedSkus.map((s:any)=>s.id)} />
-                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:5,fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""}</div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map((s:any)=>(<div key={s.id} title={`${s.productName} · ${s.sku}`} style={{ display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",padding:"3px 7px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span><button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>))}</div></div>)}
+                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:5,fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""} · {pickedSkus.filter((s:any)=>!originalSkuIds.has(s.id)&&!originalSkuIds.has(s.sku)).length} new</div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map((s:any)=>{ const isNew=!originalSkuIds.has(s.id)&&!originalSkuIds.has(s.sku); return (<div key={s.id} title={`${isNew?"New SKU · ":""}${s.productName} · ${s.sku}`} style={{ display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",padding:"3px 7px",background:isNew?"#ECFDF5":C.surfaceAlt,borderRadius:6,border:`1px solid ${isNew?"#86EFAC":C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span>{isNew&&<span style={{ fontSize:9,fontWeight:900,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"1px 5px",lineHeight:1 }}>NEW</span>}<button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>);})}</div></div>)}
                 </>
             }
           </Field>
@@ -2245,7 +2396,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
               <div>
                 <p style={{ margin:0,fontSize:12,fontWeight:800,color:"#92400E" }}>AI Phase-Out Helper</p>
                 <p style={{ margin:"3px 0 0",fontSize:11,color:"#B45309" }}>
-                  Use this after adding new SKUs to allocate them to matching events/seasons again.
+                  New SKUs show a green NEW badge. Auto-match uses brand, category, campaign intent, and seasonal fit to place them better.
                 </p>
               </div>
               <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>Auto-match SKUs</Btn>
