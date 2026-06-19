@@ -613,6 +613,20 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     });
   };
 
+  const unselectAllVisible = () => {
+    if (!multiSelect) return;
+    results.forEach((s:any)=>{
+      if (selectedSet.has(s.id)) onSelect(s);
+    });
+  };
+
+  const clearSelectedSkus = () => {
+    if (!multiSelect) return;
+    (skuStorage||[]).forEach((s:any)=>{
+      if (selectedSet.has(s.id)) onSelect(s);
+    });
+  };
+
   return (
     <div ref={ref} style={{ position:"relative",display:"flex",flexDirection:"column",gap:8 }}>
       {categoryOptions.length>0&&(
@@ -641,9 +655,14 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
               {results.length} SKU{results.length===1?"":"s"} found{categoryFilter!=="all"?` · ${categoryFilter}`:""}
             </span>
             {multiSelect&&results.length>0&&(
-              <button type="button" onMouseDown={e=>{e.preventDefault();selectAllVisible();}} style={{ border:`1px solid ${C.border}`,background:C.surfaceAlt,borderRadius:6,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
-                Select all visible
-              </button>
+              <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
+                <button type="button" onMouseDown={e=>{e.preventDefault();selectAllVisible();}} style={{ border:`1px solid ${C.border}`,background:C.surfaceAlt,borderRadius:6,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
+                  Select all visible
+                </button>
+                <button type="button" onMouseDown={e=>{e.preventDefault();unselectAllVisible();}} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer" }}>
+                  Unselect visible
+                </button>
+              </div>
             )}
           </div>
 
@@ -677,6 +696,15 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
               <div style={{ flex:1,minWidth:0,fontSize:11,color:C.muted,fontWeight:700 }}>
                 {selectedSet.size} selected SKU{selectedSet.size!==1?"s":""}
               </div>
+              {selectedSet.size>0&&(
+                <button
+                  type="button"
+                  onMouseDown={e=>{ e.preventDefault(); clearSelectedSkus(); }}
+                  style={{ height:34,padding:"0 12px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surfaceAlt,color:"#DC2626",fontSize:12,fontWeight:800,cursor:"pointer",flexShrink:0 }}
+                >
+                  Clear
+                </button>
+              )}
               <button
                 type="button"
                 onMouseDown={e=>{ e.preventDefault(); setOpen(false); }}
