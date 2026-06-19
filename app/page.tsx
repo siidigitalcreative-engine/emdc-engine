@@ -2403,6 +2403,25 @@ const AIEngineView = () => {
   const [error,setError] = useState("");
   const [result,setResult] = useState<any>(null);
   const [savedOutputs,setSavedOutputs] = useState<any[]>([]);
+  const [savedOutputsHydrated,setSavedOutputsHydrated] = useState(false);
+
+  useEffect(()=>{
+    try {
+      const raw = localStorage.getItem("emdc_ai_saved_outputs");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setSavedOutputs(parsed);
+      }
+    } catch {}
+    setSavedOutputsHydrated(true);
+  },[]);
+
+  useEffect(()=>{
+    if (!savedOutputsHydrated) return;
+    try {
+      localStorage.setItem("emdc_ai_saved_outputs", JSON.stringify(savedOutputs));
+    } catch {}
+  },[savedOutputs,savedOutputsHydrated]);
 
   const imageUrl =
     result?.data?.[0]?.url ||
@@ -2605,6 +2624,7 @@ const AIEngineView = () => {
             {savedOutputs.length>0&&<button onClick={()=>setSavedOutputs([])} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}>Clear All</button>}
           </div>
           {savedOutputs.length===0&&<p style={{ margin:0,fontSize:12,color:C.muted }}>Nothing saved yet. Generated images only appear here after clicking Save Output.</p>}
+          {savedOutputs.length>0&&<p style={{ margin:"0 0 10px",fontSize:11,color:C.muted }}>Saved in this browser, so outputs stay when switching tabs or refreshing this device.</p>}
           <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
             {savedOutputs.map(h=>(
               <div key={h.id} style={{ display:"flex",gap:10,alignItems:"center",padding:8,borderRadius:9,background:C.surfaceAlt }}>
