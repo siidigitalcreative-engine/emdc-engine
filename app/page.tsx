@@ -241,40 +241,51 @@ const DateInput = ({ value, onChange, style={} }) => {
 };
 
 const Select = ({ value, onChange, children, style={} }) => {
+  const {
+    width,
+    minWidth,
+    maxWidth,
+    flex,
+    flexShrink,
+    flexGrow,
+    alignSelf,
+    ...selectOverrides
+  }: any = style || {};
+
   const wrapperStyle:any = {
     position:"relative",
-    width: style?.width || "100%",
-    minWidth: style?.minWidth,
-    maxWidth: style?.maxWidth,
-    flex: style?.flex,
-    flexShrink: style?.flexShrink,
+    width: width || "100%",
+    minWidth,
+    maxWidth,
+    flex,
+    flexShrink,
+    flexGrow,
+    alignSelf,
   };
-  const selectStyle:any = {
-    width:"100%",
-    height: style?.height || 38,
-    padding:"9px 40px 9px 12px",
-    fontSize:14,
-    borderRadius:8,
-    border:`1.5px solid ${C.border}`,
-    background:C.surface,
-    color:C.text,
-    outline:"none",
-    cursor:"pointer",
-    appearance:"none",
-    WebkitAppearance:"none",
-    MozAppearance:"none",
-    boxSizing:"border-box",
-    ...style,
-  };
-  delete selectStyle.width;
-  delete selectStyle.minWidth;
-  delete selectStyle.maxWidth;
-  delete selectStyle.flex;
-  delete selectStyle.flexShrink;
 
   return (
     <div style={wrapperStyle}>
-      <select value={value} onChange={e=>onChange(e.target.value)} style={selectStyle}>
+      <select
+        value={value}
+        onChange={e=>onChange(e.target.value)}
+        style={{
+          width:"100%",
+          height:38,
+          padding:"9px 40px 9px 12px",
+          fontSize:14,
+          borderRadius:8,
+          border:`1.5px solid ${C.border}`,
+          background:C.surface,
+          color:C.text,
+          outline:"none",
+          cursor:"pointer",
+          appearance:"none",
+          WebkitAppearance:"none",
+          MozAppearance:"none",
+          boxSizing:"border-box",
+          ...selectOverrides,
+        }}
+      >
         {children}
       </select>
       <span style={{ position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:11,color:C.muted,lineHeight:1 }}>
@@ -3225,29 +3236,29 @@ const AIEngineView = () => {
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
-      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:14 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap" }}>
           <div>
-            <h3 style={{ margin:"0 0 4px",fontSize:20,fontWeight:800,color:C.text }}>AI Engine</h3>
-            <p style={{ margin:0,fontSize:13,color:C.muted }}>AI tools, prompt builders, generators, and workflow automations.</p>
+            <p style={{ margin:"0 0 3px",fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".08em" }}>AI Tool</p>
+            <p style={{ margin:0,fontSize:13,color:C.textSub }}>Choose a generator to open below.</p>
           </div>
-        </div>
 
-        <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
-          <button
-            type="button"
-            onClick={()=>setAiPage("image")}
-            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="image" ? C.accent : C.border}`,background:aiPage==="image" ? C.accent : C.surface,color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
-          >
-            Image Generation
-          </button>
-          <button
-            type="button"
-            onClick={()=>setAiPage("text")}
-            style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="text" ? C.accent : C.border}`,background:aiPage==="text" ? C.accent : C.surface,color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
-          >
-            Text Generation
-          </button>
+          <div style={{ display:"inline-flex",gap:6,padding:4,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }}>
+            <button
+              type="button"
+              onClick={()=>setAiPage("image")}
+              style={{ height:38,padding:"0 16px",borderRadius:9,border:"none",background:aiPage==="image" ? C.accent : "transparent",color:aiPage==="image" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+            >
+              Image Generation
+            </button>
+            <button
+              type="button"
+              onClick={()=>setAiPage("text")}
+              style={{ height:38,padding:"0 16px",borderRadius:9,border:"none",background:aiPage==="text" ? C.accent : "transparent",color:aiPage==="text" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+            >
+              Text Generation
+            </button>
+          </div>
         </div>
       </div>
 
