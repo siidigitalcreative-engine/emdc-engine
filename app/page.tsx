@@ -1253,7 +1253,11 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
-  const saveEventTypes = (types: any[]) => { setEventTypes(types); if(onStateChange) onStateChange({calendarTypes:types}); };
+  const saveEventTypes = (types: any[]) => {
+    setEventTypes(types);
+    if(filter!=="all" && !types.some((t:any)=>t.id===filter)) setFilter("all");
+    if(onStateChange) onStateChange({calendarTypes:types});
+  };
   const [filter,setFilter]       = useState("all");
   const [addModal,setAddModal]   = useState(false);
   const [editModal,setEditModal] = useState(false);
@@ -1272,21 +1276,16 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     .replace(/\b\w/g,(m:string)=>m.toUpperCase());
 
   const calendarFilterTypes = useMemo(()=>{
-    const map = new Map<string,any>();
-    [...DEFAULT_EVENT_TYPES,...(eventTypes||[])].forEach((t:any)=>{
-      if(t?.id) map.set(t.id,{...t,label:t.label || normalizeTagLabel(t.id),color:t.color || "#9CA3AF"});
-    });
+    // Manage Tags is the source of truth.
+    // If a tag is deleted there, it must disappear from the top calendar filters.
+    return (eventTypes||[]).map((t:any)=>({
+      ...t,
+      label:t.label || normalizeTagLabel(t.id),
+      color:t.color || "#9CA3AF",
+    }));
+  },[eventTypes]);
 
-    [...(seasonalEvents||[]),...(manualEvents||[]),...(extraEvents||[])].forEach((ev:any)=>{
-      const id = ev?.type || ev?.seasonalType;
-      if(!id || map.has(id)) return;
-      map.set(id,{ id, label:normalizeTagLabel(id), color:ev.color || "#9CA3AF" });
-    });
-
-    return Array.from(map.values());
-  },[eventTypes,seasonalEvents,manualEvents,extraEvents]);
-
-  // Helper: look up type color from live eventTypes plus detected existing tags
+  // Helper: look up type color from current Manage Tags list
   const typeColor = id => calendarFilterTypes.find((t:any)=>t.id===id)?.color || "#9CA3AF";
   const typeLabel = id => calendarFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
 
@@ -2286,17 +2285,14 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     .replace(/\b\w/g,(m:string)=>m.toUpperCase());
 
   const eventFilterTypes = useMemo(()=>{
-    const map = new Map<string,any>();
-    [...DEFAULT_EVENT_TYPES,...(eventTypes||[])].forEach((t:any)=>{
-      if(t?.id) map.set(t.id,{...t,label:t.label || normalizeTagLabel(t.id),color:t.color || "#6B7280"});
-    });
-    (events||[]).forEach((ev:any)=>{
-      const id = ev?.type;
-      if(!id || map.has(id)) return;
-      map.set(id,{ id, label:normalizeTagLabel(id), color:ev.color || "#6B7280" });
-    });
-    return Array.from(map.values());
-  },[eventTypes,events]);
+    // Manage Tags is the source of truth.
+    // Removed tags should not come back just because older events still use that type.
+    return (eventTypes||[]).map((t:any)=>({
+      ...t,
+      label:t.label || normalizeTagLabel(t.id),
+      color:t.color || "#6B7280",
+    }));
+  },[eventTypes]);
 
   const eventTypeColor = (id:any) => eventFilterTypes.find((t:any)=>t.id===id)?.color || "#6B7280";
   const eventTypeLabel = (id:any) => eventFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
@@ -2540,7 +2536,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
         ))}
       </div>
 
-      <ManageTypesModal open={typesModal} onClose={()=>setTypesModal(false)} eventTypes={eventFilterTypes} onChange={saveEventTypesLocal} />
+      <ManageTypesModal open={typesModal} onClose={()=>setTypesModal(false)} eventTypes={eventTypes} onChange={saveEventTypesLocal} />
 
       <Modal open={addEventModal} onClose={()=>setAddEventModal(false)} title="Add Custom Event" width={500}>
         {renderEvForm({
