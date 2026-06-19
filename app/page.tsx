@@ -2127,7 +2127,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, events=[], onApp
 };
 
 // ─── GROUP EDIT MODAL ────────────────────────────────────────────────────────
-const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes, events=[] }: any) => {
+const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes, events=[], onApplyPhaseoutAssignments }: any) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
@@ -2136,6 +2136,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const [linkedEventIds,setLinkedEventIds] = useState<any[]>([]);
   const [skus,setSkus] = useState<any[]>([]);
   const [pickedSkus,setPickedSkus] = useState<any[]>([]);
+  const [phaseoutHelperMsg,setPhaseoutHelperMsg] = useState("");
 
   useEffect(()=>{
     if(group){
@@ -2153,6 +2154,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       setSkus(existingSkus);
       setPickedSkus(useStorageMode ? storageMatches : []);
       setSkuMode(useStorageMode ? "storage" : "manual");
+      setPhaseoutHelperMsg("");
     }
   },[group,skuStorage]);
 
@@ -2162,7 +2164,36 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const pickSku=(s:any)=>{ setPickedSkus((p:any[])=>p.find((x:any)=>x.id===s.id)?p.filter((x:any)=>x.id!==s.id):[...p,s]); };
   const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   const finalSkus = skuMode==="storage" ? pickedSkus.map((s:any)=>({id:s.id,value:s.sku})) : skus.filter((s:any)=>s.value.trim());
+  const phaseoutSourceSkus:any[] = skuMode==="storage"
+    ? pickedSkus
+    : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
+  const isPhaseoutType = launchType==="phaseout" || (launchTypes?.[launchType]?.label || "").toLowerCase().includes("phase-out");
   const canSave = finalSkus.length>0 && groupName.trim();
+
+  const runPhaseoutHelper = () => {
+    if (!phaseoutSourceSkus.length) {
+      setPhaseoutHelperMsg("Select at least one SKU first.");
+      return;
+    }
+    if (!events.length) {
+      setPhaseoutHelperMsg("No events or seasons available yet.");
+      return;
+    }
+
+    const assignments = suggestPhaseoutAssignments(phaseoutSourceSkus,events,brands);
+    const ids = Object.keys(assignments);
+
+    if (!ids.length) {
+      setPhaseoutHelperMsg("No aligned event found. You can still manually select events below.");
+      return;
+    }
+
+    setLinkedEventIds((prev:any[])=>Array.from(new Set([...prev,...ids])));
+    if (onApplyPhaseoutAssignments) onApplyPhaseoutAssignments(assignments);
+
+    const totalProducts = ids.reduce((sum:number,id:string)=>sum+(assignments[id]?.length||0),0);
+    setPhaseoutHelperMsg(`AI helper matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} into ${ids.length} event/season card${ids.length>1?"s":""}.`);
+  };
 
   if(!group) return null;
 
@@ -2188,11 +2219,26 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
               ? <div style={{ padding:"14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No SKUs in storage yet. Go to SKU Storage tab first.</div>
               : <>
                   <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickSku} placeholder="Search by product, SKU, or brand..." multiSelect selectedIds={pickedSkus.map((s:any)=>s.id)} />
-                  {pickedSkus.length>0&&(<div style={{ marginTop:8,display:"flex",flexWrap:"wrap",gap:6 }}>{pickedSkus.map((s:any)=>(<div key={s.id} style={{ display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}` }}><span style={{ fontSize:11,fontFamily:"monospace",fontWeight:600,color:C.text }}>{s.sku}</span><span style={{ fontSize:11,color:C.muted }}>{s.productName}</span><button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:14,lineHeight:1,padding:"0 0 0 2px" }}>&#215;</button></div>))}</div>)}
+                  {pickedSkus.length>0&&(<div style={{ marginTop:8,display:"flex",flexWrap:"wrap",gap:5 }}>{pickedSkus.map((s:any)=>(<div key={s.id} title={`${s.productName} · ${s.sku}`} style={{ display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",padding:"3px 7px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span><button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>))}</div>)}
                 </>
             }
           </Field>
         )}
+        {isPhaseoutType&&(
+          <div style={{ padding:14,background:"#FFFBEB",border:"1.5px solid #FDE68A",borderRadius:10,display:"flex",flexDirection:"column",gap:8 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+              <div>
+                <p style={{ margin:0,fontSize:12,fontWeight:800,color:"#92400E" }}>AI Phase-Out Helper</p>
+                <p style={{ margin:"3px 0 0",fontSize:11,color:"#B45309" }}>
+                  Use this after adding new SKUs to allocate them to matching events/seasons again.
+                </p>
+              </div>
+              <Btn sm onClick={runPhaseoutHelper} disabled={phaseoutSourceSkus.length===0 || events.length===0}>Auto-match SKUs</Btn>
+            </div>
+            {phaseoutHelperMsg&&<p style={{ margin:0,fontSize:12,color:"#92400E",fontWeight:700 }}>{phaseoutHelperMsg}</p>}
+          </div>
+        )}
+
         <Field label="Linked Events / Seasons" hint="optional">
           {events.length===0 ? (
             <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No events or seasons available yet.</div>
@@ -2691,7 +2737,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       </div>
 
       <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={updateTemplatesAndChecklistItems} launchTypes={launchTypes} onLaunchTypesChange={updateLaunchTypesAndSync} />
-      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]}
+      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={seasonalEvents||[]} onApplyPhaseoutAssignments={applyPhaseoutAssignments}
         onSave={(patch:any)=>updateGroup(editingGroup.id,patch)} />
 
       {creating&&(
