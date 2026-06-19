@@ -8,8 +8,12 @@ export async function POST(req: NextRequest) {
 
     const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
     const size = body?.size || "2K";
-    const watermark =
-      typeof body?.watermark === "boolean" ? body.watermark : true;
+    const watermark = typeof body?.watermark === "boolean" ? body.watermark : false;
+    const referenceImages = Array.isArray(body?.referenceImages)
+      ? body.referenceImages.filter((v: unknown) => typeof v === "string" && v)
+      : [];
+    const outputCountRaw = Number(body?.outputCount || 1);
+    const outputCount = Math.max(1, Math.min(4, Number.isFinite(outputCountRaw) ? outputCountRaw : 1));
 
     if (!prompt) {
       return NextResponse.json(
@@ -32,21 +36,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const payload: Record<string, unknown> = {
+      model,
+      prompt,
+      sequential_image_generation: outputCount > 1 ? "auto" : "disabled",
+      response_format: "url",
+      size,
+      stream: false,
+      watermark,
+    };
+
+    if (outputCount > 1) {
+      payload.sequential_image_generation_options = {
+        max_images: outputCount,
+      };
+    }
+
+    if (referenceImages.length > 0) {
+      payload.image = referenceImages;
+      payload.sequential_image_generation = "auto";
+      payload.sequential_image_generation_options = {
+        max_images: outputCount,
+      };
+    }
+
     const response = await fetch(`${baseUrl}/api/v3/images/generations`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        prompt,
-        sequential_image_generation: "disabled",
-        response_format: "url",
-        size,
-        stream: false,
-        watermark,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json().catch(() => ({}));
