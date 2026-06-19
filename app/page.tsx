@@ -2349,6 +2349,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
 // ─── EVENTS & SEASONS ────────────────────────────────────────────────────────
 const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, eventTypes=DEFAULT_EVENT_TYPES, setEventTypes }: any) => {
+  const { isMobile } = useBreakpoint();
   const [filter,setFilter]       = useState("all");
   const [expanded,setExpanded]   = useState(null);
   const [addingTo,setAddingTo]   = useState(null);
@@ -2463,7 +2464,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const applyManualOrder = (nextIds:any[]) => {
     setSortMode("manual");
     setEvents((prev:any[])=>{
-      const next = prev.map((ev:any)=>nextIds.includes(ev.id)?{...ev,manualOrder:nextIds.indexOf(ev.id)}:ev);
+      const base = Array.isArray(prev) ? prev : [];
+      const next = base.map((ev:any)=>nextIds.includes(ev.id)?{...ev,manualOrder:nextIds.indexOf(ev.id)}:ev);
       if(onStateChange) onStateChange({seasonalEvents:next});
       return next;
     });
