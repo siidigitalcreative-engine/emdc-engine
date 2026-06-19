@@ -1139,12 +1139,12 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup }: any) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTypes, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup }: any) => {
   const { isMobile } = useBreakpoint();
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
-  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType][dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
+  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:""})); }); return out; });
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [skuPickDept,setSkuPickDept] = useState(null);
@@ -1153,7 +1153,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateC
   const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
   const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:""}]}; if(onItemsChange) onItemsChange(next); return next; }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
-  const lt=LAUNCH_TYPES[group.launchType];
+  const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
   const allItems = Object.values(items).flat();
   const overallDone = allItems.filter(i=>i.done).length;
   const overallPct  = allItems.length ? Math.round(overallDone/allItems.length*100) : 0;
@@ -1222,17 +1222,17 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, onStateC
         })}
       </div>
       <StatusManagerModal open={statusModal} onClose={()=>setStatusModal(false)} statuses={statuses} onChange={saveStatuses} />
-      <GroupEditModal open={groupEditModal} group={group} onClose={()=>setGroupEditModal(false)} skuStorage={skuStorage} brands={brands}
+      <GroupEditModal open={groupEditModal} group={group} onClose={()=>setGroupEditModal(false)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes}
         onSave={(patch:any)=>{ if(onUpdateGroup) onUpdateGroup(patch); }} />
     </div>
   );
 };
 
 // ─── SKU SELECTOR ────────────────────────────────────────────────────────────
-const SKUSelector = ({ onNext, skuStorage, brands }) => {
+const SKUSelector = ({ onNext, skuStorage, brands, launchTypes }) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [skus,setSkus]           = useState([{id:uid(),value:""}]);
-  const [selType,setSelType]     = useState(null);
+  const [selType,setSelType]     = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
@@ -1272,7 +1272,7 @@ const SKUSelector = ({ onNext, skuStorage, brands }) => {
         )}
         <Field label="Operational Type">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {Object.entries(LAUNCH_TYPES).map(([k,v])=>(
+            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
               <button key={k} onClick={()=>setSelType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
                 <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
                 <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{selType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
@@ -1287,7 +1287,7 @@ const SKUSelector = ({ onNext, skuStorage, brands }) => {
 };
 
 // ─── GROUP EDIT MODAL ────────────────────────────────────────────────────────
-const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: any) => {
+const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes }: any) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [groupName,setGroupName] = useState("");
   const [deadline,setDeadline]   = useState("");
@@ -1307,7 +1307,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: an
       setGroupName(group.groupName||"");
       setDeadline(group.deadline||"");
       setDeadlineEnd(group.deadlineEnd||"");
-      setLaunchType(group.launchType||"introduction");
+      const availableTypes = Object.keys(launchTypes||LAUNCH_TYPES); setLaunchType((group.launchType&&availableTypes.includes(group.launchType)) ? group.launchType : (availableTypes[0]||"introduction"));
       setSkus(existingSkus);
       setPickedSkus(useStorageMode ? storageMatches : []);
       setSkuMode(useStorageMode ? "storage" : "manual");
@@ -1352,7 +1352,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: an
         )}
         <Field label="Operational Type" hint="(existing checklist items won't change)">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {Object.entries(LAUNCH_TYPES).map(([k,v]:any)=>(
+            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
               <button key={k} onClick={()=>setLaunchType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${launchType===k?C.accent:C.border}`,background:launchType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
                 <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
                 <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${launchType===k?C.accent:C.border}`,background:launchType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{launchType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
@@ -1367,20 +1367,103 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands }: an
 };
 
 // ─── TEMPLATE MANAGER ────────────────────────────────────────────────────────
-const TemplateManagerModal = ({ open, onClose, templates, onChange }) => {
-  const [launchType,setLaunchType] = useState("introduction");
+const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes, onLaunchTypesChange }) => {
+  const [launchType,setLaunchType] = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
   const [dept,setDept]             = useState("ecommerce");
   const [editIdx,setEditIdx]       = useState(null);
   const [editText,setEditText]     = useState("");
   const [newText,setNewText]       = useState("");
+  const [typeLabel,setTypeLabel]   = useState("");
+  const [typeTag,setTypeTag]       = useState("");
+  const [typeColor,setTypeColor]   = useState("#111827");
 
+  const typeKeys = Object.keys(launchTypes||LAUNCH_TYPES);
+
+  useEffect(()=>{
+    const keys = Object.keys(launchTypes||LAUNCH_TYPES);
+    if(!keys.length) return;
+    if(!keys.includes(launchType)) setLaunchType(keys[0]);
+  },[launchTypes]);
+
+  useEffect(()=>{
+    const current = (launchTypes||LAUNCH_TYPES)[launchType];
+    if(current){
+      setTypeLabel(current.label||"");
+      setTypeTag(current.tag||"");
+      setTypeColor(current.color||"#111827");
+    }
+  },[launchType,launchTypes]);
+
+  const makeEmptyTemplateSet = () => Object.keys(DEPTS).reduce((acc:any,deptKey:string)=>({ ...acc, [deptKey]:[] }),{});
   const list = templates[launchType]?.[dept] || [];
 
   const updateList = next => {
     onChange(prev => ({
       ...prev,
-      [launchType]: { ...prev[launchType], [dept]: next },
+      [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: next },
     }));
+  };
+
+  const saveChecklistType = () => {
+    if(!typeLabel.trim()) return;
+    onLaunchTypesChange((prev:any)=>({
+      ...prev,
+      [launchType]: {
+        ...(prev[launchType] || {}),
+        label:typeLabel.trim(),
+        tag:typeTag.trim() || "Custom",
+        color:typeColor || "#111827",
+      },
+    }));
+  };
+
+  const addChecklistType = () => {
+    const id = uid();
+    const label = "New Checklist Type";
+    onLaunchTypesChange((prev:any)=>({
+      ...prev,
+      [id]: { label, tag:"Custom", color:"#111827" },
+    }));
+    onChange((prev:any)=>({
+      ...prev,
+      [id]: makeEmptyTemplateSet(),
+    }));
+    setLaunchType(id);
+    setEditIdx(null);
+  };
+
+  const duplicateChecklistType = () => {
+    const id = uid();
+    const current = (launchTypes||LAUNCH_TYPES)[launchType] || { label:"Checklist Type", tag:"Custom", color:"#111827" };
+    onLaunchTypesChange((prev:any)=>({
+      ...prev,
+      [id]: { ...current, label:`${current.label} Copy` },
+    }));
+    onChange((prev:any)=>({
+      ...prev,
+      [id]: JSON.parse(JSON.stringify(prev[launchType] || makeEmptyTemplateSet())),
+    }));
+    setLaunchType(id);
+    setEditIdx(null);
+  };
+
+  const deleteChecklistType = () => {
+    const keys = Object.keys(launchTypes||LAUNCH_TYPES);
+    if(keys.length<=1) return;
+    const nextKey = keys.find(k=>k!==launchType) || keys[0];
+
+    onLaunchTypesChange((prev:any)=>{
+      const next = { ...prev };
+      delete next[launchType];
+      return next;
+    });
+    onChange((prev:any)=>{
+      const next = { ...prev };
+      delete next[launchType];
+      return next;
+    });
+    setLaunchType(nextKey);
+    setEditIdx(null);
   };
 
   const addItem = () => {
@@ -1408,13 +1491,33 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange }) => {
   };
 
   return (
-    <Modal open={open} onClose={()=>{onClose();setEditIdx(null);}} title="Manage Checklist Templates" width={560}>
+    <Modal open={open} onClose={()=>{onClose();setEditIdx(null);}} title="Manage Checklist Templates" width={660}>
       <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
         <Field label="Checklist Type">
           <Select value={launchType} onChange={v=>{setLaunchType(v);setEditIdx(null);}}>
-            {Object.keys(LAUNCH_TYPES).map(k=><option key={k} value={k}>{LAUNCH_TYPES[k].label}</option>)}
+            {typeKeys.map(k=><option key={k} value={k}>{(launchTypes||LAUNCH_TYPES)[k]?.label || k}</option>)}
           </Select>
         </Field>
+
+        <div style={{ padding:12,background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}`,display:"flex",flexDirection:"column",gap:10 }}>
+          <p style={{ margin:0,fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Checklist Type Settings</p>
+          <Field label="Name">
+            <TI value={typeLabel} onChange={setTypeLabel} placeholder="e.g. Product Launch, Monthly Campaign, Clearance Sale" />
+          </Field>
+          <Field label="Tag">
+            <TI value={typeTag} onChange={setTypeTag} placeholder="e.g. New Launch, Relaunch, Custom" />
+          </Field>
+          <Field label="Color">
+            <ColorPicker value={typeColor} onChange={setTypeColor} palette={STATUS_PALETTE} />
+          </Field>
+          <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+            <Btn sm onClick={saveChecklistType} disabled={!typeLabel.trim()}>Save Type</Btn>
+            <Btn sm variant="outline" onClick={addChecklistType}>+ Add Type</Btn>
+            <Btn sm variant="outline" onClick={duplicateChecklistType}>Duplicate Type</Btn>
+            <Btn sm variant="danger" onClick={deleteChecklistType} disabled={typeKeys.length<=1}>Delete Type</Btn>
+          </div>
+        </div>
+
         <Field label="Department">
           <Select value={dept} onChange={v=>{setDept(v);setEditIdx(null);}}>
             {Object.keys(DEPTS).map(k=><option key={k} value={k}>{DEPTS[k].label}</option>)}
@@ -1446,8 +1549,8 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange }) => {
                   <div style={{ display:"flex",gap:3,flexShrink:0 }}>
                     <button onClick={()=>moveItem(i,-1)} disabled={i===0} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===0?"not-allowed":"pointer",color:C.muted,opacity:i===0?.4:1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8593;</button>
                     <button onClick={()=>moveItem(i,1)} disabled={i===list.length-1} style={{ width:22,height:22,borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:i===list.length-1?"not-allowed":"pointer",color:C.muted,opacity:i===list.length-1?.4:1,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8595;</button>
-                    <button onClick={()=>startEdit(i)} style={{ height:22,padding:"0 7px",borderRadius:5,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",color:C.muted,fontSize:10,fontWeight:600 }}>Edit</button>
-                    <button onClick={()=>removeItem(i)} style={{ width:22,height:22,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12 }}>&#215;</button>
+                    <button onClick={()=>startEdit(i)} style={{ fontSize:11,padding:"3px 8px",borderRadius:5,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.muted }}>Edit</button>
+                    <button onClick={()=>removeItem(i)} style={{ width:22,height:22,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
                   </div>
                 </div>
               )}
@@ -1464,9 +1567,9 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange }) => {
         </div>
 
         <Divider />
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-          <span style={{ fontSize:11,color:C.faint }}>This only affects new checklist groups created after saving.</span>
-          <Btn sm variant="outline" onClick={resetToDefault}>Reset to Default</Btn>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+          <span style={{ fontSize:11,color:C.faint }}>Checklist types and templates affect new checklist groups created after saving.</span>
+          <Btn sm variant="outline" onClick={resetToDefault}>Reset Tasks to Default</Btn>
         </div>
       </div>
     </Modal>
@@ -1483,24 +1586,41 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
     setAllGroupItems((p:any)=>{ const next={...p,[groupId]:items}; if(onStateChange) onStateChange({checklistItems:{[groupId]:items}}); return next; });
   };
   const updateStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
-  const [templates,setTemplates]   = useState(TEMPLATES);
+  const [launchTypes,setLaunchTypes] = useState<any>(() => {
+    if (typeof window === "undefined") return LAUNCH_TYPES;
+    try {
+      const raw = localStorage.getItem("emdc_checklist_launch_types_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object" && Object.keys(parsed).length) return parsed;
+    } catch {}
+    return LAUNCH_TYPES;
+  });
+  const [templates,setTemplates]   = useState<any>(() => {
+    if (typeof window === "undefined") return TEMPLATES;
+    try {
+      const raw = localStorage.getItem("emdc_checklist_templates_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch {}
+    return TEMPLATES;
+  });
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
 
   useEffect(()=>{
-    if(navigateToGroupId&&navigateToGroupId!==navRef.current){
-      navRef.current=navigateToGroupId;
-      setActive(navigateToGroupId);
-      if(onGroupNavigated) onGroupNavigated();
-    }
-  },[navigateToGroupId]);
+    try { localStorage.setItem("emdc_checklist_launch_types_v1", JSON.stringify(launchTypes)); } catch {}
+  },[launchTypes]);
+
+  useEffect(()=>{
+    try { localStorage.setItem("emdc_checklist_templates_v1", JSON.stringify(templates)); } catch {}
+  },[templates]);
 
   const createGroup = cfg=>{ const g={id:uid(),...cfg}; setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; }); if(onGroupCreated) onGroupCreated(g); setActive(g.id); setCreating(false); };
   const deleteGroup = id=>{ setGroups((p:any)=>{ const next=p.filter((g:any)=>g.id!==id); if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]}); return next; }); if(active===id) setActive(null); };
   const updateGroup = (id:string, patch:any) => { setGroups((p:any)=>{ const next=p.map((g:any)=>g.id===id?{...g,...patch}:g); if(onStateChange) onStateChange({checklistGroups:next}); return next; }); };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
 
   return (
     <div>
@@ -1512,8 +1632,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
         </div>
       </div>
 
-      <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={setTemplates} />
-      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands}
+      <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={setTemplates} launchTypes={launchTypes} onLaunchTypesChange={setLaunchTypes} />
+      <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes}
         onSave={(patch:any)=>updateGroup(editingGroup.id,patch)} />
 
       {creating&&(
@@ -1522,7 +1642,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
             <h3 style={{ margin:0,fontSize:15,fontWeight:700,color:C.text }}>New Checklist Group</h3>
             <button onClick={()=>setCreating(false)} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>&#215;</button>
           </div>
-          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} />
+          <SKUSelector onNext={createGroup} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} />
         </div>
       )}
 
@@ -1532,8 +1652,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, navigateToGroupId, 
         </div>
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
-          {groups.map(g=>{ const lt=LAUNCH_TYPES[g.launchType]; return (
-            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${C.accent}`,cursor:"pointer",transition:"box-shadow .2s" }} onClick={()=>setActive(g.id)}>
+          {groups.map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; return (
+            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${lt?.color||C.accent}`,cursor:"pointer",transition:"box-shadow .2s" }} onClick={()=>setActive(g.id)}>
               <div style={{ padding:"16px" }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
                   <p style={{ margin:0,fontSize:14,fontWeight:700,color:C.text,flex:1,marginRight:8 }}>{g.groupName}</p>
