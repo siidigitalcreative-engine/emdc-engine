@@ -590,7 +590,7 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
 };
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
-const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
+const CalendarView = ({ extraEvents=[], seasonalEvents=[], onNavigateToGroup, onStateChange, manualEvents, setManualEvents, eventTypes, setEventTypes }: any) => {
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
@@ -610,6 +610,107 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
   const typeLabel = id => eventTypes.find(t=>t.id===id)?.label || id;
 
   const allEvents = useMemo(()=>[...manualEvents,...extraEvents],[manualEvents,extraEvents]);
+
+  const getMonthFromText = (value:any) => {
+    const txt = String(value || "").toLowerCase();
+    if (!txt) return null;
+    if (txt.includes("monthly")) return { index:13, label:"Monthly / Recurring", day:1 };
+    for (let i=0;i<12;i++){
+      const full = MONTHS[i].toLowerCase();
+      const short = MONTHS_SHORT[i].toLowerCase();
+      if (txt.includes(full) || txt.includes(short)) {
+        const dayMatch = txt.match(/\b(\d{1,2})\b/);
+        return { index:i, label:MONTHS[i], day:dayMatch ? Number(dayMatch[1]) : 1 };
+      }
+    }
+    return null;
+  };
+
+  const getListMonthInfo = (item:any) => {
+    const rawDate = item.calDate || item.date;
+    if (typeof rawDate === "string" && rawDate.startsWith("monthly:")) {
+      return { index:13, label:"Monthly / Recurring", day:1 };
+    }
+    if (typeof rawDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      const d = new Date(rawDate+"T00:00:00");
+      if (!Number.isNaN(d.getTime())) return { index:d.getMonth(), label:MONTHS[d.getMonth()], day:d.getDate() };
+    }
+    const fromText = getMonthFromText(item.dateText || item.displayDate || item.date || item.name || item.title);
+    if (fromText) return fromText;
+    return { index:14, label:"No Specific Date", day:99 };
+  };
+
+  const yearListGroups = useMemo(()=>{
+    const overlapsYear = (start:any,end:any) => {
+      if (!start) return true;
+      if (typeof start === "string" && start.startsWith("monthly:")) return true;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(start))) return true;
+      const s = new Date(String(start)+"T00:00:00");
+      const e = end && /^\d{4}-\d{2}-\d{2}$/.test(String(end)) ? new Date(String(end)+"T00:00:00") : s;
+      if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return true;
+      const yearStart = new Date(`${year}-01-01T00:00:00`);
+      const yearEnd = new Date(`${year}-12-31T23:59:59`);
+      return s <= yearEnd && e >= yearStart;
+    };
+
+    const seasonal = (seasonalEvents||[]).map((ev:any)=>({
+      id:"seasonal-list-"+ev.id,
+      title:ev.name,
+      type:ev.type || "seasonal",
+      color:ev.color,
+      calDate:ev.calDate,
+      dateEnd:ev.calDateEnd,
+      dateText:ev.date,
+      source:"Events & Seasons",
+    }));
+
+    const manual = (manualEvents||[]).map((ev:any)=>({
+      id:"manual-list-"+ev.id,
+      title:ev.title,
+      type:ev.type || "task",
+      color:ev.color || typeColor(ev.type),
+      calDate:ev.date,
+      dateEnd:ev.dateEnd,
+      dateText:formatDate(ev.date),
+      source:"Calendar",
+    }));
+
+    const checklist = (extraEvents||[]).filter((ev:any)=>!ev.fromSeasonal).map((ev:any)=>({
+      id:"extra-list-"+ev.id,
+      title:ev.title,
+      type:ev.type || "deadline",
+      color:ev.color,
+      calDate:ev.date,
+      dateEnd:ev.dateEnd,
+      dateText:formatDate(ev.date),
+      source:ev.fromChecklist ? "Checklist" : "Calendar",
+      groupId:ev.groupId,
+    }));
+
+    const items = [...seasonal,...manual,...checklist]
+      .filter((item:any)=>overlapsYear(item.calDate,item.dateEnd))
+      .map((item:any)=>{
+        const info = getListMonthInfo(item);
+        return { ...item, monthIndex:info.index, monthLabel:info.label, day:info.day };
+      })
+      .sort((a:any,b:any)=>
+        (a.monthIndex-b.monthIndex) ||
+        (a.day-b.day) ||
+        String(a.title).localeCompare(String(b.title))
+      );
+
+    const groups:any[] = [];
+    items.forEach((item:any)=>{
+      let group = groups.find((g:any)=>g.key===item.monthLabel);
+      if (!group) {
+        group = { key:item.monthLabel, label:item.monthLabel, index:item.monthIndex, items:[] };
+        groups.push(group);
+      }
+      group.items.push(item);
+    });
+    return groups.sort((a:any,b:any)=>a.index-b.index);
+  },[year,seasonalEvents,manualEvents,extraEvents,eventTypes]);
+
   const days=getDaysInMonth(year,month), firstDay=getFirstDay(year,month);
   const prevMo=()=>month===0?(setMonth(11),setYear(y=>y-1)):setMonth(m=>m-1);
   const nextMo=()=>month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1);
@@ -748,6 +849,44 @@ const CalendarView = ({ extraEvents=[], onNavigateToGroup, onStateChange, manual
             {t.label}
           </button>
         ))}
+      </div>
+
+      {/* Year event list */}
+      <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?12:16,marginBottom:12 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
+          <div>
+            <h3 style={{ margin:"0 0 3px",fontSize:14,fontWeight:800,color:C.text }}>{year} Events & Seasons</h3>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Monthly list includes calendar events, checklist dates, events/seasons, and items without specific dates.</p>
+          </div>
+        </div>
+        {yearListGroups.length===0 ? (
+          <p style={{ margin:0,fontSize:12,color:C.muted }}>No events listed for this year yet.</p>
+        ) : (
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(auto-fill,minmax(260px,1fr))",gap:10 }}>
+            {yearListGroups.map((group:any)=>(
+              <div key={group.key} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".04em" }}>
+                  {group.label} <span style={{ color:C.faint,fontWeight:700 }}>({group.items.length})</span>
+                </div>
+                <div style={{ display:"flex",flexDirection:"column" }}>
+                  {group.items.map((item:any)=>(
+                    <button key={item.id} type="button"
+                      onClick={()=>item.groupId?onNavigateToGroup?.(item.groupId):undefined}
+                      style={{ textAlign:"left",padding:"8px 10px",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surface,cursor:item.groupId?"pointer":"default" }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
+                        <span style={{ minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.title}</span>
+                        <span style={{ flexShrink:0,fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
+                      </div>
+                      <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                        {item.dateText || item.calDate || "No specific date"}{item.dateEnd?` → ${item.dateEnd}`:""} · {item.source}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Grid */}
@@ -981,10 +1120,75 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
   const [addEventModal,setAddEventModal] = useState(false);
   const [editEvModal,setEditEvModal]     = useState(false);
   const [editEvForm,setEditEvForm]       = useState(null);
+  const [dragEventId,setDragEventId]       = useState<any>(null);
   const [evForm,setEvForm] = useState({ name:"",date:"",type:"holiday",color:"#374151",desc:"",calDate:"",calDateEnd:"" });
 
   const TYPE_COLORS = { holiday:"#374151",seasonal:"#111827",campaign:"#6B7280" };
-  const filtered = filter==="all" ? events : events.filter(e=>e.type===filter);
+  const filtered = filter==="all" ? events : events.filter((e:any)=>e.type===filter);
+
+  const getEventMonthInfo = (ev:any) => {
+    if (ev.calDate && /^\d{4}-\d{2}-\d{2}$/.test(String(ev.calDate))) {
+      const d = new Date(ev.calDate+"T00:00:00");
+      if (!Number.isNaN(d.getTime())) return { index:d.getMonth(), label:MONTHS[d.getMonth()], day:d.getDate() };
+    }
+    const txt = String(ev.date || "").toLowerCase();
+    if (txt.includes("monthly")) return { index:13, label:"Monthly / Recurring", day:1 };
+    for (let i=0;i<12;i++){
+      const full = MONTHS[i].toLowerCase();
+      const short = MONTHS_SHORT[i].toLowerCase();
+      if (txt.includes(full) || txt.includes(short)) {
+        const dayMatch = txt.match(/\b(\d{1,2})\b/);
+        return { index:i, label:MONTHS[i], day:dayMatch ? Number(dayMatch[1]) : 1 };
+      }
+    }
+    return { index:14, label:"No Specific Date", day:99 };
+  };
+
+  const sortedFiltered = useMemo(()=>[...filtered].sort((a:any,b:any)=>{
+    const am=getEventMonthInfo(a), bm=getEventMonthInfo(b);
+    const ao = a.manualOrder ?? am.day;
+    const bo = b.manualOrder ?? bm.day;
+    return (am.index-bm.index) || (ao-bo) || (am.day-bm.day) || String(a.name).localeCompare(String(b.name));
+  }),[filtered]);
+
+  const groupedEvents = useMemo(()=>{
+    const groups:any[] = [];
+    sortedFiltered.forEach((ev:any)=>{
+      const info = getEventMonthInfo(ev);
+      let group = groups.find((g:any)=>g.label===info.label);
+      if (!group) {
+        group = { label:info.label, index:info.index, events:[] };
+        groups.push(group);
+      }
+      group.events.push(ev);
+    });
+    return groups.sort((a:any,b:any)=>a.index-b.index);
+  },[sortedFiltered]);
+
+  const reorderEventCards = (fromId:any,toId:any) => {
+    if (!fromId || !toId || fromId===toId) return;
+    const ids = sortedFiltered.map((e:any)=>e.id);
+    const fromIndex = ids.indexOf(fromId);
+    const toIndex = ids.indexOf(toId);
+    if (fromIndex<0 || toIndex<0) return;
+    const nextIds = [...ids];
+    const [moved] = nextIds.splice(fromIndex,1);
+    nextIds.splice(toIndex,0,moved);
+    setEvents((prev:any[])=>{
+      const next = prev.map((ev:any)=>nextIds.includes(ev.id)?{...ev,manualOrder:nextIds.indexOf(ev.id)}:ev);
+      if(onStateChange) onStateChange({seasonalEvents:next});
+      return next;
+    });
+  };
+
+  const resetEventSortToDate = () => {
+    setEvents((prev:any[])=>{
+      const next = prev.map((ev:any)=>{ const copy={...ev}; delete copy.manualOrder; return copy; });
+      if(onStateChange) onStateChange({seasonalEvents:next});
+      return next;
+    });
+  };
+
   const updProds = (id:any,fn:any) => setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===id?{...e,products:fn(e.products)}:e); if(onStateChange) onStateChange({seasonalEvents:next}); return next; });
 
   const renderEvForm = ({ form, setForm, onSave, onDelete, saveLabel }) => (
@@ -1014,11 +1218,32 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
         <Btn sm onClick={()=>setAddEventModal(true)}>+ Add Event</Btn>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,340px),1fr))",gap:12 }}>
-        {filtered.map(ev=>{
+      <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+          <p style={{ margin:0,fontSize:12,color:C.muted }}>
+            Sorted from start to end of year, grouped by month. Drag cards to manually rearrange within the list.
+          </p>
+          <Btn xs variant="outline" onClick={resetEventSortToDate}>Sort by Date</Btn>
+        </div>
+
+        {groupedEvents.map((group:any)=>(
+          <section key={group.label} style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+              <h3 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>{group.label}</h3>
+              <span style={{ fontSize:11,color:C.faint,fontWeight:700 }}>{group.events.length}</span>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,340px),1fr))",gap:12 }}>
+              {group.events.map((ev:any)=>{
           const isOpen=expanded===ev.id, tc=TYPE_COLORS[ev.type]||C.muted;
           return (
-            <div key={ev.id} className="emdc-card" style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"box-shadow .2s" }}>
+            <div key={ev.id}
+              draggable
+              onDragStart={()=>setDragEventId(ev.id)}
+              onDragOver={e=>e.preventDefault()}
+              onDrop={e=>{ e.preventDefault(); reorderEventCards(dragEventId,ev.id); setDragEventId(null); }}
+              onDragEnd={()=>setDragEventId(null)}
+              className="emdc-card"
+              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${dragEventId===ev.id?C.accent:C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"box-shadow .2s",opacity:dragEventId===ev.id?.75:1,cursor:"grab" }}>
               <div style={{ padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center" }} onClick={()=>setExpanded(isOpen?null:ev.id)}>
                 <div style={{ minWidth:0,marginRight:8 }}>
                   <p style={{ margin:"0 0 5px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.name}</p>
@@ -1096,7 +1321,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents }: an
               )}
             </div>
           );
-        })}
+              })}
+            </div>
+          </section>
+        ))}
       </div>
 
       <Modal open={addEventModal} onClose={()=>setAddEventModal(false)} title="Add Custom Event" width={500}>
@@ -5082,7 +5310,7 @@ export default function App({
               Shared Sync: {cloudSyncStatus}
             </p>
           </div>
-          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
+          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
