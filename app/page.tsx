@@ -2398,12 +2398,15 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 const AIEngineView = () => {
   const [prompt,setPrompt] = useState("");
   const [size,setSize] = useState("2K");
-  const [watermark,setWatermark] = useState(true);
+  const [watermark,setWatermark] = useState(false);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
   const [result,setResult] = useState<any>(null);
   const [savedOutputs,setSavedOutputs] = useState<any[]>([]);
   const [savedOutputsHydrated,setSavedOutputsHydrated] = useState(false);
+  const [referenceImages,setReferenceImages] = useState<any[]>([]);
+  const [outputCount,setOutputCount] = useState(1);
+  const [previewOutput,setPreviewOutput] = useState<any>(null);
 
   useEffect(()=>{
     try {
@@ -2423,21 +2426,44 @@ const AIEngineView = () => {
     } catch {}
   },[savedOutputs,savedOutputsHydrated]);
 
-  const imageUrl =
-    result?.data?.[0]?.url ||
-    result?.images?.[0]?.url ||
-    result?.output?.[0]?.url ||
-    result?.url ||
-    "";
+  const generatedUrls = useMemo(()=>{
+    const list:any[] = [];
+    const add = (v:any) => {
+      if (!v) return;
+      if (typeof v === "string") list.push(v);
+      else if (typeof v?.url === "string") list.push(v.url);
+      else if (typeof v?.image_url === "string") list.push(v.image_url);
+    };
+    if (Array.isArray(result?.data)) result.data.forEach(add);
+    if (Array.isArray(result?.images)) result.images.forEach(add);
+    if (Array.isArray(result?.output)) result.output.forEach(add);
+    add(result?.url);
+    return [...new Set(list.filter(Boolean))];
+  },[result]);
 
-  const currentOutput = imageUrl ? {
-    id:"current",
-    prompt:prompt.trim(),
-    size,
-    watermark,
-    url:imageUrl,
-    createdAt:new Date().toISOString(),
-  } : null;
+  const imageUrl = generatedUrls[0] || "";
+
+  const handleReferenceUpload = (files: FileList|null) => {
+    if (!files?.length) return;
+    Array.from(files).forEach(file=>{
+      if (!file.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result || "");
+        setReferenceImages(p=>[
+          ...p,
+          {
+            id:uid(),
+            name:file.name,
+            size:file.size,
+            type:file.type,
+            dataUrl,
+          }
+        ].slice(0,6));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
 
   const generateImage = async () => {
     if (!prompt.trim() || loading) return;
@@ -2446,6 +2472,7 @@ const AIEngineView = () => {
     setResult(null);
 
     try {
+      const references = referenceImages.map(img=>img.dataUrl).filter(Boolean);
       const res = await fetch("/api/ai/generate-image", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -2453,6 +2480,8 @@ const AIEngineView = () => {
           prompt:prompt.trim(),
           size,
           watermark,
+          referenceImages:references,
+          outputCount,
         }),
       });
 
@@ -2489,20 +2518,23 @@ const AIEngineView = () => {
     }
   };
 
-  const saveCurrentOutput = () => {
-    if (!imageUrl) return;
+  const saveOutput = (url:string) => {
+    if (!url) return;
+    if (savedOutputs.some(o=>o.url===url)) return;
     const saved = {
       id:uid(),
       prompt:prompt.trim(),
       size,
       watermark,
-      url:imageUrl,
+      url,
       createdAt:new Date().toISOString(),
     };
     setSavedOutputs(p=>[saved,...p]);
   };
 
-  const isCurrentSaved = !!imageUrl && savedOutputs.some(o=>o.url===imageUrl);
+  const saveAllOutputs = () => {
+    generatedUrls.forEach(url=>saveOutput(url));
+  };
 
   const promptExamples = [
     "Hyper-realistic product lifestyle image of a premium insulated tumbler on a clean modern desk, soft morning sunlight, minimal props, elegant commercial photography, 4k detail.",
@@ -2534,17 +2566,60 @@ const AIEngineView = () => {
             />
           </Field>
 
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12 }}>
+          <Field label="Reference Images" hint="temporary only, not saved">
+            <div style={{ border:`1.5px dashed ${C.borderStrong}`,borderRadius:10,padding:14,background:C.bg }}>
+              <input
+                id="emdc-ref-upload"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={e=>{ handleReferenceUpload(e.target.files); e.currentTarget.value=""; }}
+                style={{ display:"none" }}
+              />
+              <label htmlFor="emdc-ref-upload"
+                style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:8,height:42,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontSize:13,fontWeight:700,color:C.textSub }}>
+                + Upload Reference Image
+              </label>
+              <p style={{ margin:"8px 0 0",fontSize:11,color:C.muted }}>
+                References are used only for the generation request and are not stored in Saved Outputs.
+              </p>
+
+              {referenceImages.length>0&&(
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:8,marginTop:12 }}>
+                  {referenceImages.map(img=>(
+                    <div key={img.id} style={{ position:"relative",borderRadius:9,overflow:"hidden",border:`1px solid ${C.border}`,background:C.surface }}>
+                      <img src={img.dataUrl} alt={img.name} style={{ width:"100%",height:82,objectFit:"cover",display:"block" }} />
+                      <button onClick={()=>setReferenceImages(p=>p.filter(x=>x.id!==img.id))}
+                        style={{ position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",border:"none",background:"rgba(255,255,255,.9)",color:"#DC2626",fontSize:14,fontWeight:800,cursor:"pointer" }}>
+                        ×
+                      </button>
+                      <div style={{ padding:"5px 6px",fontSize:10,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{img.name}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Field>
+
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:12 }}>
             <Field label="Size">
               <Select value={size} onChange={setSize}>
                 <option value="1K">1K</option>
                 <option value="2K">2K</option>
               </Select>
             </Field>
+            <Field label="Outputs">
+              <Select value={String(outputCount)} onChange={v=>setOutputCount(Math.max(1,Math.min(4,parseInt(v)||1)))}>
+                <option value="1">1 image</option>
+                <option value="2">2 images</option>
+                <option value="3">3 images</option>
+                <option value="4">4 images</option>
+              </Select>
+            </Field>
             <Field label="Watermark">
               <button type="button" onClick={()=>setWatermark(v=>!v)}
                 style={{ height:38,borderRadius:8,border:`1.5px solid ${watermark?C.accent:C.border}`,background:watermark?C.accent:C.surface,color:watermark?"#fff":C.textSub,fontSize:13,fontWeight:700,cursor:"pointer" }}>
-                {watermark ? "Watermark On" : "Watermark Off"}
+                {watermark ? "On" : "Off"}
               </button>
             </Field>
           </div>
@@ -2560,7 +2635,7 @@ const AIEngineView = () => {
           </Btn>
 
           <p style={{ margin:"-4px 0 0",fontSize:11,color:C.muted }}>
-            Generated images are not saved automatically. Use <b>Save Output</b> only when you want to keep a result in this session.
+            Generated images are not saved automatically. Use <b>Save Output</b> only when you want to keep a result in this browser.
           </p>
 
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
@@ -2578,7 +2653,7 @@ const AIEngineView = () => {
         <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:16,minHeight:320 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
             <h4 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Result</h4>
-            {imageUrl&&<Tag color="#22C55E" sm>Not auto-saved</Tag>}
+            {generatedUrls.length>1&&<Btn xs variant="outline" onClick={saveAllOutputs}>Save All</Btn>}
           </div>
 
           {loading&&(
@@ -2587,21 +2662,25 @@ const AIEngineView = () => {
             </div>
           )}
 
-          {!loading&&imageUrl&&(
+          {!loading&&generatedUrls.length>0&&(
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              <img src={imageUrl} alt="Generated image" style={{ width:"100%",borderRadius:10,border:`1px solid ${C.border}`,display:"block" }} />
-              <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8 }}>
-                <Btn sm variant="outline" onClick={()=>downloadImage(imageUrl, `emdc-image-${Date.now()}.png`)}>Download</Btn>
-                <Btn sm onClick={saveCurrentOutput} disabled={isCurrentSaved}>{isCurrentSaved ? "Saved" : "Save Output"}</Btn>
-              </div>
-              <button onClick={()=>window.open(imageUrl,"_blank","noopener,noreferrer")}
-                style={{ border:"none",background:"transparent",padding:0,fontSize:12,fontWeight:700,color:C.accent,cursor:"pointer",textAlign:"center" }}>
-                Open image in new tab
-              </button>
+              {generatedUrls.map((url,i)=>{
+                const isSaved = savedOutputs.some(o=>o.url===url);
+                return (
+                  <div key={url} style={{ display:"flex",flexDirection:"column",gap:10,padding:8,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }}>
+                    <img onClick={()=>setPreviewOutput({ id:"current-"+i, url, prompt:prompt.trim(), size, watermark })}
+                      src={url} alt={`Generated image ${i+1}`} style={{ width:"100%",borderRadius:9,border:`1px solid ${C.border}`,display:"block",cursor:"zoom-in" }} />
+                    <div style={{ display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8 }}>
+                      <Btn sm variant="outline" onClick={()=>downloadImage(url, `emdc-image-${Date.now()}-${i+1}.png`)}>Download</Btn>
+                      <Btn sm onClick={()=>saveOutput(url)} disabled={isSaved}>{isSaved ? "Saved" : "Save Output"}</Btn>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {!loading&&!imageUrl&&(
+          {!loading&&generatedUrls.length===0&&(
             <div style={{ height:260,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",borderRadius:10,background:C.surfaceAlt,border:`1px dashed ${C.border}`,padding:20 }}>
               <div>
                 <div style={{ fontSize:28,marginBottom:8,opacity:.5 }}>✦</div>
@@ -2611,7 +2690,7 @@ const AIEngineView = () => {
             </div>
           )}
 
-          {!loading&&result&&!imageUrl&&(
+          {!loading&&result&&generatedUrls.length===0&&(
             <pre style={{ margin:"12px 0 0",padding:12,borderRadius:8,background:C.bg,border:`1px solid ${C.border}`,fontSize:11,color:C.textSub,overflow:"auto",maxHeight:180 }}>
               {JSON.stringify(result,null,2)}
             </pre>
@@ -2624,16 +2703,16 @@ const AIEngineView = () => {
             {savedOutputs.length>0&&<button onClick={()=>setSavedOutputs([])} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}>Clear All</button>}
           </div>
           {savedOutputs.length===0&&<p style={{ margin:0,fontSize:12,color:C.muted }}>Nothing saved yet. Generated images only appear here after clicking Save Output.</p>}
-          {savedOutputs.length>0&&<p style={{ margin:"0 0 10px",fontSize:11,color:C.muted }}>Saved in this browser, so outputs stay when switching tabs or refreshing this device.</p>}
+          {savedOutputs.length>0&&<p style={{ margin:"0 0 10px",fontSize:11,color:C.muted }}>Click a saved output to preview. Saved in this browser only.</p>}
           <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
             {savedOutputs.map(h=>(
-              <div key={h.id} style={{ display:"flex",gap:10,alignItems:"center",padding:8,borderRadius:9,background:C.surfaceAlt }}>
-                <img src={h.url} alt="" style={{ width:54,height:54,objectFit:"cover",borderRadius:7,border:`1px solid ${C.border}` }} />
+              <div key={h.id} onClick={()=>setPreviewOutput(h)} style={{ display:"flex",gap:10,alignItems:"center",padding:8,borderRadius:9,background:C.surfaceAlt,cursor:"pointer" }}>
+                <img src={h.url} alt="" style={{ width:54,height:54,objectFit:"cover",borderRadius:7,border:`1px solid ${C.border}`,flexShrink:0 }} />
                 <div style={{ minWidth:0,flex:1 }}>
                   <p style={{ margin:"0 0 2px",fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{h.prompt}</p>
                   <p style={{ margin:0,fontSize:11,color:C.muted }}>{h.size} · {h.watermark?"Watermark on":"Watermark off"}</p>
                 </div>
-                <div style={{ display:"flex",gap:4,flexShrink:0 }}>
+                <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
                   <button onClick={()=>downloadImage(h.url, `emdc-saved-${h.id}.png`)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Download</button>
                   <button onClick={()=>setSavedOutputs(p=>p.filter(x=>x.id!==h.id))} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
                 </div>
@@ -2642,6 +2721,22 @@ const AIEngineView = () => {
           </div>
         </div>
       </div>
+
+      <Modal open={!!previewOutput} onClose={()=>setPreviewOutput(null)} title="Output Preview" width={820}>
+        {previewOutput&&(
+          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            <img src={previewOutput.url} alt="Saved output preview" style={{ width:"100%",maxHeight:"70vh",objectFit:"contain",borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }} />
+            <div style={{ padding:12,borderRadius:10,background:C.surfaceAlt }}>
+              <p style={{ margin:"0 0 6px",fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Prompt</p>
+              <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.45 }}>{previewOutput.prompt || "No prompt saved."}</p>
+            </div>
+            <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+              <Btn variant="outline" onClick={()=>window.open(previewOutput.url,"_blank","noopener,noreferrer")}>Open in New Tab</Btn>
+              <Btn onClick={()=>downloadImage(previewOutput.url, `emdc-output-${previewOutput.id||Date.now()}.png`)}>Download</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <style>{`
         @media(max-width:1023px){
