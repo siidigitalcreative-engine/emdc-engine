@@ -1207,7 +1207,32 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const typeColor = id => eventTypes.find(t=>t.id===id)?.color || "#9CA3AF";
   const typeLabel = id => eventTypes.find(t=>t.id===id)?.label || id;
 
-  const allEvents = useMemo(()=>[...manualEvents,...extraEvents],[manualEvents,extraEvents]);
+  const monthOnlyCalendarEvents = useMemo(()=>{
+    const monthStart = `${year}-${pad(month+1)}-01`;
+    const monthEnd = `${year}-${pad(month+1)}-${pad(getDaysInMonth(year,month))}`;
+
+    return (seasonalEvents||[])
+      .filter((ev:any)=>{
+        const selectedMonths = monthOnlyValues(ev.months);
+        const hasSpecificDate = !!ev.calDate || !!ev.calDateEnd;
+        return selectedMonths.includes(month) && !hasSpecificDate;
+      })
+      .map((ev:any)=>({
+        id:`month-only-${ev.id}-${year}-${month}`,
+        title:ev.name,
+        type:ev.type || "seasonal",
+        color:ev.color || "#14B8A6",
+        date:monthStart,
+        dateEnd:monthEnd,
+        fromSeasonal:true,
+        seasonalType:ev.type || "seasonal",
+        sourceEventId:ev.id,
+        monthOnly:true,
+        phaseoutCount:(ev.products||[]).filter(isPhaseoutProduct).length,
+      }));
+  },[seasonalEvents,year,month]);
+
+  const allEvents = useMemo(()=>[...manualEvents,...extraEvents,...monthOnlyCalendarEvents],[manualEvents,extraEvents,monthOnlyCalendarEvents]);
 
   // Date helpers must be defined before yearly list memo uses them during prerender.
   const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
@@ -1654,6 +1679,26 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         ))}
       </div>
 
+      {monthOnlyCalendarEvents.length>0&&(
+        <div style={{ margin:"10px 0 12px",padding:isMobile?10:12,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surface }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8 }}>
+            <div>
+              <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>Month-only Events in {MONTHS[month]}</p>
+              <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>These events have no exact date but are active during this month.</p>
+            </div>
+            <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{monthOnlyCalendarEvents.length}</span>
+          </div>
+          <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+            {monthOnlyCalendarEvents.map((ev:any)=>(
+              <button key={ev.id} type="button" onClick={()=>setDetailEv(ev)}
+                style={{ border:`1px solid ${(ev.color||C.accent)}28`,background:(ev.color||C.accent)+"14",color:ev.color||C.accent,borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                {ev.phaseoutCount>0?"⚑ ":""}{ev.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Grid */}
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
@@ -2051,8 +2096,10 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           const phaseoutSkus = getOverviewPhaseoutSkus(seasonalSource);
           const normalProducts = products.filter((p:any)=>!isPhaseoutProduct(p));
           const title = seasonalSource?.name || detailEv.title;
-          const dateText = seasonalSource?.date || formatDate(detailEv.date) || "No specific date";
-          const endText = seasonalSource?.calDateEnd || detailEv.dateEnd || "";
+          const dateText = detailEv.monthOnly
+            ? (seasonalSource?.date || formatMonthOnlyLabel(seasonalSource?.months || []))
+            : (seasonalSource?.date || formatDate(detailEv.date) || "No specific date");
+          const endText = detailEv.monthOnly ? "" : (seasonalSource?.calDateEnd || detailEv.dateEnd || "");
 
           return (
             <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
@@ -2069,7 +2116,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
                   {isChecklist&&<Tag color="#8B5CF6">Checklist Deadline</Tag>}
-                  {detailEv.dateEnd&&<Tag color={C.muted}>Multi-day</Tag>}
+                  {detailEv.monthOnly&&<Tag color={C.muted}>Month-only</Tag>}
+                  {detailEv.dateEnd&&!detailEv.monthOnly&&<Tag color={C.muted}>Multi-day</Tag>}
                 </div>
                 {seasonalSource?.desc&&<p style={{ margin:"10px 0 0",fontSize:13,color:C.textSub,lineHeight:1.45 }}>{seasonalSource.desc}</p>}
               </div>
