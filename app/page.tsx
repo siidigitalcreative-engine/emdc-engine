@@ -3126,7 +3126,403 @@ const AITextGenerator = () => {
   );
 };
 
-// ─── AI ENGINE ────────────────────────────────────────────────────────────────
+// ─── AD TEMPLATE BUILDER ──────────────────────────────────────────────────────
+const DEFAULT_AD_TEMPLATE_PLATFORMS = [
+  {
+    id: "meta",
+    name: "Meta",
+    formats: [
+      {
+        id: "meta-single-image",
+        name: "Single Image Ad",
+        templates: [
+          {
+            id: "meta-single-image-template-1",
+            name: "Benefit Hook Template",
+            body: "Hook: [Main customer problem]\nPrimary Text: [Introduce product + key benefit]\nCreative Direction: Clean lifestyle product image with clear hero product focus.\nHeadline: [Short benefit headline]\nCTA: Shop Now",
+          },
+        ],
+      },
+      {
+        id: "meta-carousel",
+        name: "Carousel Ad",
+        templates: [
+          {
+            id: "meta-carousel-template-1",
+            name: "Feature Breakdown Carousel",
+            body: "Card 1: Hero product + main hook\nCard 2: Feature 1 + benefit\nCard 3: Feature 2 + benefit\nCard 4: Lifestyle use case\nCard 5: Offer or CTA\nPrimary Text: [Short product intro]\nCTA: Shop Now",
+          },
+        ],
+      },
+      {
+        id: "meta-reels-stories",
+        name: "Reels / Stories Ad",
+        templates: [
+          {
+            id: "meta-reels-template-1",
+            name: "Problem to Solution Reel",
+            body: "Scene 1: Show everyday problem\nScene 2: Product appears as the simple solution\nScene 3: Quick feature demo\nScene 4: Lifestyle result\nEnd Frame: Product + offer + CTA",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    formats: [
+      {
+        id: "tiktok-in-feed",
+        name: "In-Feed Video Ad",
+        templates: [
+          {
+            id: "tiktok-in-feed-template-1",
+            name: "UGC Hook Template",
+            body: "0-2s Hook: [Relatable problem or bold claim]\n3-6s Demo: Show the product solving the problem\n7-10s Proof: Feature or benefit close-up\n11-15s CTA: [Shop now / Try it today]\nTone: Natural, fast-paced, not too scripted.",
+          },
+        ],
+      },
+      {
+        id: "tiktok-spark",
+        name: "Spark Ad",
+        templates: [
+          {
+            id: "tiktok-spark-template-1",
+            name: "Creator Testimonial Template",
+            body: "Opening: Creator shows product in real use\nMiddle: 2-3 honest benefits\nClose-up: Product detail shot\nEnding: Personal recommendation + CTA",
+          },
+        ],
+      },
+      {
+        id: "tiktok-live",
+        name: "LIVE Shopping Ad",
+        templates: [
+          {
+            id: "tiktok-live-template-1",
+            name: "Live Selling Push Template",
+            body: "Opening Line: [Introduce product + deal]\nDemo: Show product function clearly\nSelling Points: [3 quick benefits]\nUrgency: [Limited stock / live-only offer]\nCTA: Tap the yellow cart now",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "google",
+    name: "Google",
+    formats: [
+      {
+        id: "google-search",
+        name: "Search Ad",
+        templates: [
+          {
+            id: "google-search-template-1",
+            name: "Responsive Search Ad Template",
+            body: "Headlines:\n1. [Product Name]\n2. [Key Benefit]\n3. Shop Online Today\n4. [Brand Name]\nDescriptions:\n1. Discover [product] designed for [main benefit]. Shop now.\n2. Quality, style, and everyday function in one product.",
+          },
+        ],
+      },
+      {
+        id: "google-pmax",
+        name: "Performance Max",
+        templates: [
+          {
+            id: "google-pmax-template-1",
+            name: "Asset Group Template",
+            body: "Final URL: [Product URL]\nHeadlines: [5 short headlines]\nLong Headline: [Main product promise]\nDescriptions: [4 benefit-led descriptions]\nImage Direction: Clean product hero + lifestyle use case\nAudience Signal: [Target audience]",
+          },
+        ],
+      },
+      {
+        id: "google-youtube",
+        name: "YouTube Video Ad",
+        templates: [
+          {
+            id: "google-youtube-template-1",
+            name: "15-Second Video Template",
+            body: "0-3s: Product/problem hook\n4-8s: Show product in use\n9-12s: Main benefit and proof\n13-15s: Logo/product end frame + CTA",
+          },
+        ],
+      },
+      {
+        id: "google-display",
+        name: "Display Ad",
+        templates: [
+          {
+            id: "google-display-template-1",
+            name: "Banner Ad Template",
+            body: "Visual: Product hero image\nHeadline: [Short benefit]\nSubtext: [Offer or feature]\nCTA Button: Shop Now\nLayout: Clean, high contrast, readable at small sizes.",
+          },
+        ],
+      },
+    ],
+  },
+];
+
+const AIAdTemplates = () => {
+  const [platforms,setPlatforms] = useState<any[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_AD_TEMPLATE_PLATFORMS;
+    try {
+      const raw = localStorage.getItem("emdc_ad_template_platforms_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    } catch {}
+    return DEFAULT_AD_TEMPLATE_PLATFORMS;
+  });
+  const [selectedPlatformId,setSelectedPlatformId] = useState("meta");
+  const [selectedFormatId,setSelectedFormatId] = useState("meta-single-image");
+
+  useEffect(()=>{
+    try {
+      localStorage.setItem("emdc_ad_template_platforms_v1", JSON.stringify(platforms));
+    } catch {}
+  },[platforms]);
+
+  const selectedPlatform = platforms.find((p:any)=>p.id===selectedPlatformId) || platforms[0];
+  const selectedFormat = selectedPlatform?.formats?.find((f:any)=>f.id===selectedFormatId) || selectedPlatform?.formats?.[0];
+
+  useEffect(()=>{
+    if (!selectedPlatform) return;
+    if (!selectedPlatform.formats?.some((f:any)=>f.id===selectedFormatId)) {
+      setSelectedFormatId(selectedPlatform.formats?.[0]?.id || "");
+    }
+  },[selectedPlatformId, platforms]);
+
+  const updatePlatform = (platformId:string, updater:(platform:any)=>any) => {
+    setPlatforms((prev:any[]) => prev.map((platform:any)=>platform.id===platformId ? updater(platform) : platform));
+  };
+
+  const addFormat = () => {
+    if (!selectedPlatform) return;
+    const newFormat = {
+      id: uid(),
+      name: "New Ad Format",
+      templates: [],
+    };
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:[...(platform.formats || []), newFormat],
+    }));
+    setSelectedFormatId(newFormat.id);
+  };
+
+  const updateFormatName = (formatId:string, name:string) => {
+    if (!selectedPlatform) return;
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:(platform.formats || []).map((format:any)=>format.id===formatId ? { ...format, name } : format),
+    }));
+  };
+
+  const deleteFormat = (formatId:string) => {
+    if (!selectedPlatform) return;
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:(platform.formats || []).filter((format:any)=>format.id!==formatId),
+    }));
+  };
+
+  const duplicateFormat = (format:any) => {
+    if (!selectedPlatform || !format) return;
+    const copy = {
+      ...format,
+      id: uid(),
+      name: `${format.name} Copy`,
+      templates:(format.templates || []).map((template:any)=>({ ...template, id:uid(), name:`${template.name} Copy` })),
+    };
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:[...(platform.formats || []), copy],
+    }));
+    setSelectedFormatId(copy.id);
+  };
+
+  const addTemplate = () => {
+    if (!selectedPlatform || !selectedFormat) return;
+    const newTemplate = {
+      id: uid(),
+      name: "New Template",
+      body: "Hook: [Write your opening hook here]\nBody: [Main ad message]\nCreative Direction: [Visual idea]\nCTA: [Call to action]",
+    };
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:(platform.formats || []).map((format:any)=>format.id===selectedFormat.id
+        ? { ...format, templates:[...(format.templates || []), newTemplate] }
+        : format
+      ),
+    }));
+  };
+
+  const updateTemplate = (templateId:string, patch:any) => {
+    if (!selectedPlatform || !selectedFormat) return;
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:(platform.formats || []).map((format:any)=>format.id===selectedFormat.id
+        ? {
+            ...format,
+            templates:(format.templates || []).map((template:any)=>template.id===templateId ? { ...template, ...patch } : template),
+          }
+        : format
+      ),
+    }));
+  };
+
+  const deleteTemplate = (templateId:string) => {
+    if (!selectedPlatform || !selectedFormat) return;
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:(platform.formats || []).map((format:any)=>format.id===selectedFormat.id
+        ? { ...format, templates:(format.templates || []).filter((template:any)=>template.id!==templateId) }
+        : format
+      ),
+    }));
+  };
+
+  const duplicateTemplate = (template:any) => {
+    if (!selectedPlatform || !selectedFormat || !template) return;
+    const copy = { ...template, id:uid(), name:`${template.name} Copy` };
+    updatePlatform(selectedPlatform.id, (platform:any)=>({
+      ...platform,
+      formats:(platform.formats || []).map((format:any)=>format.id===selectedFormat.id
+        ? { ...format, templates:[...(format.templates || []), copy] }
+        : format
+      ),
+    }));
+  };
+
+  const copyTemplate = async (template:any) => {
+    try { await navigator.clipboard.writeText(template?.body || ""); } catch {}
+  };
+
+  const resetAdTemplates = () => {
+    setPlatforms(DEFAULT_AD_TEMPLATE_PLATFORMS);
+    setSelectedPlatformId("meta");
+    setSelectedFormatId("meta-single-image");
+  };
+
+  return (
+    <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:20 }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
+        <div>
+          <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Ad Template Builder</h3>
+          <p style={{ margin:0,fontSize:13,color:C.muted }}>Create and manage custom ad templates by platform and ad format.</p>
+        </div>
+        <Btn sm variant="outline" onClick={resetAdTemplates}>Reset Default</Btn>
+      </div>
+
+      <div style={{ display:"grid",gridTemplateColumns:"220px 300px minmax(0,1fr)",gap:14,alignItems:"start" }}>
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Platforms</h4>
+          {platforms.map((platform:any)=>(
+            <button
+              key={platform.id}
+              type="button"
+              onClick={()=>{ setSelectedPlatformId(platform.id); setSelectedFormatId(platform.formats?.[0]?.id || ""); }}
+              style={{ textAlign:"left",height:44,padding:"0 14px",borderRadius:10,border:`1.5px solid ${selectedPlatformId===platform.id ? C.accent : C.border}`,background:selectedPlatformId===platform.id ? C.accent : C.surface,color:selectedPlatformId===platform.id ? "#fff" : C.text,fontSize:14,fontWeight:800,cursor:"pointer" }}
+            >
+              {platform.name}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+            <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Ad Formats</h4>
+            <Btn xs variant="outline" onClick={addFormat}>+ Add</Btn>
+          </div>
+
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {(selectedPlatform?.formats || []).map((format:any)=>(
+              <div
+                key={format.id}
+                onClick={()=>setSelectedFormatId(format.id)}
+                style={{ padding:10,borderRadius:10,border:`1.5px solid ${selectedFormat?.id===format.id ? C.accent : C.border}`,background:selectedFormat?.id===format.id ? "#F9FAFB" : C.surface,cursor:"pointer",display:"flex",flexDirection:"column",gap:8 }}
+              >
+                <input
+                  value={format.name}
+                  onChange={e=>updateFormatName(format.id, e.target.value)}
+                  onClick={e=>e.stopPropagation()}
+                  style={{ width:"100%",height:34,padding:"0 10px",fontSize:13,fontWeight:700,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
+                />
+                <div style={{ display:"flex",gap:6,justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
+                  <button type="button" onClick={()=>duplicateFormat(format)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Duplicate</button>
+                  <button type="button" onClick={()=>deleteFormat(format.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
+                </div>
+              </div>
+            ))}
+
+            {(!selectedPlatform?.formats || selectedPlatform.formats.length===0) && (
+              <p style={{ margin:0,fontSize:12,color:C.muted }}>No ad formats yet. Add one to start creating templates.</p>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+            <div>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Custom Templates</h4>
+              <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "No format selected"}</p>
+            </div>
+            <Btn xs variant="outline" onClick={addTemplate} disabled={!selectedFormat}>+ Add Template</Btn>
+          </div>
+
+          {!selectedFormat && (
+            <div style={{ minHeight:240,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
+              <p style={{ margin:0,fontSize:13,color:C.muted }}>Select or add an ad format first.</p>
+            </div>
+          )}
+
+          {selectedFormat && (
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              {(selectedFormat.templates || []).map((template:any)=>(
+                <div key={template.id} style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:12,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
+                  <Field label="Template Name">
+                    <input
+                      value={template.name}
+                      onChange={e=>updateTemplate(template.id, { name:e.target.value })}
+                      placeholder="Template name"
+                      style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
+                    />
+                  </Field>
+
+                  <Field label="Template">
+                    <textarea
+                      value={template.body}
+                      onChange={e=>updateTemplate(template.id, { body:e.target.value })}
+                      placeholder="Write your custom ad template here..."
+                      rows={7}
+                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+                    />
+                  </Field>
+
+                  <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                    <Btn xs variant="outline" onClick={()=>copyTemplate(template)}>Copy</Btn>
+                    <Btn xs variant="outline" onClick={()=>duplicateTemplate(template)}>Duplicate</Btn>
+                    <Btn xs variant="danger" onClick={()=>deleteTemplate(template.id)}>Delete</Btn>
+                  </div>
+                </div>
+              ))}
+
+              {(!selectedFormat.templates || selectedFormat.templates.length===0) && (
+                <div style={{ minHeight:220,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
+                  <p style={{ margin:0,fontSize:13,color:C.muted }}>No templates yet. Add a custom template for this ad format.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <style>{`
+        @media(max-width:1100px){
+          div[style*="grid-template-columns: 220px 300px minmax(0, 1fr)"]{
+            grid-template-columns:1fr!important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 const AIEngineView = () => {
   const [prompt,setPrompt] = useState("");
   const [size,setSize] = useState("2K");
@@ -3374,6 +3770,13 @@ const AIEngineView = () => {
         >
           Text Generation
         </button>
+        <button
+          type="button"
+          onClick={()=>setAiPage("ads")}
+          style={{ height:42,padding:"0 16px",borderRadius:10,border:`1.5px solid ${aiPage==="ads" ? C.accent : C.border}`,background:aiPage==="ads" ? C.accent : C.surface,color:aiPage==="ads" ? "#fff" : C.textSub,fontSize:13,fontWeight:800,cursor:"pointer" }}
+        >
+          Ad Templates
+        </button>
       </div>
 
       {aiPage==="image" && (
@@ -3586,6 +3989,10 @@ const AIEngineView = () => {
 
       {aiPage==="text" && (
         <AITextGenerator />
+      )}
+
+      {aiPage==="ads" && (
+        <AIAdTemplates />
       )}
 
       <Modal open={!!previewOutput} onClose={()=>setPreviewOutput(null)} title="Output Preview" width={820}>
