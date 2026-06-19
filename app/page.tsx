@@ -107,6 +107,7 @@ const DEFAULT_EVENT_TYPES = [
   { id:"deadline", label:"Deadline", color:"#EF4444" },
   { id:"launch",   label:"Launch",   color:"#22C55E" },
   { id:"meeting",  label:"Meeting",  color:"#3B82F6" },
+  { id:"seasonal", label:"Seasonal", color:"#3B82F6" },
   { id:"holiday",  label:"Holiday",  color:"#9CA3AF" },
 ];
 const EVENT_COLORS = ["#111827","#374151","#6B7280","#9CA3AF","#EF4444","#F97316","#F59E0B","#22C55E","#14B8A6","#3B82F6","#8B5CF6","#EC4899"];
@@ -1203,9 +1204,28 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const [dayView,setDayView]     = useState(null); // { date, label }
   const [prevDayView,setPrevDayView] = useState(null); // to go back from detail to day list
 
-  // Helper: look up type color from live eventTypes
-  const typeColor = id => eventTypes.find(t=>t.id===id)?.color || "#9CA3AF";
-  const typeLabel = id => eventTypes.find(t=>t.id===id)?.label || id;
+  const normalizeTagLabel = (id:any) => String(id || "event")
+    .replace(/[-_]+/g," ")
+    .replace(/\b\w/g,(m:string)=>m.toUpperCase());
+
+  const calendarFilterTypes = useMemo(()=>{
+    const map = new Map<string,any>();
+    [...DEFAULT_EVENT_TYPES,...(eventTypes||[])].forEach((t:any)=>{
+      if(t?.id) map.set(t.id,{...t,label:t.label || normalizeTagLabel(t.id),color:t.color || "#9CA3AF"});
+    });
+
+    [...(seasonalEvents||[]),...(manualEvents||[]),...(extraEvents||[])].forEach((ev:any)=>{
+      const id = ev?.type || ev?.seasonalType;
+      if(!id || map.has(id)) return;
+      map.set(id,{ id, label:normalizeTagLabel(id), color:ev.color || "#9CA3AF" });
+    });
+
+    return Array.from(map.values());
+  },[eventTypes,seasonalEvents,manualEvents,extraEvents]);
+
+  // Helper: look up type color from live eventTypes plus detected existing tags
+  const typeColor = id => calendarFilterTypes.find((t:any)=>t.id===id)?.color || "#9CA3AF";
+  const typeLabel = id => calendarFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
 
   const monthOnlyCalendarEvents = useMemo(()=>{
     const monthStart = `${year}-${pad(month+1)}-01`;
@@ -1619,10 +1639,10 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       </Field>
       <Field label="Tag / Filter Type">
         <Select value={seasonalEditForm.type||"campaign"} onChange={v=>{
-          const selectedType = eventTypes.find((t:any)=>t.id===v);
+          const selectedType = calendarFilterTypes.find((t:any)=>t.id===v);
           setSeasonalEditForm((f:any)=>({...f,type:v,color:selectedType?.color || f.color}));
         }}>
-          {eventTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
+          {calendarFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
       </Field>
       <Field label="Color">
@@ -1668,7 +1688,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
       {/* Filter pills */}
       <div style={{ display:"flex",gap:5,overflowX:"auto",paddingBottom:6,marginBottom:10,WebkitOverflowScrolling:"touch",msOverflowStyle:"none",scrollbarWidth:"none" }}>
-        {[{id:"all",label:"All",color:C.accent},...eventTypes].map(t=>(
+        {[{id:"all",label:"All",color:C.accent},...calendarFilterTypes].map(t=>(
           <button key={t.id} onClick={()=>setFilter(t.id)}
             style={{ padding:"4px 11px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",
               background:filter===t.id?t.color:C.surface,
@@ -2217,8 +2237,25 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [dragEventId,setDragEventId]       = useState<any>(null);
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
-  const eventTypeColor = (id:any) => eventTypes.find((t:any)=>t.id===id)?.color || "#6B7280";
-  const eventTypeLabel = (id:any) => eventTypes.find((t:any)=>t.id===id)?.label || id || "Event";
+  const normalizeTagLabel = (id:any) => String(id || "event")
+    .replace(/[-_]+/g," ")
+    .replace(/\b\w/g,(m:string)=>m.toUpperCase());
+
+  const eventFilterTypes = useMemo(()=>{
+    const map = new Map<string,any>();
+    [...DEFAULT_EVENT_TYPES,...(eventTypes||[])].forEach((t:any)=>{
+      if(t?.id) map.set(t.id,{...t,label:t.label || normalizeTagLabel(t.id),color:t.color || "#6B7280"});
+    });
+    (events||[]).forEach((ev:any)=>{
+      const id = ev?.type;
+      if(!id || map.has(id)) return;
+      map.set(id,{ id, label:normalizeTagLabel(id), color:ev.color || "#6B7280" });
+    });
+    return Array.from(map.values());
+  },[eventTypes,events]);
+
+  const eventTypeColor = (id:any) => eventFilterTypes.find((t:any)=>t.id===id)?.color || "#6B7280";
+  const eventTypeLabel = (id:any) => eventFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
   const saveEventTypesLocal = (types:any[]) => {
     if(setEventTypes) setEventTypes(types);
     if(onStateChange) onStateChange({calendarTypes:types});
@@ -2318,10 +2355,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       <Field label="Calendar End Date"><DateInput value={form.calDateEnd||""} onChange={v=>setForm(f=>({...f,calDateEnd:v,months:v?[]:(f.months||[])}))} /></Field>
       <Field label="Tag / Filter Type">
         <Select value={form.type} onChange={v=>{
-          const selectedType = eventTypes.find((t:any)=>t.id===v);
+          const selectedType = eventFilterTypes.find((t:any)=>t.id===v);
           setForm((f:any)=>({...f,type:v,color:selectedType?.color || f.color}));
         }}>
-          {eventTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
+          {eventFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
       </Field>
       <Field label="Color"><ColorPicker value={form.color || eventTypeColor(form.type)} onChange={v=>setForm(f=>({...f,color:v}))} palette={EVENT_COLORS} /></Field>
@@ -2335,7 +2372,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     <div>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10 }}>
         <div style={{ display:"flex",gap:6,overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2 }}>
-          {[{id:"all",label:"All",color:C.accent},...eventTypes].map((t:any)=>(<button key={t.id} onClick={()=>setFilter(t.id)} style={{ padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",background:filter===t.id?t.color:C.surface,color:filter===t.id?"#fff":C.muted,border:`1.5px solid ${filter===t.id?t.color:C.border}`,whiteSpace:"nowrap",flexShrink:0 }}>{t.label}</button>))}
+          {[{id:"all",label:"All",color:C.accent},...eventFilterTypes].map((t:any)=>(<button key={t.id} onClick={()=>setFilter(t.id)} style={{ padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",background:filter===t.id?t.color:C.surface,color:filter===t.id?"#fff":C.muted,border:`1.5px solid ${filter===t.id?t.color:C.border}`,whiteSpace:"nowrap",flexShrink:0 }}>{t.label}</button>))}
         </div>
         <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
           <Btn sm variant="outline" onClick={()=>setTypesModal(true)}>Manage Tags</Btn>
@@ -2459,7 +2496,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
         ))}
       </div>
 
-      <ManageTypesModal open={typesModal} onClose={()=>setTypesModal(false)} eventTypes={eventTypes} onChange={saveEventTypesLocal} />
+      <ManageTypesModal open={typesModal} onClose={()=>setTypesModal(false)} eventTypes={eventFilterTypes} onChange={saveEventTypesLocal} />
 
       <Modal open={addEventModal} onClose={()=>setAddEventModal(false)} title="Add Custom Event" width={500}>
         {renderEvForm({
