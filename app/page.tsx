@@ -2802,6 +2802,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [skuPickDept,setSkuPickDept] = useState(null);
+  const [productDetail,setProductDetail] = useState<any>(null);
+  const [productEdit,setProductEdit] = useState<any>(null);
 
   useEffect(()=>{
     if(!initialItems) return;
@@ -2820,25 +2822,64 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const overallDone = allItems.filter(i=>i.done).length;
   const overallPct  = allItems.length ? Math.round(overallDone/allItems.length*100) : 0;
 
-  const getSkuInfo = (sku:any) => {
+  const findExtraField = (extra:any={}, names:string[] = []) => {
+    const normalize = (value:any) => String(value||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
+    const wanted = names.map(normalize);
+    const key = Object.keys(extra||{}).find((k:string)=>{
+      const clean = normalize(k);
+      return wanted.some((w:string)=>clean===w || clean.includes(w));
+    });
+    return key ? String(extra[key]||"").trim() : "";
+  };
+
+  const getSkuInfo = (sku:any, index:number) => {
     const storageItem = (skuStorage||[]).find((item:any)=>
       item.id===sku.id ||
       item.sku===sku.value ||
       item.sku===sku.sku ||
       item.productName===sku.value
     );
-    const item = storageItem || sku || {};
+    const item = { ...(storageItem||{}), ...(sku||{}) };
     const brand = (brands||[]).find((b:any)=>b.id===item.brandId)?.name || item.brand || "";
-    const collection = [item.collection,item.category,item.productCategory]
-      .map((v:any)=>String(v||"").trim())
-      .find(Boolean) || "";
+    const collection = [
+      item.collection,
+      item.category,
+      item.productCategory,
+      findExtraField(item.extraFields,{ length:0 } as any),
+    ].filter(Boolean)[0] || findExtraField(item.extraFields||{},["collection","category","productcategory","product category"]) || "";
     const product = item.productName || item.name || sku.value || item.sku || "";
     const skuCode = item.sku || sku.value || "";
-    return { brand, collection, product, skuCode };
+    return { ...item, originalSku:sku, index, brand, collection, product, skuCode };
   };
 
   const productRows = (group.skus||[]).map(getSkuInfo).filter((row:any)=>row.product || row.skuCode);
-  const visibleProductRows = productRows.slice(0,6);
+
+  const openProductDetail = (row:any) => {
+    setProductDetail(row);
+    setProductEdit({
+      productName:row.product || "",
+      sku:row.skuCode || "",
+      collection:row.collection || "",
+      brandId:row.brandId || "",
+    });
+  };
+
+  const saveProductDetail = () => {
+    if(!productDetail || !productEdit) return;
+    const nextSkus = (group.skus||[]).map((sku:any,idx:number)=>idx===productDetail.index ? {
+      ...sku,
+      id:sku.id || productDetail.id || uid(),
+      value:productEdit.sku || productEdit.productName || sku.value,
+      sku:productEdit.sku,
+      productName:productEdit.productName,
+      collection:productEdit.collection,
+      category:productEdit.collection,
+      brandId:productEdit.brandId,
+    } : sku);
+    if(onUpdateGroup) onUpdateGroup({ skus:nextSkus });
+    setProductDetail(null);
+    setProductEdit(null);
+  };
 
   return (
     <div>
@@ -2871,20 +2912,23 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         {productRows.length>0&&(
           <div style={{ marginTop:14,padding:"12px 14px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10 }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8 }}>
-              <span style={{ fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Products to Work On</span>
+              <span style={{ fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Products</span>
               <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{productRows.length} item{productRows.length!==1?"s":""}</span>
             </div>
-            <div style={{ display:"flex",flexDirection:"column",border:`1px solid ${C.border}`,borderRadius:9,overflow:"hidden" }}>
-              {visibleProductRows.map((row:any,idx:number)=>(
-                <div key={`${row.skuCode}-${idx}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(140px,1fr) minmax(180px,1.4fr)",gap:isMobile?3:10,padding:"8px 10px",background:idx%2?C.surface:C.surfaceAlt,borderBottom:idx===visibleProductRows.length-1?"none":`1px solid ${C.border}` }}>
-                  <div style={{ minWidth:0,fontSize:11,fontWeight:800,color:C.textSub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"}</div>
-                  <div style={{ minWidth:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.collection || "No collection/category"}</div>
-                  <div style={{ minWidth:0,fontSize:11,color:C.text,fontWeight:750,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}{row.skuCode&&<span style={{ color:C.faint,fontWeight:600 }}> · {row.skuCode}</span>}</div>
-                </div>
-              ))}
-              {productRows.length>visibleProductRows.length&&(
-                <div style={{ padding:"7px 10px",fontSize:11,color:C.faint,fontWeight:700,background:C.surface }}>
-                  +{productRows.length-visibleProductRows.length} more selected product{productRows.length-visibleProductRows.length!==1?"s":""}
+            <div style={{ border:`1px solid ${C.border}`,borderRadius:9,overflow:"hidden",background:C.surface }}>
+              <div style={{ maxHeight:isMobile?228:196,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                {productRows.map((row:any,idx:number)=>(
+                  <button key={`${row.skuCode}-${idx}`} type="button" onClick={()=>openProductDetail(row)}
+                    style={{ width:"100%",display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(150px,1fr) minmax(180px,1.4fr)",gap:isMobile?3:10,padding:"8px 10px",background:idx%2?C.surface:C.surfaceAlt,border:"none",borderBottom:idx===productRows.length-1?"none":`1px solid ${C.border}`,textAlign:"left",cursor:"pointer" }}>
+                    <div style={{ minWidth:0,fontSize:11,fontWeight:800,color:C.textSub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"}</div>
+                    <div style={{ minWidth:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.collection || "No collection/category"}</div>
+                    <div style={{ minWidth:0,fontSize:11,color:C.text,fontWeight:750,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}{row.skuCode&&<span style={{ color:C.faint,fontWeight:600 }}> · {row.skuCode}</span>}</div>
+                  </button>
+                ))}
+              </div>
+              {productRows.length>3&&(
+                <div style={{ padding:"6px 10px",fontSize:10.5,color:C.faint,fontWeight:700,background:C.surface,borderTop:`1px solid ${C.border}` }}>
+                  Scroll to view all selected products. Tap a row to view or edit.
                 </div>
               )}
             </div>
@@ -2935,6 +2979,35 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
           );
         })}
       </div>
+      <Modal open={!!productDetail} onClose={()=>{ setProductDetail(null); setProductEdit(null); }} title="Product Details" width={520}>
+        {productDetail&&productEdit&&(
+          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            <div style={{ padding:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10 }}>
+              <p style={{ margin:"0 0 4px",fontSize:13,fontWeight:800,color:C.text }}>{productDetail.product || productDetail.skuCode}</p>
+              <p style={{ margin:0,fontSize:12,color:C.muted }}>{productDetail.brand || "No brand"} · {productDetail.collection || "No collection/category"} · {productDetail.skuCode || "No SKU"}</p>
+            </div>
+            <Field label="Brand">
+              <Select value={productEdit.brandId||""} onChange={(v:any)=>setProductEdit((p:any)=>({...p,brandId:v}))}>
+                <option value="">No brand</option>
+                {(brands||[]).map((b:any)=><option key={b.id} value={b.id}>{b.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Collection / Category">
+              <TI value={productEdit.collection||""} onChange={(v:any)=>setProductEdit((p:any)=>({...p,collection:v}))} placeholder="Collection or category" />
+            </Field>
+            <Field label="Product">
+              <TI value={productEdit.productName||""} onChange={(v:any)=>setProductEdit((p:any)=>({...p,productName:v}))} placeholder="Product name" />
+            </Field>
+            <Field label="SKU">
+              <TI value={productEdit.sku||""} onChange={(v:any)=>setProductEdit((p:any)=>({...p,sku:v}))} placeholder="SKU code" />
+            </Field>
+            <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+              <Btn variant="outline" onClick={()=>{ setProductDetail(null); setProductEdit(null); }}>Cancel</Btn>
+              <Btn onClick={saveProductDetail}>Save Product</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
       <StatusManagerModal open={statusModal} onClose={()=>setStatusModal(false)} statuses={statuses} onChange={saveStatuses} />
       <GroupEditModal open={groupEditModal} group={group} onClose={()=>setGroupEditModal(false)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} events={events}
         onSave={(patch:any)=>{ if(onUpdateGroup) onUpdateGroup(patch); }} />
@@ -2963,7 +3036,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
   const updSku=(id,v)=>setSkus(p=>p.map(s=>s.id===id?{...s,value:v}:s));
   const pickSku=s=>{ setPickedSkus((p:any[])=>p.find((x:any)=>x.id===s.id)?p.filter((x:any)=>x.id!==s.id):[...p,s]); };
   const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
-  const finalSkus=skuMode==="storage"?pickedSkus.map((s:any)=>({id:s.id,value:s.sku})):skus.filter(s=>s.value.trim());
+  const finalSkus=skuMode==="storage"?pickedSkus.map((s:any)=>({id:s.id,value:s.sku,sku:s.sku,productName:s.productName,collection:s.collection||s.category||s.productCategory||"",category:s.collection||s.category||s.productCategory||"",brandId:s.brandId,inventory:s.inventory,status:s.status,extraFields:s.extraFields||{}})):skus.filter(s=>s.value.trim());
   const phaseoutSourceSkus:any[] = skuMode==="storage"
     ? pickedSkus
     : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
@@ -3146,7 +3219,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const updSku=(id:string,v:string)=>setSkus((p:any)=>p.map((s:any)=>s.id===id?{...s,value:v}:s));
   const pickSku=(s:any)=>{ setPickedSkus((p:any[])=>p.find((x:any)=>x.id===s.id)?p.filter((x:any)=>x.id!==s.id):[...p,s]); };
   const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
-  const finalSkus = skuMode==="storage" ? pickedSkus.map((s:any)=>({id:s.id,value:s.sku})) : skus.filter((s:any)=>s.value.trim());
+  const finalSkus = skuMode==="storage" ? pickedSkus.map((s:any)=>({id:s.id,value:s.sku,sku:s.sku,productName:s.productName,collection:s.collection||s.category||s.productCategory||"",category:s.collection||s.category||s.productCategory||"",brandId:s.brandId,inventory:s.inventory,status:s.status,extraFields:s.extraFields||{}})) : skus.filter((s:any)=>s.value.trim());
   const phaseoutSourceSkus:any[] = skuMode==="storage"
     ? pickedSkus
     : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
