@@ -2820,6 +2820,26 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const overallDone = allItems.filter(i=>i.done).length;
   const overallPct  = allItems.length ? Math.round(overallDone/allItems.length*100) : 0;
 
+  const getSkuInfo = (sku:any) => {
+    const storageItem = (skuStorage||[]).find((item:any)=>
+      item.id===sku.id ||
+      item.sku===sku.value ||
+      item.sku===sku.sku ||
+      item.productName===sku.value
+    );
+    const item = storageItem || sku || {};
+    const brand = (brands||[]).find((b:any)=>b.id===item.brandId)?.name || item.brand || "";
+    const collection = [item.collection,item.category,item.productCategory]
+      .map((v:any)=>String(v||"").trim())
+      .find(Boolean) || "";
+    const product = item.productName || item.name || sku.value || item.sku || "";
+    const skuCode = item.sku || sku.value || "";
+    return { brand, collection, product, skuCode };
+  };
+
+  const productRows = (group.skus||[]).map(getSkuInfo).filter((row:any)=>row.product || row.skuCode);
+  const visibleProductRows = productRows.slice(0,6);
+
   return (
     <div>
       {/* Header */}
@@ -2833,7 +2853,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               {group.calendarType&&<Tag color={groupColor}>{group.calendarType}</Tag>}
               {group.deadline&&<span style={{ fontSize:11,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"2px 8px",borderRadius:4,border:"1px solid #DDD6FE" }}>{group.deadlineEnd?`${group.deadline} → ${group.deadlineEnd}`:`Due ${group.deadline}`}</span>}
               {!group.deadline&&Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length>0&&<span style={{ fontSize:11,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"2px 8px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(group.monthOnlyMonths)}</span>}
-              {group.skus.slice(0,3).map(s=>(<span key={s.id} style={{ fontSize:11,color:C.muted,background:C.surfaceAlt,padding:"2px 8px",borderRadius:4,border:`1px solid ${C.border}`,fontFamily:"monospace" }}>{s.value}</span>))}
             </div>
             {linkedEvents.length>0&&(
               <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:8 }}>
@@ -2849,6 +2868,29 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             <Btn sm variant="outline" onClick={()=>setStatusModal(true)}>Manage Statuses</Btn>
           </div>
         </div>
+        {productRows.length>0&&(
+          <div style={{ marginTop:14,padding:"12px 14px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8 }}>
+              <span style={{ fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Products to Work On</span>
+              <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{productRows.length} item{productRows.length!==1?"s":""}</span>
+            </div>
+            <div style={{ display:"flex",flexDirection:"column",border:`1px solid ${C.border}`,borderRadius:9,overflow:"hidden" }}>
+              {visibleProductRows.map((row:any,idx:number)=>(
+                <div key={`${row.skuCode}-${idx}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(140px,1fr) minmax(180px,1.4fr)",gap:isMobile?3:10,padding:"8px 10px",background:idx%2?C.surface:C.surfaceAlt,borderBottom:idx===visibleProductRows.length-1?"none":`1px solid ${C.border}` }}>
+                  <div style={{ minWidth:0,fontSize:11,fontWeight:800,color:C.textSub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"}</div>
+                  <div style={{ minWidth:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.collection || "No collection/category"}</div>
+                  <div style={{ minWidth:0,fontSize:11,color:C.text,fontWeight:750,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}{row.skuCode&&<span style={{ color:C.faint,fontWeight:600 }}> · {row.skuCode}</span>}</div>
+                </div>
+              ))}
+              {productRows.length>visibleProductRows.length&&(
+                <div style={{ padding:"7px 10px",fontSize:11,color:C.faint,fontWeight:700,background:C.surface }}>
+                  +{productRows.length-visibleProductRows.length} more selected product{productRows.length-visibleProductRows.length!==1?"s":""}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div style={{ marginTop:14,padding:"12px 14px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
             <span style={{ fontSize:12,fontWeight:700,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Overall Progress</span>
