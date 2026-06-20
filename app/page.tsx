@@ -2824,7 +2824,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const findExtraField = (extra:any={}, names:string[] = []) => {
     const normalize = (value:any) => String(value||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
-    const wanted = names.map(normalize);
+    const safeNames = Array.isArray(names) ? names : [];
+    const wanted = safeNames.map(normalize);
     const key = Object.keys(extra||{}).find((k:string)=>{
       const clean = normalize(k);
       return wanted.some((w:string)=>clean===w || clean.includes(w));
@@ -2845,7 +2846,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       item.collection,
       item.category,
       item.productCategory,
-      findExtraField(item.extraFields,{ length:0 } as any),
     ].filter(Boolean)[0] || findExtraField(item.extraFields||{},["collection","category","productcategory","product category"]) || "";
     const product = item.productName || item.name || sku.value || item.sku || "";
     const skuCode = item.sku || sku.value || "";
