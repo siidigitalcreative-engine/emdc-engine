@@ -2850,38 +2850,110 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const cleanValue = (value:any) => String(value||"").trim();
+  const cleanLower = (value:any) => cleanValue(value).toLowerCase();
+  const normalizeWords = (value:any) => cleanLower(value)
+    .replace(/poly\s*resin/g,"polyresin")
+    .replace(/[^a-z0-9]+/g," ")
+    .split(" ")
+    .filter(Boolean);
 
-  const getSkuInfo = (sku:any, index:number) => {
-    const skuKey = cleanValue(sku.sku || sku.value).toLowerCase();
-    const productKey = cleanValue(sku.productName || sku.value).toLowerCase();
+  const weakSkuWords = new Set([
+    "primeo","slique","scrubz","crysalis","moderno","fitspire","gray","label","quencha","nest","design","lab",
+    "polyresin","poly","resin","bathroom","accessories","accessory","collection","set","pc","pcs","piece","pieces",
+    "white","taupe","gray","grey","black","wt","tp","gy","bk"
+  ]);
 
-    const storageItem = (skuStorage||[]).find((item:any)=>{
-      const itemSku = cleanValue(item.sku || item.value).toLowerCase();
-      const itemProduct = cleanValue(item.productName || item.value).toLowerCase();
+  const productTokens = (value:any) => normalizeWords(value).filter((word:string)=>!weakSkuWords.has(word));
+  const tokenKey = (value:any) => productTokens(value).join("|");
+
+  const fieldCollection = (item:any) => [
+    item.collection,
+    item.category,
+    item.productCategory,
+    findExtraField(item.extraFields||{},["collection","category","productcategory","product category"])
+  ].map(cleanValue).find(Boolean) || "";
+
+  const brandNameFor = (item:any) => cleanValue((brands||[]).find((b:any)=>b.id===item?.brandId)?.name || item?.brand || "");
+  const skuCodeFor = (item:any) => cleanValue(item?.sku || item?.value || "");
+
+  const colorHints = (value:any) => {
+    const v = cleanLower(value);
+    const hints:string[] = [];
+    if(/(^|[-_\s])(wt|white)($|[-_\s])/.test(v)) hints.push("wt","white");
+    if(/(^|[-_\s])(tp|taupe)($|[-_\s])/.test(v)) hints.push("tp","taupe");
+    if(/(^|[-_\s])(gy|gray|grey)($|[-_\s])/.test(v)) hints.push("gy","gray","grey");
+    if(/(^|[-_\s])(bk|black)($|[-_\s])/.test(v)) hints.push("bk","black");
+    return hints;
+  };
+
+  const findLatestSkuStorageItem = (sku:any, index:number, allSkus:any[] = []) => {
+    const skuKey = cleanLower(sku?.sku || sku?.value);
+    const productText = cleanValue(sku?.productName || sku?.name || sku?.value || "");
+    const productKey = cleanLower(productText);
+    const sourceId = sku?.sourceId || sku?.storageId || sku?.skuStorageId || sku?.id;
+
+    const exact = (skuStorage||[]).find((item:any)=>{
+      const itemSku = cleanLower(item?.sku || item?.value);
+      const itemProduct = cleanLower(item?.productName || item?.name || item?.value);
       return (
-        (sku.id && item.id===sku.id) ||
+        (sourceId && item?.id===sourceId) ||
         (skuKey && itemSku && itemSku===skuKey) ||
         (productKey && itemProduct && itemProduct===productKey)
       );
-    }) || {};
+    });
+    if(exact) return exact;
 
-    const storageBrand = (brands||[]).find((b:any)=>b.id===storageItem.brandId)?.name || storageItem.brand || "";
-    const skuBrand = (brands||[]).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "";
+    const wantedTokens = productTokens(productText);
+    const wantedKey = wantedTokens.join("|");
+    if(!wantedTokens.length) return null;
+
+    const skuBrand = brandNameFor(sku);
+    const skuCollection = cleanLower(fieldCollection(sku));
+    const skuHints = colorHints(`${sku?.sku||""} ${sku?.value||""} ${sku?.productName||""}`);
+
+    const candidateRows = (skuStorage||[]).map((item:any)=>{
+      const itemProduct = cleanValue(item?.productName || item?.name || item?.value || "");
+      const itemTokens = productTokens(itemProduct);
+      const matchedTokens = wantedTokens.filter((token:string)=>itemTokens.includes(token)).length;
+      const containsProduct = cleanLower(itemProduct).includes(productKey) || productKey.includes(cleanLower(itemProduct));
+      if(matchedTokens < wantedTokens.length && !containsProduct) return null;
+
+      const itemBrand = cleanLower(brandNameFor(item));
+      const itemCollection = cleanLower(fieldCollection(item));
+      const itemSku = cleanLower(item?.sku || item?.value);
+      let score = matchedTokens * 10;
+
+      if(skuBrand && itemBrand && itemBrand===cleanLower(skuBrand)) score += 8;
+      if(skuCollection && itemCollection && (itemCollection.includes(skuCollection) || skuCollection.includes(itemCollection))) score += 4;
+      if(skuHints.some((hint:string)=>itemSku.includes(hint) || cleanLower(itemProduct).includes(hint))) score += 5;
+
+      return { item, score, itemSku };
+    }).filter(Boolean) as any[];
+
+    if(!candidateRows.length) return null;
+
+    candidateRows.sort((a:any,b:any)=>b.score-a.score || String(a.itemSku||"").localeCompare(String(b.itemSku||"")));
+
+    const sameBefore = (allSkus||[]).slice(0,index).filter((prev:any)=>{
+      const prevKey = tokenKey(prev?.productName || prev?.name || prev?.value || "");
+      return prevKey && prevKey===wantedKey;
+    }).length;
+
+    const strong = candidateRows.filter((row:any)=>row.score===candidateRows[0].score);
+    const pool = strong.length > 1 ? strong : candidateRows;
+    return pool[sameBefore % pool.length]?.item || candidateRows[0]?.item || null;
+  };
+
+  const getSkuInfo = (sku:any, index:number) => {
+    const allSkus = group.skus || [];
+    const storageItem = findLatestSkuStorageItem(sku,index,allSkus) || {};
+
+    const storageBrand = brandNameFor(storageItem);
+    const skuBrand = brandNameFor(sku);
     const brandId = cleanValue(storageItem.brandId) || cleanValue(sku.brandId);
 
-    const storageCollection = [
-      storageItem.collection,
-      storageItem.category,
-      storageItem.productCategory,
-      findExtraField(storageItem.extraFields||{},["collection","category","productcategory","product category"])
-    ].map(cleanValue).find(Boolean) || "";
-
-    const skuCollection = [
-      sku.collection,
-      sku.category,
-      sku.productCategory,
-      findExtraField(sku.extraFields||{},["collection","category","productcategory","product category"])
-    ].map(cleanValue).find(Boolean) || "";
+    const storageCollection = fieldCollection(storageItem);
+    const skuCollection = fieldCollection(sku);
 
     const product = cleanValue(storageItem.productName) || cleanValue(storageItem.name) || cleanValue(sku.productName) || cleanValue(sku.value) || cleanValue(storageItem.sku);
     const skuCode = cleanValue(storageItem.sku) || cleanValue(sku.sku) || cleanValue(sku.value);
@@ -2896,6 +2968,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       collection: storageCollection || skuCollection,
       product,
       skuCode,
+      sourceId: storageItem?.id || sku?.sourceId || sku?.storageId || sku?.skuStorageId || sku?.id,
       isSyncedFromSkuStorage: !!storageItem?.id,
     };
   };
@@ -2935,6 +3008,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     { id:"ecommerce", label:"E-commerce", sub:"Listing copy and marketplace assets" },
     { id:"marketing", label:"Marketing", sub:"Campaign copy and ads direction" },
     { id:"digital", label:"Digital Creative", sub:"Creative briefs and image prompts" },
+    { id:"overview", label:"Overview", sub:"Collected final outputs" },
   ];
 
   const workspaceConfig:any = {
@@ -2965,6 +3039,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       imagePlaceholder:"Example: Create a polished product photography prompt with lighting, background, props, and composition.",
       outputHint:"Generated digital creative briefs and image prompts will appear here once AI generation is connected.",
     },
+    overview:{
+      title:"Overview",
+      description:"Collect final outputs from E-commerce, Marketing, and Digital Creative in one clean page.",
+    },
   };
 
   const updateAiWorkspace = (tab:string, patch:any) => {
@@ -2977,6 +3055,40 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       }
     };
     if(onUpdateGroup) onUpdateGroup({ aiWorkspace:next });
+  };
+
+  const getOverviewItems = () => {
+    const overview = ((group.aiWorkspace || {}).overview || {}) as any;
+    return Array.isArray(overview.items) ? overview.items : [];
+  };
+
+  const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output") => {
+    const textContent = String(content || "").trim();
+    if(!textContent) return;
+    const items = getOverviewItems();
+    const newItem = {
+      id:uid(),
+      sourceTab,
+      kind,
+      title:title || `${sourceTab} output`,
+      content:textContent,
+      createdAt:new Date().toISOString(),
+    };
+    updateAiWorkspace("overview",{ items:[newItem,...items] });
+  };
+
+  const deleteOverviewItem = (id:string) => {
+    updateAiWorkspace("overview",{ items:getOverviewItems().filter((item:any)=>item.id!==id) });
+  };
+
+  const copyOverviewItem = async (item:any) => {
+    try { await navigator.clipboard.writeText(String(item?.content || "")); } catch {}
+  };
+
+  const copyAllOverviewItems = async () => {
+    const output = getOverviewItems().map((item:any)=>`${item.title}\n${item.content}`).join("\n\n---\n\n");
+    if(!output) return;
+    try { await navigator.clipboard.writeText(output); } catch {}
   };
 
   const defaultEcommerceOutputSections = [
@@ -3378,6 +3490,52 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const data = (group.aiWorkspace || {})[tab] || {};
     if(!cfg) return null;
 
+    if(tab==="overview"){
+      const overviewItems = getOverviewItems();
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Overview</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Collected outputs added from E-commerce, Marketing, and Digital Creative.</p>
+              </div>
+              <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{overviewItems.length} item{overviewItems.length!==1?"s":""}</span>
+                <Btn sm variant="outline" onClick={copyAllOverviewItems} disabled={!overviewItems.length}>Copy All</Btn>
+              </div>
+            </div>
+          </div>
+
+          {overviewItems.length===0 ? (
+            <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No overview items yet. Go to E-commerce, Marketing, or Digital Creative and click Add to Overview on any output.</p>
+            </div>
+          ) : (
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14 }}>
+              {overviewItems.map((item:any)=>(
+                <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                  <div style={{ padding:"12px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start" }}>
+                    <div style={{ minWidth:0 }}>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Overview Item"}</p>
+                      <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.sourceTab || "output"} · {item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+                    </div>
+                    <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                      <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
+                      <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                    </div>
+                  </div>
+                  <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:14,background:C.bg }}>
+                    <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.55,color:C.text }}>{item.content || ""}</pre>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if(tab==="ecommerce"){
       const catalogFiles = data.catalogFiles || [];
       const selectedSections = getSelectedEcommerceSections();
@@ -3523,6 +3681,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                   <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                   <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
+                  <Btn sm variant="outline" onClick={()=>addToOverview("ecommerce","E-commerce Generated Output",data.generatedText,"Generated Output")} disabled={!data.generatedText}>Add to Overview</Btn>
                   <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                 </div>
               </div>
@@ -3553,6 +3712,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Saved Output"}</p>
                         <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"} · Click to view</p>
                       </button>
+                      <button onClick={(e:any)=>{ e.stopPropagation(); addToOverview("ecommerce",item.title || "Saved E-commerce Output",item.text,"Saved Output"); }} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Add to Overview</button>
                       <button onClick={(e:any)=>{ e.stopPropagation(); deleteSavedEcommerceOutput(item.id); if(savedEcommercePreview?.id===item.id) setSavedEcommercePreview(null); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                     </div>
                   ))}
@@ -3574,6 +3734,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   </div>
                   <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                     <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
+                    <Btn variant="outline" onClick={()=>addToOverview("ecommerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output")}>Add to Overview</Btn>
                     <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
                   </div>
                 </div>
@@ -3630,6 +3791,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             />
             <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",marginTop:10 }}>
               <Btn sm variant="outline" disabled>Save Prompt</Btn>
+              <Btn sm variant="outline" onClick={()=>addToOverview(tab,`${cfg.title} Text`,data.generatedText || data.textPrompt,"Text Output")} disabled={!(data.generatedText || data.textPrompt)}>Add to Overview</Btn>
               <Btn sm disabled>Generate Text</Btn>
             </div>
           </div>
@@ -3659,6 +3821,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <option value="lifestyle">Lifestyle</option>
                 <option value="ugc">UGC / TikTok Style</option>
               </Select>
+              <Btn sm variant="outline" onClick={()=>addToOverview(tab,`${cfg.title} Image Prompt`,data.generatedImagePrompt || data.imagePrompt,"Image Prompt")} disabled={!(data.generatedImagePrompt || data.imagePrompt)}>Add to Overview</Btn>
               <Btn sm disabled>Generate Image</Btn>
             </div>
           </div>
@@ -3681,7 +3844,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Generated Outputs</h4>
             <div style={{ minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,padding:16 }}>
-              <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>{cfg.outputHint}</p>
+              <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>{cfg.outputHint}<br />When an output is ready, click Add to Overview to collect it in the Overview tab.</p>
             </div>
           </div>
 
@@ -7967,7 +8130,7 @@ const AIEngineView = () => {
 
 // ─── SHAREABLE PAGE LINKS ────────────────────────────────────────────────────
 const safeRouteTab = (value:any) => ["calendar","events","checklists","skus","ai"].includes(String(value||"")) ? String(value) : "calendar";
-const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","marketing","digital"].includes(String(value||"")) ? String(value) : "tasks";
+const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","marketing","digital","overview"].includes(String(value||"")) ? String(value) : "tasks";
 
 const parseEmdcRoute = () => {
   if (typeof window === "undefined") return { tab:"calendar", groupId:null, groupTab:"tasks" };
@@ -8104,28 +8267,83 @@ export default function App({
     [seasonalEvents]
   );
 
-  const syncSkuFromStorage = (sku:any) => {
-    const clean = (value:any) => String(value||"").trim().toLowerCase();
-    const skuKey = clean(sku?.sku || sku?.value);
-    const productKey = clean(sku?.productName || sku?.value);
-    const latest = (skuStorage||[]).find((item:any)=>{
-      const itemSku = clean(item?.sku || item?.value);
-      const itemProduct = clean(item?.productName || item?.value);
+  const syncSkuFromStorage = (sku:any, index:number = 0, allSkus:any[] = []) => {
+    const clean = (value:any) => String(value||"").trim();
+    const lower = (value:any) => clean(value).toLowerCase();
+    const normalizeWords = (value:any) => lower(value)
+      .replace(/poly\s*resin/g,"polyresin")
+      .replace(/[^a-z0-9]+/g," ")
+      .split(" ")
+      .filter(Boolean);
+
+    const weakWords = new Set([
+      "primeo","slique","scrubz","crysalis","moderno","fitspire","gray","label","quencha","nest","design","lab",
+      "polyresin","poly","resin","bathroom","accessories","accessory","collection","set","pc","pcs","piece","pieces",
+      "white","taupe","gray","grey","black","wt","tp","gy","bk"
+    ]);
+
+    const productTokens = (value:any) => normalizeWords(value).filter((word:string)=>!weakWords.has(word));
+    const tokenKey = (value:any) => productTokens(value).join("|");
+    const fieldCollection = (item:any) => clean(item?.collection || item?.category || item?.productCategory || item?.extraFields?.collection || item?.extraFields?.category || "");
+
+    const brandNameFor = (item:any) => clean((brands||[]).find((b:any)=>b.id===item?.brandId)?.name || item?.brand || "");
+    const skuKey = lower(sku?.sku || sku?.value);
+    const productText = clean(sku?.productName || sku?.name || sku?.value || "");
+    const productKey = lower(productText);
+    const sourceId = sku?.sourceId || sku?.storageId || sku?.skuStorageId || sku?.id;
+
+    let latest = (skuStorage||[]).find((item:any)=>{
+      const itemSku = lower(item?.sku || item?.value);
+      const itemProduct = lower(item?.productName || item?.name || item?.value);
       return (
-        (sku?.id && item?.id===sku.id) ||
+        (sourceId && item?.id===sourceId) ||
         (skuKey && itemSku && skuKey===itemSku) ||
-        (productKey && itemProduct && productKey===itemProduct)
+        (productKey && itemProduct && itemProduct===productKey)
       );
     });
+
+    if(!latest){
+      const wantedTokens = productTokens(productText);
+      const wantedKey = wantedTokens.join("|");
+      if(wantedTokens.length){
+        const skuBrand = lower(brandNameFor(sku));
+        const skuCollection = lower(fieldCollection(sku));
+        const candidateRows = (skuStorage||[]).map((item:any)=>{
+          const itemProduct = clean(item?.productName || item?.name || item?.value || "");
+          const itemTokens = productTokens(itemProduct);
+          const matchedTokens = wantedTokens.filter((token:string)=>itemTokens.includes(token)).length;
+          const containsProduct = lower(itemProduct).includes(productKey) || productKey.includes(lower(itemProduct));
+          if(matchedTokens < wantedTokens.length && !containsProduct) return null;
+
+          const itemBrand = lower(brandNameFor(item));
+          const itemCollection = lower(fieldCollection(item));
+          const itemSku = lower(item?.sku || item?.value);
+          let score = matchedTokens * 10;
+          if(skuBrand && itemBrand && itemBrand===skuBrand) score += 8;
+          if(skuCollection && itemCollection && (itemCollection.includes(skuCollection) || skuCollection.includes(itemCollection))) score += 4;
+          return { item, score, itemSku };
+        }).filter(Boolean) as any[];
+
+        if(candidateRows.length){
+          candidateRows.sort((a:any,b:any)=>b.score-a.score || String(a.itemSku||"").localeCompare(String(b.itemSku||"")));
+          const sameBefore = (allSkus||[]).slice(0,index).filter((prev:any)=>tokenKey(prev?.productName || prev?.name || prev?.value || "")===wantedKey).length;
+          const strong = candidateRows.filter((row:any)=>row.score===candidateRows[0].score);
+          const pool = strong.length > 1 ? strong : candidateRows;
+          latest = pool[sameBefore % pool.length]?.item || candidateRows[0]?.item;
+        }
+      }
+    }
+
     if(!latest) return sku;
 
     return {
       ...sku,
       ...latest,
       id:latest.id || sku.id,
+      sourceId:latest.id || sku.sourceId || sku.storageId || sku.skuStorageId || sku.id,
       value:latest.sku || sku.value || latest.productName,
       sku:latest.sku || sku.sku,
-      productName:latest.productName || sku.productName,
+      productName:latest.productName || latest.name || sku.productName,
       collection:latest.collection || latest.category || latest.productCategory || sku.collection,
       category:latest.category || latest.collection || latest.productCategory || sku.category,
       productCategory:latest.productCategory || latest.category || latest.collection || sku.productCategory,
@@ -8159,8 +8377,8 @@ export default function App({
       let changed = false;
       const next = (prev||[]).map((group:any)=>{
         if(!Array.isArray(group.skus) || !group.skus.length) return group;
-        const nextSkus = group.skus.map((sku:any)=>{
-          const synced = syncSkuFromStorage(sku);
+        const nextSkus = group.skus.map((sku:any,idx:number)=>{
+          const synced = syncSkuFromStorage(sku,idx,group.skus || []);
           if(JSON.stringify(synced)!==JSON.stringify(sku)) changed = true;
           return synced;
         });
