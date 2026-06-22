@@ -7454,7 +7454,7 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
   },
 ];
 
-const AIAdTemplates = () => {
+const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
   const { isMobile } = useBreakpoint();
   const [platforms,setPlatforms] = useState<any[]>(() => {
     if (typeof window === "undefined") return DEFAULT_AD_TEMPLATE_PLATFORMS;
@@ -7475,6 +7475,8 @@ const AIAdTemplates = () => {
   const [generatedAdCards,setGeneratedAdCards] = useState<any[]>([]);
   const [savedAdTemplates,setSavedAdTemplates] = useState<any[]>([]);
   const [savedAdTemplatesHydrated,setSavedAdTemplatesHydrated] = useState(false);
+  const [selectedAdSkus,setSelectedAdSkus] = useState<any[]>([]);
+  const [adMenuView,setAdMenuView] = useState("generate");
 
   useEffect(()=>{
     try {
@@ -7502,6 +7504,27 @@ const AIAdTemplates = () => {
   const selectedFormat = selectedPlatform?.formats?.find((f:any)=>f.id===selectedFormatId) || selectedPlatform?.formats?.[0];
   const selectedTemplate = selectedFormat?.templates?.find((t:any)=>t.id===selectedTemplateId) || selectedFormat?.templates?.[0];
   const isCarouselFormat = (selectedFormat?.name || "").toLowerCase().includes("carousel");
+  const selectedAdSkuIds = useMemo(()=>selectedAdSkus.map((sku:any)=>sku.id),[selectedAdSkus]);
+
+  const getAdSkuBrand = (sku:any) => brands.find((brand:any)=>brand.id===sku?.brandId)?.name || sku?.brand || "";
+  const getAdSkuCategory = (sku:any) => getSkuCollectionCategory(sku) || sku?.collection || sku?.category || sku?.productCategory || "";
+
+  const toggleAdSku = (sku:any) => {
+    setSelectedAdSkus((prev:any[])=>{
+      if(prev.some((item:any)=>item.id===sku.id)) return prev.filter((item:any)=>item.id!==sku.id);
+      return [...prev,sku];
+    });
+  };
+
+  const clearAdSkus = () => setSelectedAdSkus([]);
+
+  const adProductSummary = useMemo(()=>selectedAdSkus.map((sku:any,idx:number)=>[
+    `${idx+1}. Brand: ${getAdSkuBrand(sku) || "Unbranded"}`,
+    `Collection/Category: ${getAdSkuCategory(sku) || "No collection/category"}`,
+    `Product: ${sku.productName || ""}`,
+    `SKU: ${sku.sku || ""}`,
+    getSkuTags(sku).length ? `Tags: ${getSkuTags(sku).join(", ")}` : "",
+  ].filter(Boolean).join(" | ")).join("\n"),[selectedAdSkus,brands]);
 
   const makeEmptyCarouselCards = () => Array.from({ length:10 }, (_,i)=>({
     id: uid(),
@@ -7659,29 +7682,47 @@ const AIAdTemplates = () => {
     return next;
   };
 
-  const generateAdForFormat = async () => {
-    if (!selectedPlatform || !selectedFormat) return;
-    if (!adBrief.trim()) {
-      setAdError("Please enter a product, offer, or campaign brief first.");
+  const generateAdForFormat = async (formatOverride?:any, templateOverride?:any) => {
+    const activePlatform = selectedPlatform;
+    const activeFormat = formatOverride || selectedFormat;
+    const activeTemplate = templateOverride || selectedTemplate;
+    const activeIsCarousel = (activeFormat?.name || "").toLowerCase().includes("carousel");
+
+    if (!activePlatform || !activeFormat) return;
+    if (!adBrief.trim() && selectedAdSkus.length===0) {
+      setAdError("Please select products or enter a campaign brief first.");
       return;
     }
 
+    setSelectedFormatId(activeFormat.id);
+    if(activeTemplate?.id) setSelectedTemplateId(activeTemplate.id);
     setAdGenerating(true);
     setAdError("");
     setGeneratedAdText("");
+    setGeneratedAdCards(activeIsCarousel ? makeEmptyCarouselCards() : []);
 
     try {
-      const carouselInstruction = isCarouselFormat
-        ? "Because this is a carousel ad format, generate exactly 10 carousel cards. Return compact valid JSON only, no markdown, no explanation. Use this structure: { \"cards\": [ { \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\", \"cta\": \"...\" } ] }. The cards array must contain exactly 10 items. Keep each field short so all 10 cards are completed."
-        : "Generate one complete ad output for this selected ad format.";
+      const carouselInstruction = activeIsCarousel
+        ? "Because this is a carousel ad format, generate exactly 10 carousel cards. Return compact valid JSON only, no markdown, no explanation. Use this structure: { \"cards\": [ { \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\" , \"cta\": \"...\" } ] }. The cards array must contain exactly 10 items. Keep each field short so all 10 cards are completed. For each card, also write an image direction in the visual field. Actual AI image generation is not connected yet, so visual fields will be used as image placeholders."
+        : "Generate one complete ad output for this selected ad format. Include a clear image direction/placeholder section for the creative visual.";
+
+      const productInstruction = selectedAdSkus.length
+        ? `Selected products from SKU Storage:\n${adProductSummary}`
+        : "No products selected from SKU Storage. Use the campaign brief only.";
 
       const instruction = [
-        `Generate a ${selectedPlatform.name} ad for the selected format: ${selectedFormat.name}.`,
+        `Generate a ${activePlatform.name} ad for the selected format: ${activeFormat.name}.`,
         carouselInstruction,
-        selectedTemplate?.body ? `Use this custom template as the structure and inspiration:\n${selectedTemplate.body}` : "",
+        productInstruction,
+        activeTemplate?.body ? `Use this template as the structure and inspiration:\n${activeTemplate.body}` : "",
         "Keep it clear, ecommerce-ready, and easy to copy.",
         "Avoid em dashes.",
         "Do not invent technical specs that are not provided.",
+      ].filter(Boolean).join("\n\n");
+
+      const composedInput = [
+        selectedAdSkus.length ? `Products selected:\n${adProductSummary}` : "",
+        adBrief.trim() ? `Campaign / product brief:\n${adBrief.trim()}` : "",
       ].filter(Boolean).join("\n\n");
 
       const res = await fetch("/api/ai/generate-text", {
@@ -7689,10 +7730,10 @@ const AIAdTemplates = () => {
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({
           task:"ad_template_generator",
-          taskLabel:`${selectedPlatform.name} ${selectedFormat.name}`,
+          taskLabel:`${activePlatform.name} ${activeFormat.name}`,
           instruction,
           tone:"professional",
-          input:adBrief.trim(),
+          input:composedInput,
           referenceImages:[],
         }),
       });
@@ -7713,7 +7754,7 @@ const AIAdTemplates = () => {
       const textOutput = data?.text || "";
       setGeneratedAdText(textOutput);
 
-      if (isCarouselFormat) {
+      if (activeIsCarousel) {
         const parsedCards = parseCarouselCards(textOutput);
         setGeneratedAdCards(parsedCards);
 
@@ -7899,148 +7940,116 @@ const AIAdTemplates = () => {
 
   return (
     <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?14:20,maxWidth:"100%",overflow:"hidden" }}>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:18,flexWrap:"wrap" }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:16,flexWrap:"wrap" }}>
         <div>
-          <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Ad Template Builder</h3>
-          <p style={{ margin:0,fontSize:13,color:C.muted }}>Create and manage custom ad templates by platform and ad format.</p>
+          <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Ad Menu Builder</h3>
+          <p style={{ margin:0,fontSize:13,color:C.muted }}>Choose products, pick an ad format, then generate ready-to-use copy. Image areas are placeholders for now.</p>
         </div>
-        <Btn sm variant="outline" onClick={resetAdTemplates}>Reset Default</Btn>
+        <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+          <Btn sm variant={adMenuView==="generate"?"primary":"outline"} onClick={()=>setAdMenuView("generate")}>Generate Ads</Btn>
+          <Btn sm variant={adMenuView==="templates"?"primary":"outline"} onClick={()=>setAdMenuView("templates")}>Manage Templates</Btn>
+          <Btn sm variant="outline" onClick={resetAdTemplates}>Reset Default</Btn>
+        </div>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"220px 300px minmax(0,1fr)",gap:14,alignItems:"start",width:"100%" }}>
-        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-          <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Platforms</h4>
-          {platforms.map((platform:any)=>(
-            <button
-              key={platform.id}
-              type="button"
-              onClick={()=>{ setSelectedPlatformId(platform.id); setSelectedFormatId(platform.formats?.[0]?.id || ""); }}
-              style={{ textAlign:"left",height:44,padding:"0 14px",borderRadius:10,border:`1.5px solid ${selectedPlatformId===platform.id ? C.accent : C.border}`,background:selectedPlatformId===platform.id ? C.accent : C.surface,color:selectedPlatformId===platform.id ? "#fff" : C.text,fontSize:14,fontWeight:800,cursor:"pointer" }}
-            >
-              {platform.name}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
-            <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Ad Formats</h4>
-            <Btn xs variant="outline" onClick={addFormat}>+ Add</Btn>
-          </div>
-
-          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {(selectedPlatform?.formats || []).map((format:any)=>(
-              <div
-                key={format.id}
-                onClick={()=>setSelectedFormatId(format.id)}
-                style={{ padding:10,borderRadius:10,border:`1.5px solid ${selectedFormat?.id===format.id ? C.accent : C.border}`,background:selectedFormat?.id===format.id ? "#F9FAFB" : C.surface,cursor:"pointer",display:"flex",flexDirection:"column",gap:8 }}
-              >
-                <input
-                  value={format.name}
-                  onChange={e=>updateFormatName(format.id, e.target.value)}
-                  onClick={e=>e.stopPropagation()}
-                  style={{ width:"100%",height:34,padding:"0 10px",fontSize:13,fontWeight:700,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
-                />
-                <div style={{ display:"flex",gap:6,justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
-                  <button type="button" onClick={()=>duplicateFormat(format)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Duplicate</button>
-                  <button type="button" onClick={()=>deleteFormat(format.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
+      {adMenuView==="generate"&&(
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"360px minmax(0,1fr)",gap:14,alignItems:"start" }}>
+          <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+            <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+                <div>
+                  <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>1. Select Products</h4>
+                  <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>Pick products/category like ordering from a menu.</p>
                 </div>
+                {selectedAdSkus.length>0&&<button type="button" onClick={clearAdSkus} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear</button>}
               </div>
-            ))}
 
-            {(!selectedPlatform?.formats || selectedPlatform.formats.length===0) && (
-              <p style={{ margin:0,fontSize:12,color:C.muted }}>No ad formats yet. Add one to start creating templates.</p>
-            )}
-          </div>
-        </div>
+              <SKUPicker
+                skuStorage={skuStorage}
+                brands={brands}
+                multiSelect
+                selectedIds={selectedAdSkuIds}
+                onSelect={toggleAdSku}
+                placeholder="Search product, SKU, brand, tag..."
+              />
 
-        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
-          <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:12 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-              <div>
-                <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Generate Ad</h4>
-                <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "No format selected"}</p>
+              <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
+                <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                  <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Selected Products</span>
+                  <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{selectedAdSkus.length} item{selectedAdSkus.length!==1?"s":""}</span>
+                </div>
+                {selectedAdSkus.length===0 ? (
+                  <p style={{ margin:0,padding:12,fontSize:12,color:C.muted }}>No products selected yet.</p>
+                ) : (
+                  <div style={{ maxHeight:220,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                    {selectedAdSkus.map((sku:any)=>(
+                      <div key={sku.id} style={{ display:"flex",gap:8,alignItems:"flex-start",padding:"8px 10px",borderBottom:`1px solid ${C.border}` }}>
+                        <div style={{ minWidth:0,flex:1 }}>
+                          <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku.productName || sku.sku}</p>
+                          <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{getAdSkuBrand(sku)} · {getAdSkuCategory(sku) || "No collection/category"} · {sku.sku}</p>
+                        </div>
+                        <button type="button" onClick={()=>toggleAdSku(sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <Btn xs onClick={generateAdForFormat} disabled={!selectedFormat || adGenerating}>
-                {adGenerating ? "Generating All..." : "Generate Ad"}
-              </Btn>
             </div>
 
-            <Field label="Campaign / Product Brief">
+            <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>2. Campaign Notes</h4>
               <textarea
                 value={adBrief}
                 onChange={e=>setAdBrief(e.target.value)}
-                placeholder="Paste the product, offer, target audience, selling points, or campaign direction..."
-                rows={4}
-                style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+                placeholder="Optional: offer, target audience, promo, angle, tone, deadline..."
+                rows={5}
+                style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.45,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
               />
-            </Field>
+            </div>
+          </div>
 
-            {selectedFormat && (selectedFormat.templates || []).length>0 && (
-              <Field label="Use Template">
-                <Select value={selectedTemplate?.id || ""} onChange={setSelectedTemplateId}>
-                  {(selectedFormat.templates || []).map((template:any)=>(
-                    <option key={template.id} value={template.id}>{template.name}</option>
-                  ))}
-                </Select>
-              </Field>
-            )}
-
-            {adError && (
-              <div style={{ padding:"10px 12px",borderRadius:9,background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",fontSize:13,fontWeight:600 }}>
-                {adError}
-              </div>
-            )}
-
-            {selectedFormat && isCarouselFormat && (
-              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
-                  <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>10 Carousel Cards</h4>
-                  <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
-                    <Btn xs variant="outline" onClick={saveGeneratedAdTemplate}>Save Output</Btn>
-                    <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy All</Btn>
-                  </div>
-                </div>
-
-                <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(2,minmax(0,1fr))",gap:10 }}>
-                  {(generatedAdCards.length ? generatedAdCards : makeEmptyCarouselCards()).map((card:any, index:number)=>(
-                    <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:10,padding:10,background:C.surface,display:"flex",flexDirection:"column",gap:8 }}>
-                      <div style={{ fontSize:12,fontWeight:800,color:C.text }}>Card {index + 1}</div>
-                      <input
-                        value={card.headline || ""}
-                        onChange={e=>updateAdCard(index, { headline:e.target.value })}
-                        placeholder="Headline"
-                        style={{ width:"100%",height:34,padding:"0 10px",fontSize:12,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
-                      />
-                      <textarea
-                        value={card.copy || ""}
-                        onChange={e=>updateAdCard(index, { copy:e.target.value })}
-                        placeholder="Copy"
-                        rows={3}
-                        style={{ width:"100%",padding:"8px 10px",fontSize:12,lineHeight:1.4,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
-                      />
-                      <input
-                        value={card.visual || ""}
-                        onChange={e=>updateAdCard(index, { visual:e.target.value })}
-                        placeholder="Visual direction"
-                        style={{ width:"100%",height:34,padding:"0 10px",fontSize:12,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
-                      />
-                      <input
-                        value={card.cta || ""}
-                        onChange={e=>updateAdCard(index, { cta:e.target.value })}
-                        placeholder="CTA"
-                        style={{ width:"100%",height:34,padding:"0 10px",fontSize:12,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
-                      />
+          <div style={{ display:"flex",flexDirection:"column",gap:12,minWidth:0 }}>
+            <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg }}>
+              <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>3. Choose Your Ad Order</h4>
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10 }}>
+                {platforms.map((platform:any)=>(
+                  <div key={platform.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
+                    <div style={{ padding:"9px 11px",background:selectedPlatformId===platform.id?C.accent:C.surfaceAlt,color:selectedPlatformId===platform.id?"#fff":C.text,borderBottom:`1px solid ${C.border}` }}>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900 }}>{platform.name}</p>
                     </div>
-                  ))}
-                </div>
+                    <div style={{ padding:9,display:"flex",flexDirection:"column",gap:8 }}>
+                      {(platform.formats||[]).map((format:any)=> {
+                        const firstTemplate = format.templates?.[0];
+                        const active = selectedPlatformId===platform.id && selectedFormatId===format.id;
+                        return (
+                          <button key={format.id} type="button" onClick={()=>{
+                              setSelectedPlatformId(platform.id);
+                              setSelectedFormatId(format.id);
+                              if(firstTemplate?.id) setSelectedTemplateId(firstTemplate.id);
+                              generateAdForFormat(format,firstTemplate);
+                            }}
+                            disabled={adGenerating}
+                            style={{ width:"100%",textAlign:"left",border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.bg,borderRadius:10,padding:10,cursor:adGenerating?"not-allowed":"pointer",opacity:adGenerating?.8:1 }}>
+                            <span style={{ display:"block",fontSize:12.5,fontWeight:900,color:C.text }}>{format.name}</span>
+                            <span style={{ display:"block",marginTop:2,fontSize:11,color:C.muted }}>{firstTemplate?.name || "Custom ad format"}</span>
+                            <span style={{ display:"inline-block",marginTop:8,fontSize:10.5,fontWeight:800,color:active?C.accent:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{adGenerating&&active?"Generating...":"Generate"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+              {adError&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:700 }}>{adError}</p>}
+            </div>
 
-            {selectedFormat && !isCarouselFormat && (
-              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
-                  <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Output</h4>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) 300px",gap:12,alignItems:"start" }}>
+              <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface,minWidth:0 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10 }}>
+                  <div>
+                    <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Generated Text Output</h4>
+                    <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "Ad Format"}</p>
+                  </div>
                   {generatedAdText&&(
                     <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                       <Btn xs variant="outline" onClick={saveGeneratedAdTemplate}>Save Output</Btn>
@@ -8048,111 +8057,123 @@ const AIAdTemplates = () => {
                     </div>
                   )}
                 </div>
-                <div style={{ minHeight:180,padding:12,borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.5,color:generatedAdText?C.textSub:C.muted }}>
-                  {adGenerating ? "Generating..." : generatedAdText || "Your generated ad will appear here."}
+
+                {isCarouselFormat && generatedAdCards.length>0 ? (
+                  <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(210px,1fr))",gap:10 }}>
+                    {generatedAdCards.map((card:any,index:number)=>(
+                      <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ height:92,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:10 }}>
+                          <span style={{ fontSize:11,color:C.muted,fontWeight:800 }}>Image Placeholder<br/>Card {index+1}</span>
+                        </div>
+                        <div style={{ padding:10,display:"flex",flexDirection:"column",gap:6 }}>
+                          <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.accent }}>Card {index+1}</p>
+                          <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{card.headline || "Headline"}</p>
+                          <p style={{ margin:0,fontSize:11.5,color:C.textSub,lineHeight:1.4 }}>{card.copy || "Copy will appear here."}</p>
+                          <p style={{ margin:0,fontSize:10.5,color:C.muted,lineHeight:1.35 }}>Visual: {card.visual || "Image direction placeholder"}</p>
+                          <p style={{ margin:0,fontSize:10.5,color:C.textSub,fontWeight:800 }}>CTA: {card.cta || "Shop Now"}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ minHeight:220,padding:12,borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.5,color:generatedAdText?C.textSub:C.muted }}>
+                    {adGenerating ? "Generating..." : generatedAdText || "Generated ad copy will appear here after you choose an ad format."}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface }}>
+                <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Image Placeholder</h4>
+                <div style={{ aspectRatio:"1 / 1",borderRadius:12,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:16 }}>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>AI image generation will be connected later.<br/>For now, use the generated visual direction as the image brief.</p>
                 </div>
               </div>
-            )}
-          </div>
-
-          <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface,display:"flex",flexDirection:"column",gap:10 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-              <div>
-                <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Saved Ad Templates</h4>
-                <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>Saved generated ads stay in this browser.</p>
-              </div>
-              {savedAdTemplates.length>0&&(
-                <button
-                  type="button"
-                  onClick={()=>setSavedAdTemplates([])}
-                  style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}
-                >
-                  Clear All
-                </button>
-              )}
             </div>
 
-            {savedAdTemplates.length===0 ? (
-              <p style={{ margin:0,fontSize:12,color:C.muted }}>Nothing saved yet. Generate an ad, then click Save Output.</p>
-            ) : (
-              <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto" }}>
-                {savedAdTemplates.map((item:any)=>(
-                  <div
-                    key={item.id}
-                    onClick={()=>openSavedAdTemplate(item)}
-                    style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start" }}
-                  >
-                    <div style={{ minWidth:0,flex:1 }}>
-                      <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:4 }}>
-                        <span style={{ fontSize:11,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".04em" }}>{item.platformName || "Platform"}</span>
-                        <span style={{ fontSize:11,color:C.muted }}>{item.formatName || "Ad Format"}</span>
-                        {item.isCarousel&&<span style={{ fontSize:11,color:C.muted }}>10 cards</span>}
-                      </div>
-                      <p style={{ margin:"0 0 4px",fontSize:12,color:C.textSub,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden" }}>
-                        {item.text}
-                      </p>
-                      {item.brief&&<p style={{ margin:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Brief: {item.brief}</p>}
-                    </div>
-                    <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={()=>copySavedAdTemplate(item)}
-                        style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}
-                      >
-                        Copy
-                      </button>
-                      <button
-                        type="button"
-                        onClick={()=>deleteSavedAdTemplate(item.id)}
-                        style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface,display:"flex",flexDirection:"column",gap:10 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                <div>
+                  <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Saved Ad Outputs</h4>
+                  <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>Saved generated ads stay in this browser.</p>
+                </div>
+                {savedAdTemplates.length>0&&(
+                  <button type="button" onClick={()=>setSavedAdTemplates([])} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}>Clear All</button>
+                )}
               </div>
-            )}
+
+              {savedAdTemplates.length===0 ? (
+                <p style={{ margin:0,fontSize:12,color:C.muted }}>Nothing saved yet. Generate an ad, then click Save Output.</p>
+              ) : (
+                <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:220,overflowY:"auto" }}>
+                  {savedAdTemplates.map((item:any)=>(
+                    <div key={item.id} onClick={()=>openSavedAdTemplate(item)} style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start" }}>
+                      <div style={{ minWidth:0,flex:1 }}>
+                        <p style={{ margin:"0 0 4px",fontSize:12,fontWeight:900,color:C.text }}>{item.platformName || "Platform"} · {item.formatName || "Ad Format"}</p>
+                        <p style={{ margin:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.text}</p>
+                      </div>
+                      <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
+                        <button type="button" onClick={()=>copySavedAdTemplate(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Copy</button>
+                        <button type="button" onClick={()=>deleteSavedAdTemplate(item.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {adMenuView==="templates"&&(
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"220px 300px minmax(0,1fr)",gap:14,alignItems:"start",width:"100%" }}>
+          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+            <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Platforms</h4>
+            {platforms.map((platform:any)=>(
+              <button key={platform.id} type="button" onClick={()=>{ setSelectedPlatformId(platform.id); setSelectedFormatId(platform.formats?.[0]?.id || ""); }}
+                style={{ textAlign:"left",height:44,padding:"0 14px",borderRadius:10,border:`1.5px solid ${selectedPlatformId===platform.id ? C.accent : C.border}`,background:selectedPlatformId===platform.id ? C.accent : C.surface,color:selectedPlatformId===platform.id ? "#fff" : C.text,fontSize:14,fontWeight:800,cursor:"pointer" }}>
+                {platform.name}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Ad Formats</h4>
+              <Btn xs variant="outline" onClick={addFormat}>+ Add</Btn>
+            </div>
+            {(selectedPlatform?.formats || []).map((format:any)=>(
+              <div key={format.id} style={{ border:`1.5px solid ${selectedFormatId===format.id ? C.accent : C.border}`,borderRadius:12,padding:10,background:selectedFormatId===format.id ? C.bg : C.surface }}>
+                <input value={format.name} onChange={e=>updateFormatName(format.id,e.target.value)} onFocus={()=>setSelectedFormatId(format.id)}
+                  style={{ width:"100%",height:36,padding:"0 10px",fontSize:14,fontWeight:800,borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }} />
+                <div style={{ display:"flex",gap:6,justifyContent:"flex-end",marginTop:8 }}>
+                  <Btn xs variant="outline" onClick={()=>duplicateFormat(format)}>Duplicate</Btn>
+                  <Btn xs variant="danger" onClick={()=>deleteFormat(format.id)}>Delete</Btn>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
               <div>
-                <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Custom Templates</h4>
+                <h4 style={{ margin:0,fontSize:12,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Templates</h4>
                 <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "No format selected"}</p>
               </div>
               <Btn xs variant="outline" onClick={addTemplate} disabled={!selectedFormat}>+ Add Template</Btn>
             </div>
-
-            {!selectedFormat && (
-              <div style={{ minHeight:240,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
-                <p style={{ margin:0,fontSize:13,color:C.muted }}>Select or add an ad format first.</p>
-              </div>
-            )}
 
             {selectedFormat && (
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 {(selectedFormat.templates || []).map((template:any)=>(
                   <div key={template.id} style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:12,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
                     <Field label="Template Name">
-                      <input
-                        value={template.name}
-                        onChange={e=>updateTemplate(template.id, { name:e.target.value })}
-                        placeholder="Template name"
-                        style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }}
-                      />
+                      <input value={template.name} onChange={e=>updateTemplate(template.id, { name:e.target.value })} placeholder="Template name"
+                        style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }} />
                     </Field>
-
                     <Field label="Template">
-                      <textarea
-                        value={template.body}
-                        onChange={e=>updateTemplate(template.id, { body:e.target.value })}
-                        placeholder="Write your custom ad template here..."
-                        rows={7}
-                        style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
-                      />
+                      <textarea value={template.body} onChange={e=>updateTemplate(template.id, { body:e.target.value })} placeholder="Write your custom ad template here..." rows={7}
+                        style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }} />
                     </Field>
-
                     <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
                       <Btn xs variant="outline" onClick={()=>copyTemplate(template)}>Copy</Btn>
                       <Btn xs variant="outline" onClick={()=>duplicateTemplate(template)}>Duplicate</Btn>
@@ -8160,7 +8181,6 @@ const AIAdTemplates = () => {
                     </div>
                   </div>
                 ))}
-
                 {(!selectedFormat.templates || selectedFormat.templates.length===0) && (
                   <div style={{ minHeight:220,borderRadius:10,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,textAlign:"center" }}>
                     <p style={{ margin:0,fontSize:13,color:C.muted }}>No templates yet. Add a custom template for this ad format.</p>
@@ -8170,20 +8190,13 @@ const AIAdTemplates = () => {
             )}
           </div>
         </div>
-      </div>
-
-      <style>{`
-        @media(max-width:1100px){
-          div[style*="grid-template-columns: 220px 300px minmax(0, 1fr)"]{
-            grid-template-columns:1fr!important;
-          }
-        }
-      `}</style>
+      )}
     </div>
   );
 };
 
-const AIEngineView = () => {
+
+const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
   const { isMobile } = useBreakpoint();
   const [prompt,setPrompt] = useState("");
   const [size,setSize] = useState("2K");
@@ -8653,7 +8666,7 @@ const AIEngineView = () => {
       )}
 
       {aiPage==="ads" && (
-        <AIAdTemplates />
+        <AIAdTemplates skuStorage={skuStorage} brands={brands} />
       )}
 
       <Modal open={!!previewOutput} onClose={()=>setPreviewOutput(null)} title="Output Preview" width={820}>
@@ -9287,7 +9300,7 @@ export default function App({
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
-          <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView /></div>
+          <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
         {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
