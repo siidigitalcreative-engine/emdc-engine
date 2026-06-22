@@ -763,6 +763,22 @@ const splitSkuTags = (value:any) => Array.from(new Map(
 
 const getSkuTags = (sku:any) => splitSkuTags(getSkuTagText(sku));
 
+const getSkuCollectionCategory = (sku:any) => {
+  const extra = sku?.extraFields || {};
+  const normalize = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");
+  const categoryKey = Object.keys(extra).find((key:string)=>{
+    const k = normalize(key);
+    return k==="category" || k==="collection" || k==="collectioncategory" || k==="productcategory";
+  });
+  return String(
+    sku?.collection ||
+    sku?.category ||
+    sku?.productCategory ||
+    (categoryKey ? extra[categoryKey] : "") ||
+    ""
+  ).trim();
+};
+
 const hasSkuTag = (sku:any, tag:any) => {
   const target = normalizeSkuTagKey(tag);
   return getSkuTags(sku).some((item:string)=>normalizeSkuTagKey(item)===target);
@@ -2273,7 +2289,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
               if(!brandItems.length) return null;
 
               const groupedItems = brandItems.reduce((acc:any[],item:any)=>{
-                const collectionName = item.sku?.collection || item.sku?.category || item.sku?.productCategory || "No collection/category";
+                const collectionName = getSkuCollectionCategory(item.sku) || "No collection/category";
                 let group = acc.find((entry:any)=>entry.collectionName===collectionName);
                 if(!group){
                   group = { collectionName, items:[] };
