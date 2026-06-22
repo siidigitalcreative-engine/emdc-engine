@@ -2272,9 +2272,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
               <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>SKU List</p>
               <span style={{ fontSize:10.5,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"2px 8px" }}>{filteredPhaseoutSkuLinks.length} shown</span>
             </div>
-            <div style={{ maxHeight:isMobile?260:330,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+            <div style={{ maxHeight:isMobile?260:330,overflow:"auto",WebkitOverflowScrolling:"touch" }}>
               {filteredPhaseoutSkuLinks.map((item:any)=>(
-                <div key={`${item.brandName}-${item.label}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"150px minmax(280px,1fr) 320px 82px",gap:isMobile?4:10,alignItems:"center",padding:isMobile?"8px 10px":"7px 10px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
+                <div key={`${item.brandName}-${item.label}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"130px minmax(260px,.75fr) minmax(520px,1.5fr) 74px",minWidth:isMobile?"100%":980,gap:isMobile?4:8,alignItems:"center",padding:isMobile?"8px 10px":"6px 8px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
                   <div style={{ minWidth:0 }}>
                     <p style={{ margin:0,fontSize:11.5,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.brandName}</p>
                     <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.sku?.collection || item.sku?.category || item.sku?.productCategory || "No collection/category"}</p>
@@ -2294,7 +2294,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                     {(!item.events || item.events.length===0) ? (
                       <p style={{ margin:0,fontSize:10.5,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>No linked event/season yet.</p>
                     ) : (
-                      <div style={{ overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",display:"flex",gap:4,paddingBottom:2 }}>
+                      <div style={{ width:"100%",maxWidth:"100%",overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",display:"flex",gap:4,paddingBottom:2 }}>
                         {item.events.map((ev:any)=>(
                           <button key={ev.id} type="button" onClick={()=>{
                               const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
@@ -2306,7 +2306,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                 focusedPhaseoutSku:item,
                               });
                             }}
-                            style={{ flex:"0 0 auto",width:isMobile?150:180,minHeight:30,border:`1px solid ${C.border}`,background:C.bg,borderRadius:6,padding:"3px 7px",textAlign:"left",cursor:"pointer",display:"block" }}>
+                            style={{ flex:"0 0 auto",width:isMobile?150:210,minHeight:30,border:`1px solid ${C.border}`,background:C.bg,borderRadius:6,padding:"3px 7px",textAlign:"left",cursor:"pointer",display:"block" }}>
                             <span style={{ display:"block",fontSize:10.3,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
                             <span style={{ display:"block",fontSize:9.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || "No specific date"}</span>
                           </button>
@@ -2325,7 +2325,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
               ))}
             </div>
             <div style={{ padding:"6px 10px",borderTop:`1px solid ${C.border}`,background:C.bg }}>
-              <p style={{ margin:0,fontSize:10.5,fontWeight:700,color:C.faint }}>Compact view. Scroll to see more. Tap a product or Edit to update tags.</p>
+              <p style={{ margin:0,fontSize:10.5,fontWeight:700,color:C.faint }}>Compact view. Scroll down for more SKUs and scroll sideways if the row has more linked events.</p>
             </div>
           </div>
         )}
