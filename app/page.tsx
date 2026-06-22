@@ -2274,7 +2274,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
             </div>
             <div style={{ maxHeight:isMobile?260:330,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
               {filteredPhaseoutSkuLinks.map((item:any)=>(
-                <div key={`${item.brandName}-${item.label}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr auto":"170px 1fr 190px auto",gap:isMobile?4:10,alignItems:"center",padding:isMobile?"8px 10px":"7px 10px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
+                <div key={`${item.brandName}-${item.label}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr auto":"170px 1fr 260px auto",gap:isMobile?4:10,alignItems:"center",padding:isMobile?"8px 10px":"7px 10px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
                   <div style={{ minWidth:0 }}>
                     <p style={{ margin:0,fontSize:11.5,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.brandName}</p>
                     <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.sku?.collection || item.sku?.category || item.sku?.productCategory || "No collection/category"}</p>
@@ -2294,21 +2294,24 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                     {(!item.events || item.events.length===0) ? (
                       <p style={{ margin:0,fontSize:10.5,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>No linked event/season yet.</p>
                     ) : (
-                      <button type="button" onClick={()=>{
-                          const ev = item.events[0];
-                          const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
-                          setYearOverview({
-                            item:{ sourceId:ev.id,itemKind:"seasonal",title:fullEv.name||ev.name,type:fullEv.type||ev.type,color:fullEv.color||ev.color,dateText:fullEv.date||ev.date,source:"Events & Seasons" },
-                            type:"seasonal",
-                            event:fullEv,
-                            phaseoutSkus:getOverviewPhaseoutSkus(fullEv),
-                            focusedPhaseoutSku:item,
-                          });
-                        }}
-                        style={{ width:"100%",border:"none",background:"transparent",padding:0,textAlign:"left",cursor:"pointer" }}>
-                        <span style={{ display:"block",fontSize:10.5,fontWeight:800,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.events[0].name}{item.events.length>1?` +${item.events.length-1}`:""}</span>
-                        <span style={{ display:"block",fontSize:10,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.events[0].date || "No specific date"}</span>
-                      </button>
+                      <div style={{ display:"flex",flexDirection:"column",gap:3,maxHeight:72,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingRight:2 }}>
+                        {item.events.map((ev:any)=>(
+                          <button key={ev.id} type="button" onClick={()=>{
+                              const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
+                              setYearOverview({
+                                item:{ sourceId:ev.id,itemKind:"seasonal",title:fullEv.name||ev.name,type:fullEv.type||ev.type,color:fullEv.color||ev.color,dateText:fullEv.date||ev.date,source:"Events & Seasons" },
+                                type:"seasonal",
+                                event:fullEv,
+                                phaseoutSkus:getOverviewPhaseoutSkus(fullEv),
+                                focusedPhaseoutSku:item,
+                              });
+                            }}
+                            style={{ width:"100%",border:`1px solid ${C.border}`,background:C.bg,borderRadius:6,padding:"3px 6px",textAlign:"left",cursor:"pointer" }}>
+                            <span style={{ display:"block",fontSize:10.3,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
+                            <span style={{ display:"block",fontSize:9.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || "No specific date"}</span>
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
 
