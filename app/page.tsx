@@ -3385,6 +3385,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                   <Btn xs variant="outline" onClick={setAllEcommerceSections}>Select All</Btn>
                   <Btn xs variant="outline" onClick={clearAllEcommerceSections}>Clear All</Btn>
+                  <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt() })}>Save Changes</Btn>
                 </div>
               </div>
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
@@ -3398,7 +3399,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   );
                 })}
               </div>
-              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Only selected sections will be included in the generated output.</p>
+              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>After changing sections, click Save Changes to refresh the listing template prompt above.</p>
             </div>
           </div>
 
