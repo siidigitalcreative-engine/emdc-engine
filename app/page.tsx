@@ -2848,15 +2848,22 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const cleanValue = (value:any) => String(value||"").trim();
 
   const getSkuInfo = (sku:any, index:number) => {
-    const storageItem = (skuStorage||[]).find((item:any)=>
-      item.id===sku.id ||
-      cleanValue(item.sku).toLowerCase()===cleanValue(sku.value||sku.sku).toLowerCase() ||
-      cleanValue(item.productName).toLowerCase()===cleanValue(sku.value).toLowerCase()
-    ) || {};
+    const skuKey = cleanValue(sku.sku || sku.value).toLowerCase();
+    const productKey = cleanValue(sku.productName || sku.value).toLowerCase();
+
+    const storageItem = (skuStorage||[]).find((item:any)=>{
+      const itemSku = cleanValue(item.sku || item.value).toLowerCase();
+      const itemProduct = cleanValue(item.productName || item.value).toLowerCase();
+      return (
+        (sku.id && item.id===sku.id) ||
+        (skuKey && itemSku && itemSku===skuKey) ||
+        (productKey && itemProduct && itemProduct===productKey)
+      );
+    }) || {};
 
     const storageBrand = (brands||[]).find((b:any)=>b.id===storageItem.brandId)?.name || storageItem.brand || "";
     const skuBrand = (brands||[]).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "";
-    const brandId = cleanValue(sku.brandId) || cleanValue(storageItem.brandId);
+    const brandId = cleanValue(storageItem.brandId) || cleanValue(sku.brandId);
 
     const storageCollection = [
       storageItem.collection,
@@ -2872,19 +2879,20 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       findExtraField(sku.extraFields||{},["collection","category","productcategory","product category"])
     ].map(cleanValue).find(Boolean) || "";
 
-    const product = cleanValue(sku.productName) || cleanValue(storageItem.productName) || cleanValue(storageItem.name) || cleanValue(sku.value) || cleanValue(storageItem.sku);
-    const skuCode = cleanValue(sku.sku) || cleanValue(storageItem.sku) || cleanValue(sku.value);
+    const product = cleanValue(storageItem.productName) || cleanValue(storageItem.name) || cleanValue(sku.productName) || cleanValue(sku.value) || cleanValue(storageItem.sku);
+    const skuCode = cleanValue(storageItem.sku) || cleanValue(sku.sku) || cleanValue(sku.value);
 
     return {
-      ...(storageItem||{}),
       ...(sku||{}),
+      ...(storageItem||{}),
       originalSku:sku,
       index,
-      brand: skuBrand || storageBrand,
+      brand: storageBrand || skuBrand,
       brandId,
-      collection: skuCollection || storageCollection,
+      collection: storageCollection || skuCollection,
       product,
       skuCode,
+      isSyncedFromSkuStorage: !!storageItem?.id,
     };
   };
 
@@ -2911,6 +2919,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       collection:productEdit.collection,
       category:productEdit.collection,
       brandId:productEdit.brandId,
+      localProductOverride:true,
     } : sku);
     if(onUpdateGroup) onUpdateGroup({ skus:nextSkus });
     setProductDetail(null);
@@ -7940,6 +7949,86 @@ export default function App({
     })),
     [seasonalEvents]
   );
+
+  const syncSkuFromStorage = (sku:any) => {
+    const clean = (value:any) => String(value||"").trim().toLowerCase();
+    const skuKey = clean(sku?.sku || sku?.value);
+    const productKey = clean(sku?.productName || sku?.value);
+    const latest = (skuStorage||[]).find((item:any)=>{
+      const itemSku = clean(item?.sku || item?.value);
+      const itemProduct = clean(item?.productName || item?.value);
+      return (
+        (sku?.id && item?.id===sku.id) ||
+        (skuKey && itemSku && skuKey===itemSku) ||
+        (productKey && itemProduct && productKey===itemProduct)
+      );
+    });
+    if(!latest) return sku;
+
+    return {
+      ...sku,
+      ...latest,
+      id:latest.id || sku.id,
+      value:latest.sku || sku.value || latest.productName,
+      sku:latest.sku || sku.sku,
+      productName:latest.productName || sku.productName,
+      collection:latest.collection || latest.category || latest.productCategory || sku.collection,
+      category:latest.category || latest.collection || latest.productCategory || sku.category,
+      productCategory:latest.productCategory || latest.category || latest.collection || sku.productCategory,
+      brandId:latest.brandId || sku.brandId,
+      inventory:latest.inventory ?? sku.inventory,
+      status:latest.status || sku.status,
+      extraFields:{ ...(sku.extraFields||{}), ...(latest.extraFields||{}) },
+      syncedFromSkuStorage:true,
+    };
+  };
+
+  const syncPhaseoutProductLabelFromStorage = (value:any) => {
+    if(!isPhaseoutProduct(value)) return value;
+    const clean = (v:any) => String(v||"").toLowerCase();
+    const label = cleanPhaseoutProductLabel(value);
+    const labelClean = clean(label);
+
+    const latest = (skuStorage||[]).find((item:any)=>{
+      const sku = clean(item?.sku || item?.value);
+      const product = clean(item?.productName || item?.value);
+      return (sku && labelClean.includes(sku)) || (product && labelClean.includes(product));
+    });
+
+    return latest ? phaseoutProductLabel(latest,brands) : value;
+  };
+
+  useEffect(()=>{
+    if(!skuStorage?.length) return;
+
+    setChecklistGroups((prev:any[])=>{
+      let changed = false;
+      const next = (prev||[]).map((group:any)=>{
+        if(!Array.isArray(group.skus) || !group.skus.length) return group;
+        const nextSkus = group.skus.map((sku:any)=>{
+          const synced = syncSkuFromStorage(sku);
+          if(JSON.stringify(synced)!==JSON.stringify(sku)) changed = true;
+          return synced;
+        });
+        return changed ? { ...group, skus:nextSkus } : group;
+      });
+      return changed ? next : prev;
+    });
+
+    setSeasonalEvents((prev:any[])=>{
+      let changed = false;
+      const next = (prev||[]).map((event:any)=>{
+        if(!Array.isArray(event.products) || !event.products.length) return event;
+        const products = event.products.map((product:any)=>{
+          const synced = syncPhaseoutProductLabelFromStorage(product);
+          if(synced!==product) changed = true;
+          return synced;
+        });
+        return changed ? { ...event, products } : event;
+      });
+      return changed ? next : prev;
+    });
+  },[skuStorage,brands]);
 
   const [appStateHydrated,setAppStateHydrated] = useState(false);
   const [cloudHydrated,setCloudHydrated] = useState(false);
