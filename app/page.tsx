@@ -5372,17 +5372,53 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const makeBulkRows = (count:number=8) => Array.from({length:count},()=>newBulkRow());
   const [bulkGridRows,setBulkGridRows] = useState<any[]>(()=>makeBulkRows(8));
   const [bulkError,setBulkError] = useState("");
-  const commitSkuStorage = (updater:any) => {
+  const skuStorageSaveTimer = useRef<any>(null);
+  const skuBrandsSaveTimer = useRef<any>(null);
+
+  useEffect(()=>{
+    return () => {
+      if(skuStorageSaveTimer.current) clearTimeout(skuStorageSaveTimer.current);
+      if(skuBrandsSaveTimer.current) clearTimeout(skuBrandsSaveTimer.current);
+    };
+  },[]);
+
+  const scheduleSkuStorageSave = (next:any[]) => {
+    if(!onStateChange) return;
+    if(skuStorageSaveTimer.current) clearTimeout(skuStorageSaveTimer.current);
+    skuStorageSaveTimer.current = setTimeout(()=>onStateChange({ skuItems: next }), 650);
+  };
+
+  const scheduleSkuBrandsSave = (next:any[]) => {
+    if(!onStateChange) return;
+    if(skuBrandsSaveTimer.current) clearTimeout(skuBrandsSaveTimer.current);
+    skuBrandsSaveTimer.current = setTimeout(()=>onStateChange({ skuBrands: next }), 650);
+  };
+
+  const commitSkuStorage = (updater:any, immediate:boolean=false) => {
     setSkuStorage((prev:any[]) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      if(onStateChange) onStateChange({ skuItems: next });
+      if(onStateChange){
+        if(immediate) {
+          if(skuStorageSaveTimer.current) clearTimeout(skuStorageSaveTimer.current);
+          onStateChange({ skuItems: next });
+        } else {
+          scheduleSkuStorageSave(next);
+        }
+      }
       return next;
     });
   };
-  const commitBrands = (updater:any) => {
+  const commitBrands = (updater:any, immediate:boolean=false) => {
     setBrands((prev:any[]) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      if(onStateChange) onStateChange({ skuBrands: next });
+      if(onStateChange){
+        if(immediate) {
+          if(skuBrandsSaveTimer.current) clearTimeout(skuBrandsSaveTimer.current);
+          onStateChange({ skuBrands: next });
+        } else {
+          scheduleSkuBrandsSave(next);
+        }
+      }
       return next;
     });
   };
@@ -5473,10 +5509,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
     const baseSku={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
     const e=setSkuTagsOnItem(baseSku,sForm.tag);
-    if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s)); else commitSkuStorage((p:any[])=>[...p,e]);
+    if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s), true); else commitSkuStorage((p:any[])=>[...p,e], true);
     setSkuModal(false);
   };
-  const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id));
+  const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id), true);
   const normalizeKey = (v:any) => String(v||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
 
   const BULK_PLACEHOLDERS:any = {
@@ -6031,8 +6067,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         ? [...skuStorage.filter((s:any)=>!scopedOriginalIds.has(s.id)), ...editedSkus]
         : editedSkus;
 
-      commitBrands(nextBrands);
-      commitSkuStorage(nextSkus);
+      commitBrands(nextBrands, true);
+      commitSkuStorage(nextSkus, true);
       setBulkModal(false);
       setBulkError("");
       return;
@@ -6045,8 +6081,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       if(existingIndex>=0) nextSkus[existingIndex]={...nextSkus[existingIndex],...e,id:nextSkus[existingIndex].id};
       else nextSkus.push(e);
     });
-    commitBrands(nextBrands);
-    commitSkuStorage(nextSkus);
+    commitBrands(nextBrands, true);
+    commitSkuStorage(nextSkus, true);
     setBulkModal(false);
     setBulkGridRows(makeBulkRows(8));
     setBulkError("");
