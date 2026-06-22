@@ -8138,77 +8138,108 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
               {adError&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:700 }}>{adError}</p>}
             </div>
 
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) 300px",gap:12,alignItems:"start" }}>
-              <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface,minWidth:0 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10 }}>
-                  <div>
-                    <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Generated Text Output</h4>
-                    <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "Ad Format"}</p>
-                  </div>
-                  {generatedAdText&&(
-                    <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
-                      <Btn xs variant="outline" onClick={saveGeneratedAdTemplate}>Save Output</Btn>
-                      <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy</Btn>
-                    </div>
-                  )}
+            <div style={{ border:`1.5px solid ${C.border}`,borderRadius:14,padding:isMobile?12:16,background:C.surface,minWidth:0 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:12 }}>
+                <div>
+                  <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Generated Ad Output</h4>
+                  <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>{selectedPlatform?.name || "Platform"} · {selectedFormat?.name || "Ad Format"}</p>
                 </div>
-
-                {isCarouselFormat && generatedAdCards.length>0 ? (
-                  <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(210px,1fr))",gap:10 }}>
-                    {generatedAdCards.map((card:any,index:number)=>(
-                      <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                        <div style={{ height:92,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:10 }}>
-                          <span style={{ fontSize:11,color:C.muted,fontWeight:800 }}>{(card.mediaType || recommendedCarouselMediaType(index))==="video" ? "Video Placeholder" : "Image Placeholder"}<br/>Card {index+1}</span>
-                        </div>
-                        <div style={{ padding:10,display:"flex",flexDirection:"column",gap:6 }}>
-                          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:6 }}>
-                            <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.accent }}>Card {index+1}</p>
-                            <Select value={card.mediaType || recommendedCarouselMediaType(index)} onChange={(value)=>updateAdCard(index,{ mediaType:value })}>
-                              <option value="image">Image</option>
-                              <option value="video">Video</option>
-                            </Select>
-                          </div>
-                          <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{card.headline || "Headline"}</p>
-                          <p style={{ margin:0,fontSize:11.5,color:C.textSub,lineHeight:1.4 }}>{card.copy || "Copy will appear here."}</p>
-                          <p style={{ margin:0,fontSize:10.5,color:C.muted,lineHeight:1.35 }}>Visual: {card.visual || "Image direction placeholder"}</p>
-                          <p style={{ margin:0,fontSize:10.5,color:C.textSub,fontWeight:800 }}>CTA: {card.cta || "Shop Now"}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ minHeight:220,padding:12,borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.5,color:generatedAdText?C.textSub:C.muted }}>
-                    {adGenerating ? "Generating..." : generatedAdText || "Generated ad copy will appear here after you choose an ad format."}
+                {generatedAdText&&(
+                  <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                    <Btn xs variant="outline" onClick={saveGeneratedAdTemplate}>Save Output</Btn>
+                    <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy</Btn>
                   </div>
                 )}
               </div>
 
-              <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface }}>
-                <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{isCollectionFormat ? "Collection Ad Preview" : "Image Placeholder"}</h4>
-                {isCollectionFormat ? (
-                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                    <div style={{ aspectRatio:"4 / 3",borderRadius:12,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:16 }}>
+              {isCarouselFormat && generatedAdCards.length>0 ? (
+                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                  <div style={{ padding:"10px 12px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                    <div>
+                      <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>Carousel Asset Plan</p>
+                      <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Each card can be set as Image or Video. Placeholder only for now.</p>
+                    </div>
+                    <div style={{ display:"flex",gap:5,flexWrap:"wrap" }}>
+                      {generatedAdCards.map((card:any,index:number)=>(
+                        <button key={`mini-${index}`} type="button" onClick={()=>updateAdCard(index,{ mediaType:(card.mediaType || recommendedCarouselMediaType(index))==="video"?"image":"video" })}
+                          style={{ border:`1px solid ${(card.mediaType || recommendedCarouselMediaType(index))==="video"?"#FCA5A5":"#BFDBFE"}`,background:(card.mediaType || recommendedCarouselMediaType(index))==="video"?"#FEF2F2":"#EFF6FF",color:(card.mediaType || recommendedCarouselMediaType(index))==="video"?"#DC2626":C.accent,borderRadius:999,padding:"3px 7px",fontSize:10,fontWeight:900,cursor:"pointer" }}>
+                          C{index+1} {(card.mediaType || recommendedCarouselMediaType(index))==="video"?"Video":"Image"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(260px,1fr))",gap:12 }}>
+                    {generatedAdCards.map((card:any,index:number)=>{
+                      const mediaType = card.mediaType || recommendedCarouselMediaType(index);
+                      return (
+                        <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:14,background:C.bg,overflow:"hidden",boxShadow:"0 8px 22px rgba(15,23,42,.04)" }}>
+                          <div style={{ height:118,background:mediaType==="video"?"#FEF2F2":"#EFF6FF",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,position:"relative" }}>
+                            <span style={{ position:"absolute",top:8,left:8,fontSize:10,fontWeight:900,color:mediaType==="video"?"#DC2626":C.accent,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Card {index+1}</span>
+                            <span style={{ fontSize:12,color:mediaType==="video"?"#991B1B":C.accent,fontWeight:900,lineHeight:1.35 }}>{mediaType==="video" ? "Video Placeholder" : "Image Placeholder"}<br/><span style={{ fontSize:10,color:C.muted }}>AI visual will go here later</span></span>
+                          </div>
+
+                          <div style={{ padding:12,display:"flex",flexDirection:"column",gap:8 }}>
+                            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+                              <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Asset Type</p>
+                              <Select value={mediaType} onChange={(value)=>updateAdCard(index,{ mediaType:value })}>
+                                <option value="image">Image</option>
+                                <option value="video">Video</option>
+                              </Select>
+                            </div>
+
+                            <div>
+                              <p style={{ margin:"0 0 3px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
+                              <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{card.headline || "Headline"}</p>
+                            </div>
+
+                            <div>
+                              <p style={{ margin:"0 0 3px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p>
+                              <p style={{ margin:0,fontSize:12.2,color:C.textSub,lineHeight:1.45 }}>{card.copy || "Copy will appear here."}</p>
+                            </div>
+
+                            <div style={{ padding:9,borderRadius:9,background:C.surface,border:`1px solid ${C.border}` }}>
+                              <p style={{ margin:"0 0 3px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{mediaType==="video"?"Video Direction":"Image Direction"}</p>
+                              <p style={{ margin:0,fontSize:11.2,color:C.textSub,lineHeight:1.4 }}>{card.visual || "Visual direction placeholder"}</p>
+                            </div>
+
+                            <p style={{ margin:0,fontSize:11,color:C.text,fontWeight:900 }}>CTA: {card.cta || "Shop Now"}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : isCollectionFormat ? (
+                <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.1fr) minmax(260px,.9fr)",gap:12,alignItems:"start" }}>
+                  <div style={{ minHeight:220,padding:12,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.5,color:generatedAdText?C.textSub:C.muted }}>
+                    {adGenerating ? "Generating..." : generatedAdText || "Generated collection ad copy will appear here after you choose Collection Ad."}
+                  </div>
+
+                  <div style={{ border:`1px solid ${C.border}`,borderRadius:14,background:C.bg,padding:12 }}>
+                    <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Collection Ad Layout</h4>
+                    <div style={{ aspectRatio:"4 / 3",borderRadius:12,border:`1.5px dashed ${C.border}`,background:C.surface,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:16,marginBottom:10 }}>
                       <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>{collectionHeroMedia==="video" ? "Single Video Hero Placeholder" : collectionHeroMedia==="image" ? "Single Image Hero Placeholder" : "Hero Placeholder: AI recommends image or video"}</p>
                     </div>
                     <div style={{ display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8 }}>
                       {Array.from({length:4},(_,i)=>{
                         const sku = selectedAdSkus[i];
                         return (
-                          <div key={i} style={{ border:`1px solid ${C.border}`,borderRadius:8,background:C.bg,padding:8,minHeight:72 }}>
-                            <div style={{ height:32,borderRadius:6,border:`1px dashed ${C.border}`,background:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,color:C.muted,fontWeight:800 }}>Product {i+1}</div>
-                            <p style={{ margin:"5px 0 0",fontSize:10.5,fontWeight:800,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku?.productName || "Product placeholder"}</p>
+                          <div key={i} style={{ border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,padding:8,minHeight:78 }}>
+                            <div style={{ height:34,borderRadius:7,border:`1px dashed ${C.border}`,background:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,color:C.muted,fontWeight:800 }}>Product {i+1}</div>
+                            <p style={{ margin:"6px 0 0",fontSize:10.5,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku?.productName || "Product placeholder"}</p>
                             <p style={{ margin:"1px 0 0",fontSize:9.5,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku?.sku || "SKU"}</p>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                ) : (
-                  <div style={{ aspectRatio:"1 / 1",borderRadius:12,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:16 }}>
-                    <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>AI image generation will be connected later.<br/>For now, use the generated visual direction as the image brief.</p>
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div style={{ minHeight:240,padding:12,borderRadius:12,border:`1px solid ${C.border}`,background:C.bg,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.5,color:generatedAdText?C.textSub:C.muted }}>
+                  {adGenerating ? "Generating..." : generatedAdText || "Generated ad copy will appear here after you choose an ad format."}
+                </div>
+              )}
             </div>
 
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface,display:"flex",flexDirection:"column",gap:10 }}>
