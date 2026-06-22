@@ -3315,7 +3315,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                   <div style={{ minWidth:0,flex:"1 1 260px" }}>
                     <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Catalog image reader</p>
                     <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
-                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Read Catalog & Generate Prompt.` : "Click this box then Ctrl+V / Cmd+V to paste a catalog image, or use Choose Image. Gemini will read visible text/details from the image."}
+                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Add Reference if you want to include it.` : "Click this box then Ctrl+V / Cmd+V to paste a catalog image, or use Choose Image. Gemini will read visible text/details from the image when generating."}
                     </p>
                   </div>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
@@ -3324,7 +3324,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                       <input type="file" accept="image/*" onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
                     </label>
                     <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add Reference</Btn>
-                    <Btn sm onClick={generateEcommercePromptFromCatalog} disabled={!!aiBusy.ecommercePrompt || (!data.pastedPromptImage && !(data.catalogFiles||[]).length && !productRows.length)}>{aiBusy.ecommercePrompt?"Reading Catalog...":"Read Catalog & Generate Prompt"}</Btn>
                   </div>
                 </div>
                 {data.pastedPromptImage&&String(data.pastedPromptImage.type||"").startsWith("image/")&&(
