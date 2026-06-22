@@ -2801,6 +2801,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
+  const [activeGroupTab,setActiveGroupTab] = useState("tasks");
   const [skuPickDept,setSkuPickDept] = useState(null);
   const [productDetail,setProductDetail] = useState<any>(null);
   const [productEdit,setProductEdit] = useState<any>(null);
@@ -2905,6 +2906,164 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     setProductEdit(null);
   };
 
+  const workspaceTabs:any[] = [
+    { id:"tasks", label:"Tasks", sub:"Checklist board" },
+    { id:"ecommerce", label:"E-commerce", sub:"Listing copy and marketplace assets" },
+    { id:"marketing", label:"Marketing", sub:"Campaign copy and ads direction" },
+    { id:"digital", label:"Digital Creative", sub:"Creative briefs and image prompts" },
+  ];
+
+  const workspaceConfig:any = {
+    ecommerce:{
+      title:"E-commerce Overview",
+      description:"Build listing text, marketplace copy, SEO titles, bullets, and product image prompts for the selected products.",
+      textLabel:"AI Text Generation",
+      textPlaceholder:"Example: Generate Shopee/Lazada product title, short description, bullet points, and SEO keywords for these selected products.",
+      imageLabel:"AI Image Generation",
+      imagePlaceholder:"Example: Create a clean marketplace hero image prompt with product benefits, lifestyle setting, and no text overlay.",
+      outputHint:"Generated e-commerce text and image prompts will appear here once AI generation is connected.",
+    },
+    marketing:{
+      title:"Marketing Overview",
+      description:"Plan campaign angles, hooks, captions, offer messaging, ad copy, and content ideas for the selected products.",
+      textLabel:"AI Text Generation",
+      textPlaceholder:"Example: Generate 5 campaign hooks, ad captions, selling points, and promo angles for this checklist group.",
+      imageLabel:"AI Image Generation",
+      imagePlaceholder:"Example: Create a lifestyle campaign image prompt that matches the event/season and target buyers.",
+      outputHint:"Generated marketing copy and campaign image prompts will appear here once AI generation is connected.",
+    },
+    digital:{
+      title:"Digital Creative Overview",
+      description:"Create visual directions, design briefs, video prompts, shot lists, and creative production notes.",
+      textLabel:"AI Text Generation",
+      textPlaceholder:"Example: Generate a creative brief, storyboard direction, and shot list for social media content.",
+      imageLabel:"AI Image Generation",
+      imagePlaceholder:"Example: Create a polished product photography prompt with lighting, background, props, and composition.",
+      outputHint:"Generated digital creative briefs and image prompts will appear here once AI generation is connected.",
+    },
+  };
+
+  const updateAiWorkspace = (tab:string, patch:any) => {
+    const current = group.aiWorkspace || {};
+    const next = {
+      ...current,
+      [tab]: {
+        ...(current[tab] || {}),
+        ...patch,
+      }
+    };
+    if(onUpdateGroup) onUpdateGroup({ aiWorkspace:next });
+  };
+
+  const renderAiWorkspace = (tab:string) => {
+    const cfg = workspaceConfig[tab];
+    const data = (group.aiWorkspace || {})[tab] || {};
+    if(!cfg) return null;
+    return (
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.1fr) minmax(0,.9fr)",gap:14 }}>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>{cfg.title}</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:680 }}>{cfg.description}</p>
+              </div>
+              <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{productRows.length} products</span>
+            </div>
+            <div style={{ marginTop:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)",gap:8 }}>
+              <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:9 }}>
+                <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>Group</p>
+                <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{group.groupName}</p>
+              </div>
+              <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:9 }}>
+                <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>Operation</p>
+                <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text }}>{lt.label}</p>
+              </div>
+              <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:9 }}>
+                <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>Schedule</p>
+                <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text }}>{group.deadline ? (group.deadlineEnd?`${group.deadline} → ${group.deadlineEnd}`:group.deadline) : (Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length?formatMonthOnlyLabel(group.monthOnlyMonths):"No date")}</p>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8 }}>
+              <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{cfg.textLabel}</h4>
+              <span style={{ fontSize:10.5,color:C.faint,fontWeight:800,textTransform:"uppercase",letterSpacing:".05em" }}>Interface only</span>
+            </div>
+            <textarea
+              value={data.textPrompt || ""}
+              onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
+              placeholder={cfg.textPlaceholder}
+              rows={5}
+              style={{ width:"100%",minHeight:120,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+            />
+            <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",marginTop:10 }}>
+              <Btn sm variant="outline" disabled>Save Prompt</Btn>
+              <Btn sm disabled>Generate Text</Btn>
+            </div>
+          </div>
+
+          <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8 }}>
+              <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{cfg.imageLabel}</h4>
+              <span style={{ fontSize:10.5,color:C.faint,fontWeight:800,textTransform:"uppercase",letterSpacing:".05em" }}>Interface only</span>
+            </div>
+            <textarea
+              value={data.imagePrompt || ""}
+              onChange={e=>updateAiWorkspace(tab,{ imagePrompt:e.target.value })}
+              placeholder={cfg.imagePlaceholder}
+              rows={5}
+              style={{ width:"100%",minHeight:120,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+            />
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:8,marginTop:10 }}>
+              <Select value={data.imageRatio || "1:1"} onChange={(v:any)=>updateAiWorkspace(tab,{ imageRatio:v })}>
+                <option value="1:1">1:1 Square</option>
+                <option value="4:5">4:5 Portrait</option>
+                <option value="9:16">9:16 Vertical</option>
+                <option value="16:9">16:9 Landscape</option>
+              </Select>
+              <Select value={data.imageStyle || "photorealistic"} onChange={(v:any)=>updateAiWorkspace(tab,{ imageStyle:v })}>
+                <option value="photorealistic">Photorealistic</option>
+                <option value="studio">Studio Product</option>
+                <option value="lifestyle">Lifestyle</option>
+                <option value="ugc">UGC / TikTok Style</option>
+              </Select>
+              <Btn sm disabled>Generate Image</Btn>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Selected Products</h4>
+            <div style={{ maxHeight:220,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:9 }}>
+              {productRows.slice(0,20).map((row:any,idx:number)=>(
+                <div key={`${row.skuCode}-${idx}`} style={{ padding:"8px 10px",borderBottom:idx===Math.min(productRows.length,20)-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
+                  <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}</p>
+                  <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || "No collection/category"} · {row.skuCode}</p>
+                </div>
+              ))}
+              {productRows.length===0&&<div style={{ padding:12,fontSize:12,color:C.faint }}>No selected products yet.</div>}
+            </div>
+          </div>
+
+          <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Generated Outputs</h4>
+            <div style={{ minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,padding:16 }}>
+              <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>{cfg.outputHint}</p>
+            </div>
+          </div>
+
+          <div style={{ padding:14,background:"#FFFBEB",border:"1.5px solid #FDE68A",borderRadius:12 }}>
+            <h4 style={{ margin:"0 0 6px",fontSize:13,fontWeight:900,color:"#92400E" }}>Next AI Setup</h4>
+            <p style={{ margin:0,fontSize:12,color:"#92400E",lineHeight:1.5 }}>This tab is ready for Gemini text generation and image generation connection. Buttons are disabled for now so the interface can be reviewed first.</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       {/* Header */}
@@ -2968,6 +3127,18 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         </div>
       </div>
 
+      <div style={{ display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:14,WebkitOverflowScrolling:"touch" }}>
+        {workspaceTabs.map((tab:any)=>(
+          <button key={tab.id} onClick={()=>setActiveGroupTab(tab.id)}
+            style={{ flexShrink:0,padding:"8px 12px",borderRadius:10,border:`1.5px solid ${activeGroupTab===tab.id?groupColor:C.border}`,background:activeGroupTab===tab.id?groupColor:C.surface,color:activeGroupTab===tab.id?"#fff":C.textSub,cursor:"pointer",textAlign:"left",minWidth:isMobile?132:150 }}>
+            <span style={{ display:"block",fontSize:12,fontWeight:900 }}>{tab.label}</span>
+            <span style={{ display:"block",fontSize:10,opacity:.78,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{tab.sub}</span>
+          </button>
+        ))}
+      </div>
+
+      {activeGroupTab==="tasks" ? (
+        <>
       {/* Dept filter + status legend */}
       <div style={{ display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:16,WebkitOverflowScrolling:"touch" }}>
         {["all",...Object.keys(DEPTS)].map(d=>(<button key={d} onClick={()=>setActiveDept(d)} style={{ padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",background:activeDept===d?C.accent:C.surface,color:activeDept===d?"#fff":C.muted,border:`1.5px solid ${activeDept===d?C.accent:C.border}`,whiteSpace:"nowrap",flexShrink:0 }}>{d==="all"?"All Depts":DEPTS[d].label}</button>))}
@@ -3003,6 +3174,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
           );
         })}
       </div>
+        </>
+      ) : (
+        renderAiWorkspace(activeGroupTab)
+      )}
+
       <Modal open={!!productDetail} onClose={()=>{ setProductDetail(null); setProductEdit(null); }} title="Product Details" width={520}>
         {productDetail&&productEdit&&(
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
