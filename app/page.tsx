@@ -2816,7 +2816,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [newEcommerceSection,setNewEcommerceSection] = useState("");
   const [editingEcommerceSection,setEditingEcommerceSection] = useState<any>(null);
   const [editingEcommerceSectionValue,setEditingEcommerceSectionValue] = useState("");
-  const [openEcommerceInstruction,setOpenEcommerceInstruction] = useState<any>(null);
+  const [editingEcommerceInstructionValue,setEditingEcommerceInstructionValue] = useState("");
 
   useEffect(()=>{
     if(!initialItems) return;
@@ -3182,11 +3182,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const startEditEcommerceSection = (section:string) => {
     setEditingEcommerceSection(section);
     setEditingEcommerceSectionValue(section);
+    setEditingEcommerceInstructionValue(getEcommerceSectionInstructions()[section] || "");
   };
 
   const cancelEditEcommerceSection = () => {
     setEditingEcommerceSection(null);
     setEditingEcommerceSectionValue("");
+    setEditingEcommerceInstructionValue("");
   };
 
   const saveEditedEcommerceSection = () => {
@@ -3197,12 +3199,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const nextSections = sections.map((section:string)=>section===oldLabel ? newLabel : section);
     const nextSelected = getSelectedEcommerceSections().map((section:string)=>section===oldLabel ? newLabel : section);
     const instructions = { ...getEcommerceSectionInstructions() };
-    if(instructions[oldLabel] && oldLabel!==newLabel){
-      instructions[newLabel] = instructions[oldLabel];
-      delete instructions[oldLabel];
-    }
+    if(oldLabel!==newLabel) delete instructions[oldLabel];
+    const cleanInstruction = editingEcommerceInstructionValue.trim();
+    if(cleanInstruction) instructions[newLabel] = cleanInstruction;
+    else delete instructions[newLabel];
     saveEcommerceSections(nextSections,nextSelected,instructions);
-    if(openEcommerceInstruction===oldLabel) setOpenEcommerceInstruction(newLabel);
     cancelEditEcommerceSection();
   };
 
@@ -3213,7 +3214,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     delete instructions[section];
     saveEcommerceSections(nextSections,nextSelected,instructions);
     if(editingEcommerceSection===section) cancelEditEcommerceSection();
-    if(openEcommerceInstruction===section) setOpenEcommerceInstruction(null);
   };
 
   const buildEcommercePrompt = () => {
@@ -3668,47 +3668,52 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
                 {ecommerceOutputSections.map((section:string)=>{
                   const active = selectedSections.includes(section);
-                  const editing = editingEcommerceSection===section;
+                  const hasInstruction = !!String(sectionInstructions[section] || "").trim();
                   return (
-                    <div key={section} style={{ display:"flex",alignItems:"center",gap:6,padding:"7px 8px",background:active?"#EEF2FF":C.bg,border:`1.5px solid ${active?C.accent:C.border}`,borderRadius:8 }}>
+                    <div key={section} style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 10px",background:active?"#EEF2FF":C.bg,border:`1.5px solid ${active?C.accent:C.border}`,borderRadius:8 }}>
                       <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ width:18,height:18,borderRadius:4,display:"inline-flex",alignItems:"center",justifyContent:"center",background:active?C.accent:"transparent",border:`1.5px solid ${active?C.accent:C.borderStrong}`,color:"#fff",fontSize:11,fontWeight:900,flexShrink:0,cursor:"pointer" }}>{active?"✓":""}</button>
-                      {editing ? (
-                        <>
-                          <input
-                            value={editingEcommerceSectionValue}
-                            onChange={e=>setEditingEcommerceSectionValue(e.target.value)}
-                            onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); saveEditedEcommerceSection(); } if(e.key==="Escape"){ cancelEditEcommerceSection(); } }}
-                            autoFocus
-                            style={{ minWidth:0,flex:1,height:28,padding:"0 8px",borderRadius:7,border:`1px solid ${C.border}`,outline:"none",fontSize:12,fontWeight:750,color:C.text,background:C.surface }}
-                          />
-                          <button onClick={saveEditedEcommerceSection} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save</button>
-                          <button onClick={cancelEditEcommerceSection} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Cancel</button>
-                        </>
-                      ) : (
-                        <>
-                          <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>{section}</button>
-                          <button onClick={()=>setOpenEcommerceInstruction(openEcommerceInstruction===section?null:section)} style={{ border:"none",background:sectionInstructions[section]?"#ECFDF5":C.surfaceAlt,color:sectionInstructions[section]?"#047857":C.muted,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>{sectionInstructions[section]?"Instruction":"Add Instruction"}</button>
-                          <button onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
-                          <button onClick={()=>deleteEcommerceSection(section)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Delete</button>
-                        </>
-                      )}
-                      {openEcommerceInstruction===section&&!editing&&(
-                        <div style={{ flexBasis:"100%",marginTop:6 }}>
-                          <textarea
-                            value={sectionInstructions[section] || ""}
-                            onChange={e=>setEcommerceSectionInstruction(section,e.target.value)}
-                            placeholder={`Add specific instructions for ${section}...`}
-                            style={{ width:"100%",minHeight:64,resize:"vertical",padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,outline:"none",fontSize:11.5,lineHeight:1.45,color:C.text,background:C.surface }}
-                          />
-                          <p style={{ margin:"4px 0 0",fontSize:10.5,color:C.faint }}>This instruction will be added under this section in the AI prompt.</p>
-                        </div>
-                      )}
+                      <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>
+                        {section}
+                        {hasInstruction&&<span style={{ display:"block",marginTop:2,fontSize:10.5,fontWeight:700,color:"#047857" }}>Has instruction</span>}
+                      </button>
+                      <button onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
                     </div>
                   );
                 })}
               </div>
-              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Add, edit, delete, select sections, or add instructions, then click Save Changes to refresh the listing template prompt above.</p>
+              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Edit a section to rename it, add refining instructions, or delete it. Then click Save Changes to refresh the listing template prompt above.</p>
             </div>
+
+            {editingEcommerceSection&&(
+              <Modal open={!!editingEcommerceSection} onClose={cancelEditEcommerceSection} title="Edit Output Section" width={560}>
+                <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+                  <Field label="Section Name">
+                    <TI value={editingEcommerceSectionValue} onChange={setEditingEcommerceSectionValue} placeholder="e.g. Product Overview" />
+                  </Field>
+
+                  <Field label="Section Instruction">
+                    <textarea
+                      value={editingEcommerceInstructionValue}
+                      onChange={e=>setEditingEcommerceInstructionValue(e.target.value)}
+                      placeholder="Add specific instructions to refine how AI writes this section..."
+                      style={{ width:"100%",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                    />
+                  </Field>
+
+                  <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                    <p style={{ margin:0,fontSize:11.5,color:C.muted,lineHeight:1.5 }}>This instruction will be added under this section in the AI prompt after you click Save, then Save Changes.</p>
+                  </div>
+
+                  <div style={{ display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}>
+                    <Btn variant="danger" onClick={()=>deleteEcommerceSection(editingEcommerceSection)}>Delete Section</Btn>
+                    <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                      <Btn variant="outline" onClick={cancelEditEcommerceSection}>Cancel</Btn>
+                      <Btn onClick={saveEditedEcommerceSection} disabled={!editingEcommerceSectionValue.trim()}>Save</Btn>
+                    </div>
+                  </div>
+                </div>
+              </Modal>
+            )}
           </div>
 
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
