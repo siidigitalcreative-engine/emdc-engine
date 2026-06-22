@@ -2955,10 +2955,161 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(onUpdateGroup) onUpdateGroup({ aiWorkspace:next });
   };
 
+  const ecommerceOutputSections = [
+    "Product Overview",
+    "Key Features",
+    "Variants Available",
+    "Color Options",
+    "Product Specifications",
+    "Perfect For",
+    "Care & Use",
+    "Package Includes",
+    "Best SEO Listing Title",
+    "Stronger Lazada/Shopee SEO Version",
+    "Recommended Variations",
+    "Better Option / Higher AOV",
+    "Search Keywords",
+    "Recommended Final Listing Structure",
+  ];
+
+  const buildEcommercePrompt = () => {
+    const mappedProducts = productRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||""} | Product: ${row.product||""} | SKU: ${row.skuCode||""}`).join("\n");
+    return `Create a complete e-commerce listing output for this checklist group.\n\nGroup: ${group.groupName}\nOperational Type: ${lt.label}\nSchedule: ${group.deadline ? (group.deadlineEnd?`${group.deadline} to ${group.deadlineEnd}`:group.deadline) : (Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length?formatMonthOnlyLabel(group.monthOnlyMonths):"No date")}\n\nSelected products mapped from SKU Storage:\n${mappedProducts || "No products selected yet."}\n\nUse the uploaded catalog page as the product reference. Generate the output using this exact structure:\n- Product collection/title\n- Product Overview\n- Key Features\n- Variants Available\n- Color Options\n- Product Specifications\n- Perfect For\n- Care & Use\n- Package Includes\n- Best SEO Listing Title\n- Stronger Lazada/Shopee SEO Version\n- Recommended Variations\n- Better Option / Higher AOV\n- Search Keywords\n- Recommended Final Listing Structure\n\nWrite in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.`;
+  };
+
+  const handleCatalogUpload = async (tab:string, e:any) => {
+    const files = Array.from(e?.target?.files || []) as any[];
+    if(!files.length) return;
+    const existing = ((group.aiWorkspace || {})[tab]?.catalogFiles || []) as any[];
+    const toDataUrl = (file:any) => new Promise((resolve)=>{
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name:file.name, type:file.type, size:file.size, dataUrl:reader.result });
+      reader.onerror = () => resolve({ name:file.name, type:file.type, size:file.size, dataUrl:"" });
+      reader.readAsDataURL(file);
+    });
+    const uploaded:any[] = await Promise.all(files.slice(0,8).map(toDataUrl));
+    updateAiWorkspace(tab,{ catalogFiles:[...existing,...uploaded].slice(0,12) });
+    e.target.value = "";
+  };
+
+  const removeCatalogFile = (tab:string, idx:number) => {
+    const current = ((group.aiWorkspace || {})[tab]?.catalogFiles || []) as any[];
+    updateAiWorkspace(tab,{ catalogFiles:current.filter((_:any,i:number)=>i!==idx) });
+  };
+
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
     const data = (group.aiWorkspace || {})[tab] || {};
     if(!cfg) return null;
+
+    if(tab==="ecommerce"){
+      const catalogFiles = data.catalogFiles || [];
+      const mappedProducts = productRows.slice(0,30);
+      return (
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.1fr) minmax(0,.9fr)",gap:14 }}>
+          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                <div>
+                  <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>E-commerce Listing Builder</h3>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Generate the complete marketplace listing structure for the selected products. The product list is mapped from the checklist SKUs, while uploaded catalog pages will be used as reference once AI is connected.</p>
+                </div>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{productRows.length} products</span>
+              </div>
+            </div>
+
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                <div>
+                  <h4 style={{ margin:"0 0 3px",fontSize:13,fontWeight:900,color:C.text }}>Upload Catalog Page</h4>
+                  <p style={{ margin:0,fontSize:11.5,color:C.muted }}>Upload catalog pages, product sheets, images, or PDFs for AI reference.</p>
+                </div>
+                <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:34,padding:"0 12px",borderRadius:8,background:C.accent,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer" }}>
+                  Upload Catalog
+                  <input type="file" accept="image/*,.pdf,.txt,.doc,.docx" multiple onChange={(e:any)=>handleCatalogUpload(tab,e)} style={{ display:"none" }} />
+                </label>
+              </div>
+              <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                {catalogFiles.length===0&&<div style={{ padding:12,background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,fontSize:12,color:C.faint,textAlign:"center" }}>No catalog uploaded yet. Upload a catalog page so AI can read product specs, materials, sizes, colors, and care instructions later.</div>}
+                {catalogFiles.map((file:any,idx:number)=>(
+                  <div key={`${file.name}-${idx}`} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
+                    <div style={{ minWidth:0 }}>
+                      <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{file.name}</p>
+                      <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.faint }}>{file.type||"file"} · {Math.round((file.size||0)/1024)} KB</p>
+                    </div>
+                    <button onClick={()=>removeCatalogFile(tab,idx)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
+                <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
+                <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt() })}>Use Listing Template</Btn>
+              </div>
+              <textarea
+                value={data.textPrompt || ""}
+                onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
+                placeholder="Click Use Listing Template, or write your own instruction for the e-commerce listing output."
+                rows={9}
+                style={{ width:"100%",minHeight:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+              />
+              <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",marginTop:10 }}>
+                <Btn sm variant="outline" disabled>Save Prompt</Btn>
+                <Btn sm disabled>Generate E-commerce Listing</Btn>
+              </div>
+            </div>
+
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Required Output Structure</h4>
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
+                {ecommerceOutputSections.map((section:string)=>(
+                  <div key={section} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
+                    <span style={{ color:"#16A34A",fontWeight:900 }}>✓</span>
+                    <span style={{ fontSize:12,fontWeight:750,color:C.text }}>{section}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Mapped Products</h4>
+              <div style={{ maxHeight:260,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:9,WebkitOverflowScrolling:"touch" }}>
+                {mappedProducts.map((row:any,idx:number)=>(
+                  <div key={`${row.skuCode}-${idx}`} style={{ padding:"8px 10px",borderBottom:idx===mappedProducts.length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}</p>
+                    <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || "No collection/category"} · {row.skuCode}</p>
+                  </div>
+                ))}
+                {productRows.length===0&&<div style={{ padding:12,fontSize:12,color:C.faint }}>No selected products yet.</div>}
+                {productRows.length>mappedProducts.length&&<div style={{ padding:8,fontSize:11,color:C.faint,fontWeight:700 }}>+{productRows.length-mappedProducts.length} more products</div>}
+              </div>
+            </div>
+
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>E-commerce Output Preview</h4>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {["Product Title / Collection Name","Product Overview","Key Features","Variants + Color Options","Specifications + Care & Package Includes","SEO Title + Keywords + Final Listing Structure"].map((label:string)=>(
+                  <div key={label} style={{ padding:"9px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>{label}</p>
+                    <p style={{ margin:"3px 0 0",fontSize:11,color:C.faint }}>AI output placeholder</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ padding:14,background:"#FFFBEB",border:"1.5px solid #FDE68A",borderRadius:12 }}>
+              <h4 style={{ margin:"0 0 6px",fontSize:13,fontWeight:900,color:"#92400E" }}>Next AI Setup</h4>
+              <p style={{ margin:0,fontSize:12,color:"#92400E",lineHeight:1.5 }}>Next step: connect this tab to text generation so it reads selected products plus uploaded catalog pages and generates the full listing structure automatically.</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.1fr) minmax(0,.9fr)",gap:14 }}>
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
