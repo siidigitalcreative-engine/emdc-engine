@@ -580,9 +580,13 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const compactQ = q.replace(/[^a-z0-9]+/g,"");
+    const terms = q.split(/\s+/).filter(Boolean);
+
     const list = (skuStorage||[]).filter((s:any) => {
       const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
       const collectionName = getPickerCollection(s);
+      const tagText = getSkuTags(s).join(" ");
 
       if(brandFilter!=="all" && s.brandId !== brandFilter) return false;
       if(categoryFilter!=="all" && collectionName !== categoryFilter) return false;
@@ -599,10 +603,17 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
         s.inventory,
         s.status,
         brandName,
+        tagText,
+        getSkuTagText(s),
+        Object.keys(s.extraFields || {}).join(" "),
         Object.values(s.extraFields || {}).join(" "),
       ].filter(Boolean).join(" ").toLowerCase();
 
-      return searchable.includes(q);
+      const compactSearchable = searchable.replace(/[^a-z0-9]+/g,"");
+
+      return searchable.includes(q) ||
+        (!!compactQ && compactSearchable.includes(compactQ)) ||
+        terms.every((term:string)=>searchable.includes(term) || compactSearchable.includes(term.replace(/[^a-z0-9]+/g,"")));
     });
 
     return list;
@@ -676,8 +687,23 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
         onFocus={()=>setOpen(true)}
       />
       {open&&(
-        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,.12)",zIndex:400,maxHeight:420,overflowY:"auto" }}>
-          <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+        <div style={{
+          position:"fixed",
+          top:"max(96px, 12vh)",
+          left:"50%",
+          transform:"translateX(-50%)",
+          width:"min(92vw, 720px)",
+          maxWidth:"calc(100vw - 24px)",
+          background:C.surface,
+          border:`1.5px solid ${C.border}`,
+          borderRadius:12,
+          boxShadow:"0 18px 60px rgba(15,23,42,.22)",
+          zIndex:9999,
+          maxHeight:"min(70vh, 620px)",
+          overflowY:"auto",
+          WebkitOverflowScrolling:"touch"
+        }}>
+          <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
             <span style={{ fontSize:11,color:C.muted,fontWeight:700 }}>
               {results.length} SKU{results.length===1?"":"s"} found{brandFilter!=="all"?` · ${(brands||[]).find((b:any)=>b.id===brandFilter)?.name || "Brand"}`:""}{categoryFilter!=="all"?` · ${categoryFilter}`:""}
             </span>
@@ -700,7 +726,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
           {results.map((s:any)=>{ const brand=brands.find((b:any)=>b.id===s.brandId); const checked=selectedSet.has(s.id); const collectionName=getPickerCollection(s); return (
             <div key={s.id} onMouseDown={e=>{ e.preventDefault(); handlePick(s); }}
               className="emdc-row"
-              style={{ padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,background:checked?C.surfaceAlt:C.surface }}>
+              style={{ padding:"9px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,background:checked?C.surfaceAlt:C.surface }}>
               {multiSelect&&(
                 <div style={{ width:18,height:18,borderRadius:5,border:`2px solid ${checked?C.accent:C.borderStrong}`,background:checked?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
                   {checked&&<span style={{ color:"#fff",fontSize:10,lineHeight:1 }}>&#10003;</span>}
