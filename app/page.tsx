@@ -1525,12 +1525,14 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     }));
   },[eventTypes]);
 
-  // Helper: look up type color from current Manage Tags list
-  const typeColor = id => {
-    const found = calendarFilterTypes.find((t:any)=>t.id===id);
-    return found?.useColor ? found.color : "#9CA3AF";
+  // Helper: Manage Tags controls display color only when "Use tag color" is checked.
+  // If unchecked, each event/season/checklist keeps its own saved color.
+  const typeMeta = (id:any) => calendarFilterTypes.find((t:any)=>t.id===id);
+  const typeColor = (id:any, fallback:string="#9CA3AF") => {
+    const found = typeMeta(id);
+    return found?.useColor ? found.color : (fallback || found?.color || "#9CA3AF");
   };
-  const typeLabel = id => calendarFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
+  const typeLabel = (id:any) => typeMeta(id)?.label || normalizeTagLabel(id);
 
   const monthOnlyCalendarEvents = useMemo(()=>{
     const monthStart = `${year}-${pad(month+1)}-01`;
@@ -1546,7 +1548,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         id:`month-only-${ev.id}-${year}-${month}`,
         title:ev.name,
         type:ev.type || "seasonal",
-        color:(calendarFilterTypes.find((t:any)=>t.id===(ev.type || "seasonal"))?.useColor ? typeColor(ev.type || "seasonal") : (ev.color || "#14B8A6")),
+        color:typeColor(ev.type || "seasonal", ev.color || "#14B8A6"),
         date:monthStart,
         dateEnd:monthEnd,
         fromSeasonal:true,
@@ -1643,7 +1645,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         itemKind:"seasonal",
         title:ev.name,
         type:ev.type || "seasonal",
-        color:ev.color,
+        color:typeColor(ev.type || "seasonal", ev.color || "#14B8A6"),
         calDate:ev.calDate,
         dateEnd:ev.calDateEnd,
         dateText:ev.date,
@@ -1658,7 +1660,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:"manual",
       title:ev.title,
       type:ev.type || "task",
-      color:ev.color || typeColor(ev.type),
+      color:typeColor(ev.type || "task", ev.color || "#374151"),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -1671,7 +1673,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:ev.fromChecklist ? "checklist" : "extra",
       title:ev.title,
       type:ev.type || "deadline",
-      color:ev.color,
+      color:typeColor(ev.type || "deadline", ev.color || "#8B5CF6"),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -2093,7 +2095,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         </Select>
       </Field>
       <Field label="Color">
-        <ColorPicker value={seasonalEditForm.color||typeColor(seasonalEditForm.type)||"#374151"} onChange={v=>setSeasonalEditForm((f:any)=>({...f,color:v}))} palette={EVENT_COLORS} />
+        <ColorPicker value={typeColor(seasonalEditForm.type, seasonalEditForm.color || "#374151")} onChange={v=>setSeasonalEditForm((f:any)=>({...f,color:v}))} palette={EVENT_COLORS} />
       </Field>
       <Field label="Description" hint="optional">
         <TI value={seasonalEditForm.desc||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,desc:v}))} placeholder="Short description" />
@@ -2159,7 +2161,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
             {monthOnlyCalendarEvents.filter((ev:any)=>filter==="all" || ev.type===filter).map((ev:any)=>(
               <button key={ev.id} type="button" onClick={()=>setDetailEv(ev)}
-                style={{ border:`1px solid ${(ev.color||C.accent)}28`,background:(ev.color||C.accent)+"14",color:ev.color||C.accent,borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                style={{ border:`1px solid ${typeColor(ev.type, ev.color||C.accent)}28`,background:typeColor(ev.type, ev.color||C.accent)+"14",color:typeColor(ev.type, ev.color||C.accent),borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
                 {ev.phaseoutCount>0?"⚑ ":""}{ev.title}
               </button>
             ))}
@@ -2207,7 +2209,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
                 {/* Range bands — fixed height per band, flush to cell edges */}
                 {rangeEvs.map(ev=>{
-                  const rs=getRangeStyle(ev,d), ec=ev.color||"#9CA3AF";
+                  const rs=getRangeStyle(ev,d), ec=typeColor(ev.type, ev.color || "#9CA3AF");
                   return (
                     <div key={ev._monthOnlyCloneId||ev.id}
                       onClick={e=>{e.stopPropagation();setDetailEv(ev);}}
@@ -2231,7 +2233,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
                 {/* Point chips — same visual style as range bands */}
                 {pointEvs.map(ev=>{
-                  const ec = ev.color || typeColor(ev.type);
+                  const ec = typeColor(ev.type, ev.color || "#9CA3AF");
                   return (
                     <div key={ev.id}
                       onClick={e=>{e.stopPropagation();setDetailEv(ev);}}
@@ -2290,7 +2292,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                 ⚑ {item.phaseoutCount}
                               </span>
                             )}
-                            <span style={{ fontSize:10,color:item.color||C.faint,background:(item.color||C.faint)+"14",border:`1px solid ${(item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{item.type}</span>
+                            <span style={{ fontSize:10,color:typeColor(item.type,item.color||C.faint),background:typeColor(item.type,item.color||C.faint)+"14",border:`1px solid ${typeColor(item.type,item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{typeLabel(item.type)}</span>
                           </div>
                         </div>
                         <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
@@ -2482,7 +2484,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                           <span style={{ display:"block",fontSize:12.5,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
                           <span style={{ display:"block",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || ev.calDate || formatMonthOnlyLabel(ev.months) || "No specific date"} · {ev.type || "event"}</span>
                         </span>
-                        <Tag color={ev.color || typeColor(ev.type || "seasonal")}>{typeLabel(ev.type || "seasonal")}</Tag>
+                        <Tag color={typeColor(ev.type || "seasonal", ev.color || "#14B8A6")}>{typeLabel(ev.type || "seasonal")}</Tag>
                       </button>
                     );
                   })
@@ -2506,7 +2508,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         {yearOverview&&(()=>{
           const ev:any = yearOverview.event || {};
           const item:any = yearOverview.item || {};
-          const color = ev.color || item.color || C.accent;
+          const color = typeColor(ev.type || item.type || "seasonal", ev.color || item.color || C.accent);
           const title = ev.name || ev.title || item.title;
           const dateText = item.dateText || ev.date || ev.calDate || "No specific date";
           const endText = item.dateEnd || ev.calDateEnd || ev.dateEnd || "";
@@ -2639,9 +2641,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 {dayEv.map(ev=>{
                   const isChecklist=!!ev.fromChecklist, isSeasonal=!!ev.fromSeasonal;
                   const tLabel = isChecklist ? "Deadline" : typeLabel(ev.type);
-                  const tColor = isChecklist ? "#8B5CF6" : (ev.color || typeColor(ev.type));
+                  const tColor = isChecklist ? typeColor("deadline", "#8B5CF6") : typeColor(ev.type, ev.color || "#9CA3AF");
                   return (
-                    <div key={ev.id} style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,borderLeft:`4px solid ${ev.color||tColor}`,cursor:"pointer" }}
+                    <div key={ev.id} style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,borderLeft:`4px solid ${tColor}`,cursor:"pointer" }}
                       onClick={()=>{ setPrevDayView(dayView); setDayView(null); setDetailEv(ev); }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8 }}>
                         <div style={{ minWidth:0 }}>
@@ -2649,7 +2651,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                           <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
                             <Tag color={tColor} sm>{tLabel}</Tag>
                             {ev.dateEnd&&<span style={{ fontSize:10,color:C.muted }}>{ev.date} → {ev.dateEnd}</span>}
-                            {isSeasonal&&<Tag color="#14B8A6" sm>Seasonal</Tag>}
+                            {isSeasonal&&<Tag color={typeColor(detailEv.type || "seasonal", "#14B8A6")} sm>{typeLabel(detailEv.type || "seasonal")}</Tag>}
                             {isChecklist&&<Tag color="#8B5CF6" sm>Checklist</Tag>}
                           </div>
                         </div>
@@ -2673,7 +2675,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           const isSeasonal  = !!detailEv.fromSeasonal;
           const isManual    = !isChecklist && !isSeasonal;
           const tLabel = isChecklist ? "Deadline" : typeLabel(detailEv.type);
-          const tColor = isChecklist ? "#8B5CF6" : (detailEv.color || typeColor(detailEv.type));
+          const tColor = isChecklist ? typeColor("deadline", "#8B5CF6") : typeColor(detailEv.type, detailEv.color || "#9CA3AF");
           const seasonalSource = isSeasonal ? (seasonalEvents||[]).find((ev:any)=>ev.id===detailEv.sourceEventId) : null;
           const products = Array.isArray(seasonalSource?.products) ? seasonalSource.products : [];
           const phaseoutSkus = getOverviewPhaseoutSkus(seasonalSource);
@@ -2803,11 +2805,12 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     }));
   },[eventTypes]);
 
-  const eventTypeColor = (id:any) => {
-    const found = eventFilterTypes.find((t:any)=>t.id===id);
-    return found?.useColor ? found.color : "#6B7280";
+  const eventTypeMeta = (id:any) => eventFilterTypes.find((t:any)=>t.id===id);
+  const eventTypeColor = (id:any, fallback:string="#6B7280") => {
+    const found = eventTypeMeta(id);
+    return found?.useColor ? found.color : (fallback || found?.color || "#6B7280");
   };
-  const eventTypeLabel = (id:any) => eventFilterTypes.find((t:any)=>t.id===id)?.label || normalizeTagLabel(id);
+  const eventTypeLabel = (id:any) => eventTypeMeta(id)?.label || normalizeTagLabel(id);
   const saveEventTypesLocal = (types:any[]) => {
     if(setEventTypes) setEventTypes(types);
     if(onStateChange) onStateChange({calendarTypes:types});
@@ -2948,7 +2951,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
           {eventFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
       </Field>
-      <Field label="Color"><ColorPicker value={form.color || eventTypeColor(form.type)} onChange={v=>setForm(f=>({...f,color:v}))} palette={EVENT_COLORS} /></Field>
+      <Field label="Color"><ColorPicker value={eventTypeColor(form.type, form.color || "#6B7280")} onChange={v=>setForm(f=>({...f,color:v}))} palette={EVENT_COLORS} /></Field>
       <Field label="Description" hint="(optional)"><TI value={form.desc||""} onChange={v=>setForm(f=>({...f,desc:v}))} placeholder="Brief description" /></Field>
       <Btn full onClick={onSave} disabled={!form.name.trim()}>{saveLabel}</Btn>
       {onDelete&&<Btn full variant="danger" onClick={onDelete}>Delete Event</Btn>}
@@ -2984,19 +2987,19 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
             </div>
             <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,340px),1fr))",gap:12 }}>
               {group.events.map((ev:any)=>{
-          const isOpen=expanded===ev.id, tc=ev.color || eventTypeColor(ev.type);
+          const isOpen=expanded===ev.id, tc=eventTypeColor(ev.type, ev.color || "#6B7280");
           const evProducts = Array.isArray(ev.products) ? ev.products : [];
           const phaseoutCount = evProducts.filter(isPhaseoutProduct).length;
           return (
             <div key={ev.id}
               data-event-card-id={ev.id}
               className="emdc-card"
-              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${C.border}`,borderLeft:`4px solid ${ev.color||tc}`,overflow:"hidden",transition:"box-shadow .18s ease",cursor:"default" }}>
+              style={{ background:C.surface,borderRadius:12,border:`1.5px solid ${C.border}`,borderLeft:`4px solid ${tc}`,overflow:"hidden",transition:"box-shadow .18s ease",cursor:"default" }}>
               <div style={{ padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center" }} onClick={()=>setExpanded(isOpen?null:ev.id)}>
                 <div style={{ minWidth:0,marginRight:8 }}>
                   <p style={{ margin:"0 0 5px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.name}</p>
                   <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-                    <Tag color={ev.color||tc} sm>{eventTypeLabel(ev.type)}</Tag>
+                    <Tag color={tc} sm>{eventTypeLabel(ev.type)}</Tag>
                     <span style={{ fontSize:11,color:C.faint }}>{ev.date}</span>
                     {phaseoutCount>0&&(
                       <span style={{ fontSize:10,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"2px 7px" }}>
@@ -3029,7 +3032,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                     <p style={{ margin:"0 0 10px",fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>Recommended Products</p>
                     <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
                       {evProducts.map((p,i)=>(
-                        <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:isPhaseoutProduct(p)?"#FFFBEB":C.bg,borderRadius:8,borderLeft:`2px solid ${isPhaseoutProduct(p)?"#F59E0B":(ev.color||C.borderStrong)}` }}>
+                        <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:isPhaseoutProduct(p)?"#FFFBEB":C.bg,borderRadius:8,borderLeft:`2px solid ${isPhaseoutProduct(p)?"#F59E0B":tc}` }}>
                           {editingProd?.eventId===ev.id&&editingProd?.idx===i?(
                             <div style={{ display:"flex",gap:6,flex:1,alignItems:"center" }}>
                               <input value={edf} onChange={e=>setEdf(e.target.value)} style={{ flex:1,padding:"5px 8px",fontSize:12,borderRadius:6,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }} />
