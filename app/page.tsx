@@ -1428,6 +1428,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const [phaseoutBrandFilter,setPhaseoutBrandFilter] = useState("all");
   const [phaseoutTagEdit,setPhaseoutTagEdit] = useState<any>(null);
   const [phaseoutTagValue,setPhaseoutTagValue] = useState("");
+  const [phaseoutSelectedEventIds,setPhaseoutSelectedEventIds] = useState<any[]>([]);
   const [addForm,setAddForm]     = useState({ title:"",type:"task",date:"",color:"#374151" });
   const [dayView,setDayView]     = useState(null); // { date, label }
   const [prevDayView,setPrevDayView] = useState(null); // to go back from detail to day list
@@ -1634,16 +1635,62 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     });
   };
 
+  const phaseoutProductLabelForSku = (sku:any) => {
+    const brandName = (brands||[]).find((b:any)=>b.id===sku?.brandId)?.name || sku?.brand || "";
+    return `Phase-Out: ${[brandName,sku?.productName,sku?.sku].filter(Boolean).join(" - ")}`;
+  };
+
+  const eventHasPhaseoutSku = (ev:any, sku:any) => {
+    if(!ev || !sku) return false;
+    const skuCode = String(sku?.sku || "").toLowerCase();
+    const productName = String(sku?.productName || "").toLowerCase();
+    return (ev.products||[]).some((product:any)=>{
+      if(!isPhaseoutProduct(product)) return false;
+      const clean = String(cleanPhaseoutProductLabel(product) || product || "").toLowerCase();
+      return (!!skuCode && clean.includes(skuCode)) || (!!productName && clean.includes(productName));
+    });
+  };
+
   const openPhaseoutTagEdit = (sku:any) => {
     setPhaseoutTagEdit(sku);
     setPhaseoutTagValue(getSkuTagText(sku));
+    setPhaseoutSelectedEventIds((seasonalEvents||[]).filter((ev:any)=>eventHasPhaseoutSku(ev,sku)).map((ev:any)=>ev.id));
+  };
+
+  const togglePhaseoutEventSelection = (eventId:any) => {
+    setPhaseoutSelectedEventIds((prev:any[])=>prev.includes(eventId) ? prev.filter((id:any)=>id!==eventId) : [...prev,eventId]);
   };
 
   const savePhaseoutTagEdit = () => {
     if(!phaseoutTagEdit) return;
     updateSkuTagValue(phaseoutTagEdit.id,phaseoutTagValue);
+
+    const sku = phaseoutTagEdit;
+    const nextLabel = phaseoutProductLabelForSku(sku);
+    const selectedSet = new Set(phaseoutSelectedEventIds);
+
+    const nextSeasonalEvents = (seasonalEvents||[]).map((ev:any)=>{
+      const currentProducts = Array.isArray(ev.products) ? ev.products : [];
+      const withoutThisSku = currentProducts.filter((product:any)=>{
+        if(!isPhaseoutProduct(product)) return true;
+        const clean = String(cleanPhaseoutProductLabel(product) || product || "").toLowerCase();
+        const skuCode = String(sku?.sku || "").toLowerCase();
+        const productName = String(sku?.productName || "").toLowerCase();
+        return !((skuCode && clean.includes(skuCode)) || (productName && clean.includes(productName)));
+      });
+      const shouldInclude = selectedSet.has(ev.id);
+      return {
+        ...ev,
+        products:shouldInclude ? [...withoutThisSku,nextLabel] : withoutThisSku,
+      };
+    });
+
+    if(setSeasonalEvents) setSeasonalEvents(nextSeasonalEvents);
+    if(onStateChange) onStateChange({ seasonalEvents:nextSeasonalEvents });
+
     setPhaseoutTagEdit(null);
     setPhaseoutTagValue("");
+    setPhaseoutSelectedEventIds([]);
   };
 
   const clearPhaseoutTag = (sku:any) => {
@@ -1653,6 +1700,19 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       if(onStateChange) onStateChange({ skuItems:next });
       return next;
     });
+
+    const skuCode = String(sku?.sku || "").toLowerCase();
+    const productName = String(sku?.productName || "").toLowerCase();
+    const nextSeasonalEvents = (seasonalEvents||[]).map((ev:any)=>({
+      ...ev,
+      products:(ev.products||[]).filter((product:any)=>{
+        if(!isPhaseoutProduct(product)) return true;
+        const clean = String(cleanPhaseoutProductLabel(product) || product || "").toLowerCase();
+        return !((skuCode && clean.includes(skuCode)) || (productName && clean.includes(productName)));
+      }),
+    }));
+    if(setSeasonalEvents) setSeasonalEvents(nextSeasonalEvents);
+    if(onStateChange) onStateChange({ seasonalEvents:nextSeasonalEvents });
   };
 
   const clearAllPhaseoutTags = () => {
@@ -2269,7 +2329,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       </div>
 
 
-      <Modal open={!!phaseoutTagEdit} onClose={()=>{setPhaseoutTagEdit(null);setPhaseoutTagValue("");}} title="Edit SKU Tags" width={460}>
+      <Modal open={!!phaseoutTagEdit} onClose={()=>{setPhaseoutTagEdit(null);setPhaseoutTagValue("");setPhaseoutSelectedEventIds([]);}} title="Edit SKU Tags & Events" width={560}>
         {phaseoutTagEdit&&(
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
             <div style={{ padding:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10 }}>
@@ -2279,11 +2339,42 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
             <Field label="Tags" hint="Separate multiple tags with commas. Example: Phase Out, High Sales">
               <TI value={phaseoutTagValue} onChange={setPhaseoutTagValue} placeholder="Phase Out" />
             </Field>
+
+            <div>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8 }}>
+                <div>
+                  <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".06em" }}>Linked Events / Seasons</p>
+                  <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Select one or more existing events/seasons where this SKU should appear.</p>
+                </div>
+                <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{phaseoutSelectedEventIds.length} selected</span>
+              </div>
+              <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",border:`1.5px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                {(seasonalEvents||[]).length===0 ? (
+                  <p style={{ margin:0,padding:12,fontSize:12,color:C.muted }}>No events/seasons created yet.</p>
+                ) : (
+                  (seasonalEvents||[]).map((ev:any)=> {
+                    const checked = phaseoutSelectedEventIds.includes(ev.id);
+                    return (
+                      <button key={ev.id} type="button" onClick={()=>togglePhaseoutEventSelection(ev.id)}
+                        style={{ width:"100%",display:"flex",alignItems:"center",gap:10,textAlign:"left",padding:"9px 10px",border:"none",borderBottom:`1px solid ${C.border}`,background:checked?"#FFFBEB":C.surface,cursor:"pointer" }}>
+                        <span style={{ width:18,height:18,borderRadius:999,border:`2px solid ${checked?"#F59E0B":C.borderStrong}`,background:checked?"#F59E0B":"transparent",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,flexShrink:0 }}>{checked?"✓":""}</span>
+                        <span style={{ minWidth:0,flex:1 }}>
+                          <span style={{ display:"block",fontSize:12.5,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
+                          <span style={{ display:"block",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || ev.calDate || formatMonthOnlyLabel(ev.months) || "No specific date"} · {ev.type || "event"}</span>
+                        </span>
+                        <Tag color={ev.color || typeColor(ev.type || "seasonal")}>{typeLabel(ev.type || "seasonal")}</Tag>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
             <div style={{ display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}>
-              <Btn variant="danger" onClick={()=>{ clearPhaseoutTag(phaseoutTagEdit); setPhaseoutTagEdit(null); setPhaseoutTagValue(""); }}>Clear Phase-Out</Btn>
+              <Btn variant="danger" onClick={()=>{ clearPhaseoutTag(phaseoutTagEdit); setPhaseoutTagEdit(null); setPhaseoutTagValue(""); setPhaseoutSelectedEventIds([]); }}>Clear Phase-Out</Btn>
               <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                <Btn variant="outline" onClick={()=>{setPhaseoutTagEdit(null);setPhaseoutTagValue("");}}>Cancel</Btn>
-                <Btn onClick={savePhaseoutTagEdit}>Save Tags</Btn>
+                <Btn variant="outline" onClick={()=>{setPhaseoutTagEdit(null);setPhaseoutTagValue("");setPhaseoutSelectedEventIds([]);}}>Cancel</Btn>
+                <Btn onClick={savePhaseoutTagEdit}>Save Changes</Btn>
               </div>
             </div>
           </div>
