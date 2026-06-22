@@ -2894,11 +2894,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
     const exact = (skuStorage||[]).find((item:any)=>{
       const itemSku = cleanLower(item?.sku || item?.value);
-      const itemProduct = cleanLower(item?.productName || item?.name || item?.value);
       return (
         (sourceId && item?.id===sourceId) ||
-        (skuKey && itemSku && itemSku===skuKey) ||
-        (productKey && itemProduct && itemProduct===productKey)
+        (skuKey && itemSku && itemSku===skuKey)
       );
     });
     if(exact) return exact;
@@ -2939,8 +2937,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       return prevKey && prevKey===wantedKey;
     }).length;
 
-    const strong = candidateRows.filter((row:any)=>row.score===candidateRows[0].score);
-    const pool = strong.length > 1 ? strong : candidateRows;
+    const topScore = candidateRows[0]?.score || 0;
+    const pool = candidateRows.filter((row:any)=>row.score >= Math.max(1, topScore - 5));
     return pool[sameBefore % pool.length]?.item || candidateRows[0]?.item || null;
   };
 
@@ -2989,7 +2987,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(!productDetail || !productEdit) return;
     const nextSkus = (group.skus||[]).map((sku:any,idx:number)=>idx===productDetail.index ? {
       ...sku,
-      id:sku.id || productDetail.id || uid(),
+      id:sku.id || uid(),
+      sourceId:sku.sourceId || sku.storageId || sku.skuStorageId || productDetail.sourceId || productDetail.storageId || productDetail.skuStorageId || productDetail.id,
+      storageId:sku.storageId || sku.sourceId || sku.skuStorageId || productDetail.storageId || productDetail.sourceId || productDetail.skuStorageId || productDetail.id,
+      skuStorageId:sku.skuStorageId || sku.sourceId || sku.storageId || productDetail.skuStorageId || productDetail.sourceId || productDetail.storageId || productDetail.id,
       value:productEdit.sku || productEdit.productName || sku.value,
       sku:productEdit.sku,
       productName:productEdit.productName,
@@ -4029,7 +4030,24 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
   const updSku=(id,v)=>setSkus(p=>p.map(s=>s.id===id?{...s,value:v}:s));
   const pickSku=s=>{ setPickedSkus((p:any[])=>p.find((x:any)=>x.id===s.id)?p.filter((x:any)=>x.id!==s.id):[...p,s]); };
   const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
-  const finalSkus=skuMode==="storage"?pickedSkus.map((s:any)=>({id:s.id,value:s.sku,sku:s.sku,productName:s.productName,collection:s.collection||s.category||s.productCategory||"",category:s.collection||s.category||s.productCategory||"",brandId:s.brandId,inventory:s.inventory,status:s.status,extraFields:s.extraFields||{}})):skus.filter(s=>s.value.trim());
+  const finalSkus=skuMode==="storage"?pickedSkus.map((s:any)=>({
+    id:uid(),
+    sourceId:s.id,
+    storageId:s.id,
+    skuStorageId:s.id,
+    value:s.sku,
+    sku:s.sku,
+    productName:s.productName,
+    collection:s.collection||s.category||s.productCategory||"",
+    category:s.collection||s.category||s.productCategory||"",
+    productCategory:s.productCategory||s.category||s.collection||"",
+    brandId:s.brandId,
+    brand:s.brand,
+    inventory:s.inventory,
+    status:s.status,
+    extraFields:s.extraFields||{},
+    syncedFromSkuStorage:true,
+  })):skus.filter(s=>s.value.trim());
   const phaseoutSourceSkus:any[] = skuMode==="storage"
     ? pickedSkus
     : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
@@ -8294,11 +8312,9 @@ export default function App({
 
     let latest = (skuStorage||[]).find((item:any)=>{
       const itemSku = lower(item?.sku || item?.value);
-      const itemProduct = lower(item?.productName || item?.name || item?.value);
       return (
         (sourceId && item?.id===sourceId) ||
-        (skuKey && itemSku && skuKey===itemSku) ||
-        (productKey && itemProduct && itemProduct===productKey)
+        (skuKey && itemSku && skuKey===itemSku)
       );
     });
 
@@ -8327,8 +8343,8 @@ export default function App({
         if(candidateRows.length){
           candidateRows.sort((a:any,b:any)=>b.score-a.score || String(a.itemSku||"").localeCompare(String(b.itemSku||"")));
           const sameBefore = (allSkus||[]).slice(0,index).filter((prev:any)=>tokenKey(prev?.productName || prev?.name || prev?.value || "")===wantedKey).length;
-          const strong = candidateRows.filter((row:any)=>row.score===candidateRows[0].score);
-          const pool = strong.length > 1 ? strong : candidateRows;
+          const topScore = candidateRows[0]?.score || 0;
+          const pool = candidateRows.filter((row:any)=>row.score >= Math.max(1, topScore - 5));
           latest = pool[sameBefore % pool.length]?.item || candidateRows[0]?.item;
         }
       }
