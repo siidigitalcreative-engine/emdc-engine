@@ -2812,6 +2812,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [productEdit,setProductEdit] = useState<any>(null);
   const [aiBusy,setAiBusy] = useState<any>({});
   const [aiError,setAiError] = useState<any>({});
+  const [savedEcommercePreview,setSavedEcommercePreview] = useState<any>(null);
 
   useEffect(()=>{
     if(!initialItems) return;
@@ -3103,11 +3104,13 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const openSavedEcommerceOutput = (item:any) => {
-    updateAiWorkspace("ecommerce",{
-      generatedText:item.text || "",
-      textPrompt:item.prompt || ((group.aiWorkspace || {}).ecommerce || {}).textPrompt || "",
-      generatedAt:item.createdAt || new Date().toISOString(),
-    });
+    setSavedEcommercePreview(item);
+  };
+
+  const copySavedEcommerceOutput = async () => {
+    const output = String(savedEcommercePreview?.text || "");
+    if(!output) return;
+    try { await navigator.clipboard.writeText(output); } catch {}
   };
 
   const deleteSavedEcommerceOutput = (id:string) => {
@@ -3444,19 +3447,42 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
             {Array.isArray(data.savedOutputs)&&data.savedOutputs.length>0&&(
               <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Saved E-commerce Outputs</h4>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10 }}>
+                  <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Saved E-commerce Outputs</h4>
+                  <span style={{ padding:"3px 8px",borderRadius:999,background:C.surfaceAlt,border:`1px solid ${C.border}`,fontSize:10.5,fontWeight:800,color:C.muted }}>{data.savedOutputs.length} saved</span>
+                </div>
                 <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:220,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                   {data.savedOutputs.map((item:any)=>(
-                    <div key={item.id} style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",padding:"8px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
-                      <button onClick={()=>openSavedEcommerceOutput(item)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",cursor:"pointer" }}>
+                    <div key={item.id} style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",padding:"10px 12px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                      <button onClick={()=>openSavedEcommerceOutput(item)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",cursor:"pointer",padding:0 }}>
                         <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Saved Output"}</p>
-                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"}</p>
+                        <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"} · Click to view</p>
                       </button>
-                      <button onClick={()=>deleteSavedEcommerceOutput(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                      <button onClick={(e:any)=>{ e.stopPropagation(); deleteSavedEcommerceOutput(item.id); if(savedEcommercePreview?.id===item.id) setSavedEcommercePreview(null); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                     </div>
                   ))}
                 </div>
               </div>
+            )}
+
+            {savedEcommercePreview&&(
+              <Modal open={!!savedEcommercePreview} onClose={()=>setSavedEcommercePreview(null)} title="Saved E-commerce Output" width={760}>
+                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                  <div style={{ padding:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                    <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{savedEcommercePreview.title || "Saved Output"}</p>
+                    <p style={{ margin:"4px 0 0",fontSize:11,color:C.faint }}>
+                      {savedEcommercePreview.createdAt ? new Date(savedEcommercePreview.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved output"}
+                    </p>
+                  </div>
+                  <div style={{ maxHeight:isMobile?"58vh":"62vh",overflowY:"auto",WebkitOverflowScrolling:"touch",background:C.bg,border:`1.5px solid ${C.border}`,borderRadius:12,padding:14 }}>
+                    <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:13,lineHeight:1.55,color:C.text }}>{savedEcommercePreview.text || ""}</pre>
+                  </div>
+                  <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
+                    <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
+                    <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
+                  </div>
+                </div>
+              </Modal>
             )}
 
             <div style={{ padding:14,background:"#ECFDF5",border:"1.5px solid #A7F3D0",borderRadius:12 }}>
