@@ -736,6 +736,58 @@ const cleanPhaseoutProductLabel = (value:any) => String(value || "")
   .replace(/^\s*(phase\s*-?\s*out|phaseout|closeout|clearance)\s*:\s*/i,"")
   .trim();
 
+const normalizeSkuTagKey = (value:any) => String(value || "")
+  .trim()
+  .toLowerCase()
+  .replace(/[-_]+/g," ")
+  .replace(/\s+/g," ");
+
+const prettySkuTagLabel = (value:any) => {
+  const clean = String(value || "").trim().replace(/[-_]+/g," ").replace(/\s+/g," ");
+  return clean ? clean.replace(/\b\w/g,(m:string)=>m.toUpperCase()) : "";
+};
+
+const getSkuTagText = (sku:any) => {
+  const extra = sku?.extraFields || {};
+  const extraKey = Object.keys(extra).find((key:string)=>normalizeSkuTagKey(key)==="tag" || normalizeSkuTagKey(key)==="tags");
+  return String(sku?.tag || sku?.tags || (extraKey ? extra[extraKey] : "") || "").trim();
+};
+
+const splitSkuTags = (value:any) => Array.from(new Map(
+  String(value || "")
+    .split(/[;,|\n]/)
+    .map((tag:string)=>tag.trim())
+    .filter(Boolean)
+    .map((tag:string)=>[normalizeSkuTagKey(tag), prettySkuTagLabel(tag)])
+).values());
+
+const getSkuTags = (sku:any) => splitSkuTags(getSkuTagText(sku));
+
+const hasSkuTag = (sku:any, tag:any) => {
+  const target = normalizeSkuTagKey(tag);
+  return getSkuTags(sku).some((item:string)=>normalizeSkuTagKey(item)===target);
+};
+
+const isPhaseoutSkuByTag = (sku:any) => getSkuTags(sku).some((tag:string)=>{
+  const key = normalizeSkuTagKey(tag);
+  return key==="phase out" || key==="phaseout" || key==="phase out sku" || key.includes("phase out");
+});
+
+const setSkuTagsOnItem = (sku:any, tagText:any) => {
+  const cleanTags = splitSkuTags(tagText).join(", ");
+  const extra = { ...(sku?.extraFields || {}) };
+  const tagKey = Object.keys(extra).find((key:string)=>normalizeSkuTagKey(key)==="tag" || normalizeSkuTagKey(key)==="tags") || "Tag";
+  if(cleanTags) extra[tagKey] = cleanTags;
+  else delete extra[tagKey];
+  return { ...sku, tag:cleanTags, extraFields:extra };
+};
+
+const removeSkuTagFromItem = (sku:any, tagToRemove:any) => {
+  const target = normalizeSkuTagKey(tagToRemove);
+  const nextTags = getSkuTags(sku).filter((tag:string)=>normalizeSkuTagKey(tag)!==target);
+  return setSkuTagsOnItem(sku,nextTags.join(", "));
+};
+
 const normalizePhaseoutText = (value:any) => String(value || "")
   .toLowerCase()
   .replace(/&/g," and ")
@@ -1356,7 +1408,7 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
 };
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
-const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, brands=[], onNavigateToGroup, onStateChange, manualEvents=[], setManualEvents, eventTypes=[], setEventTypes }: any) => {
+const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, brands=[], skuStorage=[], setSkuStorage, onNavigateToGroup, onStateChange, manualEvents=[], setManualEvents, eventTypes=[], setEventTypes }: any) => {
   const { isMobile } = useBreakpoint();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
@@ -1374,6 +1426,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const [yearOverview,setYearOverview] = useState<any>(null);
   const [seasonalEditForm,setSeasonalEditForm] = useState<any>(null);
   const [phaseoutBrandFilter,setPhaseoutBrandFilter] = useState("all");
+  const [phaseoutTagEdit,setPhaseoutTagEdit] = useState<any>(null);
+  const [phaseoutTagValue,setPhaseoutTagValue] = useState("");
   const [addForm,setAddForm]     = useState({ title:"",type:"task",date:"",color:"#374151" });
   const [dayView,setDayView]     = useState(null); // { date, label }
   const [prevDayView,setPrevDayView] = useState(null); // to go back from detail to day list
@@ -1571,9 +1625,87 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return groups.sort((a:any,b:any)=>a.index-b.index);
   },[year,seasonalEvents,manualEvents,extraEvents,eventTypes]);
 
+  const updateSkuTagValue = (skuId:any, tagText:string) => {
+    if(!setSkuStorage) return;
+    setSkuStorage((prev:any[])=>{
+      const next = (prev||[]).map((sku:any)=>sku.id===skuId ? setSkuTagsOnItem(sku,tagText) : sku);
+      if(onStateChange) onStateChange({ skuItems:next });
+      return next;
+    });
+  };
+
+  const openPhaseoutTagEdit = (sku:any) => {
+    setPhaseoutTagEdit(sku);
+    setPhaseoutTagValue(getSkuTagText(sku));
+  };
+
+  const savePhaseoutTagEdit = () => {
+    if(!phaseoutTagEdit) return;
+    updateSkuTagValue(phaseoutTagEdit.id,phaseoutTagValue);
+    setPhaseoutTagEdit(null);
+    setPhaseoutTagValue("");
+  };
+
+  const clearPhaseoutTag = (sku:any) => {
+    if(!setSkuStorage || !sku?.id) return;
+    setSkuStorage((prev:any[])=>{
+      const next = (prev||[]).map((item:any)=>item.id===sku.id ? removeSkuTagFromItem(item,"Phase Out") : item);
+      if(onStateChange) onStateChange({ skuItems:next });
+      return next;
+    });
+  };
+
+  const clearAllPhaseoutTags = () => {
+    if(!setSkuStorage) return;
+    setSkuStorage((prev:any[])=>{
+      const next = (prev||[]).map((item:any)=>isPhaseoutSkuByTag(item) ? removeSkuTagFromItem(item,"Phase Out") : item);
+      if(onStateChange) onStateChange({ skuItems:next });
+      return next;
+    });
+  };
+
   const phaseoutSkuLinks = useMemo(()=>{
     const knownBrands = (brands||[]).map((b:any)=>String(b.name||"").trim()).filter(Boolean);
+    const brandForSku = (sku:any) => (brands||[]).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "Unbranded";
+
+    const labelForSku = (sku:any) => {
+      const brandName = brandForSku(sku);
+      return [brandName,sku.productName,sku.sku].filter(Boolean).join(" - ");
+    };
+
+    const productMatchesSku = (product:any, sku:any) => {
+      const raw = cleanPhaseoutProductLabel(product);
+      const lower = String(raw || product || "").toLowerCase();
+      const skuCode = String(sku?.sku || "").toLowerCase();
+      const productName = String(sku?.productName || "").toLowerCase();
+      return (!!skuCode && lower.includes(skuCode)) || (!!productName && lower.includes(productName));
+    };
+
     const byProduct:any = {};
+
+    (skuStorage||[]).filter(isPhaseoutSkuByTag).forEach((sku:any)=>{
+      const brandName = brandForSku(sku);
+      const label = labelForSku(sku);
+      const key = sku.id || `${brandName}__${label}`;
+      const events = (seasonalEvents||[])
+        .filter((ev:any)=>Array.isArray(ev.products) && ev.products.some((product:any)=>isPhaseoutProduct(product) && productMatchesSku(product,sku)))
+        .map((ev:any)=>({
+          id:ev.id,
+          name:ev.name,
+          date:ev.date,
+          type:ev.type,
+          color:ev.color,
+        }));
+
+      byProduct[key] = {
+        sku,
+        skuId:sku.id,
+        label,
+        brandName,
+        tags:getSkuTags(sku),
+        events,
+      };
+    });
 
     const detectBrand = (label:string) => {
       const lower = label.toLowerCase();
@@ -1588,11 +1720,12 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       phaseProducts.forEach((product:any)=>{
         const label = cleanPhaseoutProductLabel(product) || String(product||"").trim();
         if(!label) return;
+        const alreadyMatched = Object.values(byProduct).some((item:any)=>item.events?.some((event:any)=>event.id===ev.id) && String(label).toLowerCase().includes(String(item.sku?.sku||"").toLowerCase()));
+        if(alreadyMatched) return;
 
         const brandName = detectBrand(label);
-        const key = `${brandName}__${label}`;
-
-        if(!byProduct[key]) byProduct[key] = { label, brandName, events:[] };
+        const key = `legacy__${brandName}__${label}`;
+        if(!byProduct[key]) byProduct[key] = { label, brandName, tags:["Legacy Phase Out"], events:[], legacy:true };
         if(!byProduct[key].events.some((item:any)=>item.id===ev.id)){
           byProduct[key].events.push({
             id:ev.id,
@@ -1608,7 +1741,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return Object.values(byProduct).sort((a:any,b:any)=>
       String(a.brandName).localeCompare(String(b.brandName)) || String(a.label).localeCompare(String(b.label))
     );
-  },[seasonalEvents,brands]);
+  },[seasonalEvents,brands,skuStorage]);
 
   const phaseoutBrandTabs = useMemo(()=>{
     const byBrand:any = {};
@@ -2041,11 +2174,17 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
           <div>
             <h3 style={{ margin:"0 0 3px",fontSize:14,fontWeight:800,color:C.text }}>Phase-Out SKU Campaign Map</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted }}>Filter by brand to see which phase-out SKUs are linked to each event/season.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Products tagged Phase Out in SKU Storage appear here. Tag edits sync back to SKU Storage.</p>
           </div>
-          <span style={{ fontSize:11,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"4px 9px" }}>
-            ⚑ {filteredPhaseoutSkuLinks.length} / {phaseoutSkuLinks.length} SKU{phaseoutSkuLinks.length!==1?"s":""}
-          </span>
+          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+            <button type="button" onClick={clearAllPhaseoutTags} disabled={!phaseoutSkuLinks.some((item:any)=>item.skuId)}
+              style={{ height:28,padding:"0 10px",border:`1px solid ${C.border}`,borderRadius:7,background:C.surfaceAlt,color:C.muted,fontSize:11,fontWeight:800,cursor:phaseoutSkuLinks.some((item:any)=>item.skuId)?"pointer":"not-allowed",opacity:phaseoutSkuLinks.some((item:any)=>item.skuId)?1:.55 }}>
+              Clear All Phase-Out Tags
+            </button>
+            <span style={{ fontSize:11,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"4px 9px" }}>
+              ⚑ {filteredPhaseoutSkuLinks.length} / {phaseoutSkuLinks.length} SKU{phaseoutSkuLinks.length!==1?"s":""}
+            </span>
+          </div>
         </div>
 
         {phaseoutSkuLinks.length>0&&(
@@ -2064,7 +2203,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         )}
 
         {phaseoutSkuLinks.length===0 ? (
-          <p style={{ margin:0,fontSize:12,color:C.muted }}>No phase-out SKUs linked to events/seasons yet. Use the Product Phase-Out AI Helper from Checklists.</p>
+          <p style={{ margin:0,fontSize:12,color:C.muted }}>No products are tagged Phase Out yet. Add PHASE OUT in the SKU Storage Tag column to show products here.</p>
         ) : filteredPhaseoutSkuLinks.length===0 ? (
           <p style={{ margin:0,fontSize:12,color:C.muted }}>No phase-out SKUs found for this brand.</p>
         ) : (
@@ -2076,9 +2215,19 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                   <div style={{ minWidth:0,flex:1 }}>
                     <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{String(item.label||"").startsWith(String(item.brandName||"")+" - ")?String(item.label||"").slice(String(item.brandName||"").length+3):item.label}</p>
                     <p style={{ margin:"2px 0 0",fontSize:10,color:"#B45309",fontWeight:800,textTransform:"uppercase",letterSpacing:".04em" }}>{item.brandName}</p>
+                    {Array.isArray(item.tags)&&item.tags.length>0&&<p style={{ margin:"2px 0 0",fontSize:10,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Tags: {item.tags.join(", ")}</p>}
                   </div>
+                  {item.sku&&(
+                    <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                      <button type="button" onClick={()=>openPhaseoutTagEdit(item.sku)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Edit</button>
+                      <button type="button" onClick={()=>clearPhaseoutTag(item.sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear</button>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display:"flex",flexDirection:"column" }}>
+                  {(!item.events || item.events.length===0)&&(
+                    <div style={{ padding:"8px 10px",fontSize:11,color:C.muted,background:C.surface }}>No linked event/season yet.</div>
+                  )}
                   {item.events.map((ev:any)=>(
                     <button key={ev.id} type="button" onClick={()=>{
                         const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
@@ -2107,6 +2256,27 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         )}
       </div>
 
+
+      <Modal open={!!phaseoutTagEdit} onClose={()=>{setPhaseoutTagEdit(null);setPhaseoutTagValue("");}} title="Edit SKU Tags" width={460}>
+        {phaseoutTagEdit&&(
+          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            <div style={{ padding:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10 }}>
+              <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{phaseoutTagEdit.productName || phaseoutTagEdit.sku}</p>
+              <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,fontFamily:"monospace" }}>{phaseoutTagEdit.sku}</p>
+            </div>
+            <Field label="Tags" hint="Separate multiple tags with commas. Example: Phase Out, High Sales">
+              <TI value={phaseoutTagValue} onChange={setPhaseoutTagValue} placeholder="Phase Out" />
+            </Field>
+            <div style={{ display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}>
+              <Btn variant="danger" onClick={()=>{ clearPhaseoutTag(phaseoutTagEdit); setPhaseoutTagEdit(null); setPhaseoutTagValue(""); }}>Clear Phase-Out</Btn>
+              <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                <Btn variant="outline" onClick={()=>{setPhaseoutTagEdit(null);setPhaseoutTagValue("");}}>Cancel</Btn>
+                <Btn onClick={savePhaseoutTagEdit}>Save Tags</Btn>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Year list overview */}
       <Modal open={!!yearOverview} onClose={()=>setYearOverview(null)} title={yearOverview?.event?.name || yearOverview?.event?.title || yearOverview?.item?.title || "Overview"} width={560}>
@@ -5039,7 +5209,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [editSkuId,setEditSkuId]         = useState(null);
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
-  const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""});
+  const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""});
   const DEFAULT_SKU_TABLE_COLUMNS = [
     { key:"productName", label:"Product",    base:true },
     { key:"sku",         label:"SKU",        base:true },
@@ -5060,6 +5230,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     inventory:{ key:"inventory", label:"Stock", base:true },
     qty:{ key:"inventory", label:"Stock", base:true },
     status:{ key:"status", label:"Status", base:true },
+    tag:{ key:"tag", label:"Tag", base:true },
+    tags:{ key:"tag", label:"Tag", base:true },
   };
   const [skuTableColumns,setSkuTableColumns] = useState<any[]>(DEFAULT_SKU_TABLE_COLUMNS);
   const [skuNewColumn,setSkuNewColumn] = useState("");
@@ -5067,6 +5239,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
   const [skuTableEditMode,setSkuTableEditMode] = useState(false);
   const [skuSearch,setSkuSearch] = useState("");
+  const [activeSkuTag,setActiveSkuTag] = useState("all");
   const DEFAULT_BULK_COLUMNS = [
     { key:"productName", label:"Product Name", placeholder:"Desk Organizer", locked:true },
     { key:"sku",         label:"SKU",          placeholder:"GL-DO001",        locked:true },
@@ -5110,14 +5283,29 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return next;
     });
   };
+  const skuTagOptions = useMemo(()=>{
+    const byKey:any = {};
+    (skuStorage||[]).forEach((sku:any)=>{
+      getSkuTags(sku).forEach((tag:string)=>{
+        const key = normalizeSkuTagKey(tag);
+        if(!key) return;
+        if(!byKey[key]) byKey[key] = { key, label:prettySkuTagLabel(tag), count:0 };
+        byKey[key].count += 1;
+      });
+    });
+    return Object.values(byKey).sort((a:any,b:any)=>String(a.label).localeCompare(String(b.label)));
+  },[skuStorage]);
+
   const filteredSkus = useMemo(() => {
     const brandFiltered = activeBrand ? skuStorage.filter((s:any)=>s.brandId===activeBrand) : skuStorage;
+    const tagFiltered = activeSkuTag==="all" ? brandFiltered : brandFiltered.filter((s:any)=>hasSkuTag(s,activeSkuTag));
     const terms = skuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if(!terms.length) return brandFiltered;
+    if(!terms.length) return tagFiltered;
 
-    return brandFiltered.filter((s:any)=>{
+    return tagFiltered.filter((s:any)=>{
       const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
       const statusLabel = s.status==="active" ? "active" : s.status==="nostocks" ? "no stocks out of stock sold out" : (s.customStatus || "custom");
+      const tagText = getSkuTags(s).join(" ");
       const extraText = Object.values(s.extraFields || {}).join(" ");
       const searchable = [
         s.productName,
@@ -5129,12 +5317,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         s.srp,
         s.status,
         statusLabel,
+        tagText,
         extraText,
       ].filter(Boolean).join(" ").toLowerCase();
 
       return terms.every((term:string)=>searchable.includes(term));
     });
-  }, [activeBrand,skuStorage,skuSearch,brands]);
+  }, [activeBrand,activeSkuTag,skuStorage,skuSearch,brands]);
   const collectionOptions = useMemo(() => Array.from(new Set(
     skuStorage
       .filter(s => !sForm.brandId || s.brandId===sForm.brandId)
@@ -5175,11 +5364,12 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const openEditBrand = b=>{ setEditBrandForm({...b}); setEditBrandModal(true); };
   const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; commitBrands((p:any[])=>p.map((b:any)=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
   const delBrand  = id=>{ commitBrands((p:any[])=>p.filter((b:any)=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
-  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""}); setEditSkuId(null); setSkuModal(true); };
-  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||""}); setEditSkuId(s.id); setSkuModal(true); };
+  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""}); setEditSkuId(null); setSkuModal(true); };
+  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||"",tag:getSkuTags(s).join(", ")}); setEditSkuId(s.id); setSkuModal(true); };
   const saveSku   = ()=>{
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
-    const e={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
+    const baseSku={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
+    const e=setSkuTagsOnItem(baseSku,sForm.tag);
     if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s)); else commitSkuStorage((p:any[])=>[...p,e]);
     setSkuModal(false);
   };
@@ -5193,6 +5383,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     collection:"Workspace",
     inventory:"50",
     status:"Active",
+    tag:"Phase Out",
   };
   const buildBulkColumnsFromSkuTable = (cols:any[]=skuTableColumns) => cols.map((col:any)=>({
     key:col.key,
@@ -5307,7 +5498,9 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(from<0||to<0||to>=order.length) return;
     reorderSkuRows(id,order[to],dir>0?"after":"before");
   };
+  const isTagColumn = (col:any) => normalizeKey(col?.key)==="tag" || normalizeKey(col?.label)==="tag" || normalizeKey(col?.key)==="tags" || normalizeKey(col?.label)==="tags";
   const getSkuExtraValue = (s:any, col:any) => {
+    if(isTagColumn(col)) return getSkuTags(s).join(", ");
     const extra=s.extraFields||{};
     return extra[col.label] ?? extra[col.key] ?? "";
   };
@@ -5323,6 +5516,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       if(s.status==="nostocks") return "No Stocks";
       return s.customStatus||"Custom";
     }
+    if(col.key==="tag" || normalizeKey(col.label)==="tag") return getSkuTags(s).join(", ");
     return getSkuExtraValue(s,col);
   };
   const skuToBulkRow = (s:any, columns:any[]=BULK_COLUMNS) => {
@@ -5337,6 +5531,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const setSkuExtraValue = (id:any, col:any, value:string) => {
     commitSkuStorage((p:any[])=>p.map((s:any)=>{
       if(s.id!==id) return s;
+      if(isTagColumn(col)) return setSkuTagsOnItem(s,value);
       const extra={...(s.extraFields||{})};
       extra[col.label||col.key]=value;
       return {...s,extraFields:extra};
@@ -5701,17 +5896,21 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return fresh.id;
     };
 
-    const buildSku = (r:any, existing?:any) => ({
-      id:existing?.id || r.id || uid(),
-      brandId:getBrandId(r.brand),
-      productName:r.productName.trim(),
-      collection:r.collection.trim(),
-      sku:r.sku.trim(),
-      inventory:r.inventory,
-      status:r.status,
-      customStatus:r.customStatus||"",
-      extraFields:r.extraFields||{},
-    });
+    const buildSku = (r:any, existing?:any) => {
+      const builtSkuBase = {
+        id:existing?.id || r.id || uid(),
+        brandId:getBrandId(r.brand),
+        productName:r.productName.trim(),
+        collection:r.collection.trim(),
+        sku:r.sku.trim(),
+        inventory:r.inventory,
+        status:r.status,
+        customStatus:r.customStatus||"",
+        extraFields:r.extraFields||{},
+      };
+      const rowTag = r.tag || r.extraFields?.Tag || r.extraFields?.tag || existing?.tag || getSkuTagText(existing);
+      return setSkuTagsOnItem(builtSkuBase,rowTag);
+    };
 
     applyBulkColumnsToSkuTable(BULK_COLUMNS);
 
@@ -5868,6 +6067,21 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               )}
             </div>
 
+            {skuTagOptions.length>0&&(
+              <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
+                <button type="button" onClick={()=>setActiveSkuTag("all")}
+                  style={{ height:28,padding:"0 10px",borderRadius:999,border:`1.5px solid ${activeSkuTag==="all"?C.accent:C.border}`,background:activeSkuTag==="all"?C.accent:C.surface,color:activeSkuTag==="all"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                  All Tags
+                </button>
+                {skuTagOptions.map((tag:any)=>(
+                  <button key={tag.key} type="button" onClick={()=>setActiveSkuTag(tag.label)}
+                    style={{ height:28,padding:"0 10px",borderRadius:999,border:`1.5px solid ${normalizeSkuTagKey(activeSkuTag)===tag.key?C.accent:C.border}`,background:normalizeSkuTagKey(activeSkuTag)===tag.key?C.accent:C.surface,color:normalizeSkuTagKey(activeSkuTag)===tag.key?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                    {tag.label} <span style={{ opacity:.72 }}>({tag.count})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {!isMobile&&skuTableEditMode&&(
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
                 <span style={{ fontSize:12,color:C.muted }}>Edit mode: use the 6-dot handles to drag columns or product rows, rename headers, hide columns, or add columns.</span>
@@ -5984,6 +6198,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                             {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
                             <span style={{ fontSize:11,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:500 }}>{s.inventory.toLocaleString()} units</span>
                             <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"2px 8px",borderRadius:4,border:`1px solid ${st.color}28` }}>{st.label}</span>
+                            {getSkuTags(s).map((tag:string)=><span key={tag} style={{ fontSize:11,fontWeight:700,color:"#92400E",background:"#FEF3C7",padding:"2px 8px",borderRadius:4,border:"1px solid #FDE68A" }}>{tag}</span>)}
                           </div>
                         </div>
                       );
@@ -8799,7 +9014,7 @@ export default function App({
               Shared Sync: {cloudSyncStatus}
             </p>
           </div>
-          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
+          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
