@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from "react";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const C = {
@@ -5375,6 +5375,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const makeBulkRows = (count:number=8) => Array.from({length:count},()=>newBulkRow());
   const [bulkGridRows,setBulkGridRows] = useState<any[]>(()=>makeBulkRows(8));
   const [bulkError,setBulkError] = useState("");
+  const [bulkRenderLimit,setBulkRenderLimit] = useState(80);
   const skuStorageSaveTimer = useRef<any>(null);
   const skuBrandsSaveTimer = useRef<any>(null);
 
@@ -5914,8 +5915,9 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     const error=empty?"":!productName?"Missing product name":!sku?"Missing SKU":"";
     return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, inventory, extraFields, ...st, error, valid:!empty&&!error, empty };
   }).filter((r:any)=>!r.empty);
-  const bulkRows = useMemo(()=>parseGridRows(bulkGridRows),[bulkGridRows,bulkColumns]);
-  const bulkVisibleRows = useMemo(()=>{
+  const deferredBulkGridRows = useDeferredValue(bulkGridRows);
+  const bulkRows = useMemo(()=>parseGridRows(deferredBulkGridRows),[deferredBulkGridRows,bulkColumns]);
+  const bulkVisibleRowsAll = useMemo(()=>{
     const terms = bulkSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const rows = bulkGridRows.map((row:any,idx:number)=>({ row, idx }));
     if(bulkMode!=="edit" || !terms.length) return rows;
@@ -5929,6 +5931,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return terms.every((term:string)=>text.includes(term));
     });
   },[bulkGridRows,bulkSearch,bulkMode,bulkColumns]);
+
+  const bulkVisibleRows = useMemo(()=>bulkVisibleRowsAll.slice(0,bulkRenderLimit),[bulkVisibleRowsAll,bulkRenderLimit]);
+  useEffect(()=>{ setBulkRenderLimit(80); },[bulkSearch,bulkMode,bulkModal]);
+
   const updateBulkCell = (rowId:any, field:string, value:string) => {
     setBulkGridRows((p:any[])=>p.map((r:any)=>r.id===rowId?{...r,[field]:value}:r));
 
@@ -6006,6 +6012,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     setBulkEditColumnNames(false);
     setBulkColumns(columns);
     setBulkGridRows(makeBulkRows(8));
+    setBulkRenderLimit(80);
     resetBulkSheetSelection();
     setBulkModal(true);
   };
@@ -6019,11 +6026,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     setBulkEditBrandId(activeBrand || null);
     setBulkColumns(columns);
     setBulkGridRows(makeBulkRowsFromStorage(scopedItems,columns));
+    setBulkRenderLimit(80);
     resetBulkSheetSelection();
     setBulkModal(true);
   };
   const saveBulkSkus = () => {
-    const rows=bulkRows.filter(r=>r.valid);
+    const currentBulkRows = parseGridRows(bulkGridRows);
+    const rows=currentBulkRows.filter((r:any)=>r.valid);
     if(!rows.length){ setBulkError(bulkMode==="edit" ? "No valid SKU rows to save." : "No valid SKU rows to import."); return; }
 
     const nextBrands=[...brands];
@@ -6381,7 +6390,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>{bulkMode==="edit"?`Editing scope: ${bulkEditBrandObj?.name || "All Brands"}. Collection changes autosave while typing. Other sheet changes are applied when you click Save. Deleting rows in this sheet and saving will remove SKUs only from this scope.`:"This sheet follows the current SKU Storage table columns and order. Header row is optional. Existing SKUs with the same SKU code will be updated."}</p>
           </div>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-            <p style={{ margin:0,fontSize:12,color:C.muted }}>Use this like a mini spreadsheet. Click and drag cells to select, copy/paste ranges, press Delete to clear selected cells, or click row numbers to select and delete rows.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted }}>Use this like a mini spreadsheet. For smoother editing, the sheet loads rows in batches. Use search or Load more rows when needed.</p>
             <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
               <input value={bulkNewColumn} placeholder="New column name" onChange={e=>setBulkNewColumn(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addBulkColumn(); } }}
                 style={{ height:30,width:150,padding:"6px 9px",fontSize:12,borderRadius:7,border:`1.5px solid ${C.border}`,outline:"none",background:C.surface,color:C.text }} />
@@ -6450,7 +6459,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                   ))}
                 </div>
                 <div style={{ maxHeight:390,overflowY:"auto" }}>
-                  {bulkVisibleRows.length===0 ? (
+                  {bulkVisibleRowsAll.length===0 ? (
                     <div style={{ padding:18,fontSize:12,color:C.muted,textAlign:"center",borderBottom:`1px solid ${C.border}` }}>
                       No matching SKU rows. Try another keyword or clear search.
                     </div>
@@ -6479,6 +6488,14 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                       </div>
                     );
                   })}
+                  {bulkVisibleRows.length<bulkVisibleRowsAll.length&&(
+                    <div style={{ padding:10,borderTop:`1px solid ${C.border}`,background:C.bg,display:"flex",justifyContent:"center" }}>
+                      <button type="button" onClick={()=>setBulkRenderLimit((n:number)=>n+80)}
+                        style={{ height:32,padding:"0 14px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:12,fontWeight:800,cursor:"pointer" }}>
+                        Load more rows ({bulkVisibleRows.length} / {bulkVisibleRowsAll.length})
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -6486,7 +6503,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
           {bulkError&&<p style={{ margin:0,fontSize:12,color:C.muted }}>{bulkError}</p>}
           {bulkRows.length>0&&(
             <p style={{ margin:0,fontSize:12,color:bulkRows.some((r:any)=>r.error)?"#DC2626":C.muted,fontWeight:bulkRows.some((r:any)=>r.error)?700:400 }}>
-              {bulkRows.filter((r:any)=>r.valid).length} valid SKU{bulkRows.filter((r:any)=>r.valid).length!==1?"s":""}{bulkRows.some((r:any)=>r.error) ? ` · Fix highlighted rows before ${bulkMode==="edit"?"saving":"importing"} invalid items.` : (bulkMode==="edit" ? " ready to save." : " ready to import.")}{bulkMode==="edit"&&bulkSearch.trim()?` · Showing ${bulkVisibleRows.length} matching row${bulkVisibleRows.length!==1?"s":""}. Save still applies to the full sheet.`:""}
+              {bulkRows.filter((r:any)=>r.valid).length} valid SKU{bulkRows.filter((r:any)=>r.valid).length!==1?"s":""}{bulkRows.some((r:any)=>r.error) ? ` · Fix highlighted rows before ${bulkMode==="edit"?"saving":"importing"} invalid items.` : (bulkMode==="edit" ? " ready to save." : " ready to import.")}{bulkMode==="edit"?(bulkSearch.trim()?` · Showing ${bulkVisibleRows.length}/${bulkVisibleRowsAll.length} matching row${bulkVisibleRowsAll.length!==1?"s":""}. Save still applies to the full sheet.`:bulkVisibleRowsAll.length>bulkVisibleRows.length?` · Showing ${bulkVisibleRows.length}/${bulkVisibleRowsAll.length} rows for smoother editing.`:""):""}
             </p>
           )}
           <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
