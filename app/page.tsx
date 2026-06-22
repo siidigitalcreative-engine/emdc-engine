@@ -2816,6 +2816,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [newEcommerceSection,setNewEcommerceSection] = useState("");
   const [editingEcommerceSection,setEditingEcommerceSection] = useState<any>(null);
   const [editingEcommerceSectionValue,setEditingEcommerceSectionValue] = useState("");
+  const [openEcommerceInstruction,setOpenEcommerceInstruction] = useState<any>(null);
 
   useEffect(()=>{
     if(!initialItems) return;
@@ -3116,6 +3117,21 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const ecommerceOutputSections = getEcommerceOutputSections();
 
+  const getEcommerceSectionInstructions = () => {
+    const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
+    return data.sectionInstructions && typeof data.sectionInstructions==="object" ? data.sectionInstructions : {};
+  };
+
+  const setEcommerceSectionInstruction = (section:string, instruction:string) => {
+    const current = getEcommerceSectionInstructions();
+    updateAiWorkspace("ecommerce",{
+      sectionInstructions:{
+        ...current,
+        [section]:instruction,
+      },
+    });
+  };
+
   const getSelectedEcommerceSections = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
     const all = getEcommerceOutputSections();
@@ -3123,14 +3139,20 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return selected.length ? selected : [...all];
   };
 
-  const saveEcommerceSections = (sections:string[], selected?:string[]) => {
+  const saveEcommerceSections = (sections:string[], selected?:string[], instructionsPatch?:any) => {
     const cleanSections = Array.from(new Set((sections||[]).map((s:any)=>String(s||"").trim()).filter(Boolean)));
     const nextSections = cleanSections.length ? cleanSections : [...defaultEcommerceOutputSections];
     const currentSelected = selected || getSelectedEcommerceSections();
     const nextSelected = currentSelected.filter((s:string)=>nextSections.includes(s));
+    const currentInstructions = instructionsPatch || getEcommerceSectionInstructions();
+    const nextInstructions:any = {};
+    nextSections.forEach((section:string)=>{
+      if(currentInstructions?.[section]) nextInstructions[section] = currentInstructions[section];
+    });
     updateAiWorkspace("ecommerce",{
       outputSections:nextSections,
       selectedSections:nextSelected.length ? nextSelected : [...nextSections],
+      sectionInstructions:nextInstructions,
     });
   };
 
@@ -3174,21 +3196,34 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const sections = getEcommerceOutputSections();
     const nextSections = sections.map((section:string)=>section===oldLabel ? newLabel : section);
     const nextSelected = getSelectedEcommerceSections().map((section:string)=>section===oldLabel ? newLabel : section);
-    saveEcommerceSections(nextSections,nextSelected);
+    const instructions = { ...getEcommerceSectionInstructions() };
+    if(instructions[oldLabel] && oldLabel!==newLabel){
+      instructions[newLabel] = instructions[oldLabel];
+      delete instructions[oldLabel];
+    }
+    saveEcommerceSections(nextSections,nextSelected,instructions);
+    if(openEcommerceInstruction===oldLabel) setOpenEcommerceInstruction(newLabel);
     cancelEditEcommerceSection();
   };
 
   const deleteEcommerceSection = (section:string) => {
     const nextSections = getEcommerceOutputSections().filter((s:string)=>s!==section);
     const nextSelected = getSelectedEcommerceSections().filter((s:string)=>s!==section);
-    saveEcommerceSections(nextSections,nextSelected);
+    const instructions = { ...getEcommerceSectionInstructions() };
+    delete instructions[section];
+    saveEcommerceSections(nextSections,nextSelected,instructions);
     if(editingEcommerceSection===section) cancelEditEcommerceSection();
+    if(openEcommerceInstruction===section) setOpenEcommerceInstruction(null);
   };
 
   const buildEcommercePrompt = () => {
     const mappedProducts = productRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||""} | Product: ${row.product||""} | SKU: ${row.skuCode||""}`).join("\n");
     const selectedSections = getSelectedEcommerceSections();
-    const structureBlock = selectedSections.map((section:string)=>section).join("\n");
+    const sectionInstructions = getEcommerceSectionInstructions();
+    const structureBlock = selectedSections.map((section:string)=>{
+      const instruction = String(sectionInstructions?.[section] || "").trim();
+      return instruction ? `${section}\nInstruction: ${instruction}` : section;
+    }).join("\n\n");
     return `Create a complete e-commerce listing output for this checklist group.
 
 Group: ${group.groupName}
@@ -3430,8 +3465,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       "Do not number the section headers like 1., 2., 8., etc.",
       "Use clean section titles only, then the content below each title.",
       "",
-      "Required output structure, use only these selected clean section titles:",
-      ...selectedSections,
+      "Required output structure, use only these selected clean section titles. Follow any instruction written under each section:",
+      ...selectedSections.map((section:string)=>{
+        const instruction = String(getEcommerceSectionInstructions()?.[section] || "").trim();
+        return instruction ? `${section}\nInstruction: ${instruction}` : section;
+      }),
       "Do not add any unselected sections.",
     ].join("\n");
 
@@ -3540,6 +3578,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if(tab==="ecommerce"){
       const catalogFiles = data.catalogFiles || [];
       const selectedSections = getSelectedEcommerceSections();
+      const sectionInstructions = getEcommerceSectionInstructions();
       const mappedProducts = productRows.slice(0,30);
       return (
         <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.1fr) minmax(0,.9fr)",gap:14 }}>
@@ -3648,15 +3687,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       ) : (
                         <>
                           <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>{section}</button>
+                          <button onClick={()=>setOpenEcommerceInstruction(openEcommerceInstruction===section?null:section)} style={{ border:"none",background:sectionInstructions[section]?"#ECFDF5":C.surfaceAlt,color:sectionInstructions[section]?"#047857":C.muted,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>{sectionInstructions[section]?"Instruction":"Add Instruction"}</button>
                           <button onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
                           <button onClick={()=>deleteEcommerceSection(section)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Delete</button>
                         </>
+                      )}
+                      {openEcommerceInstruction===section&&!editing&&(
+                        <div style={{ flexBasis:"100%",marginTop:6 }}>
+                          <textarea
+                            value={sectionInstructions[section] || ""}
+                            onChange={e=>setEcommerceSectionInstruction(section,e.target.value)}
+                            placeholder={`Add specific instructions for ${section}...`}
+                            style={{ width:"100%",minHeight:64,resize:"vertical",padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,outline:"none",fontSize:11.5,lineHeight:1.45,color:C.text,background:C.surface }}
+                          />
+                          <p style={{ margin:"4px 0 0",fontSize:10.5,color:C.faint }}>This instruction will be added under this section in the AI prompt.</p>
+                        </div>
                       )}
                     </div>
                   );
                 })}
               </div>
-              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Add, edit, delete, or select sections, then click Save Changes to refresh the listing template prompt above.</p>
+              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Add, edit, delete, select sections, or add instructions, then click Save Changes to refresh the listing template prompt above.</p>
             </div>
           </div>
 
