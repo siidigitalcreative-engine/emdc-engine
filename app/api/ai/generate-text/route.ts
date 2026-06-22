@@ -62,29 +62,42 @@ function parseDataUrl(dataUrl: string) {
   return { mimeType, base64, text };
 }
 
-function filePart(file: any) {
+function fileParts(file: any) {
   const name = typeof file?.name === "string" ? file.name : "uploaded reference";
   const type = typeof file?.type === "string" ? file.type : "";
   const parsed = parseDataUrl(String(file?.dataUrl || ""));
-  if (!parsed) return null;
+  if (!parsed) return [];
+
+  const mimeType = parsed.mimeType || type || "application/octet-stream";
 
   if (parsed.text) {
-    return {
-      text: [
-        `Uploaded catalog/reference file: ${name}`,
-        `MIME type: ${parsed.mimeType}`,
-        "",
-        parsed.text,
-      ].join("\\n"),
-    };
+    return [
+      {
+        text: [
+          `Uploaded catalog/reference file: ${name}`,
+          `MIME type: ${mimeType}`,
+          "",
+          parsed.text,
+        ].join("\\n"),
+      },
+    ];
   }
 
-  return {
-    inline_data: {
-      mime_type: parsed.mimeType || type || "application/octet-stream",
-      data: parsed.base64,
+  return [
+    {
+      text: [
+        `Uploaded catalog/reference image or PDF: ${name}`,
+        `MIME type: ${mimeType}`,
+        "Read this visual reference carefully. Extract visible product names, labels, material, sizes, capacity, colors, variants, care instructions, package inclusions, and any readable text. Use it as source material for the output.",
+      ].join("\\n"),
     },
-  };
+    {
+      inlineData: {
+        mimeType,
+        data: parsed.base64,
+      },
+    },
+  ];
 }
 
 export async function POST(req: NextRequest) {
@@ -127,6 +140,8 @@ export async function POST(req: NextRequest) {
       "For e-commerce listing outputs, do not use markdown heading symbols like ###.",
       "For e-commerce listing outputs, do not number section headers like 1., 2., or 8.",
       "Use plain section titles only, with the content below each section.",
+      "When uploaded catalog/reference images are included, actively read the image and extract visible text and product details.",
+      "If an uploaded catalog image is unreadable, say which details are unreadable instead of ignoring it.",
       "",
       "User input:",
       input,
@@ -137,9 +152,9 @@ export async function POST(req: NextRequest) {
       ...(Array.isArray(body?.referenceImages) ? body.referenceImages : []),
     ];
 
-    const fileParts = uploadedFiles
+    const attachedParts = uploadedFiles
       .slice(0, 12)
-      .map(filePart)
+      .flatMap(fileParts)
       .filter(Boolean);
 
     const response = await fetch(
@@ -156,7 +171,7 @@ export async function POST(req: NextRequest) {
               role: "user",
               parts: [
                 { text: prompt },
-                ...fileParts,
+                ...attachedParts,
               ],
             },
           ],
