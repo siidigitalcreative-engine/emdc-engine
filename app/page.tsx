@@ -2207,20 +2207,25 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         ) : filteredPhaseoutSkuLinks.length===0 ? (
           <p style={{ margin:0,fontSize:12,color:C.muted }}>No phase-out SKUs found for this brand.</p>
         ) : (
-          <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(auto-fill,minmax(280px,1fr))",gap:10 }}>
+          <div style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.bg,overflow:"hidden" }}>
+            <div style={{ padding:"8px 10px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:C.surfaceAlt }}>
+              <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>SKU List</p>
+              <span style={{ fontSize:10.5,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"2px 8px" }}>{filteredPhaseoutSkuLinks.length} shown</span>
+            </div>
+            <div style={{ maxHeight:isMobile?360:430,overflowY:"auto",WebkitOverflowScrolling:"touch",display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"repeat(auto-fill,minmax(250px,1fr))",gap:8,padding:8 }}>
             {filteredPhaseoutSkuLinks.map((item:any)=>(
-              <div key={`${item.brandName}-${item.label}`} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                <div style={{ padding:"9px 10px",background:"#FFFBEB",borderBottom:"1px solid #FDE68A",display:"flex",gap:8,alignItems:"center" }}>
-                  <span style={{ width:22,height:22,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0 }}>⚑</span>
+              <div key={`${item.brandName}-${item.label}`} style={{ border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,overflow:"hidden" }}>
+                <div style={{ padding:"7px 8px",background:"#FFFBEB",borderBottom:"1px solid #FDE68A",display:"flex",gap:7,alignItems:"center" }}>
+                  <span style={{ width:20,height:20,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,flexShrink:0 }}>⚑</span>
                   <div style={{ minWidth:0,flex:1 }}>
-                    <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{String(item.label||"").startsWith(String(item.brandName||"")+" - ")?String(item.label||"").slice(String(item.brandName||"").length+3):item.label}</p>
-                    <p style={{ margin:"2px 0 0",fontSize:10,color:"#B45309",fontWeight:800,textTransform:"uppercase",letterSpacing:".04em" }}>{item.brandName}</p>
-                    {Array.isArray(item.tags)&&item.tags.length>0&&<p style={{ margin:"2px 0 0",fontSize:10,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Tags: {item.tags.join(", ")}</p>}
+                    <p style={{ margin:0,fontSize:11.5,fontWeight:850,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{String(item.label||"").startsWith(String(item.brandName||"")+" - ")?String(item.label||"").slice(String(item.brandName||"").length+3):item.label}</p>
+                    <p style={{ margin:"1px 0 0",fontSize:9.5,color:"#B45309",fontWeight:800,textTransform:"uppercase",letterSpacing:".04em" }}>{item.brandName}</p>
+                    {Array.isArray(item.tags)&&item.tags.length>0&&<p style={{ margin:"1px 0 0",fontSize:9.5,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Tags: {item.tags.join(", ")}</p>}
                   </div>
                   {item.sku&&(
-                    <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-                      <button type="button" onClick={()=>openPhaseoutTagEdit(item.sku)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Edit</button>
-                      <button type="button" onClick={()=>clearPhaseoutTag(item.sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear</button>
+                    <div style={{ display:"flex",gap:4,flexShrink:0 }}>
+                      <button type="button" onClick={()=>openPhaseoutTagEdit(item.sku)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:6,padding:"4px 6px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Edit</button>
+                      <button type="button" onClick={()=>clearPhaseoutTag(item.sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 6px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Clear</button>
                     </div>
                   )}
                 </div>
@@ -2252,6 +2257,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
       </div>
