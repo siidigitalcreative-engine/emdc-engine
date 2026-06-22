@@ -531,6 +531,7 @@ const Empty = ({ icon="", title, sub, action }) => (
 const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU storage...", multiSelect=false, selectedIds=[] }) => {
   const [query,setQuery] = useState("");
   const [open,setOpen]   = useState(false);
+  const [brandFilter,setBrandFilter] = useState("all");
   const [categoryFilter,setCategoryFilter] = useState("all");
   const ref = useRef(null);
 
@@ -549,14 +550,28 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     return key ? String(extra[key]||"").trim() : "";
   };
 
+  const brandOptions = useMemo(()=>{
+    const used = new Set((skuStorage||[]).map((s:any)=>s.brandId).filter(Boolean));
+    return (brands||[])
+      .filter((brand:any)=>used.has(brand.id))
+      .sort((a:any,b:any)=>String(a.name||"").localeCompare(String(b.name||"")));
+  },[skuStorage,brands]);
+
   const categoryOptions = useMemo(()=>{
     const set = new Set<string>();
-    (skuStorage||[]).forEach((s:any)=>{
-      const value = getPickerCollection(s);
-      if(value) set.add(value);
-    });
+    (skuStorage||[])
+      .filter((s:any)=>brandFilter==="all" || s.brandId===brandFilter)
+      .forEach((s:any)=>{
+        const value = getPickerCollection(s);
+        if(value) set.add(value);
+      });
     return Array.from(set).sort((a:string,b:string)=>a.localeCompare(b));
-  },[skuStorage]);
+  },[skuStorage,brandFilter]);
+
+  useEffect(()=>{
+    if(brandFilter==="all") return;
+    if(!brandOptions.some((brand:any)=>brand.id===brandFilter)) setBrandFilter("all");
+  },[brandFilter,brandOptions]);
 
   useEffect(()=>{
     if(categoryFilter==="all") return;
@@ -569,6 +584,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
       const collectionName = getPickerCollection(s);
 
+      if(brandFilter!=="all" && s.brandId !== brandFilter) return false;
       if(categoryFilter!=="all" && collectionName !== categoryFilter) return false;
 
       if(!q) return true;
@@ -590,7 +606,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     });
 
     return list;
-  }, [query,skuStorage,brands,categoryFilter]);
+  }, [query,skuStorage,brands,brandFilter,categoryFilter]);
 
   useEffect(()=>{
     const fn = e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
@@ -629,17 +645,28 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
 
   return (
     <div ref={ref} style={{ position:"relative",display:"flex",flexDirection:"column",gap:8 }}>
-      {categoryOptions.length>0&&(
-        <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
-          <Select value={categoryFilter} onChange={v=>{ setCategoryFilter(v); setOpen(true); }}>
-            <option value="all">All Collections / Categories</option>
-            {categoryOptions.map((option:string)=><option key={option} value={option}>{option}</option>)}
-          </Select>
-          {categoryFilter!=="all"&&(
-            <button type="button" onClick={()=>setCategoryFilter("all")}
-              style={{ height:40,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,borderRadius:8,padding:"0 10px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",whiteSpace:"nowrap" }}>
-              Clear
-            </button>
+      {(brandOptions.length>0 || categoryOptions.length>0)&&(
+        <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+          {brandOptions.length>0&&(
+            <Select value={brandFilter} onChange={v=>{ setBrandFilter(v); setCategoryFilter("all"); setOpen(true); }}>
+              <option value="all">All Brands</option>
+              {brandOptions.map((brand:any)=><option key={brand.id} value={brand.id}>{brand.name}</option>)}
+            </Select>
+          )}
+
+          {categoryOptions.length>0&&(
+            <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"center" }}>
+              <Select value={categoryFilter} onChange={v=>{ setCategoryFilter(v); setOpen(true); }}>
+                <option value="all">All Collections / Categories</option>
+                {categoryOptions.map((option:string)=><option key={option} value={option}>{option}</option>)}
+              </Select>
+              {(brandFilter!=="all" || categoryFilter!=="all")&&(
+                <button type="button" onClick={()=>{ setBrandFilter("all"); setCategoryFilter("all"); setOpen(true); }}
+                  style={{ height:40,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,borderRadius:8,padding:"0 10px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",whiteSpace:"nowrap" }}>
+                  Clear
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -652,7 +679,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
         <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,.12)",zIndex:400,maxHeight:420,overflowY:"auto" }}>
           <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
             <span style={{ fontSize:11,color:C.muted,fontWeight:700 }}>
-              {results.length} SKU{results.length===1?"":"s"} found{categoryFilter!=="all"?` · ${categoryFilter}`:""}
+              {results.length} SKU{results.length===1?"":"s"} found{brandFilter!=="all"?` · ${(brands||[]).find((b:any)=>b.id===brandFilter)?.name || "Brand"}`:""}{categoryFilter!=="all"?` · ${categoryFilter}`:""}
             </span>
             {multiSelect&&results.length>0&&(
               <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
