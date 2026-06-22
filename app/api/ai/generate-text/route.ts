@@ -19,6 +19,10 @@ const taskInstructions: Record<string, string> = {
     "Improve this into a detailed image generation prompt for realistic commercial product photography. Keep product accuracy, scene, lighting, camera, and composition clear.",
   video_prompt:
     "Improve this into a cinematic image-to-video or text-to-video prompt. Include camera motion, subject action, pacing, lighting, and product hero focus.",
+  ecommerce_listing:
+    "Generate a complete marketplace-ready e-commerce listing based on selected SKUs and catalog references.",
+  phaseout_matcher:
+    "Analyze products and match them to the best campaign/event opportunities. Return exactly what the user requested.",
 };
 
 const toneInstructions: Record<string, string> = {
@@ -29,18 +33,71 @@ const toneInstructions: Record<string, string> = {
   short: "Keep the output short, direct, and easy to copy.",
 };
 
+function parseDataUrl(dataUrl: string) {
+  const match = /^data:([^;,]+)?(;base64)?,(.*)$/i.exec(dataUrl || "");
+  if (!match) return null;
+
+  const mimeType = match[1] || "application/octet-stream";
+  const isBase64 = !!match[2];
+  const rawData = match[3] || "";
+
+  if (!isBase64) {
+    return {
+      mimeType,
+      base64: Buffer.from(decodeURIComponent(rawData)).toString("base64"),
+      text: decodeURIComponent(rawData),
+    };
+  }
+
+  const base64 = rawData.replace(/\s/g, "");
+  let text = "";
+  try {
+    if (mimeType.startsWith("text/") || mimeType.includes("json") || mimeType.includes("csv")) {
+      text = Buffer.from(base64, "base64").toString("utf8");
+    }
+  } catch {}
+
+  return { mimeType, base64, text };
+}
+
+function filePart(file: any) {
+  const name = typeof file?.name === "string" ? file.name : "uploaded reference";
+  const type = typeof file?.type === "string" ? file.type : "";
+  const parsed = parseDataUrl(String(file?.dataUrl || ""));
+  if (!parsed) return null;
+
+  if (parsed.text) {
+    return {
+      text: [
+        `Uploaded catalog/reference file: ${name}`,
+        `MIME type: ${parsed.mimeType}`,
+        "",
+        parsed.text,
+      ].join("\\n"),
+    };
+  }
+
+  return {
+    inline_data: {
+      mime_type: parsed.mimeType || type || "application/octet-stream",
+      data: parsed.base64,
+    },
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
     const input = typeof body?.input === "string" ? body.input.trim() : "";
     const task = typeof body?.task === "string" ? body.task : "product_description";
-    const taskLabel = typeof body?.taskLabel === "string" ? body.taskLabel.trim() : "Output";
-    const customInstruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
     const tone = typeof body?.tone === "string" ? body.tone : "professional";
-    const referenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages.slice(0, 4) : [];
+    const customInstruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
+    const taskLabel = typeof body?.taskLabel === "string" ? body.taskLabel.trim() : "";
+    const maxOutputTokensRaw = Number(body?.maxOutputTokens || 1800);
+    const maxOutputTokens = Math.max(512, Math.min(8192, Number.isFinite(maxOutputTokensRaw) ? maxOutputTokensRaw : 1800));
 
-    if (!input) {
+    if (!input && !customInstruction) {
       return NextResponse.json({ error: "Input is required." }, { status: 400 });
     }
 
@@ -59,32 +116,25 @@ export async function POST(req: NextRequest) {
 
     const prompt = [
       "You are EMDC's marketing and ecommerce copy assistant for product content.",
-      `Output type: ${taskLabel || "Output"}.`,
+      taskLabel ? `Task: ${taskLabel}` : "",
       instruction,
       toneInstruction,
       "Avoid em dashes.",
       "Do not invent technical specs that are not provided.",
       "Use clear formatting that is easy to copy.",
-      "If reference images are attached, use them as additional visual context for the product.",
-      "Only mention visual details that are clearly visible in the image or explicitly stated in the user input.",
       "",
       "User input:",
       input,
-    ].join("\\n");
+    ].filter(Boolean).join("\\n");
 
-    const imageParts = referenceImages
-      .map((img: any) => {
-        const dataUrl = typeof img?.dataUrl === "string" ? img.dataUrl : "";
-        const type = typeof img?.type === "string" ? img.type : "image/jpeg";
-        const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
-        if (!match) return null;
-        return {
-          inlineData: {
-            mimeType: match[1] || type || "image/jpeg",
-            data: match[2],
-          },
-        };
-      })
+    const uploadedFiles = [
+      ...(Array.isArray(body?.catalogFiles) ? body.catalogFiles : []),
+      ...(Array.isArray(body?.referenceImages) ? body.referenceImages : []),
+    ];
+
+    const fileParts = uploadedFiles
+      .slice(0, 12)
+      .map(filePart)
       .filter(Boolean);
 
     const response = await fetch(
@@ -99,13 +149,16 @@ export async function POST(req: NextRequest) {
           contents: [
             {
               role: "user",
-              parts: [{ text: prompt }, ...imageParts],
+              parts: [
+                { text: prompt },
+                ...fileParts,
+              ],
             },
           ],
           generationConfig: {
-            temperature: 0.7,
+            temperature: task === "ecommerce_listing" ? 0.45 : 0.7,
             topP: 0.9,
-            maxOutputTokens: 1200,
+            maxOutputTokens,
           },
         }),
       }
