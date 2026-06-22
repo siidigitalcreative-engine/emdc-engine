@@ -2810,6 +2810,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [skuPickDept,setSkuPickDept] = useState(null);
   const [productDetail,setProductDetail] = useState<any>(null);
   const [productEdit,setProductEdit] = useState<any>(null);
+  const [aiBusy,setAiBusy] = useState<any>({});
+  const [aiError,setAiError] = useState<any>({});
 
   useEffect(()=>{
     if(!initialItems) return;
@@ -3006,6 +3008,115 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     updateAiWorkspace(tab,{ catalogFiles:current.filter((_:any,i:number)=>i!==idx) });
   };
 
+  const generateEcommerceListing = async () => {
+    const tab = "ecommerce";
+    const data = (group.aiWorkspace || {})[tab] || {};
+    const prompt = String(data.textPrompt || buildEcommercePrompt()).trim();
+    if(!prompt) return;
+
+    setAiBusy((p:any)=>({...p,[tab]:true}));
+    setAiError((p:any)=>({...p,[tab]:""}));
+
+    const mappedProducts = productRows.map((row:any,idx:number)=>({
+      no:idx+1,
+      brand:row.brand || "",
+      collection:row.collection || "",
+      product:row.product || "",
+      sku:row.skuCode || "",
+      material:row.material || row.extraFields?.Material || row.extraFields?.material || "",
+      size:row.size || row.extraFields?.Size || row.extraFields?.size || "",
+      color:row.color || row.extraFields?.Color || row.extraFields?.color || "",
+      capacity:row.capacity || row.extraFields?.Capacity || row.extraFields?.capacity || "",
+    }));
+
+    const catalogFiles = (data.catalogFiles || []).filter((file:any)=>file?.dataUrl);
+
+    const instruction = [
+      "You are EMDC's e-commerce listing assistant for Philippine marketplaces.",
+      "Read the selected products and any uploaded catalog/reference files.",
+      "Use the uploaded catalog pages to extract product specs, materials, dimensions, capacities, color options, package inclusions, and care instructions when visible.",
+      "Do not invent exact technical specifications if they are not present in the product list or catalog reference.",
+      "If a detail is missing, write it as a clean placeholder like: To be confirmed.",
+      "Generate a complete marketplace listing output using the exact required structure.",
+      "Write in clear English for Lazada, Shopee, TikTok Shop, and Shopify.",
+      "Avoid em dashes.",
+      "",
+      "Required output structure:",
+      "1. Product collection/title",
+      "2. Product Overview",
+      "3. Key Features",
+      "4. Variants Available",
+      "5. Color Options",
+      "6. Product Specifications",
+      "7. Perfect For",
+      "8. Care & Use",
+      "9. Package Includes",
+      "10. Best SEO Listing Title",
+      "11. Stronger Lazada/Shopee SEO Version",
+      "12. Recommended Variations",
+      "13. Better Option / Higher AOV",
+      "14. Search Keywords",
+      "15. Recommended Final Listing Structure",
+    ].join("\n");
+
+    try {
+      const res = await fetch("/api/ai/generate-text", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          task:"ecommerce_listing",
+          taskLabel:"E-commerce Listing Generator",
+          tone:"professional",
+          instruction,
+          input:JSON.stringify({
+            prompt,
+            group:{
+              name:group.groupName,
+              operationalType:lt.label,
+              schedule:group.deadline ? (group.deadlineEnd?`${group.deadline} to ${group.deadlineEnd}`:group.deadline) : (Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length?formatMonthOnlyLabel(group.monthOnlyMonths):"No date"),
+            },
+            products:mappedProducts,
+            requiredOutputSections:ecommerceOutputSections,
+          },null,2),
+          catalogFiles:catalogFiles.map((file:any)=>({
+            name:file.name,
+            type:file.type || "application/octet-stream",
+            dataUrl:file.dataUrl,
+          })),
+          referenceImages:catalogFiles
+            .filter((file:any)=>String(file.type||"").startsWith("image/"))
+            .map((file:any)=>({
+              name:file.name,
+              type:file.type || "image/jpeg",
+              dataUrl:file.dataUrl,
+            })),
+          maxOutputTokens:6000,
+        }),
+      });
+
+      const raw = await res.text();
+      let payload:any = {};
+      try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "E-commerce generation failed."); }
+      if(!res.ok) throw new Error(payload?.error || payload?.message || "E-commerce generation failed.");
+
+      updateAiWorkspace(tab,{
+        textPrompt:prompt,
+        generatedText:payload?.text || "",
+        generatedAt:new Date().toISOString(),
+      });
+    } catch (err:any) {
+      setAiError((p:any)=>({...p,[tab]:err?.message || "E-commerce generation failed."}));
+    } finally {
+      setAiBusy((p:any)=>({...p,[tab]:false}));
+    }
+  };
+
+  const copyGeneratedEcommerce = async () => {
+    const output = String(((group.aiWorkspace || {}).ecommerce || {}).generatedText || "");
+    if(!output) return;
+    try { await navigator.clipboard.writeText(output); } catch {}
+  };
+
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
     const data = (group.aiWorkspace || {})[tab] || {};
@@ -3021,7 +3132,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
                 <div>
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>E-commerce Listing Builder</h3>
-                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Generate the complete marketplace listing structure for the selected products. The product list is mapped from the checklist SKUs, while uploaded catalog pages will be used as reference once AI is connected.</p>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Generate the complete marketplace listing structure for the selected products. The product list is mapped from the checklist SKUs, while uploaded catalog pages are sent to Gemini as reference.</p>
                 </div>
                 <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{productRows.length} products</span>
               </div>
@@ -3039,7 +3150,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                 </label>
               </div>
               <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
-                {catalogFiles.length===0&&<div style={{ padding:12,background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,fontSize:12,color:C.faint,textAlign:"center" }}>No catalog uploaded yet. Upload a catalog page so AI can read product specs, materials, sizes, colors, and care instructions later.</div>}
+                {catalogFiles.length===0&&<div style={{ padding:12,background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,fontSize:12,color:C.faint,textAlign:"center" }}>No catalog uploaded yet. Upload a catalog page so Gemini can read product specs, materials, sizes, colors, and care instructions.</div>}
                 {catalogFiles.map((file:any,idx:number)=>(
                   <div key={`${file.name}-${idx}`} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
                     <div style={{ minWidth:0 }}>
@@ -3064,9 +3175,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                 rows={9}
                 style={{ width:"100%",minHeight:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
               />
+              {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
               <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",marginTop:10 }}>
-                <Btn sm variant="outline" disabled>Save Prompt</Btn>
-                <Btn sm disabled>Generate E-commerce Listing</Btn>
+                <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt() })}>Save Prompt</Btn>
+                <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
               </div>
             </div>
 
@@ -3099,20 +3211,30 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             </div>
 
             <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-              <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>E-commerce Output Preview</h4>
-              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                {["Product Title / Collection Name","Product Overview","Key Features","Variants + Color Options","Specifications + Care & Package Includes","SEO Title + Keywords + Final Listing Structure"].map((label:string)=>(
-                  <div key={label} style={{ padding:"9px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
-                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>{label}</p>
-                    <p style={{ margin:"3px 0 0",fontSize:11,color:C.faint }}>AI output placeholder</p>
-                  </div>
-                ))}
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>E-commerce Generated Output</h4>
+                <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                  {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
+                  <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
+                </div>
               </div>
+              {data.generatedText ? (
+                <textarea
+                  value={data.generatedText || ""}
+                  onChange={e=>updateAiWorkspace(tab,{ generatedText:e.target.value })}
+                  rows={18}
+                  style={{ width:"100%",minHeight:360,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.55,color:C.text,background:C.bg,whiteSpace:"pre-wrap" }}
+                />
+              ) : (
+                <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,padding:16 }}>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Generated e-commerce listing will appear here. Upload catalog references, click Use Listing Template, then Generate E-commerce Listing.</p>
+                </div>
+              )}
             </div>
 
-            <div style={{ padding:14,background:"#FFFBEB",border:"1.5px solid #FDE68A",borderRadius:12 }}>
-              <h4 style={{ margin:"0 0 6px",fontSize:13,fontWeight:900,color:"#92400E" }}>Next AI Setup</h4>
-              <p style={{ margin:0,fontSize:12,color:"#92400E",lineHeight:1.5 }}>Next step: connect this tab to text generation so it reads selected products plus uploaded catalog pages and generates the full listing structure automatically.</p>
+            <div style={{ padding:14,background:"#ECFDF5",border:"1.5px solid #A7F3D0",borderRadius:12 }}>
+              <h4 style={{ margin:"0 0 6px",fontSize:13,fontWeight:900,color:"#065F46" }}>Gemini Connected</h4>
+              <p style={{ margin:0,fontSize:12,color:"#065F46",lineHeight:1.5 }}>This tab now sends the selected products, prompt, and uploaded catalog files to Gemini through /api/ai/generate-text.</p>
             </div>
           </div>
         </div>
