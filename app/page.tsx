@@ -4021,6 +4021,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   ];
   const [bulkColumns,setBulkColumns] = useState<any[]>(DEFAULT_BULK_COLUMNS);
   const [bulkNewColumn,setBulkNewColumn] = useState("");
+  const [bulkEditColumnNames,setBulkEditColumnNames] = useState(false);
   const [bulkDragIndex,setBulkDragIndex] = useState<number|null>(null);
   const [bulkActiveCell,setBulkActiveCell] = useState<any>(null);
   const [bulkSelection,setBulkSelection] = useState<any>(null);
@@ -4326,6 +4327,23 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     setBulkNewColumn("");
   };
   const renameBulkColumn = (key:string, label:string) => setBulkColumns((p:any[])=>p.map((c:any)=>c.key===key?{...c,label}:c));
+  const applyBulkColumnsToSkuTable = (columns:any[]=BULK_COLUMNS) => {
+    setSkuTableColumns((prev:any[])=>{
+      const previousByKey:any = {};
+      (prev||[]).forEach((c:any)=>{ previousByKey[c.key]=c; });
+      return (columns||[]).map((c:any)=>{
+        const previous = previousByKey[c.key] || {};
+        return {
+          ...previous,
+          key:c.key,
+          label:String(c.label||previous.label||c.key||"Column").trim() || "Column",
+          base:!!(previous.base || c.base || !c.custom),
+          custom:!!(previous.custom || c.custom),
+          hidden:false,
+        };
+      });
+    });
+  };
   const removeBulkColumn = (key:string) => {
     setBulkColumns((p:any[])=>p.filter((c:any)=>c.key!==key || !c.custom));
     setBulkGridRows((p:any[])=>p.map((r:any)=>{ const next={...r}; delete next[key]; return next; }));
@@ -4592,6 +4610,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     const columns=buildBulkColumnsFromSkuTable();
     setBulkMode("paste");
     setBulkSearch("");
+    setBulkEditColumnNames(false);
     setBulkColumns(columns);
     setBulkGridRows(makeBulkRows(8));
     resetBulkSheetSelection();
@@ -4603,6 +4622,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
     setBulkMode("edit");
     setBulkSearch("");
+    setBulkEditColumnNames(false);
     setBulkEditBrandId(activeBrand || null);
     setBulkColumns(columns);
     setBulkGridRows(makeBulkRowsFromStorage(scopedItems,columns));
@@ -4636,6 +4656,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       customStatus:r.customStatus||"",
       extraFields:r.extraFields||{},
     });
+
+    applyBulkColumnsToSkuTable(BULK_COLUMNS);
 
     if(bulkMode==="edit"){
       const editedSkus=rows.map((r:any)=>{
@@ -4951,6 +4973,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               <input value={bulkNewColumn} placeholder="New column name" onChange={e=>setBulkNewColumn(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addBulkColumn(); } }}
                 style={{ height:30,width:150,padding:"6px 9px",fontSize:12,borderRadius:7,border:`1.5px solid ${C.border}`,outline:"none",background:C.surface,color:C.text }} />
               <Btn xs variant="outline" onClick={addBulkColumn}>+ Column</Btn>
+              <Btn xs variant={bulkEditColumnNames?"primary":"outline"} onClick={()=>setBulkEditColumnNames(v=>!v)}>{bulkEditColumnNames?"Done Columns":"Edit Column Names"}</Btn>
               <Btn xs variant="outline" onClick={()=>addBulkRows(10)}>+ 10 Rows</Btn>
               <Btn xs variant="outline" onClick={clearBulkSelectedCells} disabled={!bulkSelection&&!bulkSelectedRows.length}>Clear Selected</Btn>
               <Btn xs variant="danger" onClick={deleteBulkSelectedRows} disabled={!bulkSelectedRows.length}>Delete Row{bulkSelectedRows.length!==1?"s":""}</Btn>
@@ -4959,6 +4982,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               <Btn xs variant="outline" onClick={clearBulkRows}>{bulkMode==="edit"?"Clear Sheet":"Clear All"}</Btn>
             </div>
           </div>
+          {bulkEditColumnNames&&(
+            <div style={{ padding:"8px 10px",background:"#EFF6FF",border:"1.5px solid #BFDBFE",borderRadius:9,fontSize:12,color:"#1D4ED8",fontWeight:700 }}>
+              Rename the column headers directly in the sheet. Click Save to apply the updated names.
+            </div>
+          )}
           {bulkMode==="edit"&&(
             <div style={{ display:"flex",alignItems:"center",gap:8,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px" }}>
               <span style={{ fontSize:13,color:C.faint,flexShrink:0 }}>Search</span>
@@ -4995,9 +5023,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                       title="Drag to rearrange this column"
                       style={{ padding:"6px 7px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,cursor:"grab",display:"flex",alignItems:"center",gap:4,minWidth:0 }}>
                       <span style={{ color:C.faint,fontSize:11,lineHeight:1,flexShrink:0 }}>&#8942;&#8942;</span>
-                      {c.custom ? (
+                      {bulkEditColumnNames ? (
                         <input value={c.label} onChange={e=>renameBulkColumn(c.key,e.target.value)} placeholder="Column name"
-                          style={{ minWidth:0,width:"100%",background:"transparent",border:"none",outline:"none",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }} />
+                          onClick={e=>e.stopPropagation()}
+                          onMouseDown={e=>e.stopPropagation()}
+                          style={{ minWidth:0,width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:5,outline:"none",fontSize:10,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em",padding:"4px 6px" }} />
                       ) : (
                         <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{c.label}</span>
                       )}
