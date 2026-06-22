@@ -2813,6 +2813,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [aiBusy,setAiBusy] = useState<any>({});
   const [aiError,setAiError] = useState<any>({});
   const [savedEcommercePreview,setSavedEcommercePreview] = useState<any>(null);
+  const [newEcommerceSection,setNewEcommerceSection] = useState("");
+  const [editingEcommerceSection,setEditingEcommerceSection] = useState<any>(null);
+  const [editingEcommerceSectionValue,setEditingEcommerceSectionValue] = useState("");
 
   useEffect(()=>{
     if(!initialItems) return;
@@ -2976,7 +2979,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(onUpdateGroup) onUpdateGroup({ aiWorkspace:next });
   };
 
-  const ecommerceOutputSections = [
+  const defaultEcommerceOutputSections = [
     "Product Overview",
     "Key Features",
     "Variants Available",
@@ -2992,9 +2995,30 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     "Search Keywords",
   ];
 
+  const getEcommerceOutputSections = () => {
+    const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
+    const sections = Array.isArray(data.outputSections) ? data.outputSections.filter(Boolean) : [];
+    return sections.length ? sections : [...defaultEcommerceOutputSections];
+  };
+
+  const ecommerceOutputSections = getEcommerceOutputSections();
+
   const getSelectedEcommerceSections = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
-    return Array.isArray(data.selectedSections) ? data.selectedSections.filter(Boolean) : [...ecommerceOutputSections];
+    const all = getEcommerceOutputSections();
+    const selected = Array.isArray(data.selectedSections) ? data.selectedSections.filter((s:string)=>all.includes(s)) : [];
+    return selected.length ? selected : [...all];
+  };
+
+  const saveEcommerceSections = (sections:string[], selected?:string[]) => {
+    const cleanSections = Array.from(new Set((sections||[]).map((s:any)=>String(s||"").trim()).filter(Boolean)));
+    const nextSections = cleanSections.length ? cleanSections : [...defaultEcommerceOutputSections];
+    const currentSelected = selected || getSelectedEcommerceSections();
+    const nextSelected = currentSelected.filter((s:string)=>nextSections.includes(s));
+    updateAiWorkspace("ecommerce",{
+      outputSections:nextSections,
+      selectedSections:nextSelected.length ? nextSelected : [...nextSections],
+    });
   };
 
   const toggleEcommerceSection = (section:string) => {
@@ -3005,8 +3029,48 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     updateAiWorkspace("ecommerce",{ selectedSections:next });
   };
 
-  const setAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[...ecommerceOutputSections] });
+  const setAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[...getEcommerceOutputSections()] });
   const clearAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[] });
+
+  const addEcommerceSection = () => {
+    const label = newEcommerceSection.trim();
+    if(!label) return;
+    const sections = getEcommerceOutputSections();
+    if(sections.some((s:string)=>s.toLowerCase()===label.toLowerCase())){
+      setNewEcommerceSection("");
+      return;
+    }
+    saveEcommerceSections([...sections,label],[...getSelectedEcommerceSections(),label]);
+    setNewEcommerceSection("");
+  };
+
+  const startEditEcommerceSection = (section:string) => {
+    setEditingEcommerceSection(section);
+    setEditingEcommerceSectionValue(section);
+  };
+
+  const cancelEditEcommerceSection = () => {
+    setEditingEcommerceSection(null);
+    setEditingEcommerceSectionValue("");
+  };
+
+  const saveEditedEcommerceSection = () => {
+    const oldLabel = String(editingEcommerceSection || "");
+    const newLabel = editingEcommerceSectionValue.trim();
+    if(!oldLabel || !newLabel) return;
+    const sections = getEcommerceOutputSections();
+    const nextSections = sections.map((section:string)=>section===oldLabel ? newLabel : section);
+    const nextSelected = getSelectedEcommerceSections().map((section:string)=>section===oldLabel ? newLabel : section);
+    saveEcommerceSections(nextSections,nextSelected);
+    cancelEditEcommerceSection();
+  };
+
+  const deleteEcommerceSection = (section:string) => {
+    const nextSections = getEcommerceOutputSections().filter((s:string)=>s!==section);
+    const nextSelected = getSelectedEcommerceSections().filter((s:string)=>s!==section);
+    saveEcommerceSections(nextSections,nextSelected);
+    if(editingEcommerceSection===section) cancelEditEcommerceSection();
+  };
 
   const buildEcommercePrompt = () => {
     const mappedProducts = productRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||""} | Product: ${row.product||""} | SKU: ${row.skuCode||""}`).join("\n");
@@ -3391,18 +3455,49 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt() })}>Save Changes</Btn>
                 </div>
               </div>
+
+              <div style={{ display:"flex",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                <input
+                  value={newEcommerceSection}
+                  onChange={e=>setNewEcommerceSection(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addEcommerceSection(); } }}
+                  placeholder="Add output section"
+                  style={{ flex:"1 1 220px",height:32,padding:"0 10px",borderRadius:8,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12,color:C.text,background:C.bg }}
+                />
+                <Btn xs onClick={addEcommerceSection} disabled={!newEcommerceSection.trim()}>Add</Btn>
+              </div>
+
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
                 {ecommerceOutputSections.map((section:string)=>{
                   const active = selectedSections.includes(section);
+                  const editing = editingEcommerceSection===section;
                   return (
-                    <button key={section} type="button" onClick={()=>toggleEcommerceSection(section)} style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 10px",background:active?"#EEF2FF":C.bg,border:`1.5px solid ${active?C.accent:C.border}`,borderRadius:8,textAlign:"left",cursor:"pointer" }}>
-                      <span style={{ width:16,height:16,borderRadius:4,display:"inline-flex",alignItems:"center",justifyContent:"center",background:active?C.accent:"transparent",border:`1.5px solid ${active?C.accent:C.borderStrong}`,color:"#fff",fontSize:11,fontWeight:900,flexShrink:0 }}>{active?"✓":""}</span>
-                      <span style={{ fontSize:12,fontWeight:750,color:C.text }}>{section}</span>
-                    </button>
+                    <div key={section} style={{ display:"flex",alignItems:"center",gap:6,padding:"7px 8px",background:active?"#EEF2FF":C.bg,border:`1.5px solid ${active?C.accent:C.border}`,borderRadius:8 }}>
+                      <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ width:18,height:18,borderRadius:4,display:"inline-flex",alignItems:"center",justifyContent:"center",background:active?C.accent:"transparent",border:`1.5px solid ${active?C.accent:C.borderStrong}`,color:"#fff",fontSize:11,fontWeight:900,flexShrink:0,cursor:"pointer" }}>{active?"✓":""}</button>
+                      {editing ? (
+                        <>
+                          <input
+                            value={editingEcommerceSectionValue}
+                            onChange={e=>setEditingEcommerceSectionValue(e.target.value)}
+                            onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); saveEditedEcommerceSection(); } if(e.key==="Escape"){ cancelEditEcommerceSection(); } }}
+                            autoFocus
+                            style={{ minWidth:0,flex:1,height:28,padding:"0 8px",borderRadius:7,border:`1px solid ${C.border}`,outline:"none",fontSize:12,fontWeight:750,color:C.text,background:C.surface }}
+                          />
+                          <button onClick={saveEditedEcommerceSection} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save</button>
+                          <button onClick={cancelEditEcommerceSection} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>{section}</button>
+                          <button onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
+                          <button onClick={()=>deleteEcommerceSection(section)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Delete</button>
+                        </>
+                      )}
+                    </div>
                   );
                 })}
               </div>
-              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>After changing sections, click Save Changes to refresh the listing template prompt above.</p>
+              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Add, edit, delete, or select sections, then click Save Changes to refresh the listing template prompt above.</p>
             </div>
           </div>
 
