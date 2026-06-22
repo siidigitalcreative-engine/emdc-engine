@@ -3026,6 +3026,14 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(pasted) updateAiWorkspace(tab,{ pastedPromptImage:pasted });
   };
 
+  const handlePromptImageUpload = async (tab:string, e:any) => {
+    const file = e?.target?.files?.[0];
+    if(!file) return;
+    const uploaded:any = await readFileAsCatalog(file);
+    if(uploaded) updateAiWorkspace(tab,{ pastedPromptImage:uploaded });
+    e.target.value = "";
+  };
+
   const addPastedPromptImageToCatalog = (tab:string) => {
     const data = (group.aiWorkspace || {})[tab] || {};
     if(!data.pastedPromptImage) return;
@@ -3320,22 +3328,37 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               </div>
               <div
                 tabIndex={0}
+                contentEditable={false}
                 onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
-                style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${data.pastedPromptImage?C.success:C.border}`,borderRadius:10,background:data.pastedPromptImage?"#ECFDF5":C.bg,outline:"none" }}
+                onClick={(e:any)=>{ try { e.currentTarget.focus(); } catch {} }}
+                style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${data.pastedPromptImage?C.success:C.border}`,borderRadius:10,background:data.pastedPromptImage?"#ECFDF5":C.bg,outline:"none",cursor:"text" }}
               >
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-                  <div style={{ minWidth:0 }}>
-                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Paste catalog image to create prompt</p>
-                    <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{data.pastedPromptImage ? `${data.pastedPromptImage.name || "Pasted image"} ready` : "Click this box, paste a catalog/product image, then generate the prompt below."}</p>
+                  <div style={{ minWidth:0,flex:"1 1 260px" }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Catalog image for prompt</p>
+                    <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
+                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Generate Prompt from Catalog.` : "Click this box then Ctrl+V / Cmd+V to paste an image, or use Choose Image."}
+                    </p>
                   </div>
-                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                    <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add Image</Btn>
-                    <Btn sm onClick={generateEcommercePromptFromCatalog} disabled={!!aiBusy.ecommercePrompt}>{aiBusy.ecommercePrompt?"Generating Prompt...":"Generate Prompt from Catalog"}</Btn>
+                  <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
+                    <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:30,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap" }}>
+                      Choose Image
+                      <input type="file" accept="image/*" onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
+                    </label>
+                    <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add to Reference</Btn>
+                    <Btn sm onClick={generateEcommercePromptFromCatalog} disabled={!!aiBusy.ecommercePrompt || (!data.pastedPromptImage && !(data.catalogFiles||[]).length && !productRows.length)}>{aiBusy.ecommercePrompt?"Generating Prompt...":"Generate Prompt from Catalog"}</Btn>
                   </div>
                 </div>
+                {data.pastedPromptImage&&String(data.pastedPromptImage.type||"").startsWith("image/")&&(
+                  <div style={{ marginTop:10,display:"flex",alignItems:"center",gap:10 }}>
+                    <img src={data.pastedPromptImage.dataUrl} alt="Prompt reference" style={{ width:68,height:68,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}` }} />
+                    <button onClick={(e:any)=>{ e.stopPropagation(); updateAiWorkspace(tab,{ pastedPromptImage:null }); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                  </div>
+                )}
               </div>
               <textarea
                 value={data.textPrompt || ""}
+                onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
                 onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
                 placeholder="Click Use Listing Template, paste a catalog image and generate prompt, or write your own instruction for the e-commerce listing output."
                 rows={9}
