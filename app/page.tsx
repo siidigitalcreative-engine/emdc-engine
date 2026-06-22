@@ -2793,7 +2793,7 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
 };
 
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
-const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTypes, events, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup }: any) => {
+const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTypes, events, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup, initialGroupTab="tasks", onGroupTabChange }: any) => {
   const { isMobile } = useBreakpoint();
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
@@ -2801,7 +2801,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
-  const [activeGroupTab,setActiveGroupTab] = useState("tasks");
+  const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
+  const setActiveGroupTab = (nextTab:any) => {
+    const safeTab = safeChecklistInnerTab(nextTab);
+    setActiveGroupTabState(safeTab);
+    if(onGroupTabChange) onGroupTabChange(safeTab);
+  };
   const [skuPickDept,setSkuPickDept] = useState(null);
   const [productDetail,setProductDetail] = useState<any>(null);
   const [productEdit,setProductEdit] = useState<any>(null);
@@ -2810,6 +2815,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(!initialItems) return;
     setItems(initialItems);
   },[initialItems]);
+
+  useEffect(()=>{
+    setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
+  },[initialGroupTab]);
 
   const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onItemsChange) onItemsChange(next); return next; });
   const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onItemsChange) onItemsChange(next); return next; });
@@ -4019,7 +4028,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, onGroupNavigated, onStateChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onRouteChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
@@ -4048,6 +4057,15 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   });
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
+
+  useEffect(()=>{
+    if(!navigateToGroupId) return;
+    const exists = (groups||[]).some((g:any)=>g.id===navigateToGroupId);
+    if(exists) {
+      setActive(navigateToGroupId);
+      if(onGroupNavigated) onGroupNavigated();
+    }
+  },[navigateToGroupId,groups,onGroupNavigated]);
 
   const buildChecklistItemsFromTemplates = (launchTypeKey:string, nextTemplates:any, existingItems:any=null) => {
     const out:any = {};
@@ -4190,6 +4208,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
     if(onGroupCreated) onGroupCreated(g);
     setActive(g.id);
+    if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" });
     setCreating(false);
   };
   const deleteGroup = id=>{
@@ -4210,7 +4229,10 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       return next;
     });
 
-    if(active===id) setActive(null);
+    if(active===id) {
+      setActive(null);
+      if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" });
+    }
   };
 
   const updateGroup = (id:string, patch:any) => {
@@ -4236,7 +4258,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>setActive(null)} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={onStateChange} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={onStateChange} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
 
   return (
     <div>
@@ -4269,7 +4291,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
           {groups.map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; return (
-            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s" }} onClick={()=>setActive(g.id)}>
+            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s" }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px" }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
                   <p style={{ margin:0,fontSize:14,fontWeight:700,color:C.text,flex:1,marginRight:8 }}>{g.groupName}</p>
@@ -7473,6 +7495,43 @@ const AIEngineView = () => {
   );
 };
 
+// ─── SHAREABLE PAGE LINKS ────────────────────────────────────────────────────
+const safeRouteTab = (value:any) => ["calendar","events","checklists","skus","ai"].includes(String(value||"")) ? String(value) : "calendar";
+const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","marketing","digital"].includes(String(value||"")) ? String(value) : "tasks";
+
+const parseEmdcRoute = () => {
+  if (typeof window === "undefined") return { tab:"calendar", groupId:null, groupTab:"tasks" };
+  try {
+    const raw = String(window.location.hash || "").replace(/^#\/?/,"");
+    const [pathPart, queryPart] = raw.split("?");
+    const tab = safeRouteTab(pathPart || "calendar");
+    const params = new URLSearchParams(queryPart || "");
+    return {
+      tab,
+      groupId: params.get("group") || null,
+      groupTab: safeChecklistInnerTab(params.get("groupTab") || "tasks"),
+    };
+  } catch {
+    return { tab:"calendar", groupId:null, groupTab:"tasks" };
+  }
+};
+
+const buildEmdcRouteHash = (tab:any, groupId:any=null, groupTab:any="tasks") => {
+  const safeTab = safeRouteTab(tab);
+  const params = new URLSearchParams();
+  if (safeTab==="checklists" && groupId) {
+    params.set("group", String(groupId));
+    params.set("groupTab", safeChecklistInnerTab(groupTab));
+  }
+  const query = params.toString();
+  return `#/${safeTab}${query ? `?${query}` : ""}`;
+};
+
+const getCurrentShareUrl = (tab:any, groupId:any=null, groupTab:any="tasks") => {
+  if (typeof window === "undefined") return buildEmdcRouteHash(tab,groupId,groupTab);
+  return `${window.location.origin}${window.location.pathname}${buildEmdcRouteHash(tab,groupId,groupTab)}`;
+};
+
 // ─── APP SHELL ───────────────────────────────────────────────────────────────
 const TABS = [
   { id:"calendar",   label:"Calendar"         },
@@ -7492,10 +7551,15 @@ export default function App({
   onStateChange?: (patch: Record<string, unknown>) => void;
 }) {
   const { isMobile } = useBreakpoint();
-  const [tab,setTab] = useState("calendar");
+  const initialRouteRef = useRef<any>(null);
+  if(initialRouteRef.current===null) initialRouteRef.current = parseEmdcRoute();
+  const [tab,setTab] = useState(()=>initialRouteRef.current.tab || "calendar");
+  const [routeGroupId,setRouteGroupId] = useState<any>(()=>initialRouteRef.current.groupId || null);
+  const [routeGroupTab,setRouteGroupTab] = useState<any>(()=>safeChecklistInnerTab(initialRouteRef.current.groupTab || "tasks"));
+  const [copyLinkStatus,setCopyLinkStatus] = useState("");
   const [brands,setBrands]     = useState<any[]>(initialData?.skuBrands ?? INITIAL_BRANDS);
   const [skuStorage,setSkuStorage] = useState<any[]>(initialData?.skuItems ?? []);
-  const [navigateToGroupId,setNavigateToGroupId]   = useState(null);
+  const [navigateToGroupId,setNavigateToGroupId]   = useState<any>(()=>initialRouteRef.current.groupId || null);
 
   // Lifted checklist state — owned by App so it survives switching away from and back to the Checklists tab
   const [checklistGroups,setChecklistGroups] = useState<any[]>(initialData?.checklistGroups ?? []);
@@ -7772,6 +7836,65 @@ export default function App({
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
   useEffect(() => { if (onStateChange) onStateChange({ seasonalEvents }); }, [seasonalEvents]);
 
+  const applyRoute = (next:any={}) => {
+    const nextTab = safeRouteTab(next.tab ?? tab);
+    const nextGroupId = next.groupId === undefined ? routeGroupId : next.groupId;
+    const nextGroupTab = safeChecklistInnerTab(next.groupTab ?? routeGroupTab ?? "tasks");
+    setTab(nextTab);
+    setRouteGroupId(nextTab==="checklists" ? nextGroupId : null);
+    setRouteGroupTab(nextTab==="checklists" ? nextGroupTab : "tasks");
+    setNavigateToGroupId(nextTab==="checklists" ? nextGroupId : null);
+  };
+
+  const navigateMainTab = (nextTab:any) => {
+    const safeTab = safeRouteTab(nextTab);
+    applyRoute({ tab:safeTab, groupId:null, groupTab:"tasks" });
+  };
+
+  useEffect(()=>{
+    if (typeof window === "undefined") return;
+    const nextHash = buildEmdcRouteHash(tab,routeGroupId,routeGroupTab);
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null,"",nextHash);
+    }
+  },[tab,routeGroupId,routeGroupTab]);
+
+  useEffect(()=>{
+    if (typeof window === "undefined") return;
+    const onHashChange = () => {
+      const next = parseEmdcRoute();
+      setTab(next.tab);
+      setRouteGroupId(next.tab==="checklists" ? next.groupId : null);
+      setRouteGroupTab(next.tab==="checklists" ? next.groupTab : "tasks");
+      setNavigateToGroupId(next.tab==="checklists" ? next.groupId : null);
+    };
+    window.addEventListener("hashchange",onHashChange);
+    return () => window.removeEventListener("hashchange",onHashChange);
+  },[]);
+
+  const copyCurrentPageLink = async () => {
+    const url = getCurrentShareUrl(tab,routeGroupId,routeGroupTab);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyLinkStatus("Copied");
+      setTimeout(()=>setCopyLinkStatus(""),1400);
+    } catch {
+      try {
+        const box = document.createElement("textarea");
+        box.value = url;
+        document.body.appendChild(box);
+        box.select();
+        document.execCommand("copy");
+        document.body.removeChild(box);
+        setCopyLinkStatus("Copied");
+        setTimeout(()=>setCopyLinkStatus(""),1400);
+      } catch {
+        setCopyLinkStatus("Copy failed");
+        setTimeout(()=>setCopyLinkStatus(""),1600);
+      }
+    }
+  };
+
   const handleGroupCreated = (_g:any)=>{
     // Calendar checklist events are derived from checklistGroups,
     // so new and edited group dates reflect on the Calendar automatically.
@@ -7779,10 +7902,9 @@ export default function App({
   const handleNavigateToGroup = target=>{
     // target can be a groupId string OR "events" to go to Events & Seasons tab
     if(target==="events"){
-      setTab("events");
+      applyRoute({ tab:"events", groupId:null, groupTab:"tasks" });
     } else {
-      setTab("checklists");
-      setNavigateToGroupId(target);
+      applyRoute({ tab:"checklists", groupId:target, groupTab:"tasks" });
     }
   };
   const allCalExtra = useMemo(()=>[...seasonalCalEvents,...checklistCalEvents],[seasonalCalEvents,checklistCalEvents]);
@@ -7811,10 +7933,14 @@ export default function App({
             {/* Desktop nav */}
             {!isMobile&&(
               <nav style={{ display:"flex",height:"100%",alignItems:"stretch" }}>
-                {TABS.map(t=>(<button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:"0 16px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:500,color:tab===t.id?C.text:C.muted,borderBottom:tab===t.id?`2px solid ${C.accent}`:"2px solid transparent",transition:"color .15s",letterSpacing:"-.01em",whiteSpace:"nowrap" }}>{t.label}</button>))}
+                {TABS.map(t=>(<button key={t.id} onClick={()=>navigateMainTab(t.id)} style={{ padding:"0 16px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:500,color:tab===t.id?C.text:C.muted,borderBottom:tab===t.id?`2px solid ${C.accent}`:"2px solid transparent",transition:"color .15s",letterSpacing:"-.01em",whiteSpace:"nowrap" }}>{t.label}</button>))}
               </nav>
             )}
-            <span style={{ fontSize:11,color:C.faint,fontVariantNumeric:"tabular-nums" }}>{today.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}</span>
+            <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+              {!isMobile&&<button onClick={copyCurrentPageLink} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>{copyLinkStatus || "Copy Link"}</button>}
+              {isMobile&&<button onClick={copyCurrentPageLink} title="Copy page link" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:13,fontWeight:900 }}>↗</button>}
+              <span style={{ fontSize:11,color:C.faint,fontVariantNumeric:"tabular-nums" }}>{today.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}</span>
+            </div>
           </div>
         </div>
 
@@ -7835,7 +7961,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} onGroupNavigated={()=>setNavigateToGroupId(null)} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView /></div>
         </div>
@@ -7844,7 +7970,7 @@ export default function App({
         {isMobile&&(
           <div style={{ position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
             {TABS.map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:"10px 4px 12px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3 }}>
+              <button key={t.id} onClick={()=>navigateMainTab(t.id)} style={{ flex:1,padding:"10px 4px 12px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3 }}>
                 <span style={{ fontSize:18,lineHeight:1 }}>{TAB_ICONS[t.id]}</span>
                 <span style={{ fontSize:10,fontWeight:tab===t.id?700:500,color:tab===t.id?C.accent:C.faint }}>{TAB_SHORT[t.id]}</span>
                 {tab===t.id&&<div style={{ width:4,height:4,borderRadius:"50%",background:C.accent }} />}
