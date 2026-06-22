@@ -2980,7 +2980,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     "Recommended Variations",
     "Better Option / Higher AOV",
     "Search Keywords",
-    "Recommended Final Listing Structure",
+    
   ];
 
   const buildEcommercePrompt = () => {
@@ -3081,8 +3081,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const cleanReadyToUseOutput = (value:any) => {
     return String(value || "")
       .replace(/^\s*#{1,6}\s*/gm,"")
-      .replace(/^\s*\d+\.\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords|Recommended Final Listing Structure)/gmi,"$1")
-      .replace(/^\s*[-*]\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords|Recommended Final Listing Structure)/gmi,"$1")
+      .replace(/^\s*\d+\.\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
+      .replace(/^\s*[-*]\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
+      .replace(/\n\s*(?:\d+\.\s*)?Recommended Final Listing Structure[\s\S]*$/i,"")
       .trim();
   };
 
@@ -3224,7 +3225,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       "Recommended Variations",
       "Better Option / Higher AOV",
       "Search Keywords",
-      "Recommended Final Listing Structure",
     ].join("\n");
 
     try {
@@ -3293,34 +3293,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
                 <div>
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>E-commerce Listing Builder</h3>
-                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Generate the complete marketplace listing structure for the selected products. The product list is mapped from the checklist SKUs, while uploaded catalog pages are sent to Gemini as reference.</p>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Generate the complete marketplace listing structure for the selected products. The product list is mapped from the checklist SKUs, while catalog images can be pasted or uploaded inside the AI E-commerce Prompt.</p>
                 </div>
                 <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{productRows.length} products</span>
-              </div>
-            </div>
-
-            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
-                <div>
-                  <h4 style={{ margin:"0 0 3px",fontSize:13,fontWeight:900,color:C.text }}>Upload Catalog Page</h4>
-                  <p style={{ margin:0,fontSize:11.5,color:C.muted }}>Upload catalog pages, product sheets, images, or PDFs for AI reference.</p>
-                </div>
-                <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:34,padding:"0 12px",borderRadius:8,background:C.accent,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer" }}>
-                  Upload Catalog
-                  <input type="file" accept="image/*,.pdf,.txt,.doc,.docx" multiple onChange={(e:any)=>handleCatalogUpload(tab,e)} style={{ display:"none" }} />
-                </label>
-              </div>
-              <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
-                {catalogFiles.length===0&&<div style={{ padding:12,background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,fontSize:12,color:C.faint,textAlign:"center" }}>No catalog uploaded yet. Upload a catalog page so Gemini can read product specs, materials, sizes, colors, and care instructions.</div>}
-                {catalogFiles.map((file:any,idx:number)=>(
-                  <div key={`${file.name}-${idx}`} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
-                    <div style={{ minWidth:0 }}>
-                      <p style={{ margin:0,fontSize:12,fontWeight:800,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{file.name}</p>
-                      <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.faint }}>{file.type||"file"} · {Math.round((file.size||0)/1024)} KB</p>
-                    </div>
-                    <button onClick={()=>removeCatalogFile(tab,idx)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Remove</button>
-                  </div>
-                ))}
               </div>
             </div>
 
@@ -3340,7 +3315,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                   <div style={{ minWidth:0,flex:"1 1 260px" }}>
                     <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Catalog image reader</p>
                     <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
-                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Read Catalog & Generate Prompt.` : "Click this box then Ctrl+V / Cmd+V to paste an image, or use Choose Image. Gemini will read visible text/details from the image."}
+                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Read Catalog & Generate Prompt.` : "Click this box then Ctrl+V / Cmd+V to paste a catalog image, or use Choose Image. Gemini will read visible text/details from the image."}
                     </p>
                   </div>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
@@ -3348,7 +3323,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                       Choose Image
                       <input type="file" accept="image/*" onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
                     </label>
-                    <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add to Reference</Btn>
+                    <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add Reference</Btn>
                     <Btn sm onClick={generateEcommercePromptFromCatalog} disabled={!!aiBusy.ecommercePrompt || (!data.pastedPromptImage && !(data.catalogFiles||[]).length && !productRows.length)}>{aiBusy.ecommercePrompt?"Reading Catalog...":"Read Catalog & Generate Prompt"}</Btn>
                   </div>
                 </div>
