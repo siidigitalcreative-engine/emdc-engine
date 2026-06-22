@@ -2833,23 +2833,47 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return key ? String(extra[key]||"").trim() : "";
   };
 
+  const cleanValue = (value:any) => String(value||"").trim();
+
   const getSkuInfo = (sku:any, index:number) => {
     const storageItem = (skuStorage||[]).find((item:any)=>
       item.id===sku.id ||
-      item.sku===sku.value ||
-      item.sku===sku.sku ||
-      item.productName===sku.value
-    );
-    const item = { ...(storageItem||{}), ...(sku||{}) };
-    const brand = (brands||[]).find((b:any)=>b.id===item.brandId)?.name || item.brand || "";
-    const collection = [
-      item.collection,
-      item.category,
-      item.productCategory,
-    ].filter(Boolean)[0] || findExtraField(item.extraFields||{},["collection","category","productcategory","product category"]) || "";
-    const product = item.productName || item.name || sku.value || item.sku || "";
-    const skuCode = item.sku || sku.value || "";
-    return { ...item, originalSku:sku, index, brand, collection, product, skuCode };
+      cleanValue(item.sku).toLowerCase()===cleanValue(sku.value||sku.sku).toLowerCase() ||
+      cleanValue(item.productName).toLowerCase()===cleanValue(sku.value).toLowerCase()
+    ) || {};
+
+    const storageBrand = (brands||[]).find((b:any)=>b.id===storageItem.brandId)?.name || storageItem.brand || "";
+    const skuBrand = (brands||[]).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "";
+    const brandId = cleanValue(sku.brandId) || cleanValue(storageItem.brandId);
+
+    const storageCollection = [
+      storageItem.collection,
+      storageItem.category,
+      storageItem.productCategory,
+      findExtraField(storageItem.extraFields||{},["collection","category","productcategory","product category"])
+    ].map(cleanValue).find(Boolean) || "";
+
+    const skuCollection = [
+      sku.collection,
+      sku.category,
+      sku.productCategory,
+      findExtraField(sku.extraFields||{},["collection","category","productcategory","product category"])
+    ].map(cleanValue).find(Boolean) || "";
+
+    const product = cleanValue(sku.productName) || cleanValue(storageItem.productName) || cleanValue(storageItem.name) || cleanValue(sku.value) || cleanValue(storageItem.sku);
+    const skuCode = cleanValue(sku.sku) || cleanValue(storageItem.sku) || cleanValue(sku.value);
+
+    return {
+      ...(storageItem||{}),
+      ...(sku||{}),
+      originalSku:sku,
+      index,
+      brand: skuBrand || storageBrand,
+      brandId,
+      collection: skuCollection || storageCollection,
+      product,
+      skuCode,
+    };
   };
 
   const productRows = (group.skus||[]).map(getSkuInfo).filter((row:any)=>row.product || row.skuCode);
@@ -2916,10 +2940,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{productRows.length} item{productRows.length!==1?"s":""}</span>
             </div>
             <div style={{ border:`1px solid ${C.border}`,borderRadius:9,overflow:"hidden",background:C.surface }}>
-              <div style={{ maxHeight:isMobile?228:196,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+              <div style={{ maxHeight:isMobile?168:138,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                 {productRows.map((row:any,idx:number)=>(
                   <button key={`${row.skuCode}-${idx}`} type="button" onClick={()=>openProductDetail(row)}
-                    style={{ width:"100%",display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(150px,1fr) minmax(180px,1.4fr)",gap:isMobile?3:10,padding:"8px 10px",background:idx%2?C.surface:C.surfaceAlt,border:"none",borderBottom:idx===productRows.length-1?"none":`1px solid ${C.border}`,textAlign:"left",cursor:"pointer" }}>
+                    style={{ width:"100%",display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(150px,1fr) minmax(180px,1.4fr)",gap:isMobile?2:10,padding:isMobile?"7px 10px":"8px 10px",background:idx%2?C.surface:C.surfaceAlt,border:"none",borderBottom:idx===productRows.length-1?"none":`1px solid ${C.border}`,textAlign:"left",cursor:"pointer" }}>
                     <div style={{ minWidth:0,fontSize:11,fontWeight:800,color:C.textSub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"}</div>
                     <div style={{ minWidth:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.collection || "No collection/category"}</div>
                     <div style={{ minWidth:0,fontSize:11,color:C.text,fontWeight:750,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}{row.skuCode&&<span style={{ color:C.faint,fontWeight:600 }}> · {row.skuCode}</span>}</div>
@@ -2928,7 +2952,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               </div>
               {productRows.length>3&&(
                 <div style={{ padding:"6px 10px",fontSize:10.5,color:C.faint,fontWeight:700,background:C.surface,borderTop:`1px solid ${C.border}` }}>
-                  Scroll to view all selected products. Tap a row to view or edit.
+                  Showing 3 at a time. Scroll for more. Tap a product to view or edit details.
                 </div>
               )}
             </div>
