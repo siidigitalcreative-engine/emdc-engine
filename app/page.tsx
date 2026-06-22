@@ -7351,6 +7351,17 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
         ],
       },
       {
+        id: "meta-collection",
+        name: "Collection Ad",
+        templates: [
+          {
+            id: "meta-collection-template-1",
+            name: "Instant Experience Collection",
+            body: "Hero Asset: Single image or single video showing the main product story\nPrimary Text: [Short collection intro]\nHeadline: [Benefit-led headline]\nProduct Tiles: 4 product placeholders below the hero asset\nCTA: Shop Now",
+          },
+        ],
+      },
+      {
         id: "meta-reels-stories",
         name: "Reels / Stories Ad",
         templates: [
@@ -7477,6 +7488,30 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
   const [savedAdTemplatesHydrated,setSavedAdTemplatesHydrated] = useState(false);
   const [selectedAdSkus,setSelectedAdSkus] = useState<any[]>([]);
   const [adMenuView,setAdMenuView] = useState("generate");
+  const [carouselMediaMode,setCarouselMediaMode] = useState("recommended");
+  const [collectionHeroMedia,setCollectionHeroMedia] = useState("recommended");
+
+  useEffect(()=>{
+    setPlatforms((prev:any[])=>{
+      const hasMetaCollection = (prev||[]).some((platform:any)=>platform.id==="meta" && (platform.formats||[]).some((format:any)=>format.id==="meta-collection"));
+      if(hasMetaCollection) return prev;
+      return (prev||[]).map((platform:any)=>platform.id==="meta" ? {
+        ...platform,
+        formats:[
+          ...(platform.formats || []),
+          {
+            id:"meta-collection",
+            name:"Collection Ad",
+            templates:[{
+              id:"meta-collection-template-1",
+              name:"Instant Experience Collection",
+              body:"Hero Asset: Single image or single video showing the main product story\nPrimary Text: [Short collection intro]\nHeadline: [Benefit-led headline]\nProduct Tiles: 4 product placeholders below the hero asset\nCTA: Shop Now",
+            }],
+          },
+        ],
+      } : platform);
+    });
+  },[]);
 
   useEffect(()=>{
     try {
@@ -7503,7 +7538,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
   const selectedPlatform = platforms.find((p:any)=>p.id===selectedPlatformId) || platforms[0];
   const selectedFormat = selectedPlatform?.formats?.find((f:any)=>f.id===selectedFormatId) || selectedPlatform?.formats?.[0];
   const selectedTemplate = selectedFormat?.templates?.find((t:any)=>t.id===selectedTemplateId) || selectedFormat?.templates?.[0];
-  const isCarouselFormat = (selectedFormat?.name || "").toLowerCase().includes("carousel");
+  const isCarouselFormatByName = (format:any) => (format?.name || "").toLowerCase().includes("carousel");
+  const isCollectionFormatByName = (format:any) => (format?.name || "").toLowerCase().includes("collection");
+  const isCarouselFormat = isCarouselFormatByName(selectedFormat);
+  const isCollectionFormat = isCollectionFormatByName(selectedFormat);
   const selectedAdSkuIds = useMemo(()=>selectedAdSkus.map((sku:any)=>sku.id),[selectedAdSkus]);
 
   const getAdSkuBrand = (sku:any) => brands.find((brand:any)=>brand.id===sku?.brandId)?.name || sku?.brand || "";
@@ -7526,9 +7564,18 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
     getSkuTags(sku).length ? `Tags: ${getSkuTags(sku).join(", ")}` : "",
   ].filter(Boolean).join(" | ")).join("\n"),[selectedAdSkus,brands]);
 
+  const recommendedCarouselMediaType = (index:number) => {
+    if(carouselMediaMode==="all-images") return "image";
+    if(carouselMediaMode==="all-videos") return "video";
+    if(carouselMediaMode==="mostly-images") return [2,5,8].includes(index) ? "video" : "image";
+    if(carouselMediaMode==="image-video-mix") return index % 2 === 0 ? "image" : "video";
+    return [0,3,7].includes(index) ? "video" : "image";
+  };
+
   const makeEmptyCarouselCards = () => Array.from({ length:10 }, (_,i)=>({
     id: uid(),
     cardNumber: i + 1,
+    mediaType: recommendedCarouselMediaType(i),
     headline: "",
     copy: "",
     visual: "",
@@ -7558,6 +7605,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
 
   const formatCarouselCardsForCopy = (cards:any[]) => cards.map((card:any, i:number)=>[
     `Card ${i + 1}`,
+    `Media Type: ${card.mediaType || recommendedCarouselMediaType(i)}`,
     `Headline: ${card.headline || ""}`,
     `Copy: ${card.copy || ""}`,
     `Visual: ${card.visual || ""}`,
@@ -7581,6 +7629,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
             return {
               id: uid(),
               cardNumber: i + 1,
+              mediaType: clean(card.mediaType || card.media || card.assetType || card.cardType) || recommendedCarouselMediaType(i),
               headline: clean(card.headline || card.title),
               copy: clean(card.copy || card.text || card.primaryText),
               visual: clean(card.visual || card.visualDirection || card.image),
@@ -7614,9 +7663,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
       return {
         id: uid(),
         cardNumber: i + 1,
+        mediaType: pick(["Media Type","Media","Asset Type","Card Type"]) || recommendedCarouselMediaType(i),
         headline: pick(["Headline","Title"]) || fallbackLines[0] || "",
         copy: pick(["Copy","Primary Text","Text","Caption"]) || fallbackLines[1] || "",
-        visual: pick(["Visual Direction","Visual","Image Direction","Image"]) || fallbackLines[2] || "",
+        visual: pick(["Visual Direction","Visual","Image Direction","Image","Video Direction"]) || fallbackLines[2] || "",
         cta: pick(["CTA","Call to Action"]) || fallbackLines[3] || "",
       };
     });
@@ -7633,7 +7683,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
     const instruction = [
       `Generate only the missing carousel cards for ${selectedPlatform?.name || "Meta"} ${selectedFormat?.name || "Carousel Ad"}.`,
       `Missing card numbers: ${missingIndexes.map(i=>i+1).join(", ")}.`,
-      "Return compact valid JSON only, no markdown, using this exact structure: { \"cards\": [ { \"cardNumber\": 2, \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\", \"cta\": \"...\" } ] }.",
+      "Return compact valid JSON only, no markdown, using this exact structure: { \"cards\": [ { \"cardNumber\": 2, \"mediaType\": \"image or video\", \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\", \"cta\": \"...\" } ] }.",
       "Keep each field short and ecommerce-ready.",
       selectedTemplate?.body ? `Use this custom template as the structure and inspiration:\n${selectedTemplate.body}` : "",
     ].filter(Boolean).join("\n\n");
@@ -7671,6 +7721,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
       if (picked) {
         next[missingIndex] = {
           ...next[missingIndex],
+          mediaType:picked.mediaType || next[missingIndex]?.mediaType || recommendedCarouselMediaType(missingIndex),
           headline:picked.headline || next[missingIndex]?.headline || "",
           copy:picked.copy || next[missingIndex]?.copy || "",
           visual:picked.visual || next[missingIndex]?.visual || "",
@@ -7686,7 +7737,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
     const activePlatform = selectedPlatform;
     const activeFormat = formatOverride || selectedFormat;
     const activeTemplate = templateOverride || selectedTemplate;
-    const activeIsCarousel = (activeFormat?.name || "").toLowerCase().includes("carousel");
+    const activeIsCarousel = isCarouselFormatByName(activeFormat);
+    const activeIsCollection = isCollectionFormatByName(activeFormat);
 
     if (!activePlatform || !activeFormat) return;
     if (!adBrief.trim() && selectedAdSkus.length===0) {
@@ -7702,9 +7754,19 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
     setGeneratedAdCards(activeIsCarousel ? makeEmptyCarouselCards() : []);
 
     try {
+      const carouselMediaPlan = activeIsCarousel
+        ? Array.from({length:10},(_,i)=>`Card ${i+1}: ${recommendedCarouselMediaType(i)}`).join("\n")
+        : "";
+
+      const collectionHeroPlan = activeIsCollection
+        ? (collectionHeroMedia==="recommended" ? "Recommend whether the hero asset should be a single image or single video based on the product set and explain it briefly." : `Use a single ${collectionHeroMedia} as the hero asset.`)
+        : "";
+
       const carouselInstruction = activeIsCarousel
-        ? "Because this is a carousel ad format, generate exactly 10 carousel cards. Return compact valid JSON only, no markdown, no explanation. Use this structure: { \"cards\": [ { \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\" , \"cta\": \"...\" } ] }. The cards array must contain exactly 10 items. Keep each field short so all 10 cards are completed. For each card, also write an image direction in the visual field. Actual AI image generation is not connected yet, so visual fields will be used as image placeholders."
-        : "Generate one complete ad output for this selected ad format. Include a clear image direction/placeholder section for the creative visual.";
+        ? `Because this is a carousel ad format, generate exactly 10 carousel cards. Return compact valid JSON only, no markdown, no explanation. Use this structure: { \"cards\": [ { \"mediaType\": \"image or video\", \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\" , \"cta\": \"...\" } ] }. The cards array must contain exactly 10 items. Follow this image/video recommendation plan unless the brief clearly needs a better mix:\n${carouselMediaPlan}\nFor each card, write a specific image or video direction in the visual field. Actual AI image generation is not connected yet, so visual fields will be used as placeholders.`
+        : activeIsCollection
+          ? `This is a Meta Collection Ad. Generate copy for one hero asset plus four product tiles below it. ${collectionHeroPlan} The output should include: Hero Asset Type, Hero Visual Direction, Primary Text, Headline, CTA, and Product Tile 1 to Product Tile 4. Each product tile should use one selected SKU/product when available.`
+          : "Generate one complete ad output for this selected ad format. Include a clear image direction/placeholder section for the creative visual.";
 
       const productInstruction = selectedAdSkus.length
         ? `Selected products from SKU Storage:\n${adProductSummary}`
@@ -7797,6 +7859,9 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
       templateName:selectedTemplate?.name || "",
       brief:adBrief,
       isCarousel:isCarouselFormat,
+      isCollection:isCollectionFormat,
+      carouselMediaMode,
+      collectionHeroMedia,
       cards:isCarouselFormat ? generatedAdCards : [],
       text:isCarouselFormat ? formatCarouselCardsForCopy(generatedAdCards) : generatedAdText,
       createdAt:new Date().toISOString(),
@@ -7813,6 +7878,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
     if (item.formatId) setSelectedFormatId(item.formatId);
     if (item.templateId) setSelectedTemplateId(item.templateId);
     setAdBrief(item.brief || "");
+    if(item.carouselMediaMode) setCarouselMediaMode(item.carouselMediaMode);
+    if(item.collectionHeroMedia) setCollectionHeroMedia(item.collectionHeroMedia);
     setGeneratedAdText(item.text || "");
     setGeneratedAdCards(Array.isArray(item.cards) && item.cards.length ? item.cards : (item.isCarousel ? parseCarouselCards(item.text || "") : []));
     setAdError("");
@@ -8006,11 +8073,39 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
                 style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.45,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
               />
             </div>
+
+            <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>3. Media Plan</h4>
+              <Field label="Carousel Cards">
+                <Select value={carouselMediaMode} onChange={setCarouselMediaMode}>
+                  <option value="recommended">Recommended mix</option>
+                  <option value="image-video-mix">Alternating image and video</option>
+                  <option value="mostly-images">Mostly images with key video cards</option>
+                  <option value="all-images">All image cards</option>
+                  <option value="all-videos">All video cards</option>
+                </Select>
+              </Field>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5 }}>
+                {Array.from({length:10},(_,i)=>(
+                  <div key={i} style={{ padding:"5px 4px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,textAlign:"center" }}>
+                    <p style={{ margin:0,fontSize:9.5,fontWeight:900,color:C.textSub }}>C{i+1}</p>
+                    <p style={{ margin:"1px 0 0",fontSize:9.5,color:recommendedCarouselMediaType(i)==="video"?"#DC2626":C.accent,fontWeight:800 }}>{recommendedCarouselMediaType(i)}</p>
+                  </div>
+                ))}
+              </div>
+              <Field label="Collection Ad Hero">
+                <Select value={collectionHeroMedia} onChange={setCollectionHeroMedia}>
+                  <option value="recommended">Recommend image or video</option>
+                  <option value="image">Single image hero</option>
+                  <option value="video">Single video hero</option>
+                </Select>
+              </Field>
+            </div>
           </div>
 
           <div style={{ display:"flex",flexDirection:"column",gap:12,minWidth:0 }}>
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg }}>
-              <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>3. Choose Your Ad Order</h4>
+              <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>4. Choose Your Ad Order</h4>
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10 }}>
                 {platforms.map((platform:any)=>(
                   <div key={platform.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
@@ -8063,10 +8158,16 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
                     {generatedAdCards.map((card:any,index:number)=>(
                       <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                         <div style={{ height:92,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:10 }}>
-                          <span style={{ fontSize:11,color:C.muted,fontWeight:800 }}>Image Placeholder<br/>Card {index+1}</span>
+                          <span style={{ fontSize:11,color:C.muted,fontWeight:800 }}>{(card.mediaType || recommendedCarouselMediaType(index))==="video" ? "Video Placeholder" : "Image Placeholder"}<br/>Card {index+1}</span>
                         </div>
                         <div style={{ padding:10,display:"flex",flexDirection:"column",gap:6 }}>
-                          <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.accent }}>Card {index+1}</p>
+                          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:6 }}>
+                            <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.accent }}>Card {index+1}</p>
+                            <Select value={card.mediaType || recommendedCarouselMediaType(index)} onChange={(value)=>updateAdCard(index,{ mediaType:value })}>
+                              <option value="image">Image</option>
+                              <option value="video">Video</option>
+                            </Select>
+                          </div>
                           <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{card.headline || "Headline"}</p>
                           <p style={{ margin:0,fontSize:11.5,color:C.textSub,lineHeight:1.4 }}>{card.copy || "Copy will appear here."}</p>
                           <p style={{ margin:0,fontSize:10.5,color:C.muted,lineHeight:1.35 }}>Visual: {card.visual || "Image direction placeholder"}</p>
@@ -8083,10 +8184,30 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
               </div>
 
               <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surface }}>
-                <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Image Placeholder</h4>
-                <div style={{ aspectRatio:"1 / 1",borderRadius:12,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:16 }}>
-                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>AI image generation will be connected later.<br/>For now, use the generated visual direction as the image brief.</p>
-                </div>
+                <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{isCollectionFormat ? "Collection Ad Preview" : "Image Placeholder"}</h4>
+                {isCollectionFormat ? (
+                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                    <div style={{ aspectRatio:"4 / 3",borderRadius:12,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:16 }}>
+                      <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>{collectionHeroMedia==="video" ? "Single Video Hero Placeholder" : collectionHeroMedia==="image" ? "Single Image Hero Placeholder" : "Hero Placeholder: AI recommends image or video"}</p>
+                    </div>
+                    <div style={{ display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8 }}>
+                      {Array.from({length:4},(_,i)=>{
+                        const sku = selectedAdSkus[i];
+                        return (
+                          <div key={i} style={{ border:`1px solid ${C.border}`,borderRadius:8,background:C.bg,padding:8,minHeight:72 }}>
+                            <div style={{ height:32,borderRadius:6,border:`1px dashed ${C.border}`,background:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,color:C.muted,fontWeight:800 }}>Product {i+1}</div>
+                            <p style={{ margin:"5px 0 0",fontSize:10.5,fontWeight:800,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku?.productName || "Product placeholder"}</p>
+                            <p style={{ margin:"1px 0 0",fontSize:9.5,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku?.sku || "SKU"}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ aspectRatio:"1 / 1",borderRadius:12,border:`1.5px dashed ${C.border}`,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:16 }}>
+                    <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>AI image generation will be connected later.<br/>For now, use the generated visual direction as the image brief.</p>
+                  </div>
+                )}
               </div>
             </div>
 
