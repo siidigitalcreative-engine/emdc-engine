@@ -2267,66 +2267,58 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         ) : filteredPhaseoutSkuLinks.length===0 ? (
           <p style={{ margin:0,fontSize:12,color:C.muted }}>No phase-out SKUs found for this brand.</p>
         ) : (
-          <div style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
-            <div style={{ padding:"8px 10px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:C.surfaceAlt }}>
-              <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>SKU List</p>
-              <span style={{ fontSize:10.5,fontWeight:800,color:"#B45309",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:999,padding:"2px 8px" }}>{filteredPhaseoutSkuLinks.length} shown</span>
-            </div>
-            <div style={{ maxHeight:isMobile?260:330,overflow:"auto",WebkitOverflowScrolling:"touch" }}>
-              {filteredPhaseoutSkuLinks.map((item:any)=>(
-                <div key={`${item.brandName}-${item.label}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"130px minmax(260px,.75fr) minmax(520px,1.5fr) 74px",minWidth:isMobile?"100%":980,gap:isMobile?4:8,alignItems:"center",padding:isMobile?"8px 10px":"6px 8px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
-                  <div style={{ minWidth:0 }}>
-                    <p style={{ margin:0,fontSize:11.5,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.brandName}</p>
-                    <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.sku?.collection || item.sku?.category || item.sku?.productCategory || "No collection/category"}</p>
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:10,maxHeight:isMobile?430:520,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingRight:2 }}>
+            {filteredPhaseoutSkuLinks.map((item:any)=>(
+              <div key={`${item.brandName}-${item.label}`} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden",minHeight:120 }}>
+                <div style={{ padding:"8px 9px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:8,alignItems:"flex-start",background:C.bg }}>
+                  <span style={{ width:20,height:20,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,flexShrink:0,marginTop:1 }}>⚑</span>
+                  <div style={{ minWidth:0,flex:1 }}>
+                    <p style={{ margin:0,fontSize:11.5,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                      {item.sku?.productName || String(item.label||"").replace(String(item.brandName||"")+" - ","")}
+                    </p>
+                    <p style={{ margin:"2px 0 0",fontSize:10.2,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                      {item.sku?.sku || ""}{item.sku?.sku && " · "}{item.sku?.collection || item.sku?.category || item.sku?.productCategory || "No collection/category"}
+                    </p>
+                    <p style={{ margin:"2px 0 0",fontSize:10,color:"#B45309",fontWeight:800,textTransform:"uppercase",letterSpacing:".04em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.brandName}</p>
                   </div>
-
-                  <div style={{ minWidth:0 }}>
-                    <button type="button" onClick={()=>item.sku&&openPhaseoutTagEdit(item.sku)} style={{ display:"block",width:"100%",border:"none",background:"transparent",padding:0,textAlign:"left",cursor:item.sku?"pointer":"default" }}>
-                      <span style={{ display:"block",fontSize:11.5,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
-                        {item.sku?.productName || String(item.label||"").replace(String(item.brandName||"")+" - ","")}
-                        {item.sku?.sku&&<span style={{ color:C.faint,fontWeight:800 }}> · {item.sku.sku}</span>}
-                      </span>
-                    </button>
-                    {Array.isArray(item.tags)&&item.tags.length>0&&<p style={{ margin:"2px 0 0",fontSize:10,color:"#B45309",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Tags: {item.tags.join(", ")}</p>}
-                  </div>
-
-                  <div style={{ minWidth:0,gridColumn:isMobile?"1 / -1":"auto",marginTop:isMobile?4:0 }}>
-                    {(!item.events || item.events.length===0) ? (
-                      <p style={{ margin:0,fontSize:10.5,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>No linked event/season yet.</p>
-                    ) : (
-                      <div style={{ width:"100%",maxWidth:"100%",overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",display:"flex",gap:4,paddingBottom:2 }}>
-                        {item.events.map((ev:any)=>(
-                          <button key={ev.id} type="button" onClick={()=>{
-                              const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
-                              setYearOverview({
-                                item:{ sourceId:ev.id,itemKind:"seasonal",title:fullEv.name||ev.name,type:fullEv.type||ev.type,color:fullEv.color||ev.color,dateText:fullEv.date||ev.date,source:"Events & Seasons" },
-                                type:"seasonal",
-                                event:fullEv,
-                                phaseoutSkus:getOverviewPhaseoutSkus(fullEv),
-                                focusedPhaseoutSku:item,
-                              });
-                            }}
-                            style={{ flex:"0 0 auto",width:isMobile?150:210,minHeight:30,border:`1px solid ${C.border}`,background:C.bg,borderRadius:6,padding:"3px 7px",textAlign:"left",cursor:"pointer",display:"block" }}>
-                            <span style={{ display:"block",fontSize:10.3,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
-                            <span style={{ display:"block",fontSize:9.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || "No specific date"}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   {item.sku&&(
-                    <div style={{ display:"flex",gap:4,justifyContent:isMobile?"flex-start":"flex-end",alignItems:"center",flexWrap:"nowrap",gridColumn:isMobile?"1 / -1":"auto" }}>
+                    <div style={{ display:"flex",gap:4,flexShrink:0 }}>
                       <button type="button" onClick={()=>openPhaseoutTagEdit(item.sku)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:6,padding:"4px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Edit</button>
                       <button type="button" onClick={()=>clearPhaseoutTag(item.sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Clear</button>
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-            <div style={{ padding:"6px 10px",borderTop:`1px solid ${C.border}`,background:C.bg }}>
-              <p style={{ margin:0,fontSize:10.5,fontWeight:700,color:C.faint }}>Compact view. Scroll down for more SKUs and scroll sideways if the row has more linked events.</p>
-            </div>
+
+                <div style={{ padding:"7px 9px" }}>
+                  {Array.isArray(item.tags)&&item.tags.length>0&&(
+                    <p style={{ margin:"0 0 6px",fontSize:10,color:"#B45309",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>Tags: {item.tags.join(", ")}</p>
+                  )}
+
+                  {(!item.events || item.events.length===0) ? (
+                    <div style={{ padding:"7px 8px",fontSize:10.5,color:C.muted,background:C.bg,border:`1px solid ${C.border}`,borderRadius:7 }}>No linked event/season yet.</div>
+                  ) : (
+                    <div style={{ display:"flex",gap:5,overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:2 }}>
+                      {item.events.map((ev:any)=>(
+                        <button key={ev.id} type="button" onClick={()=>{
+                            const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
+                            setYearOverview({
+                              item:{ sourceId:ev.id,itemKind:"seasonal",title:fullEv.name||ev.name,type:fullEv.type||ev.type,color:fullEv.color||ev.color,dateText:fullEv.date||ev.date,source:"Events & Seasons" },
+                              type:"seasonal",
+                              event:fullEv,
+                              phaseoutSkus:getOverviewPhaseoutSkus(fullEv),
+                              focusedPhaseoutSku:item,
+                            });
+                          }}
+                          style={{ flex:"0 0 145px",border:`1px solid ${C.border}`,background:C.bg,borderRadius:7,padding:"4px 7px",textAlign:"left",cursor:"pointer" }}>
+                          <span style={{ display:"block",fontSize:10.3,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
+                          <span style={{ display:"block",fontSize:9.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || "No specific date"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
