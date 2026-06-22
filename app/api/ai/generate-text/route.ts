@@ -20,7 +20,9 @@ const taskInstructions: Record<string, string> = {
   video_prompt:
     "Improve this into a cinematic image-to-video or text-to-video prompt. Include camera motion, subject action, pacing, lighting, and product hero focus.",
   ecommerce_listing:
-    "Generate a complete marketplace-ready e-commerce listing based on selected SKUs and catalog references.",
+    "Generate a complete marketplace-ready e-commerce listing based on selected SKUs and catalog references. Use clean copy-paste-ready section titles only. Do not use markdown heading symbols like ###. Do not number section headers.",
+  ecommerce_prompt_from_catalog:
+    "Read catalog references and selected products, then create a complete AI prompt that can generate an e-commerce marketplace listing. The prompt itself must instruct the next AI output to avoid markdown heading symbols and numbered section headers.",
   phaseout_matcher:
     "Analyze products and match them to the best campaign/event opportunities. Return exactly what the user requested.",
 };
@@ -122,6 +124,9 @@ export async function POST(req: NextRequest) {
       "Avoid em dashes.",
       "Do not invent technical specs that are not provided.",
       "Use clear formatting that is easy to copy.",
+      "For e-commerce listing outputs, do not use markdown heading symbols like ###.",
+      "For e-commerce listing outputs, do not number section headers like 1., 2., or 8.",
+      "Use plain section titles only, with the content below each section.",
       "",
       "User input:",
       input,
