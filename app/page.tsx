@@ -3086,13 +3086,23 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       .trim();
   };
 
+  const uniqueCatalogFiles = (files:any[] = []) => {
+    const seen = new Set();
+    return (files||[]).filter((file:any)=>{
+      const key = `${file?.name||""}|${file?.type||""}|${file?.size||""}|${String(file?.dataUrl||"").slice(0,80)}`;
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return !!file?.dataUrl;
+    });
+  };
+
   const generateEcommercePromptFromCatalog = async () => {
     const tab = "ecommerce";
     const data = (group.aiWorkspace || {})[tab] || {};
-    const promptCatalogFiles = [
+    const promptCatalogFiles = uniqueCatalogFiles([
       ...(data.pastedPromptImage ? [data.pastedPromptImage] : []),
       ...(data.catalogFiles || []),
-    ].filter((file:any)=>file?.dataUrl).slice(0,12);
+    ]).slice(0,12);
 
     if(!promptCatalogFiles.length && !productRows.length) {
       setAiError((p:any)=>({...p,[tab]:"Paste or upload a catalog image first, or select products from SKU Storage."}));
@@ -3113,6 +3123,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const instruction = [
       "Create the AI E-commerce Prompt only, not the final listing output.",
       "Read the catalog/reference image and selected products.",
+      "Extract all visible text from the catalog image first: product names, specs, materials, dimensions, capacity, colors, variants, package inclusions, and care instructions.",
+      "Use those extracted details when writing the prompt.",
       "Write a clear instruction prompt that will be used later to generate a complete marketplace listing.",
       "The prompt must tell the AI to use a clean copy-paste ready format.",
       "Do not include markdown heading symbols like ###.",
@@ -3144,10 +3156,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             type:file.type || "image/png",
             dataUrl:file.dataUrl,
           })),
-          referenceImages:promptCatalogFiles
-            .filter((file:any)=>String(file.type||"").startsWith("image/"))
-            .map((file:any)=>({ name:file.name,type:file.type || "image/png",dataUrl:file.dataUrl })),
-          maxOutputTokens:2500,
+          maxOutputTokens:3000,
         }),
       });
       const raw = await res.text();
@@ -3183,11 +3192,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       capacity:row.capacity || row.extraFields?.Capacity || row.extraFields?.capacity || "",
     }));
 
-    const catalogFiles = (data.catalogFiles || []).filter((file:any)=>file?.dataUrl);
+    const catalogFiles = uniqueCatalogFiles(data.catalogFiles || []);
 
     const instruction = [
       "You are EMDC's e-commerce listing assistant for Philippine marketplaces.",
       "Read the selected products and any uploaded catalog/reference files.",
+      "Actively read uploaded catalog images and extract all visible text and product details before writing the output.",
       "Use the uploaded catalog pages to extract product specs, materials, dimensions, capacities, color options, package inclusions, and care instructions when visible.",
       "Do not invent exact technical specifications if they are not present in the product list or catalog reference.",
       "If a detail is missing, write it as a clean placeholder like: To be confirmed.",
@@ -3241,14 +3251,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             type:file.type || "application/octet-stream",
             dataUrl:file.dataUrl,
           })),
-          referenceImages:catalogFiles
-            .filter((file:any)=>String(file.type||"").startsWith("image/"))
-            .map((file:any)=>({
-              name:file.name,
-              type:file.type || "image/jpeg",
-              dataUrl:file.dataUrl,
-            })),
-          maxOutputTokens:6000,
+          maxOutputTokens:7000,
         }),
       });
 
@@ -3335,9 +3338,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               >
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
                   <div style={{ minWidth:0,flex:"1 1 260px" }}>
-                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Catalog image for prompt</p>
+                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Catalog image reader</p>
                     <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
-                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Generate Prompt from Catalog.` : "Click this box then Ctrl+V / Cmd+V to paste an image, or use Choose Image."}
+                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Read Catalog & Generate Prompt.` : "Click this box then Ctrl+V / Cmd+V to paste an image, or use Choose Image. Gemini will read visible text/details from the image."}
                     </p>
                   </div>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
@@ -3346,7 +3349,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                       <input type="file" accept="image/*" onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
                     </label>
                     <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add to Reference</Btn>
-                    <Btn sm onClick={generateEcommercePromptFromCatalog} disabled={!!aiBusy.ecommercePrompt || (!data.pastedPromptImage && !(data.catalogFiles||[]).length && !productRows.length)}>{aiBusy.ecommercePrompt?"Generating Prompt...":"Generate Prompt from Catalog"}</Btn>
+                    <Btn sm onClick={generateEcommercePromptFromCatalog} disabled={!!aiBusy.ecommercePrompt || (!data.pastedPromptImage && !(data.catalogFiles||[]).length && !productRows.length)}>{aiBusy.ecommercePrompt?"Reading Catalog...":"Read Catalog & Generate Prompt"}</Btn>
                   </div>
                 </div>
                 {data.pastedPromptImage&&String(data.pastedPromptImage.type||"").startsWith("image/")&&(
