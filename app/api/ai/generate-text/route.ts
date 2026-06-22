@@ -22,7 +22,7 @@ const taskInstructions: Record<string, string> = {
   ecommerce_listing:
     "Generate a complete marketplace-ready e-commerce listing based on selected SKUs and catalog references. Use clean copy-paste-ready section titles only. Do not use markdown heading symbols like ###. Do not number section headers.",
   ecommerce_prompt_from_catalog:
-    "Read catalog references and selected products, then create a complete AI prompt that can generate an e-commerce marketplace listing. The prompt itself must instruct the next AI output to avoid markdown heading symbols and numbered section headers.",
+    "Read catalog references and selected products, then create a complete AI prompt that can generate an e-commerce marketplace listing. The prompt itself must instruct the next AI output to avoid markdown heading symbols, numbered section headers, and the Recommended Final Listing Structure section.",
   phaseout_matcher:
     "Analyze products and match them to the best campaign/event opportunities. Return exactly what the user requested.",
 };
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       "Use clear formatting that is easy to copy.",
       "For e-commerce listing outputs, do not use markdown heading symbols like ###.",
       "For e-commerce listing outputs, do not number section headers like 1., 2., or 8.",
-      "Use plain section titles only, with the content below each section.",
+      "Use plain section titles only, with the content below each section. Do not include a section called Recommended Final Listing Structure.",
       "When uploaded catalog/reference images are included, actively read the image and extract visible text and product details.",
       "If an uploaded catalog image is unreadable, say which details are unreadable instead of ignoring it.",
       "",
