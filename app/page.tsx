@@ -2985,7 +2985,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const buildEcommercePrompt = () => {
     const mappedProducts = productRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||""} | Product: ${row.product||""} | SKU: ${row.skuCode||""}`).join("\n");
-    return `Create a complete e-commerce listing output for this checklist group.\n\nGroup: ${group.groupName}\nOperational Type: ${lt.label}\nSchedule: ${group.deadline ? (group.deadlineEnd?`${group.deadline} to ${group.deadlineEnd}`:group.deadline) : (Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length?formatMonthOnlyLabel(group.monthOnlyMonths):"No date")}\n\nSelected products mapped from SKU Storage:\n${mappedProducts || "No products selected yet."}\n\nUse the uploaded catalog page as the product reference. Generate the output using this exact structure:\n- Product collection/title\n- Product Overview\n- Key Features\n- Variants Available\n- Color Options\n- Product Specifications\n- Perfect For\n- Care & Use\n- Package Includes\n- Best SEO Listing Title\n- Stronger Lazada/Shopee SEO Version\n- Recommended Variations\n- Better Option / Higher AOV\n- Search Keywords\n- Recommended Final Listing Structure\n\nWrite in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.`;
+    return `Create a complete e-commerce listing output for this checklist group.\n\nGroup: ${group.groupName}\nOperational Type: ${lt.label}\nSchedule: ${group.deadline ? (group.deadlineEnd?`${group.deadline} to ${group.deadlineEnd}`:group.deadline) : (Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length?formatMonthOnlyLabel(group.monthOnlyMonths):"No date")}\n\nSelected products mapped from SKU Storage:\n${mappedProducts || "No products selected yet."}\n\nUse the uploaded catalog page as the product reference. Generate the output using this exact structure, but make it ready to copy and paste. Do not use markdown heading symbols like ###. Do not number the section headers like 1., 2., or 8. Use clean section titles only.\n\nProduct collection/title\nProduct Overview\nKey Features\nVariants Available\nColor Options\nProduct Specifications\nPerfect For\nCare & Use\nPackage Includes\nBest SEO Listing Title\nStronger Lazada/Shopee SEO Version\nRecommended Variations\nBetter Option / Higher AOV\nSearch Keywords\nRecommended Final Listing Structure\n\nWrite in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.`;
   };
 
   const handleCatalogUpload = async (tab:string, e:any) => {
@@ -3006,6 +3006,152 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const removeCatalogFile = (tab:string, idx:number) => {
     const current = ((group.aiWorkspace || {})[tab]?.catalogFiles || []) as any[];
     updateAiWorkspace(tab,{ catalogFiles:current.filter((_:any,i:number)=>i!==idx) });
+  };
+
+  const readFileAsCatalog = (file:any) => new Promise((resolve)=>{
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name:file.name || `Pasted catalog ${new Date().toLocaleTimeString("en-PH")}`, type:file.type || "image/png", size:file.size || 0, dataUrl:reader.result });
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+
+  const handlePromptImagePaste = async (tab:string, e:any) => {
+    const items = Array.from(e?.clipboardData?.items || []) as any[];
+    const imageItem = items.find((item:any)=>String(item?.type||"").startsWith("image/"));
+    if(!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if(!file) return;
+    const pasted:any = await readFileAsCatalog(file);
+    if(pasted) updateAiWorkspace(tab,{ pastedPromptImage:pasted });
+  };
+
+  const addPastedPromptImageToCatalog = (tab:string) => {
+    const data = (group.aiWorkspace || {})[tab] || {};
+    if(!data.pastedPromptImage) return;
+    const existing = data.catalogFiles || [];
+    updateAiWorkspace(tab,{
+      catalogFiles:[data.pastedPromptImage,...existing].slice(0,12),
+      pastedPromptImage:null,
+    });
+  };
+
+  const deleteGeneratedEcommerceOutput = () => {
+    updateAiWorkspace("ecommerce",{ generatedText:"", generatedAt:"" });
+  };
+
+  const saveEcommerceOutput = () => {
+    const data = ((group.aiWorkspace || {}).ecommerce || {});
+    const output = String(data.generatedText || "").trim();
+    if(!output) return;
+    const saved = Array.isArray(data.savedOutputs) ? data.savedOutputs : [];
+    updateAiWorkspace("ecommerce",{
+      savedOutputs:[{
+        id:uid(),
+        title:`E-commerce Listing ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+        text:output,
+        prompt:data.textPrompt || "",
+        createdAt:new Date().toISOString(),
+      },...saved].slice(0,20)
+    });
+  };
+
+  const openSavedEcommerceOutput = (item:any) => {
+    updateAiWorkspace("ecommerce",{
+      generatedText:item.text || "",
+      textPrompt:item.prompt || ((group.aiWorkspace || {}).ecommerce || {}).textPrompt || "",
+      generatedAt:item.createdAt || new Date().toISOString(),
+    });
+  };
+
+  const deleteSavedEcommerceOutput = (id:string) => {
+    const data = ((group.aiWorkspace || {}).ecommerce || {});
+    const saved = Array.isArray(data.savedOutputs) ? data.savedOutputs : [];
+    updateAiWorkspace("ecommerce",{ savedOutputs:saved.filter((item:any)=>item.id!==id) });
+  };
+
+  const cleanReadyToUseOutput = (value:any) => {
+    return String(value || "")
+      .replace(/^\s*#{1,6}\s*/gm,"")
+      .replace(/^\s*\d+\.\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords|Recommended Final Listing Structure)/gmi,"$1")
+      .replace(/^\s*[-*]\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords|Recommended Final Listing Structure)/gmi,"$1")
+      .trim();
+  };
+
+  const generateEcommercePromptFromCatalog = async () => {
+    const tab = "ecommerce";
+    const data = (group.aiWorkspace || {})[tab] || {};
+    const promptCatalogFiles = [
+      ...(data.pastedPromptImage ? [data.pastedPromptImage] : []),
+      ...(data.catalogFiles || []),
+    ].filter((file:any)=>file?.dataUrl).slice(0,12);
+
+    if(!promptCatalogFiles.length && !productRows.length) {
+      setAiError((p:any)=>({...p,[tab]:"Paste or upload a catalog image first, or select products from SKU Storage."}));
+      return;
+    }
+
+    setAiBusy((p:any)=>({...p,ecommercePrompt:true}));
+    setAiError((p:any)=>({...p,[tab]:""}));
+
+    const mappedProducts = productRows.map((row:any,idx:number)=>({
+      no:idx+1,
+      brand:row.brand || "",
+      collection:row.collection || "",
+      product:row.product || "",
+      sku:row.skuCode || "",
+    }));
+
+    const instruction = [
+      "Create the AI E-commerce Prompt only, not the final listing output.",
+      "Read the catalog/reference image and selected products.",
+      "Write a clear instruction prompt that will be used later to generate a complete marketplace listing.",
+      "The prompt must tell the AI to use a clean copy-paste ready format.",
+      "Do not include markdown heading symbols like ###.",
+      "Do not number the section headers.",
+      "Include the exact required output sections.",
+      "Mention that uploaded catalog images are only reference for product look, specs, sizes, colors, and care details.",
+    ].join("\n");
+
+    try {
+      const res = await fetch("/api/ai/generate-text", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          task:"ecommerce_prompt_from_catalog",
+          taskLabel:"E-commerce Prompt from Catalog",
+          tone:"professional",
+          instruction,
+          input:JSON.stringify({
+            group:{
+              name:group.groupName,
+              operationalType:lt.label,
+              schedule:group.deadline ? (group.deadlineEnd?`${group.deadline} to ${group.deadlineEnd}`:group.deadline) : (Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length?formatMonthOnlyLabel(group.monthOnlyMonths):"No date"),
+            },
+            products:mappedProducts,
+            requiredOutputSections:ecommerceOutputSections,
+          },null,2),
+          catalogFiles:promptCatalogFiles.map((file:any)=>({
+            name:file.name,
+            type:file.type || "image/png",
+            dataUrl:file.dataUrl,
+          })),
+          referenceImages:promptCatalogFiles
+            .filter((file:any)=>String(file.type||"").startsWith("image/"))
+            .map((file:any)=>({ name:file.name,type:file.type || "image/png",dataUrl:file.dataUrl })),
+          maxOutputTokens:2500,
+        }),
+      });
+      const raw = await res.text();
+      let payload:any = {};
+      try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "Prompt generation failed."); }
+      if(!res.ok) throw new Error(payload?.error || payload?.message || "Prompt generation failed.");
+      updateAiWorkspace(tab,{ textPrompt:cleanReadyToUseOutput(payload?.text || ""), pastedPromptImage:null });
+    } catch(err:any) {
+      setAiError((p:any)=>({...p,[tab]:err?.message || "Prompt generation failed."}));
+    } finally {
+      setAiBusy((p:any)=>({...p,ecommercePrompt:false}));
+    }
   };
 
   const generateEcommerceListing = async () => {
@@ -3040,23 +3186,27 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       "Generate a complete marketplace listing output using the exact required structure.",
       "Write in clear English for Lazada, Shopee, TikTok Shop, and Shopify.",
       "Avoid em dashes.",
+      "Make the output ready to copy and paste directly into marketplaces or internal docs.",
+      "Do not use markdown heading symbols like ###.",
+      "Do not number the section headers like 1., 2., 8., etc.",
+      "Use clean section titles only, then the content below each title.",
       "",
-      "Required output structure:",
-      "1. Product collection/title",
-      "2. Product Overview",
-      "3. Key Features",
-      "4. Variants Available",
-      "5. Color Options",
-      "6. Product Specifications",
-      "7. Perfect For",
-      "8. Care & Use",
-      "9. Package Includes",
-      "10. Best SEO Listing Title",
-      "11. Stronger Lazada/Shopee SEO Version",
-      "12. Recommended Variations",
-      "13. Better Option / Higher AOV",
-      "14. Search Keywords",
-      "15. Recommended Final Listing Structure",
+      "Required output structure, use these as clean section titles only:",
+      "Product collection/title",
+      "Product Overview",
+      "Key Features",
+      "Variants Available",
+      "Color Options",
+      "Product Specifications",
+      "Perfect For",
+      "Care & Use",
+      "Package Includes",
+      "Best SEO Listing Title",
+      "Stronger Lazada/Shopee SEO Version",
+      "Recommended Variations",
+      "Better Option / Higher AOV",
+      "Search Keywords",
+      "Recommended Final Listing Structure",
     ].join("\n");
 
     try {
@@ -3101,7 +3251,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
       updateAiWorkspace(tab,{
         textPrompt:prompt,
-        generatedText:payload?.text || "",
+        generatedText:cleanReadyToUseOutput(payload?.text || ""),
         generatedAt:new Date().toISOString(),
       });
     } catch (err:any) {
@@ -3168,10 +3318,26 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                 <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
                 <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt() })}>Use Listing Template</Btn>
               </div>
+              <div
+                tabIndex={0}
+                onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
+                style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${data.pastedPromptImage?C.success:C.border}`,borderRadius:10,background:data.pastedPromptImage?"#ECFDF5":C.bg,outline:"none" }}
+              >
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                  <div style={{ minWidth:0 }}>
+                    <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Paste catalog image to create prompt</p>
+                    <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{data.pastedPromptImage ? `${data.pastedPromptImage.name || "Pasted image"} ready` : "Click this box, paste a catalog/product image, then generate the prompt below."}</p>
+                  </div>
+                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                    <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add Image</Btn>
+                    <Btn sm onClick={generateEcommercePromptFromCatalog} disabled={!!aiBusy.ecommercePrompt}>{aiBusy.ecommercePrompt?"Generating Prompt...":"Generate Prompt from Catalog"}</Btn>
+                  </div>
+                </div>
+              </div>
               <textarea
                 value={data.textPrompt || ""}
                 onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
-                placeholder="Click Use Listing Template, or write your own instruction for the e-commerce listing output."
+                placeholder="Click Use Listing Template, paste a catalog image and generate prompt, or write your own instruction for the e-commerce listing output."
                 rows={9}
                 style={{ width:"100%",minHeight:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
               />
@@ -3213,9 +3379,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
                 <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>E-commerce Generated Output</h4>
-                <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
                   {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                   <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
+                  <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
+                  <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                 </div>
               </div>
               {data.generatedText ? (
@@ -3231,6 +3399,23 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                 </div>
               )}
             </div>
+
+            {Array.isArray(data.savedOutputs)&&data.savedOutputs.length>0&&(
+              <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Saved E-commerce Outputs</h4>
+                <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:220,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                  {data.savedOutputs.map((item:any)=>(
+                    <div key={item.id} style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",padding:"8px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8 }}>
+                      <button onClick={()=>openSavedEcommerceOutput(item)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",cursor:"pointer" }}>
+                        <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Saved Output"}</p>
+                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"}</p>
+                      </button>
+                      <button onClick={()=>deleteSavedEcommerceOutput(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ padding:14,background:"#ECFDF5",border:"1.5px solid #A7F3D0",borderRadius:12 }}>
               <h4 style={{ margin:"0 0 6px",fontSize:13,fontWeight:900,color:"#065F46" }}>Gemini Connected</h4>
