@@ -2274,7 +2274,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
             </div>
             <div style={{ maxHeight:isMobile?260:330,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
               {filteredPhaseoutSkuLinks.map((item:any)=>(
-                <div key={`${item.brandName}-${item.label}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"150px minmax(280px,1fr) 300px 82px",gap:isMobile?4:10,alignItems:"center",padding:isMobile?"8px 10px":"7px 10px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
+                <div key={`${item.brandName}-${item.label}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"150px minmax(280px,1fr) 320px 82px",gap:isMobile?4:10,alignItems:"center",padding:isMobile?"8px 10px":"7px 10px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
                   <div style={{ minWidth:0 }}>
                     <p style={{ margin:0,fontSize:11.5,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.brandName}</p>
                     <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.sku?.collection || item.sku?.category || item.sku?.productCategory || "No collection/category"}</p>
@@ -2294,7 +2294,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                     {(!item.events || item.events.length===0) ? (
                       <p style={{ margin:0,fontSize:10.5,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>No linked event/season yet.</p>
                     ) : (
-                      <div style={{ maxHeight:isMobile?64:58,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingRight:3,display:"flex",flexDirection:"column",gap:3 }}>
+                      <div style={{ overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",display:"flex",gap:4,paddingBottom:2 }}>
                         {item.events.map((ev:any)=>(
                           <button key={ev.id} type="button" onClick={()=>{
                               const fullEv = (seasonalEvents||[]).find((seasonal:any)=>seasonal.id===ev.id) || ev;
@@ -2306,7 +2306,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                 focusedPhaseoutSku:item,
                               });
                             }}
-                            style={{ width:"100%",minHeight:25,border:`1px solid ${C.border}`,background:C.bg,borderRadius:6,padding:"3px 7px",textAlign:"left",cursor:"pointer",display:"block" }}>
+                            style={{ flex:"0 0 auto",width:isMobile?150:180,minHeight:30,border:`1px solid ${C.border}`,background:C.bg,borderRadius:6,padding:"3px 7px",textAlign:"left",cursor:"pointer",display:"block" }}>
                             <span style={{ display:"block",fontSize:10.3,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
                             <span style={{ display:"block",fontSize:9.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || "No specific date"}</span>
                           </button>
