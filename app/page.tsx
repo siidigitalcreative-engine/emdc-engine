@@ -3026,30 +3026,41 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const handlePromptImagePaste = async (tab:string, e:any) => {
     const items = Array.from(e?.clipboardData?.items || []) as any[];
-    const imageItem = items.find((item:any)=>String(item?.type||"").startsWith("image/"));
-    if(!imageItem) return;
+    const imageItems = items.filter((item:any)=>String(item?.type||"").startsWith("image/"));
+    if(!imageItems.length) return;
     e.preventDefault();
-    const file = imageItem.getAsFile();
-    if(!file) return;
-    const pasted:any = await readFileAsCatalog(file);
-    if(pasted) updateAiWorkspace(tab,{ pastedPromptImage:pasted });
+    const files = imageItems.map((item:any)=>item.getAsFile()).filter(Boolean);
+    if(!files.length) return;
+    const uploaded:any[] = (await Promise.all(files.map(readFileAsCatalog))).filter(Boolean) as any[];
+    if(!uploaded.length) return;
+    const current = (((group.aiWorkspace || {})[tab] || {}).pastedPromptImages || []) as any[];
+    updateAiWorkspace(tab,{ pastedPromptImages:[...current,...uploaded].slice(0,12) });
   };
 
   const handlePromptImageUpload = async (tab:string, e:any) => {
-    const file = e?.target?.files?.[0];
-    if(!file) return;
-    const uploaded:any = await readFileAsCatalog(file);
-    if(uploaded) updateAiWorkspace(tab,{ pastedPromptImage:uploaded });
+    const files = Array.from(e?.target?.files || []) as any[];
+    if(!files.length) return;
+    const uploaded:any[] = (await Promise.all(files.slice(0,12).map(readFileAsCatalog))).filter(Boolean) as any[];
+    if(uploaded.length){
+      const current = (((group.aiWorkspace || {})[tab] || {}).pastedPromptImages || []) as any[];
+      updateAiWorkspace(tab,{ pastedPromptImages:[...current,...uploaded].slice(0,12) });
+    }
     e.target.value = "";
+  };
+
+  const removePastedPromptImage = (tab:string, idx:number) => {
+    const current = ((((group.aiWorkspace || {})[tab] || {}).pastedPromptImages) || []) as any[];
+    updateAiWorkspace(tab,{ pastedPromptImages:current.filter((_:any,i:number)=>i!==idx) });
   };
 
   const addPastedPromptImageToCatalog = (tab:string) => {
     const data = (group.aiWorkspace || {})[tab] || {};
-    if(!data.pastedPromptImage) return;
+    const pending = (data.pastedPromptImages || []) as any[];
+    if(!pending.length) return;
     const existing = data.catalogFiles || [];
     updateAiWorkspace(tab,{
-      catalogFiles:[data.pastedPromptImage,...existing].slice(0,12),
-      pastedPromptImage:null,
+      catalogFiles:uniqueCatalogFiles([...existing,...pending]).slice(0,12),
+      pastedPromptImages:[],
     });
   };
 
@@ -3110,7 +3121,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const tab = "ecommerce";
     const data = (group.aiWorkspace || {})[tab] || {};
     const promptCatalogFiles = uniqueCatalogFiles([
-      ...(data.pastedPromptImage ? [data.pastedPromptImage] : []),
+      ...((data.pastedPromptImages || []) as any[]),
       ...(data.catalogFiles || []),
     ]).slice(0,12);
 
@@ -3173,7 +3184,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       let payload:any = {};
       try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "Prompt generation failed."); }
       if(!res.ok) throw new Error(payload?.error || payload?.message || "Prompt generation failed.");
-      updateAiWorkspace(tab,{ textPrompt:cleanReadyToUseOutput(payload?.text || ""), pastedPromptImage:null });
+      updateAiWorkspace(tab,{ textPrompt:cleanReadyToUseOutput(payload?.text || ""), pastedPromptImages:[] });
     } catch(err:any) {
       setAiError((p:any)=>({...p,[tab]:err?.message || "Prompt generation failed."}));
     } finally {
@@ -3294,6 +3305,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
     if(tab==="ecommerce"){
       const catalogFiles = data.catalogFiles || [];
+      const pendingPromptImages = data.pastedPromptImages || [];
       const mappedProducts = productRows.slice(0,30);
       return (
         <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.1fr) minmax(0,.9fr)",gap:14 }}>
@@ -3318,27 +3330,47 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                 contentEditable={false}
                 onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
                 onClick={(e:any)=>{ try { e.currentTarget.focus(); } catch {} }}
-                style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${data.pastedPromptImage?C.success:C.border}`,borderRadius:10,background:data.pastedPromptImage?"#ECFDF5":C.bg,outline:"none",cursor:"text" }}
+                style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${pendingPromptImages.length?C.success:C.border}`,borderRadius:10,background:pendingPromptImages.length?"#ECFDF5":C.bg,outline:"none",cursor:"text" }}
               >
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
                   <div style={{ minWidth:0,flex:"1 1 260px" }}>
                     <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Catalog image reader</p>
                     <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
-                      {data.pastedPromptImage ? `${data.pastedPromptImage.name || "Catalog image"} ready. Click Add Reference if you want to include it.` : "Click this box then Ctrl+V / Cmd+V to paste a catalog image, or use Choose Image. Gemini will read visible text/details from the image when generating."}
+                      {pendingPromptImages.length
+                        ? `${pendingPromptImages.length} image${pendingPromptImages.length>1?"s":""} ready. Click Add Reference to include ${pendingPromptImages.length>1?"them":"it"}.`
+                        : "Click this box then Ctrl+V / Cmd+V to paste catalog images, or use Choose Images. You can add multiple catalog pages for different color collections."}
                     </p>
+                    {!!catalogFiles.length&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.faint,fontWeight:700 }}>{catalogFiles.length} reference image{catalogFiles.length>1?"s":""} already added</p>}
                   </div>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
                     <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:30,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap" }}>
-                      Choose Image
-                      <input type="file" accept="image/*" onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
+                      Choose Images
+                      <input type="file" accept="image/*" multiple onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
                     </label>
-                    <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!data.pastedPromptImage}>Add Reference</Btn>
+                    <Btn sm variant="outline" onClick={()=>addPastedPromptImageToCatalog(tab)} disabled={!pendingPromptImages.length}>Add Reference</Btn>
                   </div>
                 </div>
-                {data.pastedPromptImage&&String(data.pastedPromptImage.type||"").startsWith("image/")&&(
-                  <div style={{ marginTop:10,display:"flex",alignItems:"center",gap:10 }}>
-                    <img src={data.pastedPromptImage.dataUrl} alt="Prompt reference" style={{ width:68,height:68,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}` }} />
-                    <button onClick={(e:any)=>{ e.stopPropagation(); updateAiWorkspace(tab,{ pastedPromptImage:null }); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                {pendingPromptImages.length>0&&(
+                  <div style={{ marginTop:10,display:"flex",flexWrap:"wrap",gap:10 }}>
+                    {pendingPromptImages.map((file:any,idx:number)=>String(file?.type||"").startsWith("image/")&&(
+                      <div key={`${file.name || 'prompt-image'}-${idx}`} style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:6 }}>
+                        <img src={file.dataUrl} alt={file.name || "Prompt reference"} style={{ width:68,height:68,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}` }} />
+                        <button onClick={(e:any)=>{ e.stopPropagation(); removePastedPromptImage(tab,idx); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {catalogFiles.length>0&&(
+                  <div style={{ marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}` }}>
+                    <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:800,color:C.textSub }}>Added references</p>
+                    <div style={{ display:"flex",flexWrap:"wrap",gap:10 }}>
+                      {catalogFiles.map((file:any,idx:number)=>String(file?.type||"").startsWith("image/")&&(
+                        <div key={`${file.name || 'catalog-file'}-${idx}`} style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:6 }}>
+                          <img src={file.dataUrl} alt={file.name || "Catalog reference"} style={{ width:56,height:56,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}` }} />
+                          <button onClick={(e:any)=>{ e.stopPropagation(); removeCatalogFile(tab,idx); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -3346,7 +3378,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
                 value={data.textPrompt || ""}
                 onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
                 onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
-                placeholder="Click Use Listing Template, paste a catalog image and generate prompt, or write your own instruction for the e-commerce listing output."
+                placeholder="Click Use Listing Template, add one or more catalog images as references, or write your own instruction for the e-commerce listing output."
                 rows={9}
                 style={{ width:"100%",minHeight:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
               />
