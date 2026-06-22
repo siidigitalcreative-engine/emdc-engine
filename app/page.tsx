@@ -110,6 +110,13 @@ const DEFAULT_EVENT_TYPES = [
   { id:"seasonal", label:"Seasonal", color:"#3B82F6", useColor:false },
   { id:"holiday",  label:"Holiday",  color:"#9CA3AF", useColor:false },
 ];
+
+const ensureRequiredCalendarTypes = (types:any[] = []) => {
+  const list = Array.isArray(types) ? types : [];
+  const required = DEFAULT_EVENT_TYPES.filter((item:any)=>item.id==="seasonal");
+  const missing = required.filter((item:any)=>!list.some((type:any)=>type.id===item.id));
+  return missing.length ? [...list,...missing] : list;
+};
 const EVENT_COLORS = ["#111827","#374151","#6B7280","#9CA3AF","#EF4444","#F97316","#F59E0B","#22C55E","#14B8A6","#3B82F6","#8B5CF6","#EC4899"];
 const INITIAL_BRANDS = [
   { id:"slique",    name:"Slique",          color:"#111827" },
@@ -1510,7 +1517,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const calendarFilterTypes = useMemo(()=>{
     // Manage Tags is the source of truth.
     // If a tag is deleted there, it must disappear from the top calendar filters.
-    return (eventTypes||[]).map((t:any)=>({
+    return ensureRequiredCalendarTypes(eventTypes?.length ? eventTypes : DEFAULT_EVENT_TYPES).map((t:any)=>({
       ...t,
       label:t.label || normalizeTagLabel(t.id),
       color:t.color || "#9CA3AF",
@@ -2788,7 +2795,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const eventFilterTypes = useMemo(()=>{
     // Manage Tags is the source of truth.
     // Removed tags should not come back just because older events still use that type.
-    return (eventTypes||[]).map((t:any)=>({
+    return ensureRequiredCalendarTypes(eventTypes?.length ? eventTypes : DEFAULT_EVENT_TYPES).map((t:any)=>({
       ...t,
       label:t.label || normalizeTagLabel(t.id),
       color:t.color || "#6B7280",
@@ -8967,7 +8974,7 @@ export default function App({
     { id:uid(), date:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(Math.min(today.getDate()+1,28))}`, title:"Shopee Flash Deal Deadline", type:"deadline", color:"#EF4444" },
   ],[]);
   const [calendarManualEvents,setCalendarManualEvents] = useState<any[]>(initialData?.calendarEvents?.length ? initialData.calendarEvents : DEFAULT_MANUAL_EVENTS);
-  const [calendarEventTypes,setCalendarEventTypes] = useState<any[]>(initialData?.calendarTypes?.length ? initialData.calendarTypes : DEFAULT_EVENT_TYPES);
+  const [calendarEventTypes,setCalendarEventTypes] = useState<any[]>(ensureRequiredCalendarTypes(initialData?.calendarTypes?.length ? initialData.calendarTypes : DEFAULT_EVENT_TYPES));
 
   // Lifted seasonal events state (Events & Seasons tab) — owned by App so edits survive tab switches
   const [seasonalEvents,setSeasonalEvents] = useState<any[]>(initialData?.seasonalEvents?.length ? initialData.seasonalEvents : INITIAL_SEASONAL);
@@ -8979,8 +8986,8 @@ export default function App({
       // Pass dateEnd for multi-day/multi-month seasonal ranges
       ...(e.calDateEnd ? { dateEnd:e.calDateEnd } : {}),
       title:e.name,
-      // Map seasonal type to closest DEFAULT_EVENT_TYPES id for filter
-      type: e.type==="holiday" ? "holiday" : e.type==="campaign" ? "campaign" : "task",
+      // Keep the actual event/season tag so Manage Tags and filters stay consistent
+      type: e.type || "seasonal",
       seasonalType:e.type,
       color:e.color,
       fromSeasonal:true,
@@ -9184,7 +9191,7 @@ export default function App({
     if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(parsed.checklistItems);
     if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
     if (Array.isArray(parsed?.calendarEvents)) setCalendarManualEvents(parsed.calendarEvents);
-    if (Array.isArray(parsed?.calendarTypes)) setCalendarEventTypes(parsed.calendarTypes);
+    if (Array.isArray(parsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(parsed.calendarTypes));
     if (Array.isArray(parsed?.seasonalEvents)) setSeasonalEvents(parsed.seasonalEvents);
   };
 
@@ -9323,6 +9330,14 @@ export default function App({
 
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
+  useEffect(() => {
+    setCalendarEventTypes((prev:any[])=>{
+      const next = ensureRequiredCalendarTypes(prev);
+      if(next.length===prev.length) return prev;
+      return next;
+    });
+  },[]);
+
   useEffect(() => { if (onStateChange) onStateChange({ seasonalEvents }); }, [seasonalEvents]);
 
   const applyRoute = (next:any={}) => {
