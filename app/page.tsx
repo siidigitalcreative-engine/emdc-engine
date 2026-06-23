@@ -639,6 +639,8 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     const compactQ = q.replace(/[^a-z0-9]+/g,"");
     const qLooksLikeSku = /[a-z]+[-_][a-z0-9_-]+/i.test(rawQ) || /\d/.test(rawQ);
     const normalizedTerms = q.split(/\s+/).map((term:string)=>term.trim()).filter((term:string)=>term.length>=2);
+    const tagSearchTerms = ["phaseout","phase out","phase-out","phase_out","clearance","launch","relaunch","campaign","seasonal","holiday","deadline"];
+    const qLooksLikeTag = tagSearchTerms.some((tag:string)=>tag.replace(/[^a-z0-9]+/g,"")===compactQ || tag.toLowerCase()===q);
 
     const normalizeCompact = (value:any) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
     const normalizeLoose = (value:any) => String(value || "").toLowerCase();
@@ -646,7 +648,10 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     const list = (skuStorage||[]).filter((s:any) => {
       const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
       const collectionName = getPickerCollection(s);
-      const tagText = getSkuTags(s).join(" ");
+      const directTagValues = getSkuTags(s).filter(Boolean);
+      const directTagText = directTagValues.join(" ");
+      const fallbackTagText = getSkuTagText(s);
+      const tagText = directTagText || fallbackTagText;
       const extraValues = Object.values(s.extraFields || {}).join(" ");
 
       if(brandFilter!=="all" && s.brandId !== brandFilter) return false;
@@ -673,8 +678,15 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       const productCompact = normalizeCompact(s.productName);
       const brandCompact = normalizeCompact(brandName);
       const collectionCompact = normalizeCompact(collectionName);
-      const tagCompact = normalizeCompact(tagText || getSkuTagText(s));
+      const tagCompact = normalizeCompact(tagText);
+      const directTagCompact = normalizeCompact(directTagText || fallbackTagText);
       const extraCompact = normalizeCompact(extraValues);
+
+      // Tag search should match actual SKU tags only.
+      // Example: "phase out" should NOT show all SKUs just because another hidden field loosely matches.
+      if(qLooksLikeTag){
+        return !!directTagCompact && (directTagCompact.includes(compactQ) || compactQ.includes(directTagCompact));
+      }
 
       // Strict search behavior:
       // While typing, show only rows that actually match the typed text.
@@ -693,12 +705,12 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       }
 
       return searchableMain.some((field:string)=>field.includes(q)) ||
-        [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact,extraCompact].some((field:string)=>field.includes(compactQ)) ||
+        [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact].some((field:string)=>field.includes(compactQ)) ||
         normalizedTerms.every((term:string)=>{
           const compactTerm = normalizeCompact(term);
           if(compactTerm.length < 2) return false;
           return searchableMain.some((field:string)=>field.includes(term)) ||
-            [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact,extraCompact].some((field:string)=>field.includes(compactTerm));
+            [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact].some((field:string)=>field.includes(compactTerm));
         });
     });
 
@@ -826,6 +838,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
                   <span style={{ fontFamily:"monospace",background:C.surfaceAlt,padding:"1px 5px",borderRadius:3 }}>{s.sku}</span>
                   {brand&&<span style={{ display:"flex",alignItems:"center",gap:3 }}><span style={{ width:6,height:6,borderRadius:"50%",background:brand.color,display:"inline-block",flexShrink:0 }}></span>{brand.name}</span>}
                   {collectionName&&<span style={{ background:C.surfaceAlt,padding:"1px 5px",borderRadius:3 }}>{collectionName}</span>}
+                  {getSkuTags(s).slice(0,2).map((tag:string)=><span key={tag} style={{ background:"#FFF7ED",color:"#C2410C",padding:"1px 5px",borderRadius:3,fontWeight:800 }}>{tag}</span>)}
                 </div>
               </div>
               <span style={{ fontSize:11,fontWeight:600,color:s.inventory===0?"#EF4444":C.faint,flexShrink:0 }}>{s.inventory===0?"No stock":s.inventory+" u"}</span>
