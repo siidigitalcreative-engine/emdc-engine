@@ -4913,54 +4913,62 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       );
     }
 
+
+    const dcUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
+    const normalizeDcUrl = (url:any) => {
+      const raw = String(url || "").trim();
+      if(!raw) return "";
+      return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    };
+    const extractDcLinks = (value:any) => {
+      const raw = String(value || "");
+      const found = raw.match(dcUrlRegex) || [];
+      return Array.from(new Set(found.map((item:string)=>item.trim()).filter(Boolean)));
+    };
+    const getSkuStorageRowByProduct = (product:any) => {
+      const skuValue = String(product?.sku || product?.skuCode || product?.value || "").trim().toLowerCase();
+      const productValue = String(product?.product || product?.productName || "").trim().toLowerCase();
+      return (skuStorage || []).find((sku:any)=>{
+        const skuCode = String(sku.sku || sku.skuCode || sku.value || "").trim().toLowerCase();
+        const productName = String(sku.productName || sku.product || "").trim().toLowerCase();
+        return (skuValue && skuCode===skuValue) || (productValue && productName===productValue);
+      });
+    };
+    const getDcProductLinks = (product:any) => {
+      const skuRow:any = getSkuStorageRowByProduct(product) || {};
+      const extraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
+      const linkSources = [
+        product.product,
+        product.productName,
+        product.sku,
+        product.skuCode,
+        product.brand,
+        product.collection,
+        skuRow.productName,
+        skuRow.sku,
+        skuRow.collection,
+        skuRow.category,
+        skuRow.link,
+        skuRow.url,
+        skuRow.image,
+        skuRow.imageUrl,
+        skuRow.productLink,
+        skuRow.reference,
+        ...extraValues,
+      ];
+      return Array.from(new Set(linkSources.flatMap((source:any)=>extractDcLinks(source))));
+    };
+
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [];
 
-      const dcUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
-      const normalizeDcUrl = (url:any) => {
-        const raw = String(url || "").trim();
-        if(!raw) return "";
-        return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-      };
-      const extractDcLinks = (value:any) => {
-        const raw = String(value || "");
-        const found = raw.match(dcUrlRegex) || [];
-        return Array.from(new Set(found.map((item:string)=>item.trim()).filter(Boolean)));
-      };
-      const getSkuStorageRowByProduct = (product:any) => {
-        const skuValue = String(product?.sku || "").trim().toLowerCase();
-        const productValue = String(product?.product || "").trim().toLowerCase();
-        return (skuStorage || []).find((sku:any)=>{
-          const skuCode = String(sku.sku || sku.skuCode || sku.value || "").trim().toLowerCase();
-          const productName = String(sku.productName || sku.product || "").trim().toLowerCase();
-          return (skuValue && skuCode===skuValue) || (productValue && productName===productValue);
-        });
-      };
       const getCampaignDigitalProductRows = (item:any) => {
         const baseProducts = Array.isArray(item.products) && item.products.length
           ? item.products
           : [{ product:item.product || "", sku:item.sku || "", brand:item.brand || "", collection:item.collection || "" }];
         return baseProducts.map((product:any)=>{
           const skuRow:any = getSkuStorageRowByProduct(product) || {};
-          const extraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
-          const linkSources = [
-            product.product,
-            product.sku,
-            product.brand,
-            product.collection,
-            skuRow.productName,
-            skuRow.sku,
-            skuRow.collection,
-            skuRow.category,
-            skuRow.link,
-            skuRow.url,
-            skuRow.image,
-            skuRow.imageUrl,
-            skuRow.productLink,
-            skuRow.reference,
-            ...extraValues,
-          ];
-          const links = Array.from(new Set(linkSources.flatMap((source:any)=>extractDcLinks(source))));
+          const links = getDcProductLinks(product);
           return {
             platform:item.platform || "All Platforms",
             brand:product.brand || skuRow.brand || item.brand || "",
@@ -5219,6 +5227,242 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     }
 
 
+
+    if(tab==="digital" && !isCampaignChecklist){
+      const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
+      const productIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
+      const sourceRows = productIntroRows.length ? productIntroRows : productRows.map((row:any)=>({
+        id:String(row.id || row.skuCode || row.sku || uid()),
+        sourceRowId:String(row.id || row.skuCode || row.sku || ""),
+        platform:"All Platforms",
+        brand:row.brand || "",
+        category:row.collection || row.category || "",
+        product:row.product || row.productName || "",
+        sku:row.skuCode || row.sku || "",
+        headline:"",
+        subheadline:"",
+        cta:"",
+        products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" }],
+        linkedEventContext:group.groupName || "Product Introduction",
+        createdAt:new Date().toISOString(),
+      }));
+      const copyProductIntroDigitalItem = async (item:any) => {
+        const output = [
+          "Platform", item.platform || "All Platforms", "",
+          "Brand", item.brand || "", "",
+          "Category", item.category || item.collection || "", "",
+          "Product", item.product || "", "",
+          "Headline", item.headline || "", "",
+          "Subheadline", item.subheadline || "", "",
+          "CTA", item.cta || "",
+        ].filter((line:any)=>String(line || "").trim()).join("\n");
+        try { await navigator.clipboard.writeText(output); } catch {}
+      };
+      const updateProductIntroDigitalItem = (id:string, patch:any) => {
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:nextRows,
+          generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
+      };
+      const deleteProductIntroDigitalItem = (id:string) => {
+        const nextRows = (productIntroRows.length ? productIntroRows : sourceRows).filter((row:any)=>row.id!==id);
+        updateAiWorkspace("digital",{ productIntroCreativeRows:nextRows, generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"), generatedAt:new Date().toISOString() });
+      };
+      const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], generatedText:"", generatedAt:"" });
+      const generateProductIntroDcImage = async (item:any) => {
+        const links = getDcProductLinks({ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }).map(normalizeDcUrl);
+        const prompt = [
+          "Create a premium ecommerce product introduction image based on this product row.",
+          item.imagePrompt ? `User image prompt instruction:\n${item.imagePrompt}` : "",
+          `Platform: ${item.platform || "All Platforms"}`,
+          `Brand: ${item.brand || ""}`,
+          `Category: ${item.category || item.collection || ""}`,
+          `Product: ${item.product || ""}`,
+          item.headline ? `Headline: ${item.headline}` : "",
+          item.subheadline ? `Subheadline: ${item.subheadline}` : "",
+          item.cta ? `CTA: ${item.cta}` : "",
+          links.length ? `Use these product image/reference links as visual references:\n${links.join("\n")}` : "",
+          "Keep the product accurate. Do not invent product details. Clean premium ecommerce layout.",
+        ].filter(Boolean).join("\n");
+        setCampaignDcGeneratingImageId(item.id);
+        try {
+          const res = await fetch("/api/ai/generate-image", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              prompt,
+              size:"1920x1920",
+              aspectRatio:"1:1",
+              watermark:false,
+              referenceImages:links,
+              referenceImageUrls:links,
+              outputCount:1,
+            }),
+          });
+          const raw = await res.text();
+          let result:any = {};
+          try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
+          if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
+          const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          updateProductIntroDigitalItem(item.id,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
+        } catch(err:any) {
+          updateProductIntroDigitalItem(item.id,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links });
+        } finally {
+          setCampaignDcGeneratingImageId("");
+        }
+      };
+
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+          <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Product Introduction Digital Creative</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Same card format as Campaign Digital Creative: product details, product links, prompt field, and AI image placeholder.</p>
+              </div>
+              <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{sourceRows.length} product{sourceRows.length!==1?"s":""}</span>
+                {productIntroRows.length>0&&<Btn xs variant="danger" onClick={clearProductIntroDigitalItems}>Clear DC</Btn>}
+              </div>
+            </div>
+          </div>
+
+          {sourceRows.length===0 ? (
+            <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No selected products yet. Add SKUs to this Product Introduction checklist group first.</p>
+            </div>
+          ) : (
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              {sourceRows.map((item:any)=>{
+                const links = getDcProductLinks({ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection });
+                return (
+                <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                  <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                    <div style={{ minWidth:0,flex:"1 1 360px" }}>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{item.product || "Product Row"}</p>
+                      <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>{[item.brand, item.category || item.collection, item.sku].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto",gap:6,width:isMobile?"100%":"auto" }}>
+                      <Btn xs variant="outline" onClick={()=>copyProductIntroDigitalItem(item)}>Copy</Btn>
+                      <Btn xs variant="danger" onClick={()=>deleteProductIntroDigitalItem(item.id)}>Delete</Btn>
+                    </div>
+                  </div>
+
+                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.35fr) minmax(260px,.65fr)",gap:12 }}>
+                    <div style={{ display:"flex",flexDirection:"column",gap:10,minWidth:0 }}>
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?220:300 }}>
+                          <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                            <thead>
+                              <tr style={{ background:C.surfaceAlt }}>
+                                {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                                  <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{item.platform || "All Platforms"}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.brand || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.category || item.collection || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{item.product || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{item.headline || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{item.subheadline || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{item.cta || ""}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Product Image Links</span>
+                          <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{links.length} link{links.length!==1?"s":""}</span>
+                        </div>
+                        <div style={{ maxHeight:150,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:10 }}>
+                          {links.length ? (
+                            <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                              {links.map((link:string,linkIdx:number)=>(
+                                <a key={`${link}-${linkIdx}`} href={normalizeDcUrl(link)} target="_blank" rel="noreferrer" style={{ fontSize:11,color:C.accent,fontWeight:750,textDecoration:"underline",textUnderlineOffset:2,wordBreak:"break-all" }}>{link}</a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p style={{ margin:0,fontSize:11,color:C.faint }}>No image/reference link found in SKU Storage for this product.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Image Prompt</span>
+                        </div>
+                        <div style={{ padding:10 }}>
+                          <textarea
+                            value={item.imagePrompt || ""}
+                            onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ imagePrompt:e.target.value })}
+                            placeholder="Add image direction for this card. Example: premium studio product ad, clean white background, product hero centered, soft shadows, no text overlay..."
+                            rows={isMobile?4:5}
+                            style={{ width:"100%",boxSizing:"border-box",minHeight:100,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
+                          />
+                          <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>This prompt is separate from the E-commerce listing prompt.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
+                      <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                        <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Image</span>
+                        <Btn xs onClick={()=>generateProductIntroDcImage(item)} disabled={campaignDcGeneratingImageId===item.id}>{campaignDcGeneratingImageId===item.id?"Generating...":"Generate Image"}</Btn>
+                      </div>
+                      <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
+                        {item.generatedImageUrl ? (
+                          <img
+                            src={item.generatedImageUrl}
+                            alt="Generated product introduction creative"
+                            onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.product || "Product Introduction Digital Creative" })}
+                            style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
+                          />
+                        ) : (
+                          <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
+                            <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
+                            <p style={{ margin:0,fontWeight:800,color:C.textSub }}>AI image placeholder</p>
+                            <p style={{ margin:"4px 0 0" }}>Uses the product links and image prompt as references when generating.</p>
+                            {item.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{item.generatedImageError}</p>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+          )}
+
+          <Modal open={!!campaignDcPreview} onClose={()=>setCampaignDcPreview(null)} title="AI Image Preview" width={820}>
+            {campaignDcPreview&&(
+              <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+                <img src={campaignDcPreview.url} alt="AI image preview" style={{ width:"100%",maxHeight:"70vh",objectFit:"contain",borderRadius:12,border:`1px solid ${C.border}`,background:C.bg }} />
+                <div style={{ padding:12,borderRadius:10,background:C.surfaceAlt,display:"grid",gap:8 }}>
+                  <div>
+                    <p style={{ margin:"0 0 6px",fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Prompt</p>
+                    <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{campaignDcPreview.prompt || "No prompt saved."}</p>
+                  </div>
+                </div>
+                <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                  <Btn variant="outline" onClick={()=>window.open(campaignDcPreview.url,"_blank","noopener,noreferrer")}>Open in New Tab</Btn>
+                </div>
+              </div>
+            )}
+          </Modal>
+        </div>
+      );
+    }
+
     if(tab==="ecommerce"){
       const catalogFiles = data.catalogFiles || [];
       const selectedSections = getSelectedEcommerceSections();
@@ -5410,6 +5654,26 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
                           <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Generated Output",data.generatedText,"Generated Output")} disabled={!data.generatedText}>Add to Overview</Btn>
+                          <Btn sm variant="outline" onClick={()=>{
+                            const rows = productRows.map((row:any)=>({
+                              id:uid(),
+                              sourceRowId:String(row.id || row.skuCode || row.sku || ""),
+                              platform:"All Platforms",
+                              brand:row.brand || "",
+                              category:row.collection || row.category || "",
+                              product:row.product || row.productName || "",
+                              sku:row.skuCode || row.sku || "",
+                              headline:"",
+                              subheadline:"",
+                              cta:"",
+                              imagePrompt:"",
+                              products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" }],
+                              linkedEventContext:group.groupName || "Product Introduction",
+                              createdAt:new Date().toISOString(),
+                            }));
+                            updateAiWorkspace("digital",{ productIntroCreativeRows:rows, generatedText:"", generatedAt:new Date().toISOString() });
+                            setActiveGroupTab("digital");
+                          }} disabled={!productRows.length}>Send to DC</Btn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                         </div>
                       </div>
