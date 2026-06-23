@@ -3337,6 +3337,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignHeadlineInstructionDraft,setCampaignHeadlineInstructionDraft] = useState("");
   const [campaignSubheadlineInstructionDraft,setCampaignSubheadlineInstructionDraft] = useState("");
   const [campaignCtaInstructionDraft,setCampaignCtaInstructionDraft] = useState("");
+  const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
 
   useEffect(()=>{
@@ -4448,7 +4449,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     "",
     "CTA",
     row.cta || "",
-  ].join("\\n").trim();
+  ].join("\n").trim();
 
   const requestEcommerceCampaignRowCopy = async (row:any, builder:any, theme:string) => {
     const customInstructions = String(builder.aiInstructions || "").trim();
@@ -4539,7 +4540,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const nextRows = rows.map((item:any)=>item.id===rowId ? generated : item);
       updateEcommerceCampaignBuilder({
         productRows:nextRows,
-        generatedText:nextRows.map((item:any)=>formatCampaignRowOutput(item)).filter(Boolean).join("\\n\\n---\\n\\n"),
+        generatedText:nextRows.map((item:any)=>formatCampaignRowOutput(item)).filter(Boolean).join("\n\n---\n\n"),
         generatedAt:new Date().toISOString(),
       });
     } catch (err:any) {
@@ -4571,7 +4572,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         generatedRows.push(generated);
       }
 
-      const combinedOutput = generatedRows.map((row:any)=>formatCampaignRowOutput(row)).join("\\n\\n---\\n\\n");
+      const combinedOutput = generatedRows.map((row:any)=>formatCampaignRowOutput(row)).join("\n\n---\n\n");
       updateEcommerceCampaignBuilder({
         productRows:generatedRows,
         generatedText:combinedOutput,
@@ -4593,13 +4594,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const addEcommerceCampaignRowToOverview = (row:any) => {
     const builder = getEcommerceCampaignBuilder();
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
+    const rowKey = String(row.id || row.productKey || row.product || uid());
     addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.product || "Product"} · ${row.platform || builder.platform} · ${theme}`);
+    setCampaignOverviewAddedIds((prev:string[])=>Array.from(new Set([...prev,rowKey])));
+    window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
 
   const addEcommerceCampaignToOverview = () => {
     const builder = getEcommerceCampaignBuilder();
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
-    addToOverview("E-commerce","Campaign Copy",builder.generatedText || "",`${builder.platform} · ${theme}`);
+    addToOverview("E-commerce","Campaign Copy",getEcommerceCampaignCombinedOutput() || builder.generatedText || "",`${builder.platform} · ${theme}`);
   };
 
   const getEcommerceCampaignCombinedOutput = () => {
@@ -4622,7 +4626,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     updateEcommerceCampaignBuilder({
       savedOutputs:[{
         id:uid(),
-        title:`${row.product || "Campaign Copy"} ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+        title:`Campaign Copy ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
         text:output,
         platform:row.platform || builder.platform,
         theme,
@@ -5087,7 +5091,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                                             <Btn xs onClick={()=>saveEcommerceCampaignRowOutput(row)}>Save Output</Btn>
                                             <Btn xs variant="outline" onClick={()=>copyEcommerceCampaignRowOutput(row)}>Copy</Btn>
-                                            <Btn xs variant="outline" onClick={()=>addEcommerceCampaignRowToOverview(row)}>Add to Overview</Btn>
+                                            <Btn xs variant={campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>addEcommerceCampaignRowToOverview(row)}>{campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"Added ✓":"Add to Overview"}</Btn>
                                           </div>
                                         )}
                                       </div>
