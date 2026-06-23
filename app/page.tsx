@@ -4914,6 +4914,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [];
+      const savedCampaignDcImages = Array.isArray(data.savedImageOutputs) ? data.savedImageOutputs : [];
 
       const dcUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
       const normalizeDcUrl = (url:any) => {
@@ -5050,6 +5051,32 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         }
       };
 
+      const saveCampaignDcImageOutput = (item:any) => {
+        if(!item.generatedImageUrl) return;
+        if(savedCampaignDcImages.some((saved:any)=>saved.url===item.generatedImageUrl)) return;
+        const saved = {
+          id:uid(),
+          title:item.title || item.product || "Campaign DC Image",
+          url:item.generatedImageUrl,
+          prompt:item.generatedImagePrompt || item.imagePrompt || "",
+          imageLinks:item.imageLinks || [],
+          createdAt:new Date().toISOString(),
+        };
+        updateAiWorkspace("digital",{ savedImageOutputs:[saved,...savedCampaignDcImages].slice(0,30) });
+      };
+
+      const deleteCampaignDcImageOutput = (item:any) => {
+        updateCampaignDigitalItem(item.id,{
+          generatedImageUrl:"",
+          generatedImageAt:"",
+          generatedImageError:"",
+        });
+      };
+
+      const deleteSavedCampaignDcImageOutput = (id:string) => {
+        updateAiWorkspace("digital",{ savedImageOutputs:savedCampaignDcImages.filter((item:any)=>item.id!==id) });
+      };
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -5160,7 +5187,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
                       <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                         <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Image</span>
-                        <Btn xs onClick={()=>generateCampaignDcImage(item)} disabled={campaignDcGeneratingImageId===item.id}>{campaignDcGeneratingImageId===item.id?"Generating...":"Generate Image"}</Btn>
+                        <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                          {item.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveCampaignDcImageOutput(item)} disabled={savedCampaignDcImages.some((saved:any)=>saved.url===item.generatedImageUrl)}>{savedCampaignDcImages.some((saved:any)=>saved.url===item.generatedImageUrl)?"Saved":"Save Output"}</Btn>}
+                          {item.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteCampaignDcImageOutput(item)}>Delete</Btn>}
+                          <Btn xs onClick={()=>generateCampaignDcImage(item)} disabled={campaignDcGeneratingImageId===item.id}>{campaignDcGeneratingImageId===item.id?"Generating...":"Generate Image"}</Btn>
+                        </div>
                       </div>
                       <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
                         {item.generatedImageUrl ? (
@@ -5179,6 +5210,28 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 </div>
                 );
               })}
+              {savedCampaignDcImages.length>0&&(
+                <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                    <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Saved AI Image Outputs</h4>
+                    <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{savedCampaignDcImages.length} saved</span>
+                  </div>
+                  <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:10 }}>
+                    {savedCampaignDcImages.map((saved:any)=>(
+                      <div key={saved.id} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <img src={saved.url} alt={saved.title || "Saved image"} style={{ display:"block",width:"100%",aspectRatio:"1 / 1",objectFit:"cover",background:"#fff" }} />
+                        <div style={{ padding:9,display:"flex",flexDirection:"column",gap:6 }}>
+                          <p style={{ margin:0,fontSize:11,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{saved.title || "Saved Image"}</p>
+                          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6 }}>
+                            <Btn xs variant="outline" onClick={()=>window.open(saved.url,"_blank","noopener,noreferrer")}>Open</Btn>
+                            <Btn xs variant="danger" onClick={()=>deleteSavedCampaignDcImageOutput(saved.id)}>Delete</Btn>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -5201,6 +5254,30 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const campaignHasOutput = !!getEcommerceCampaignCombinedOutput().trim();
             const ecommerceTabMode = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
       const isCampaignChecklist = ecommerceTabMode.includes("campaign");
+
+      const sendProductIntroEcommerceToDigitalCreative = () => {
+        const output = String(data.generatedText || "").trim();
+        if(!output) return;
+        const productSummary = productRows.slice(0,20).map((row:any)=>[
+          row.brand || "No brand",
+          row.collection || "No category",
+          row.product || row.productName || "",
+          row.skuCode || row.sku || "",
+        ].filter(Boolean).join(" · ")).filter(Boolean).join("\n");
+        const imagePrompt = [
+          "Use this Product Introduction e-commerce listing as the source for digital creative production.",
+          productSummary ? `Selected products:\n${productSummary}` : "",
+          output,
+        ].filter(Boolean).join("\n\n");
+        updateAiWorkspace("digital",{
+          textPrompt:output,
+          generatedText:output,
+          imagePrompt,
+          sourceEcommerceOutput:output,
+          sentFromEcommerceAt:new Date().toISOString(),
+        });
+        setActiveGroupTab("digital");
+      };
 
       if(!isCampaignChecklist){
         return (
@@ -5376,6 +5453,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
+                          <Btn sm variant="outline" onClick={sendProductIntroEcommerceToDigitalCreative} disabled={!data.generatedText}>Send to DC</Btn>
                           <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Generated Output",data.generatedText,"Generated Output")} disabled={!data.generatedText}>Add to Overview</Btn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                         </div>
