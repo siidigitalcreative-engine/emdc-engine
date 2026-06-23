@@ -7521,21 +7521,62 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
   const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")}${skuTableEditMode?" 90px":""}`;
   const skuTableMinWidth = Math.max(760,(skuTableEditMode?132:0)+(skuTableColumns.length*140));
+
+  const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
+  const normalizeSkuCellUrl = (url:any) => {
+    const raw = String(url || "").trim();
+    if(!raw) return "";
+    return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  };
+  const renderClickableSkuCellText = (value:any, emptyText="—", style:any={}) => {
+    const textValue = String(value || "");
+    if(!textValue.trim()) return <span style={{ ...style,color:C.faint }}>{emptyText}</span>;
+    const parts:any[] = [];
+    let lastIndex = 0;
+    textValue.replace(skuCellUrlRegex,(match:string, ...args:any[])=>{
+      const index = args[args.length-2];
+      if(index>lastIndex) parts.push(textValue.slice(lastIndex,index));
+      parts.push({ type:"link", text:match });
+      lastIndex = index + match.length;
+      return match;
+    });
+    if(lastIndex<textValue.length) parts.push(textValue.slice(lastIndex));
+    return (
+      <span style={style}>
+        {parts.map((part:any,idx:number)=>typeof part==="string" ? (
+          <span key={`text-${idx}`}>{part}</span>
+        ) : (
+          <a
+            key={`link-${idx}`}
+            href={normalizeSkuCellUrl(part.text)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e:any)=>e.stopPropagation()}
+            style={{ color:C.accent,fontWeight:800,textDecoration:"underline",textUnderlineOffset:2,wordBreak:"break-all" }}
+            title={normalizeSkuCellUrl(part.text)}
+          >
+            {part.text}
+          </a>
+        ))}
+      </span>
+    );
+  };
+
   const renderSkuDesktopCell = (s:any, col:any, brand:any, st:any) => {
-    if(col.key==="productName") return <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>;
-    if(col.key==="sku") return <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>;
-    if(col.key==="brand") return <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} /><span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{brand.name}</span></div>}</div>;
+    if(col.key==="productName") return renderClickableSkuCellText(s.productName,"—",{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 });
+    if(col.key==="sku") return renderClickableSkuCellText(s.sku,"—",{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
+    if(col.key==="brand") return <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} />{renderClickableSkuCellText(brand.name,"—",{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" })}</div>}</div>;
     if(col.key==="collection") return skuTableEditMode
       ? <input value={s.collection||""} onChange={e=>setSkuCollectionValue(s.id,e.target.value)} placeholder="Uncategorized"
           style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />
-      : <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection||"Uncategorized"}</span>;
+      : renderClickableSkuCellText(s.collection||"Uncategorized","Uncategorized",{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
     if(col.key==="inventory") return <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>;
     if(col.key==="status") return <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>;
     const extraValue = getSkuExtraValue(s,col);
     return skuTableEditMode
       ? <input value={extraValue} onChange={e=>setSkuExtraValue(s.id,col,e.target.value)} placeholder="—"
           style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />
-      : <span style={{ fontSize:12,color:extraValue?C.textSub:C.faint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{extraValue||"—"}</span>;
+      : renderClickableSkuCellText(extraValue,"—",{ fontSize:12,color:extraValue?C.textSub:C.faint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
   };
 
   const BrandSidebar = () => (
@@ -7737,8 +7778,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                         <div key={s.id} className="emdc-row" style={{ padding:"14px 16px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
                           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
                             <div style={{ minWidth:0,flex:1 }}>
-                              <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.productName}</p>
-                              <span style={{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4 }}>{s.sku}</span>
+                              <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{renderClickableSkuCellText(s.productName,"—",{ color:C.text })}</p>
+                              {renderClickableSkuCellText(s.sku,"—",{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4,display:"inline-block" })}
                             </div>
                             {skuTableEditMode&&<div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center" }}>
                               <span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint }}>&#8942;&#8942;</span>
