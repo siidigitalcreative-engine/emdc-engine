@@ -3589,8 +3589,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const getEcommerceOutputSections = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
-    const sections = Array.isArray(data.outputSections) ? data.outputSections.filter(Boolean) : [];
-    return sections.length ? sections : [...defaultEcommerceOutputSections];
+    // Important: if outputSections exists as an empty array, respect it.
+    // That means the user intentionally deleted all sections.
+    if(Array.isArray(data.outputSections)){
+      return data.outputSections.map((s:any)=>String(s||"").trim()).filter(Boolean);
+    }
+    return [...defaultEcommerceOutputSections];
   };
 
   const ecommerceOutputSections = getEcommerceOutputSections();
@@ -3613,14 +3617,18 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const getSelectedEcommerceSections = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
     const all = getEcommerceOutputSections();
-    const selected = Array.isArray(data.selectedSections) ? data.selectedSections.filter((s:string)=>all.includes(s)) : [];
-    return selected.length ? selected : [...all];
+    // Important: if selectedSections exists as an empty array, respect it.
+    // That means the user intentionally cleared all selected sections.
+    if(Array.isArray(data.selectedSections)){
+      return data.selectedSections.filter((s:string)=>all.includes(s));
+    }
+    return [...all];
   };
 
   const saveEcommerceSections = (sections:string[], selected?:string[], instructionsPatch?:any) => {
     const cleanSections = Array.from(new Set((sections||[]).map((s:any)=>String(s||"").trim()).filter(Boolean)));
-    const nextSections = cleanSections.length ? cleanSections : [...defaultEcommerceOutputSections];
-    const currentSelected = selected || getSelectedEcommerceSections();
+    const nextSections = cleanSections;
+    const currentSelected = Array.isArray(selected) ? selected : getSelectedEcommerceSections();
     const nextSelected = currentSelected.filter((s:string)=>nextSections.includes(s));
     const currentInstructions = instructionsPatch || getEcommerceSectionInstructions();
     const nextInstructions:any = {};
@@ -3629,8 +3637,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     });
     updateAiWorkspace("ecommerce",{
       outputSections:nextSections,
-      selectedSections:nextSelected.length ? nextSelected : [...nextSections],
+      selectedSections:nextSelected,
       sectionInstructions:nextInstructions,
+      textPrompt:buildEcommercePrompt(nextSections,nextSelected,nextInstructions),
     });
   };
 
@@ -3658,7 +3667,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const setAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[...getEcommerceOutputSections()] });
-  const clearAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[] });
+  const clearAllEcommerceSections = () => {
+    const sections = getEcommerceOutputSections();
+    updateAiWorkspace("ecommerce",{
+      selectedSections:[],
+      textPrompt:buildEcommercePrompt(sections,[],getEcommerceSectionInstructions()),
+    });
+  };
 
   const addEcommerceSection = () => {
     const label = newEcommerceSection.trim();
