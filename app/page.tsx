@@ -4817,41 +4817,46 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               {campaignCreativeRows.map((item:any)=>(
                 <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                  <div style={{ padding:isMobile?10:12,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
-                    <div style={{ minWidth:0,flex:"1 1 360px" }}>
-                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{item.title || "Campaign Product Row"}</p>
-                      <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>{item.platform || "Platform"} · {item.linkedEventContext || "Campaign"}</p>
-                    </div>
-                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"auto auto auto",gap:6,width:isMobile?"100%":"auto" }}>
-                      <Btn xs variant="outline" onClick={()=>copyCampaignDigitalItem(item)}>Copy</Btn>
-                      <Btn xs variant="outline" onClick={()=>addCampaignDigitalItemToOverview(item)}>Add to Overview</Btn>
-                      <Btn xs variant="danger" onClick={()=>deleteCampaignDigitalItem(item.id)}>Delete</Btn>
+                  <div style={{ padding:isMobile?12:14,display:"flex",flexDirection:"column",gap:8 }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                      <div style={{ minWidth:0,flex:"1 1 360px" }}>
+                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{item.title || "Campaign Product Row"}</p>
+                        <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>
+                          {[item.brand, item.collection, item.sku].filter(Boolean).join(" · ")}
+                        </p>
+                        {Array.isArray(item.products)&&item.products.length>1&&(
+                          <p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{item.products.length} products inside this row</p>
+                        )}
+                        <p style={{ margin:"4px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>
+                          {item.linkedEventContext || "Campaign context"}
+                        </p>
+                      </div>
+                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"auto auto auto",gap:6,width:isMobile?"100%":"auto" }}>
+                        <Btn xs variant="outline" onClick={()=>copyCampaignDigitalItem(item)}>Copy</Btn>
+                        <Btn xs variant="outline" onClick={()=>addCampaignDigitalItemToOverview(item)}>Add to Overview</Btn>
+                        <Btn xs variant="danger" onClick={()=>deleteCampaignDigitalItem(item.id)}>Delete</Btn>
+                      </div>
                     </div>
                   </div>
 
-                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10 }}>
-                    <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
-                      <p style={{ margin:"0 0 6px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Product Details</p>
-                      <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
-                        {[
-                          item.product,
-                          item.sku ? `SKU: ${item.sku}` : "",
-                          item.brand ? `Brand: ${item.brand}` : "",
-                          item.collection ? `Collection: ${item.collection}` : "",
-                          item.discount ? `Discount / Offer: ${item.discount}` : "",
-                          item.mechanics ? `Mechanics / Notes: ${item.mechanics}` : "",
-                        ].filter(Boolean).join("\n")}
-                      </p>
+                  <div style={{ margin:"0 10px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                    <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                      <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
+                      <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Sent from E-commerce</span>
                     </div>
-                    <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
-                      <p style={{ margin:"0 0 6px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output</p>
-                      <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
-                        {[
-                          item.headline ? `Headline: ${item.headline}` : "",
-                          item.subheadline ? `Subheadline: ${item.subheadline}` : "",
-                          item.cta ? `CTA: ${item.cta}` : "",
-                        ].filter(Boolean).join("\n") || "No generated copy sent."}
-                      </p>
+                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
+                      <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
+                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
+                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{item.headline || "No headline sent."}</p>
+                      </div>
+                      <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
+                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
+                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{item.subheadline || "No subheadline sent."}</p>
+                      </div>
+                      <div style={{ padding:10 }}>
+                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
+                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{item.cta || "No CTA sent."}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
