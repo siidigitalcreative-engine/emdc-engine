@@ -234,9 +234,21 @@ const TI = ({ value, onChange, placeholder, type="text", style={} }) => (
 const DateInput = ({ value, onChange, style={} }) => {
   const recurring = typeof value === "string" && value.startsWith("monthly:");
   const [mode,setMode]=useState(recurring?"monthly":"date");
+  const dateInputRef = useRef<any>(null);
   const monthlyDays = recurring ? value.replace("monthly:","").split(",").filter(Boolean) : ["15","30"];
   const [customDay,setCustomDay] = useState("");
   useEffect(()=>{ if(typeof value==="string") setMode(value.startsWith("monthly:")?"monthly":"date"); },[value]);
+
+  const openNativeDatePicker = () => {
+    const el:any = dateInputRef.current;
+    if(!el) return;
+    try {
+      if(typeof el.showPicker === "function") el.showPicker();
+      else el.focus();
+    } catch {
+      try { el.focus(); } catch {}
+    }
+  };
 
   const toggleDay = day => {
     const has = monthlyDays.includes(day);
@@ -258,8 +270,17 @@ const DateInput = ({ value, onChange, style={} }) => {
         <option value="monthly">Recurring monthly</option>
       </Select>
       {mode==="date" && (
-        <input type="date" value={recurring?"":(value||"")} onChange={e=>onChange(e.target.value)}
-        style={{ flex:1,height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",WebkitAppearance:"none",appearance:"none",colorScheme:"light",fontFamily:"inherit" }} />
+        <div onClick={openNativeDatePicker} style={{ flex:1,position:"relative",cursor:"pointer" }}>
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={recurring?"":(value||"")}
+            onClick={openNativeDatePicker}
+            onFocus={openNativeDatePicker}
+            onChange={e=>onChange(e.target.value)}
+            style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",colorScheme:"light",fontFamily:"inherit",boxSizing:"border-box",cursor:"pointer" }}
+          />
+        </div>
       )}
     </div>
     {mode==="monthly" && (
