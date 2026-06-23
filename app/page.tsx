@@ -4897,6 +4897,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     const workspaceTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
     const isCampaignChecklist = workspaceTypeLabel.includes("campaign");
+    const isProductIntroductionChecklist = workspaceTypeLabel.includes("product") && workspaceTypeLabel.includes("introduction");
 
     if(tab==="marketing" && isCampaignChecklist){
       return (
@@ -5238,6 +5239,276 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       );
     }
 
+
+    if(tab==="digital" && isProductIntroductionChecklist){
+      const savedProductIntroImages = Array.isArray(data.savedImageOutputs) ? data.savedImageOutputs : [];
+
+      const piUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
+      const normalizePiUrl = (url:any) => {
+        const raw = String(url || "").trim();
+        if(!raw) return "";
+        return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      };
+      const extractPiLinks = (value:any) => {
+        const raw = String(value || "");
+        const found = raw.match(piUrlRegex) || [];
+        return Array.from(new Set(found.map((item:string)=>item.trim()).filter(Boolean)));
+      };
+      const getProductIntroSkuRow = (row:any) => {
+        const skuValue = String(row?.skuCode || row?.sku || "").trim().toLowerCase();
+        const productValue = String(row?.product || row?.productName || "").trim().toLowerCase();
+        return (skuStorage || []).find((sku:any)=>{
+          const skuCode = String(sku.sku || sku.skuCode || sku.value || "").trim().toLowerCase();
+          const productName = String(sku.productName || sku.product || "").trim().toLowerCase();
+          return (skuValue && skuCode===skuValue) || (productValue && productName===productValue);
+        });
+      };
+      const productIntroRows = productRows.map((row:any)=>{
+        const skuRow:any = getProductIntroSkuRow(row) || {};
+        const extraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
+        const linkSources = [
+          row.product,
+          row.productName,
+          row.skuCode,
+          row.sku,
+          row.brand,
+          row.collection,
+          skuRow.productName,
+          skuRow.sku,
+          skuRow.collection,
+          skuRow.category,
+          skuRow.link,
+          skuRow.url,
+          skuRow.image,
+          skuRow.imageUrl,
+          skuRow.productLink,
+          skuRow.reference,
+          ...extraValues,
+        ];
+        const links = Array.from(new Set(linkSources.flatMap((source:any)=>extractPiLinks(source))));
+        return {
+          platform:"Marketplace",
+          brand:row.brand || skuRow.brand || "",
+          category:row.collection || skuRow.collection || skuRow.category || "",
+          product:row.product || row.productName || skuRow.productName || "",
+          sku:row.skuCode || row.sku || skuRow.sku || "",
+          headline:"",
+          subheadline:"",
+          cta:"",
+          links,
+        };
+      });
+      const allProductIntroLinks = Array.from(new Set(productIntroRows.flatMap((row:any)=>row.links || [])));
+      const updateProductIntroDigital = (patch:any) => updateAiWorkspace("digital",{ ...data, ...patch });
+
+      const generateProductIntroImage = async () => {
+        const imageLinks = allProductIntroLinks.map(normalizePiUrl);
+        const prompt = [
+          "Create a premium ecommerce product introduction image based on these products.",
+          data.imagePrompt ? `User image prompt instruction:\n${data.imagePrompt}` : "",
+          data.sourceEcommerceOutput ? `E-commerce listing source:\n${data.sourceEcommerceOutput}` : "",
+          productIntroRows.length ? `Product details:\n${productIntroRows.map((row:any)=>[
+            `Brand: ${row.brand || ""}`,
+            `Category: ${row.category || ""}`,
+            `Product: ${row.product || ""}`,
+            `SKU: ${row.sku || ""}`,
+          ].join(" | ")).join("\n")}` : "",
+          imageLinks.length ? `Use these product image/reference links as visual references:\n${imageLinks.join("\n")}` : "",
+          "Keep the product accurate. Do not invent product details. Clean premium ecommerce layout.",
+        ].filter(Boolean).join("\n\n");
+
+        updateProductIntroDigital({ imageGenerating:true, generatedImageError:"" });
+        try {
+          const res = await fetch("/api/ai/generate-image", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              prompt,
+              size:"1920x1920",
+              aspectRatio:"1:1",
+              watermark:false,
+              referenceImages:imageLinks,
+              referenceImageUrls:imageLinks,
+              outputCount:1,
+            }),
+          });
+          const raw = await res.text();
+          let result:any = {};
+          try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
+          if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
+          const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          updateProductIntroDigital({
+            imageGenerating:false,
+            generatedImageUrl:url,
+            generatedImagePrompt:prompt,
+            imageLinks,
+            generatedImageAt:new Date().toISOString(),
+            generatedImageError:"",
+          });
+        } catch (err:any) {
+          updateProductIntroDigital({
+            imageGenerating:false,
+            generatedImageError:err?.message || "Image generation failed.",
+            generatedImagePrompt:prompt,
+            imageLinks,
+          });
+        }
+      };
+
+      const saveProductIntroImageOutput = () => {
+        if(!data.generatedImageUrl) return;
+        if(savedProductIntroImages.some((saved:any)=>saved.url===data.generatedImageUrl)) return;
+        const saved = {
+          id:uid(),
+          title:`Product Introduction Image ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+          url:data.generatedImageUrl,
+          prompt:data.generatedImagePrompt || data.imagePrompt || "",
+          imageLinks:data.imageLinks || [],
+          createdAt:new Date().toISOString(),
+        };
+        updateProductIntroDigital({ savedImageOutputs:[saved,...savedProductIntroImages].slice(0,30) });
+      };
+      const deleteProductIntroImageOutput = () => updateProductIntroDigital({ generatedImageUrl:"", generatedImageAt:"", generatedImageError:"" });
+      const deleteSavedProductIntroImageOutput = (id:string) => updateProductIntroDigital({ savedImageOutputs:savedProductIntroImages.filter((item:any)=>item.id!==id) });
+
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+          <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Product Introduction Digital Creative</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Same layout as Campaign Digital Creative, with product details, SKU Storage image links, prompt input, and AI image generation.</p>
+              </div>
+              <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{productIntroRows.length} product{productIntroRows.length!==1?"s":""}</span>
+            </div>
+          </div>
+
+          {productIntroRows.length===0 ? (
+            <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No selected products yet. Add products to this checklist group first, or send the E-commerce output to DC.</p>
+            </div>
+          ) : (
+            <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+              <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.35fr) minmax(260px,.65fr)",gap:12 }}>
+                <div style={{ display:"flex",flexDirection:"column",gap:10,minWidth:0 }}>
+                  <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                    <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?260:340 }}>
+                      <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                        <thead>
+                          <tr style={{ background:C.surfaceAlt }}>
+                            {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                              <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productIntroRows.map((row:any,idx:number)=>(
+                            <tr key={`${row.sku || row.product || "product"}-${idx}`} style={{ background:idx%2?C.surface:C.bg }}>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{row.subheadline || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                    <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                      <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Product Image Links</span>
+                      <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{allProductIntroLinks.length} link{allProductIntroLinks.length!==1?"s":""}</span>
+                    </div>
+                    <div style={{ maxHeight:170,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:10,display:"flex",flexDirection:"column",gap:8 }}>
+                      {productIntroRows.map((row:any,idx:number)=>(
+                        <div key={`${row.sku || row.product || "links"}-${idx}`} style={{ padding:9,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface }}>
+                          <p style={{ margin:"0 0 5px",fontSize:11,fontWeight:900,color:C.text }}>{row.product || row.sku || `Product ${idx+1}`}</p>
+                          {row.links.length ? (
+                            <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                              {row.links.map((link:string,linkIdx:number)=>(
+                                <a key={`${link}-${linkIdx}`} href={normalizePiUrl(link)} target="_blank" rel="noreferrer" style={{ fontSize:11,color:C.accent,fontWeight:750,textDecoration:"underline",textUnderlineOffset:2,wordBreak:"break-all" }}>{link}</a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p style={{ margin:0,fontSize:11,color:C.faint }}>No image/reference link found in SKU Storage for this product.</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                    <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Image Prompt</span>
+                    </div>
+                    <div style={{ padding:10 }}>
+                      <textarea
+                        value={data.imagePrompt || ""}
+                        onChange={(e:any)=>updateProductIntroDigital({ imagePrompt:e.target.value })}
+                        placeholder="Add image direction. Example: premium studio product ad, clean white background, product hero centered, soft shadows, no text overlay..."
+                        rows={isMobile?4:5}
+                        style={{ width:"100%",boxSizing:"border-box",minHeight:100,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
+                      />
+                      <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>This prompt is combined with the product table, e-commerce output, and product image links.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
+                  <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                    <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Image</span>
+                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                      {data.generatedImageUrl&&<Btn xs variant="outline" onClick={saveProductIntroImageOutput} disabled={savedProductIntroImages.some((saved:any)=>saved.url===data.generatedImageUrl)}>{savedProductIntroImages.some((saved:any)=>saved.url===data.generatedImageUrl)?"Saved":"Save Output"}</Btn>}
+                      {data.generatedImageUrl&&<Btn xs variant="danger" onClick={deleteProductIntroImageOutput}>Delete</Btn>}
+                      <Btn xs onClick={generateProductIntroImage} disabled={!!data.imageGenerating}>{data.imageGenerating?"Generating...":"Generate Image"}</Btn>
+                    </div>
+                  </div>
+                  <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
+                    {data.generatedImageUrl ? (
+                      <img src={data.generatedImageUrl} alt="Generated product intro creative" style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}` }} />
+                    ) : (
+                      <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
+                        <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
+                        <p style={{ margin:0,fontWeight:800,color:C.textSub }}>AI image placeholder</p>
+                        <p style={{ margin:"4px 0 0" }}>Uses product links, e-commerce output, and image prompt when generating.</p>
+                        {data.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{data.generatedImageError}</p>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {savedProductIntroImages.length>0&&(
+                <div style={{ padding:isMobile?12:14,borderTop:`1px solid ${C.border}` }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                    <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Saved AI Image Outputs</h4>
+                    <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{savedProductIntroImages.length} saved</span>
+                  </div>
+                  <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:10 }}>
+                    {savedProductIntroImages.map((saved:any)=>(
+                      <div key={saved.id} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <img src={saved.url} alt={saved.title || "Saved image"} style={{ display:"block",width:"100%",aspectRatio:"1 / 1",objectFit:"cover",background:"#fff" }} />
+                        <div style={{ padding:9,display:"flex",flexDirection:"column",gap:6 }}>
+                          <p style={{ margin:0,fontSize:11,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{saved.title || "Saved Image"}</p>
+                          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6 }}>
+                            <Btn xs variant="outline" onClick={()=>window.open(saved.url,"_blank","noopener,noreferrer")}>Open</Btn>
+                            <Btn xs variant="danger" onClick={()=>deleteSavedProductIntroImageOutput(saved.id)}>Delete</Btn>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     if(tab==="ecommerce"){
       const catalogFiles = data.catalogFiles || [];
