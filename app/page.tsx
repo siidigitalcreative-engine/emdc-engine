@@ -3709,10 +3709,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(editingEcommerceSection===section) cancelEditEcommerceSection();
   };
 
-  const buildEcommercePrompt = () => {
+  const buildEcommercePrompt = (sectionsOverride?:string[], selectedOverride?:string[], instructionsOverride?:any) => {
     const mappedProducts = productRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||""} | Product: ${row.product||""} | SKU: ${row.skuCode||""}`).join("\n");
-    const selectedSections = getSelectedEcommerceSections();
-    const sectionInstructions = getEcommerceSectionInstructions();
+    const allSections = Array.isArray(sectionsOverride) && sectionsOverride.length ? sectionsOverride : getEcommerceOutputSections();
+    const selectedSource = Array.isArray(selectedOverride) ? selectedOverride : getSelectedEcommerceSections();
+    const selectedSections = selectedSource.filter((section:string)=>allSections.includes(section));
+    const sectionInstructions = instructionsOverride || getEcommerceSectionInstructions();
     const structureBlock = selectedSections.map((section:string)=>{
       const instruction = String(sectionInstructions?.[section] || "").trim();
       return instruction ? `${section}\nInstruction: ${instruction}` : section;
@@ -4132,7 +4134,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               />
               {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",gap:8,justifyContent:isMobile?"stretch":"flex-end",marginTop:10 }}>
-                <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt() })}>Save Prompt</Btn>
+                <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Save Prompt</Btn>
                 <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
               </div>
             </div>
@@ -4143,7 +4145,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
                   <Btn xs variant="outline" onClick={setAllEcommerceSections}>Select All</Btn>
                   <Btn xs variant="outline" onClick={clearAllEcommerceSections}>Clear All</Btn>
-                  <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt() })}>Save Changes</Btn>
+                  <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Save Changes</Btn>
                 </div>
               </div>
 
