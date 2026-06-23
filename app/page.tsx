@@ -4078,6 +4078,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       productRows: Array.isArray(builder.productRows) ? builder.productRows : [],
       generatedText: builder.generatedText || "",
       generatedAt: builder.generatedAt || "",
+      savedOutputs: Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [],
     };
   };
 
@@ -4296,7 +4297,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const builder = getEcommerceCampaignBuilder();
     const rows = getEcommerceCampaignRows();
     const row = rows.find((item:any)=>item.id===rowId);
-    const theme = builder.theme==="Custom" ? builder.customTheme.trim() : builder.theme;
+    const theme = String(builder.theme || "").trim();
 
     if(!row){
       setAiError((p:any)=>({...p,ecommerceCampaign:"Please add a product row first."}));
@@ -4328,7 +4329,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const generateEcommerceCampaignAssets = async () => {
     const builder = getEcommerceCampaignBuilder();
     const campaignRows = getEcommerceCampaignRows();
-    const theme = builder.theme==="Custom" ? builder.customTheme.trim() : builder.theme;
+    const theme = String(builder.theme || "").trim();
 
     if(!campaignRows.length){
       setAiError((p:any)=>({...p,ecommerceCampaign:"Please add at least one mapped product row."}));
@@ -4372,14 +4373,49 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const addEcommerceCampaignRowToOverview = (row:any) => {
     const builder = getEcommerceCampaignBuilder();
-    const theme = builder.theme==="Custom" ? builder.customTheme : builder.theme;
+    const theme = String(builder.theme || "Campaign").trim();
     addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.product || "Product"} · ${builder.platform} · ${theme}`);
   };
 
   const addEcommerceCampaignToOverview = () => {
     const builder = getEcommerceCampaignBuilder();
-    const theme = builder.theme==="Custom" ? builder.customTheme : builder.theme;
+    const theme = String(builder.theme || "Campaign").trim();
     addToOverview("E-commerce","Campaign Copy",builder.generatedText || "",`${builder.platform} · ${theme}`);
+  };
+
+  const getEcommerceCampaignCombinedOutput = () => {
+    const rows = getEcommerceCampaignRows();
+    const rowOutput = rows
+      .filter((row:any)=>row.headline || row.subheadline || row.cta)
+      .map((row:any)=>formatCampaignRowOutput(row))
+      .filter(Boolean)
+      .join("\n\n---\n\n");
+    const builder = getEcommerceCampaignBuilder();
+    return rowOutput || String(builder.generatedText || "");
+  };
+
+  const saveEcommerceCampaignOutput = () => {
+    const builder = getEcommerceCampaignBuilder();
+    const output = getEcommerceCampaignCombinedOutput().trim();
+    if(!output) return;
+    const theme = String(builder.theme || "Campaign").trim();
+    const saved = Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [];
+    updateEcommerceCampaignBuilder({
+      savedOutputs:[{
+        id:uid(),
+        title:`Campaign Copy ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+        text:output,
+        platform:builder.platform,
+        theme,
+        createdAt:new Date().toISOString(),
+      },...saved].slice(0,20),
+    });
+  };
+
+  const deleteEcommerceCampaignSavedOutput = (id:string) => {
+    const builder = getEcommerceCampaignBuilder();
+    const saved = Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [];
+    updateEcommerceCampaignBuilder({ savedOutputs:saved.filter((item:any)=>item.id!==id) });
   };
 
   const renderAiWorkspace = (tab:string) => {
@@ -4440,7 +4476,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const mappedProducts = productRows.slice(0,30);
       const campaignBuilder = getEcommerceCampaignBuilder();
       const campaignRows = getEcommerceCampaignRows();
-      const campaignTheme = campaignBuilder.theme==="Custom" ? campaignBuilder.customTheme : campaignBuilder.theme;
+      const campaignTheme = String(campaignBuilder.theme || "").trim() || "Campaign";
+      const campaignSavedOutputs = Array.isArray(campaignBuilder.savedOutputs) ? campaignBuilder.savedOutputs : [];
+      const campaignHasOutput = !!getEcommerceCampaignCombinedOutput().trim();
       return (
         <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
@@ -4448,11 +4486,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12 }}>
                 <div>
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign E-commerce Copy Builder</h3>
-                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Create campaign copy per selected mapped product row.</p>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Create campaign copy per selected mapped product row. The typed theme is sent to AI and applied to the generated output.</p>
                 </div>
                 <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
                   <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>Headline · Subheadline · CTA</span>
                   <Btn xs variant="outline" onClick={openEcommerceCampaignInstructions}>AI Instructions</Btn>
+                  <Btn xs variant="outline" onClick={saveEcommerceCampaignOutput} disabled={!campaignHasOutput}>Save Output</Btn>
                   <Btn xs onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}>{aiBusy.ecommerceCampaign?"Generating All...":"Generate All Rows"}</Btn>
                 </div>
               </div>
@@ -4465,18 +4504,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 </Field>
 
                 <Field label="Theme">
-                  <Select value={campaignBuilder.theme} onChange={(value)=>updateEcommerceCampaignBuilder({ theme:value })}>
-                    {ecommerceCampaignThemes.map((theme:string)=><option key={theme} value={theme}>{theme}</option>)}
-                  </Select>
+                  <TI
+                    value={campaignBuilder.theme || ""}
+                    onChange={(value)=>updateEcommerceCampaignBuilder({ theme:value })}
+                    placeholder="e.g. Payday Sale, 7.7 Rainy Deals, Back to School, Clearance Weekend"
+                  />
                 </Field>
-
-                {campaignBuilder.theme==="Custom"&&(
-                  <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
-                    <Field label="Custom Theme">
-                      <TI value={campaignBuilder.customTheme} onChange={(value)=>updateEcommerceCampaignBuilder({ customTheme:value })} placeholder="e.g. 7.7 Rainy Deals, Payday Bundle, Clearance Weekend" />
-                    </Field>
-                  </div>
-                )}
 
                 <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
                   <Field label="Products / SKU">
@@ -4592,6 +4625,42 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </Modal>
 
             </div>
+
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                <div>
+                  <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Saved Campaign Outputs</h4>
+                  <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Saved headline, subheadline, and CTA outputs for this E-commerce tab.</p>
+                </div>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{campaignSavedOutputs.length} saved</span>
+              </div>
+
+              {campaignSavedOutputs.length===0 ? (
+                <div style={{ padding:14,border:`1px dashed ${C.border}`,borderRadius:10,fontSize:12,color:C.muted,textAlign:"center" }}>
+                  No saved campaign outputs yet. Generate copy, then click Save Output.
+                </div>
+              ) : (
+                <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                  {campaignSavedOutputs.map((item:any)=>(
+                    <div key={item.id} style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                      <button type="button" onClick={()=>openSavedEcommerceOutput(item)} style={{ flex:1,minWidth:0,textAlign:"left",border:"none",background:"transparent",padding:0,cursor:"pointer" }}>
+                        <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Campaign Copy"}</p>
+                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.platform || campaignBuilder.platform} · {item.theme || campaignTheme} · Click to view</p>
+                      </button>
+                      <button type="button" onClick={()=>deleteEcommerceCampaignSavedOutput(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Modal open={!!savedEcommercePreview} onClose={()=>setSavedEcommercePreview(null)} title={savedEcommercePreview?.title || "Saved Campaign Output"} width={720}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                <p style={{ margin:0,fontSize:12,color:C.muted }}>{savedEcommercePreview?.platform || ""} {savedEcommercePreview?.theme ? `· ${savedEcommercePreview.theme}` : ""}</p>
+                <Btn sm variant="outline" onClick={copySavedEcommerceOutput}>Copy</Btn>
+              </div>
+              <pre style={{ margin:0,padding:14,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:13,lineHeight:1.55,color:C.textSub,maxHeight:"60vh",overflowY:"auto" }}>{savedEcommercePreview?.text || ""}</pre>
+            </Modal>
 
           </div>
 
