@@ -4592,6 +4592,24 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     return rowOutput || String(builder.generatedText || "");
   };
 
+  const saveEcommerceCampaignRowOutput = (row:any) => {
+    const builder = getEcommerceCampaignBuilder();
+    const output = formatCampaignRowOutput(row).trim();
+    if(!output || !(row.headline || row.subheadline || row.cta)) return;
+    const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
+    const saved = Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [];
+    updateEcommerceCampaignBuilder({
+      savedOutputs:[{
+        id:uid(),
+        title:`${row.product || "Campaign Copy"} ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+        text:output,
+        platform:row.platform || builder.platform,
+        theme,
+        createdAt:new Date().toISOString(),
+      },...saved].slice(0,20),
+    });
+  };
+
   const saveEcommerceCampaignOutput = () => {
     const builder = getEcommerceCampaignBuilder();
     const output = getEcommerceCampaignCombinedOutput().trim();
@@ -4938,7 +4956,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto auto auto",gap:8,alignItems:"center",justifyContent:isMobile?"stretch":"flex-end",width:isMobile?"100%":"auto" }}>
                   <span style={{ gridColumn:isMobile?"1 / -1":"auto",textAlign:isMobile?"center":"left",fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"6px 9px" }}>Headline · Subheadline · CTA</span>
                   <Btn xs variant="outline" onClick={openEcommerceCampaignInstructions}>AI Instructions</Btn>
-                  <Btn xs variant="outline" onClick={saveEcommerceCampaignOutput} disabled={!campaignHasOutput}>Save Output</Btn>
+                  <Btn xs variant="outline" onClick={saveEcommerceCampaignOutput} disabled={!campaignHasOutput}>Save All Outputs</Btn>
                   <Btn xs onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}>{aiBusy.ecommerceCampaign?"Generating All...":"Generate All Rows"}</Btn>
                 </div>
               </div>
@@ -4995,7 +5013,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                         <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                           <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{campaignRows.length} campaign product row{campaignRows.length!==1?"s":""}</span>
-                          {campaignRows.length>0&&<button type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear Rows</button>}
+                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                            {campaignHasOutput&&<button type="button" onClick={saveEcommerceCampaignOutput} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save Generated Outputs</button>}
+                            {campaignRows.length>0&&<button type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear Rows</button>}
+                          </div>
                         </div>
 
                         {campaignRows.length===0 ? (
@@ -5043,6 +5064,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                         <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
                                         {(row.headline || row.subheadline || row.cta)&&(
                                           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                                            <Btn xs onClick={()=>saveEcommerceCampaignRowOutput(row)}>Save Output</Btn>
                                             <Btn xs variant="outline" onClick={()=>copyEcommerceCampaignRowOutput(row)}>Copy</Btn>
                                             <Btn xs variant="outline" onClick={()=>addEcommerceCampaignRowToOverview(row)}>Add to Overview</Btn>
                                           </div>
@@ -5995,6 +6017,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
           </Field>
           <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
             <span style={{ fontSize:11,color:"#16A34A",fontWeight:700 }}>Type settings autosave</span>
+            <Btn sm onClick={saveChecklistType}>Save Type</Btn>
             <Btn sm variant="outline" onClick={duplicateChecklistType}>Duplicate Type</Btn>
             <Btn sm variant="danger" onClick={deleteChecklistType} disabled={typeKeys.length<=1}>Delete Type</Btn>
           </div>
