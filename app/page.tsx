@@ -585,7 +585,6 @@ const Empty = ({ icon="", title, sub, action }) => (
 const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU storage...", multiSelect=false, selectedIds=[] }) => {
   const { isMobile } = useBreakpoint();
   const [query,setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query);
   const [open,setOpen]   = useState(false);
   const [brandFilter,setBrandFilter] = useState("all");
   const [categoryFilter,setCategoryFilter] = useState("all");
@@ -635,7 +634,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
   },[categoryFilter,categoryOptions]);
 
   const results = useMemo(() => {
-    const rawQ = deferredQuery.trim();
+    const rawQ = query.trim();
     const q = rawQ.toLowerCase();
     const compactQ = q.replace(/[^a-z0-9]+/g,"");
     const qLooksLikeSku = /[a-z]+[-_][a-z0-9_-]+/i.test(rawQ) || /\d/.test(rawQ);
@@ -681,7 +680,15 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       // While typing, show only rows that actually match the typed text.
       // Example: PRM-F will only show rows whose SKU/product/brand/category/tag contains PRMF.
       if(qLooksLikeSku || compactQ.length <= 4){
-        return compactMain.some((field:string)=>field.includes(compactQ)) ||
+        const strictFields = [
+          skuCompact,
+          productCompact,
+          brandCompact,
+          collectionCompact,
+          tagCompact,
+        ].filter(Boolean);
+
+        return strictFields.some((field:string)=>field.includes(compactQ)) ||
           searchableMain.some((field:string)=>field.includes(q));
       }
 
@@ -696,7 +703,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     });
 
     return list;
-  }, [deferredQuery,skuStorage,brands,brandFilter,categoryFilter]);
+  }, [query,skuStorage,brands,brandFilter,categoryFilter]);
 
   const visibleResults = useMemo(()=>results.slice(0,PERF_SKU_PICKER_LIMIT),[results]);
 
@@ -804,7 +811,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
             </div>
           )}
 
-          {visibleResults.map((s:any)=>{ const brand=brandById[s.brandId]; const checked=selectedSet.has(s.id); const collectionName=getPickerCollection(s); return (
+          {visibleResults.map((s:any)=>{ const brand=brands.find((b:any)=>b.id===s.brandId); const checked=selectedSet.has(s.id); const collectionName=getPickerCollection(s); return (
             <div key={s.id} onMouseDown={e=>{ e.preventDefault(); handlePick(s); }}
               className="emdc-row"
               style={{ padding:"9px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,background:checked?C.surfaceAlt:C.surface }}>
