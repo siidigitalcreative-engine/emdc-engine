@@ -3822,6 +3822,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     updateAiWorkspace("ecommerce",{ generatedText:"", generatedAt:"" });
   };
 
+  const copyGeneratedEcommerce = async () => {
+    const output = String(((group.aiWorkspace || {}).ecommerce || {}).generatedText || "");
+    if(!output) return;
+    try { await navigator.clipboard.writeText(output); } catch {}
+  };
+
   const saveEcommerceOutput = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {});
     const output = String(data.generatedText || "").trim();
@@ -4538,7 +4544,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                   <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                   <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
-                  <Btn sm variant="outline" onClick={()=>addToOverview("ecommerce","E-commerce Generated Output",data.generatedText,"Generated Output")} disabled={!data.generatedText}>Add to Overview</Btn>
+                  <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Generated Output",data.generatedText,"Generated Output")} disabled={!data.generatedText}>Add to Overview</Btn>
                   <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                 </div>
               </div>
