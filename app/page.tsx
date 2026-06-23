@@ -563,6 +563,7 @@ const Empty = ({ icon="", title, sub, action }) => (
 
 // ─── SKU PICKER ──────────────────────────────────────────────────────────────
 const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU storage...", multiSelect=false, selectedIds=[] }) => {
+  const { isMobile } = useBreakpoint();
   const [query,setQuery] = useState("");
   const [open,setOpen]   = useState(false);
   const [brandFilter,setBrandFilter] = useState("all");
