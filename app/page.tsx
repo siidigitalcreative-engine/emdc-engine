@@ -4101,6 +4101,37 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     sku:item.skuCode || item.sku || "",
   }));
 
+  const getCampaignLinkedEventItems = () => (linkedEvents || []).map((ev:any)=>({
+    id:ev.id || "",
+    title:ev.title || ev.name || ev.eventName || "Linked Event",
+    date:ev.date || ev.startDate || ev.start || ev.deadline || "",
+    endDate:ev.endDate || ev.end || ev.deadlineEnd || "",
+    month:ev.month || "",
+    type:ev.type || ev.category || ev.kind || "",
+    tags:Array.isArray(ev.tags) ? ev.tags : [],
+  }));
+
+  const getCampaignLinkedEventLabel = () => {
+    const items = getCampaignLinkedEventItems();
+    if(!items.length) return "No linked event selected";
+    return items.map((ev:any)=>ev.title).filter(Boolean).join(", ");
+  };
+
+  const getCampaignLinkedEventSchedule = () => {
+    const items = getCampaignLinkedEventItems();
+    const schedules = items.map((ev:any)=>{
+      if(ev.date && ev.endDate && ev.endDate!==ev.date) return `${ev.date} to ${ev.endDate}`;
+      return ev.date || ev.month || "";
+    }).filter(Boolean);
+    return schedules.join(", ");
+  };
+
+  const getCampaignContextFromLinkedEvents = () => {
+    const label = getCampaignLinkedEventLabel();
+    const schedule = getCampaignLinkedEventSchedule();
+    return schedule ? `${label} · ${schedule}` : label;
+  };
+
   const getEcommerceCampaignBuilder = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
     const builder = data.campaignBuilder || {};
@@ -4403,6 +4434,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const headlineInstructions = String(builder.headlineInstructions || "").trim();
     const subheadlineInstructions = String(builder.subheadlineInstructions || "").trim();
     const ctaInstructions = String(builder.ctaInstructions || "").trim();
+    const linkedEventContext = getCampaignContextFromLinkedEvents();
     const instruction = [
       "You are EMDC's e-commerce campaign copy assistant.",
       "Generate campaign copy for one product row only.",
@@ -4435,7 +4467,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         instruction,
         input:JSON.stringify({
           platform:row.platform || builder.platform,
-          theme,
+          linkedEventContext,
+          linkedEvents:getCampaignLinkedEventItems(),
+          theme:linkedEventContext || theme,
           checklistGroup:group.groupName,
           operationalType:lt.label,
           products:getEcommerceCampaignRowProducts(row),
@@ -4469,14 +4503,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const builder = getEcommerceCampaignBuilder();
     const rows = getEcommerceCampaignRows();
     const row = rows.find((item:any)=>item.id===rowId);
-    const theme = String(builder.theme || "").trim();
+    const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || group.groupName || "Campaign").trim();
 
     if(!row){
       setAiError((p:any)=>({...p,ecommerceCampaign:"Please add a product row first."}));
-      return;
-    }
-    if(!theme){
-      setAiError((p:any)=>({...p,ecommerceCampaign:"Please choose a theme or enter a custom theme."}));
       return;
     }
 
@@ -4501,14 +4531,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const generateEcommerceCampaignAssets = async () => {
     const builder = getEcommerceCampaignBuilder();
     const campaignRows = getEcommerceCampaignRows();
-    const theme = String(builder.theme || "").trim();
+    const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || group.groupName || "Campaign").trim();
 
     if(!campaignRows.length){
       setAiError((p:any)=>({...p,ecommerceCampaign:"Please add at least one mapped product row."}));
-      return;
-    }
-    if(!theme){
-      setAiError((p:any)=>({...p,ecommerceCampaign:"Please choose a theme or enter a custom theme."}));
       return;
     }
 
@@ -4545,13 +4571,13 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const addEcommerceCampaignRowToOverview = (row:any) => {
     const builder = getEcommerceCampaignBuilder();
-    const theme = String(builder.theme || "Campaign").trim();
+    const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.product || "Product"} · ${row.platform || builder.platform} · ${theme}`);
   };
 
   const addEcommerceCampaignToOverview = () => {
     const builder = getEcommerceCampaignBuilder();
-    const theme = String(builder.theme || "Campaign").trim();
+    const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     addToOverview("E-commerce","Campaign Copy",builder.generatedText || "",`${builder.platform} · ${theme}`);
   };
 
@@ -4570,7 +4596,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const builder = getEcommerceCampaignBuilder();
     const output = getEcommerceCampaignCombinedOutput().trim();
     if(!output) return;
-    const theme = String(builder.theme || "Campaign").trim();
+    const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     const saved = Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [];
     updateEcommerceCampaignBuilder({
       savedOutputs:[{
@@ -4648,7 +4674,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const mappedProducts = productRows.slice(0,30);
       const campaignBuilder = getEcommerceCampaignBuilder();
       const campaignRows = getEcommerceCampaignRows();
-      const campaignTheme = String(campaignBuilder.theme || "").trim() || "Campaign";
+      const campaignLinkedEventItems = getCampaignLinkedEventItems();
+      const campaignLinkedEventLabel = getCampaignLinkedEventLabel();
+      const campaignLinkedEventSchedule = getCampaignLinkedEventSchedule();
+      const campaignTheme = getCampaignContextFromLinkedEvents() || "Campaign";
       const campaignSavedOutputs = Array.isArray(campaignBuilder.savedOutputs) ? campaignBuilder.savedOutputs : [];
       const campaignHasOutput = !!getEcommerceCampaignCombinedOutput().trim();
             const ecommerceTabMode = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
@@ -4904,7 +4933,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12 }}>
                 <div>
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign E-commerce Copy Builder</h3>
-                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Campaign checklist mode: create campaign copy per selected mapped product row. The typed theme is sent to AI and applied to the generated output.</p>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Campaign checklist mode: create campaign copy per selected mapped product row. AI reads the linked event and uses it as the campaign context.</p>
                 </div>
                 <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto auto auto",gap:8,alignItems:"center",justifyContent:isMobile?"stretch":"flex-end",width:isMobile?"100%":"auto" }}>
                   <span style={{ gridColumn:isMobile?"1 / -1":"auto",textAlign:isMobile?"center":"left",fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"6px 9px" }}>Headline · Subheadline · CTA</span>
@@ -4914,22 +4943,22 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 </div>
               </div>
 
-              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
-                <Field label="Platform">
-                  <Select value={campaignBuilder.platform} onChange={(value)=>updateEcommerceCampaignBuilder({ platform:value })}>
-                    {ecommerceCampaignPlatforms.map((platform:string)=><option key={platform} value={platform}>{platform}</option>)}
-                  </Select>
-                </Field>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10 }}>
+                <div style={{ padding:isMobile?12:14,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.bg }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start",flexWrap:"wrap" }}>
+                    <div style={{ minWidth:0,flex:"1 1 280px" }}>
+                      <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Linked Event</p>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35,wordBreak:"break-word" }}>{campaignLinkedEventLabel}</p>
+                      {campaignLinkedEventSchedule&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>{campaignLinkedEventSchedule}</p>}
+                      {!campaignLinkedEventItems.length&&<p style={{ margin:"5px 0 0",fontSize:11,color:"#B45309",lineHeight:1.35 }}>Link this checklist group to an event/season so AI can use it as the campaign context.</p>}
+                    </div>
+                    <span style={{ fontSize:11,fontWeight:800,color:campaignLinkedEventItems.length?C.accent:"#B45309",background:campaignLinkedEventItems.length?"#ECFDF5":"#FFFBEB",border:`1px solid ${campaignLinkedEventItems.length?"#A7F3D0":"#FDE68A"}`,borderRadius:999,padding:"5px 9px",whiteSpace:"nowrap" }}>
+                      {campaignLinkedEventItems.length ? `${campaignLinkedEventItems.length} linked` : "No event linked"}
+                    </span>
+                  </div>
+                </div>
 
-                <Field label="Theme">
-                  <TI
-                    value={campaignBuilder.theme || ""}
-                    onChange={(value)=>updateEcommerceCampaignBuilder({ theme:value })}
-                    placeholder="e.g. Payday Sale, 7.7 Rainy Deals, Back to School, Clearance Weekend"
-                  />
-                </Field>
-
-                <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
+                <div>
                   <Field label="Products / SKU">
                     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                       {productRows.length>0&&(
@@ -5859,8 +5888,8 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
       ...prev,
       [launchType]: {
         ...(prev[launchType] || {}),
-        label:typeLabel.trim(),
-        tag:typeTag.trim() || "Custom",
+        label:typeLabel || "Checklist Type",
+        tag:typeTag || "Custom",
         color:typeColor || "#111827",
       },
     }));
@@ -5956,10 +5985,10 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
         <div style={{ padding:12,background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}`,display:"flex",flexDirection:"column",gap:10 }}>
           <p style={{ margin:0,fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Checklist Type Settings</p>
           <Field label="Name">
-            <TI value={typeLabel} onChange={v=>{ setTypeLabel(v); updateChecklistTypeField({ label:v.trim() || "Checklist Type" }); }} placeholder="e.g. Product Launch, Monthly Campaign, Clearance Sale" />
+            <TI value={typeLabel} onChange={v=>{ setTypeLabel(v); updateChecklistTypeField({ label:v || "Checklist Type" }); }} placeholder="e.g. Product Launch, Monthly Campaign, Clearance Sale" />
           </Field>
           <Field label="Tag">
-            <TI value={typeTag} onChange={v=>{ setTypeTag(v); updateChecklistTypeField({ tag:v.trim() || "Custom" }); }} placeholder="e.g. New Launch, Relaunch, Custom" />
+            <TI value={typeTag} onChange={v=>{ setTypeTag(v); updateChecklistTypeField({ tag:v || "Custom" }); }} placeholder="e.g. New Launch, Relaunch, Custom" />
           </Field>
           <Field label="Color">
             <ColorPicker value={typeColor} onChange={v=>{ setTypeColor(v); updateChecklistTypeField({ color:v }); }} palette={STATUS_PALETTE} />
