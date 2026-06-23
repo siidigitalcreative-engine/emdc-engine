@@ -3641,6 +3641,21 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     updateAiWorkspace("ecommerce",{ selectedSections:next });
   };
 
+  const moveEcommerceSection = (section:string, direction:"up"|"down") => {
+    const sections = getEcommerceOutputSections();
+    const index = sections.indexOf(section);
+    if(index<0) return;
+    const nextIndex = direction==="up" ? index-1 : index+1;
+    if(nextIndex<0 || nextIndex>=sections.length) return;
+
+    const nextSections = [...sections];
+    const [moved] = nextSections.splice(index,1);
+    nextSections.splice(nextIndex,0,moved);
+
+    const selected = getSelectedEcommerceSections().filter((s:string)=>nextSections.includes(s));
+    saveEcommerceSections(nextSections,selected);
+  };
+
   const setAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[...getEcommerceOutputSections()] });
   const clearAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[] });
 
@@ -4143,22 +4158,31 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </div>
 
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
-                {ecommerceOutputSections.map((section:string)=>{
+                {ecommerceOutputSections.map((section:string,index:number)=>{
                   const active = selectedSections.includes(section);
                   const hasInstruction = !!String(sectionInstructions[section] || "").trim();
+                  const isFirst = index===0;
+                  const isLast = index===ecommerceOutputSections.length-1;
                   return (
-                    <div key={section} style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 10px",background:active?"#EEF2FF":C.bg,border:`1.5px solid ${active?C.accent:C.border}`,borderRadius:8 }}>
+                    <div key={section} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr) auto auto",alignItems:"center",gap:8,padding:"9px 10px",background:active?"#EEF2FF":C.bg,border:`1.5px solid ${active?C.accent:C.border}`,borderRadius:8 }}>
                       <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ width:18,height:18,borderRadius:4,display:"inline-flex",alignItems:"center",justifyContent:"center",background:active?C.accent:"transparent",border:`1.5px solid ${active?C.accent:C.borderStrong}`,color:"#fff",fontSize:11,fontWeight:900,flexShrink:0,cursor:"pointer" }}>{active?"✓":""}</button>
-                      <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>
-                        {section}
+
+                      <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>
+                        <span style={{ display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{index+1}. {section}</span>
                         {hasInstruction&&<span style={{ display:"block",marginTop:2,fontSize:10.5,fontWeight:700,color:"#047857" }}>Has instruction</span>}
                       </button>
+
+                      <div style={{ display:"flex",gap:4,alignItems:"center",justifyContent:"center" }}>
+                        <button type="button" disabled={isFirst} onClick={()=>moveEcommerceSection(section,"up")} title="Move up" style={{ width:28,height:28,border:`1px solid ${C.border}`,background:isFirst?C.surfaceAlt:C.surface,borderRadius:7,color:isFirst?C.faint:C.textSub,fontSize:13,fontWeight:900,cursor:isFirst?"not-allowed":"pointer",opacity:isFirst?.55:1 }}>↑</button>
+                        <button type="button" disabled={isLast} onClick={()=>moveEcommerceSection(section,"down")} title="Move down" style={{ width:28,height:28,border:`1px solid ${C.border}`,background:isLast?C.surfaceAlt:C.surface,borderRadius:7,color:isLast?C.faint:C.textSub,fontSize:13,fontWeight:900,cursor:isLast?"not-allowed":"pointer",opacity:isLast?.55:1 }}>↓</button>
+                      </div>
+
                       <button onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
                     </div>
                   );
                 })}
               </div>
-              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Edit a section to rename it, add refining instructions, or delete it. Then click Save Changes to refresh the listing template prompt above.</p>
+              <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Use ↑ / ↓ to rearrange the output order. Edit a section to rename it, add refining instructions, or delete it. Then click Save Changes to refresh the listing template prompt above.</p>
             </div>
 
             {editingEcommerceSection&&(
