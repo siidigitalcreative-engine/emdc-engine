@@ -3313,6 +3313,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [draggingEcommerceSection,setDraggingEcommerceSection] = useState("");
   const [campaignInstructionOpen,setCampaignInstructionOpen] = useState(false);
   const [campaignInstructionDraft,setCampaignInstructionDraft] = useState("");
+  const [campaignHeadlineInstructionDraft,setCampaignHeadlineInstructionDraft] = useState("");
+  const [campaignSubheadlineInstructionDraft,setCampaignSubheadlineInstructionDraft] = useState("");
+  const [campaignCtaInstructionDraft,setCampaignCtaInstructionDraft] = useState("");
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
 
   useEffect(()=>{
@@ -4107,6 +4110,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       customTheme: builder.customTheme || "",
       promotion: builder.promotion || "",
       aiInstructions: builder.aiInstructions || "",
+      headlineInstructions: builder.headlineInstructions || "",
+      subheadlineInstructions: builder.subheadlineInstructions || "",
+      ctaInstructions: builder.ctaInstructions || "",
       selectedProductKey: builder.selectedProductKey || "",
       productRows: Array.isArray(builder.productRows) ? builder.productRows : [],
       generatedText: builder.generatedText || "",
@@ -4129,11 +4135,19 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const openEcommerceCampaignInstructions = () => {
     const builder = getEcommerceCampaignBuilder();
     setCampaignInstructionDraft(builder.aiInstructions || "");
+    setCampaignHeadlineInstructionDraft(builder.headlineInstructions || "");
+    setCampaignSubheadlineInstructionDraft(builder.subheadlineInstructions || "");
+    setCampaignCtaInstructionDraft(builder.ctaInstructions || "");
     setCampaignInstructionOpen(true);
   };
 
   const saveEcommerceCampaignInstructions = () => {
-    updateEcommerceCampaignBuilder({ aiInstructions:campaignInstructionDraft });
+    updateEcommerceCampaignBuilder({
+      aiInstructions:campaignInstructionDraft,
+      headlineInstructions:campaignHeadlineInstructionDraft,
+      subheadlineInstructions:campaignSubheadlineInstructionDraft,
+      ctaInstructions:campaignCtaInstructionDraft,
+    });
     setCampaignInstructionOpen(false);
   };
 
@@ -4386,6 +4400,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const requestEcommerceCampaignRowCopy = async (row:any, builder:any, theme:string) => {
     const customInstructions = String(builder.aiInstructions || "").trim();
+    const headlineInstructions = String(builder.headlineInstructions || "").trim();
+    const subheadlineInstructions = String(builder.subheadlineInstructions || "").trim();
+    const ctaInstructions = String(builder.ctaInstructions || "").trim();
     const instruction = [
       "You are EMDC's e-commerce campaign copy assistant.",
       "Generate campaign copy for one product row only.",
@@ -4398,11 +4415,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       "CTA",
       "",
       "Headline should be short, catchy, marketplace-friendly, and connected to the theme.",
+      headlineInstructions ? `Headline-specific instruction:\\n${headlineInstructions}` : "",
       "Subheadline should mention the product, discount/offer, or mechanics if provided.",
+      subheadlineInstructions ? `Subheadline-specific instruction:\\n${subheadlineInstructions}` : "",
       "CTA should be short and action-oriented.",
+      ctaInstructions ? `CTA-specific instruction:\\n${ctaInstructions}` : "",
       "Avoid em dashes.",
       "Do not invent product specs.",
-      customInstructions ? `Additional user instructions:\\n${customInstructions}` : "",
+      customInstructions ? `General additional instructions:\\n${customInstructions}` : "",
     ].filter(Boolean).join("\\n");
 
     const res = await fetch("/api/ai/generate-text", {
@@ -5029,17 +5049,53 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
               {aiError.ecommerceCampaign&&<div style={{ marginTop:10,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError.ecommerceCampaign}</div>}
 
-              <Modal open={campaignInstructionOpen} onClose={()=>setCampaignInstructionOpen(false)} title="AI Output Instructions" width={560}>
-                <p style={{ margin:"0 0 10px",fontSize:13,color:C.muted,lineHeight:1.5 }}>Add extra instructions for the AI output. This applies to both per-row Generate and Generate All Rows.</p>
-                <textarea
-                  value={campaignInstructionDraft}
-                  onChange={(e)=>setCampaignInstructionDraft(e.target.value)}
-                  placeholder="Example: Make the headline shorter, use Taglish, focus on urgency, mention payday sale, keep CTA under 3 words..."
-                  rows={7}
-                  style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
-                />
+              <Modal open={campaignInstructionOpen} onClose={()=>setCampaignInstructionOpen(false)} title="AI Output Instructions" width={680}>
+                <p style={{ margin:"0 0 10px",fontSize:13,color:C.muted,lineHeight:1.5 }}>Add instructions for the overall output and for each section. These apply to both per-row Generate and Generate All Rows.</p>
+
+                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                  <Field label="General Instructions">
+                    <textarea
+                      value={campaignInstructionDraft}
+                      onChange={(e)=>setCampaignInstructionDraft(e.target.value)}
+                      placeholder="Example: Use Taglish, focus on urgency, make it premium, avoid hard-selling..."
+                      rows={4}
+                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                    />
+                  </Field>
+
+                  <Field label="Headline Instructions">
+                    <textarea
+                      value={campaignHeadlineInstructionDraft}
+                      onChange={(e)=>setCampaignHeadlineInstructionDraft(e.target.value)}
+                      placeholder="Example: Maximum 6 words, strong sale hook, mention the campaign theme."
+                      rows={3}
+                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                    />
+                  </Field>
+
+                  <Field label="Subheadline Instructions">
+                    <textarea
+                      value={campaignSubheadlineInstructionDraft}
+                      onChange={(e)=>setCampaignSubheadlineInstructionDraft(e.target.value)}
+                      placeholder="Example: Mention the product benefit, discount, or mechanics in one clean sentence."
+                      rows={3}
+                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                    />
+                  </Field>
+
+                  <Field label="CTA Instructions">
+                    <textarea
+                      value={campaignCtaInstructionDraft}
+                      onChange={(e)=>setCampaignCtaInstructionDraft(e.target.value)}
+                      placeholder="Example: Keep CTA under 3 words, direct, urgent, marketplace-ready."
+                      rows={3}
+                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                    />
+                  </Field>
+                </div>
+
                 <div style={{ display:"flex",justifyContent:"space-between",gap:8,marginTop:14,flexWrap:"wrap" }}>
-                  <Btn variant="outline" onClick={()=>{ setCampaignInstructionDraft(""); updateEcommerceCampaignBuilder({ aiInstructions:"" }); setCampaignInstructionOpen(false); }}>Clear Instructions</Btn>
+                  <Btn variant="outline" onClick={()=>{ setCampaignInstructionDraft(""); setCampaignHeadlineInstructionDraft(""); setCampaignSubheadlineInstructionDraft(""); setCampaignCtaInstructionDraft(""); updateEcommerceCampaignBuilder({ aiInstructions:"", headlineInstructions:"", subheadlineInstructions:"", ctaInstructions:"" }); setCampaignInstructionOpen(false); }}>Clear Instructions</Btn>
                   <div style={{ display:"flex",gap:8 }}>
                     <Btn variant="outline" onClick={()=>setCampaignInstructionOpen(false)}>Cancel</Btn>
                     <Btn onClick={saveEcommerceCampaignInstructions}>Save Instructions</Btn>
