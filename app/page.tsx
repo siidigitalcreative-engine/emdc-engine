@@ -3338,6 +3338,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignSubheadlineInstructionDraft,setCampaignSubheadlineInstructionDraft] = useState("");
   const [campaignCtaInstructionDraft,setCampaignCtaInstructionDraft] = useState("");
   const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
+  const [campaignDigitalSentIds,setCampaignDigitalSentIds] = useState<string[]>([]);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
 
   useEffect(()=>{
@@ -4600,6 +4601,68 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
 
+  const buildCampaignDigitalCreativeItem = (row:any) => {
+    const builder = getEcommerceCampaignBuilder();
+    const productList = getEcommerceCampaignRowProducts(row);
+    const linkedContext = getCampaignContextFromLinkedEvents() || String(builder.theme || group.groupName || "Campaign").trim();
+    return {
+      id:uid(),
+      sourceRowId:String(row.id || row.productKey || row.product || ""),
+      title:row.product || "Campaign Product Row",
+      product:row.product || "",
+      sku:row.sku || "",
+      brand:row.brand || "",
+      collection:row.collection || "",
+      platform:row.platform || builder.platform || "All Platforms",
+      discount:row.discount || "",
+      mechanics:row.mechanics || "",
+      linkedEventContext:linkedContext,
+      products:productList,
+      headline:row.headline || "",
+      subheadline:row.subheadline || "",
+      cta:row.cta || "",
+      createdAt:new Date().toISOString(),
+    };
+  };
+
+  const formatCampaignDigitalCreativeItem = (item:any) => [
+    "Linked Event / Campaign Context",
+    item.linkedEventContext || "",
+    "",
+    "Platform",
+    item.platform || "",
+    "",
+    "Product Details",
+    item.product || "",
+    item.sku ? `SKU: ${item.sku}` : "",
+    item.brand ? `Brand: ${item.brand}` : "",
+    item.collection ? `Collection: ${item.collection}` : "",
+    item.discount ? `Discount / Offer: ${item.discount}` : "",
+    item.mechanics ? `Mechanics / Notes: ${item.mechanics}` : "",
+    "",
+    "Generated Campaign Copy",
+    item.headline ? `Headline: ${item.headline}` : "",
+    item.subheadline ? `Subheadline: ${item.subheadline}` : "",
+    item.cta ? `CTA: ${item.cta}` : "",
+    "",
+    Array.isArray(item.products) && item.products.length ? "Products Inside This Row" : "",
+    ...(Array.isArray(item.products) ? item.products.map((product:any,idx:number)=>`${idx+1}. ${product.product || "Product"}${product.sku ? ` · ${product.sku}` : ""}${product.brand ? ` · ${product.brand}` : ""}${product.collection ? ` · ${product.collection}` : ""}`) : []),
+  ].filter((line:any)=>String(line || "").trim()).join("\n");
+
+  const sendEcommerceCampaignRowToDigitalCreative = (row:any) => {
+    const item = buildCampaignDigitalCreativeItem(row);
+    const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+    const current = Array.isArray(digital.campaignCreativeRows) ? digital.campaignCreativeRows : [];
+    const nextRows = [item,...current.filter((existing:any)=>existing.sourceRowId!==item.sourceRowId)].slice(0,30);
+    updateAiWorkspace("digital",{
+      campaignCreativeRows:nextRows,
+      generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
+      generatedAt:new Date().toISOString(),
+    });
+    setCampaignDigitalSentIds((prev:string[])=>Array.from(new Set([...prev,item.sourceRowId])));
+    window.setTimeout(()=>setCampaignDigitalSentIds((prev:string[])=>prev.filter((id:string)=>id!==item.sourceRowId)),1800);
+  };
+
   const addEcommerceCampaignToOverview = () => {
     const builder = getEcommerceCampaignBuilder();
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
@@ -4701,6 +4764,95 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   </div>
                   <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:14,background:C.bg }}>
                     <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.55,color:C.text }}>{item.content || ""}</pre>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const workspaceTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
+    const isCampaignChecklist = workspaceTypeLabel.includes("campaign");
+
+    if(tab==="digital" && isCampaignChecklist){
+      const campaignCreativeRows = Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [];
+      const copyCampaignDigitalItem = async (item:any) => {
+        try { await navigator.clipboard.writeText(formatCampaignDigitalCreativeItem(item)); } catch {}
+      };
+      const addCampaignDigitalItemToOverview = (item:any) => {
+        addToOverview("Digital Creative","Campaign Digital Creative",formatCampaignDigitalCreativeItem(item),item.linkedEventContext || "Campaign Digital Creative");
+      };
+      const deleteCampaignDigitalItem = (id:string) => {
+        const nextRows = campaignCreativeRows.filter((item:any)=>item.id!==id);
+        updateAiWorkspace("digital",{
+          campaignCreativeRows:nextRows,
+          generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
+      };
+      const clearCampaignDigitalItems = () => updateAiWorkspace("digital",{ campaignCreativeRows:[], generatedText:"", generatedAt:"" });
+
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+          <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign Digital Creative</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Rows sent from Campaign E-commerce appear here with product details and AI copy for creative production.</p>
+              </div>
+              <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{campaignCreativeRows.length} sent</span>
+                {campaignCreativeRows.length>0&&<Btn xs variant="danger" onClick={clearCampaignDigitalItems}>Clear DC</Btn>}
+              </div>
+            </div>
+          </div>
+
+          {campaignCreativeRows.length===0 ? (
+            <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No campaign product row sent yet. Go to Campaign E-commerce and click Send DC beside a generated row.</p>
+            </div>
+          ) : (
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              {campaignCreativeRows.map((item:any)=>(
+                <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                  <div style={{ padding:isMobile?10:12,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                    <div style={{ minWidth:0,flex:"1 1 360px" }}>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{item.title || "Campaign Product Row"}</p>
+                      <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>{item.platform || "Platform"} · {item.linkedEventContext || "Campaign"}</p>
+                    </div>
+                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"auto auto auto",gap:6,width:isMobile?"100%":"auto" }}>
+                      <Btn xs variant="outline" onClick={()=>copyCampaignDigitalItem(item)}>Copy</Btn>
+                      <Btn xs variant="outline" onClick={()=>addCampaignDigitalItemToOverview(item)}>Add to Overview</Btn>
+                      <Btn xs variant="danger" onClick={()=>deleteCampaignDigitalItem(item.id)}>Delete</Btn>
+                    </div>
+                  </div>
+
+                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10 }}>
+                    <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                      <p style={{ margin:"0 0 6px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Product Details</p>
+                      <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
+                        {[
+                          item.product,
+                          item.sku ? `SKU: ${item.sku}` : "",
+                          item.brand ? `Brand: ${item.brand}` : "",
+                          item.collection ? `Collection: ${item.collection}` : "",
+                          item.discount ? `Discount / Offer: ${item.discount}` : "",
+                          item.mechanics ? `Mechanics / Notes: ${item.mechanics}` : "",
+                        ].filter(Boolean).join("\n")}
+                      </p>
+                    </div>
+                    <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                      <p style={{ margin:"0 0 6px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output</p>
+                      <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
+                        {[
+                          item.headline ? `Headline: ${item.headline}` : "",
+                          item.subheadline ? `Subheadline: ${item.subheadline}` : "",
+                          item.cta ? `CTA: ${item.cta}` : "",
+                        ].filter(Boolean).join("\n") || "No generated copy sent."}
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -5091,6 +5243,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                                             <Btn xs onClick={()=>saveEcommerceCampaignRowOutput(row)}>Save Output</Btn>
                                             <Btn xs variant="outline" onClick={()=>copyEcommerceCampaignRowOutput(row)}>Copy</Btn>
+                                            <Btn xs variant={campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToDigitalCreative(row)}>{campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent DC ✓":"Send DC"}</Btn>
                                             <Btn xs variant={campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>addEcommerceCampaignRowToOverview(row)}>{campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"Added ✓":"Add to Overview"}</Btn>
                                           </div>
                                         )}
