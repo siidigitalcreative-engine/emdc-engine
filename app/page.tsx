@@ -621,6 +621,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     const normalizedTerms = q.split(/\s+/).map((term:string)=>term.trim()).filter((term:string)=>term.length>=2);
 
     const normalizeCompact = (value:any) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
+    const normalizeLoose = (value:any) => String(value || "").toLowerCase();
 
     const list = (skuStorage||[]).filter((s:any) => {
       const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
@@ -632,6 +633,21 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       if(categoryFilter!=="all" && collectionName !== categoryFilter) return false;
 
       if(!q) return true;
+      if(!compactQ) return false;
+
+      const searchableMain = [
+        s.sku,
+        s.productName,
+        brandName,
+        collectionName,
+        s.collection,
+        s.category,
+        s.productCategory,
+        tagText,
+        getSkuTagText(s),
+      ].filter(Boolean).map(normalizeLoose);
+
+      const compactMain = searchableMain.map(normalizeCompact);
 
       const skuCompact = normalizeCompact(s.sku);
       const productCompact = normalizeCompact(s.productName);
@@ -640,39 +656,20 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       const tagCompact = normalizeCompact(tagText || getSkuTagText(s));
       const extraCompact = normalizeCompact(extraValues);
 
-      const wordSearchable = [
-        s.productName,
-        s.sku,
-        collectionName,
-        s.collection,
-        s.category,
-        s.productCategory,
-        s.inventory,
-        s.status,
-        brandName,
-        tagText,
-        getSkuTagText(s),
-        extraValues,
-      ].filter(Boolean).join(" ").toLowerCase();
-
-      // SKU-like or short searches should not match every random extra field.
-      // Example: "SLQ-OV" should only look at SKU/product/brand/category/tag fields.
+      // Strict search behavior:
+      // While typing, show only rows that actually match the typed text.
+      // Example: PRM-F will only show rows whose SKU/product/brand/category/tag contains PRMF.
       if(qLooksLikeSku || compactQ.length <= 4){
-        return [
-          skuCompact,
-          productCompact,
-          brandCompact,
-          collectionCompact,
-          tagCompact,
-        ].some((field:string)=>field.includes(compactQ));
+        return compactMain.some((field:string)=>field.includes(compactQ)) ||
+          searchableMain.some((field:string)=>field.includes(q));
       }
 
-      return wordSearchable.includes(q) ||
+      return searchableMain.some((field:string)=>field.includes(q)) ||
         [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact,extraCompact].some((field:string)=>field.includes(compactQ)) ||
         normalizedTerms.every((term:string)=>{
           const compactTerm = normalizeCompact(term);
-          if(compactTerm.length < 2) return true;
-          return wordSearchable.includes(term) ||
+          if(compactTerm.length < 2) return false;
+          return searchableMain.some((field:string)=>field.includes(term)) ||
             [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact,extraCompact].some((field:string)=>field.includes(compactTerm));
         });
     });
@@ -779,7 +776,9 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
           </div>
 
           {results.length===0&&(
-            <div style={{ padding:16,fontSize:12,color:C.muted,textAlign:"center" }}>No matching SKUs found.</div>
+            <div style={{ padding:16,fontSize:12,color:C.muted,textAlign:"center" }}>
+              {query.trim() ? `No results found for "${query.trim()}".` : "No matching SKUs found."}
+            </div>
           )}
 
           {results.map((s:any)=>{ const brand=brands.find((b:any)=>b.id===s.brandId); const checked=selectedSet.has(s.id); const collectionName=getPickerCollection(s); return (
