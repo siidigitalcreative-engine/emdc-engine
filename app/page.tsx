@@ -4989,11 +4989,21 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
       const clearCampaignDigitalItems = () => updateAiWorkspace("digital",{ campaignCreativeRows:[], generatedText:"", generatedAt:"" });
 
+      const updateCampaignDigitalItem = (id:string, patch:any) => {
+        const nextRows = campaignCreativeRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
+        updateAiWorkspace("digital",{
+          campaignCreativeRows:nextRows,
+          generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
       const generateCampaignDcImage = async (item:any) => {
         const productRows = getCampaignDigitalProductRows(item);
         const imageLinks = Array.from(new Set(productRows.flatMap((row:any)=>row.links || []))).map(normalizeDcUrl);
         const prompt = [
           "Create a premium ecommerce campaign image based on this campaign row.",
+          item.imagePrompt ? `User image prompt instruction:\n${item.imagePrompt}` : "",
           `Platform: ${item.platform || "All Platforms"}`,
           `Brand: ${item.brand || ""}`,
           `Category: ${item.collection || ""}`,
@@ -5013,7 +5023,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               prompt,
-              size:"1024x1024",
+              size:"1920x1920",
               aspectRatio:"1:1",
               watermark:false,
               referenceImages:imageLinks,
@@ -5026,14 +5036,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
-          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks, generatedImageAt:new Date().toISOString() } : row);
+          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageUrl:url, generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks, generatedImageAt:new Date().toISOString(), generatedImageError:"" } : row);
           updateAiWorkspace("digital",{
             campaignCreativeRows:nextRows,
             generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
             generatedAt:new Date().toISOString(),
           });
         } catch (err:any) {
-          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks } : row);
+          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks } : row);
           updateAiWorkspace("digital",{ campaignCreativeRows:nextRows });
         } finally {
           setCampaignDcGeneratingImageId("");
@@ -5129,6 +5139,22 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           ))}
                         </div>
                       </div>
+
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Image Prompt</span>
+                        </div>
+                        <div style={{ padding:10 }}>
+                          <textarea
+                            value={item.imagePrompt || ""}
+                            onChange={(e:any)=>updateCampaignDigitalItem(item.id,{ imagePrompt:e.target.value })}
+                            placeholder="Add image direction for this card. Example: premium studio product ad, clean white background, product hero centered, soft shadows, no text overlay..."
+                            rows={isMobile?4:5}
+                            style={{ width:"100%",boxSizing:"border-box",minHeight:100,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
+                          />
+                          <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>This prompt is combined with the table details and product image links when you click Generate Image.</p>
+                        </div>
+                      </div>
                     </div>
 
                     <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
@@ -5143,7 +5169,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
                             <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
                             <p style={{ margin:0,fontWeight:800,color:C.textSub }}>AI image placeholder</p>
-                            <p style={{ margin:"4px 0 0" }}>Uses the product links above as references when generating.</p>
+                            <p style={{ margin:"4px 0 0" }}>Uses the product links and image prompt as references when generating.</p>
                             {item.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{item.generatedImageError}</p>}
                           </div>
                         )}
