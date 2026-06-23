@@ -5069,7 +5069,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                     <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(240px,.9fr) minmax(170px,.65fr) minmax(260px,1fr)",gap:10,alignItems:"end" }}>
                                       <Field label="Platform">
                                         <div style={{ minWidth:0,width:"100%" }}>
-                                          <Select value={row.platform || campaignBuilder.platform || "All Platforms"} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ platform:value },rowIndex)} style={{ width:"100%",minWidth:0,height:44,fontSize:13,padding:"0 42px 0 12px",lineHeight:"normal",background:C.surface }}>
+                                          <Select value={row.platform || campaignBuilder.platform || "All Platforms"} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ platform:value },rowIndex)} style={{ width:"100%",minWidth:0,height:38,fontSize:12,padding:"8px 34px 8px 9px",lineHeight:"20px",borderRadius:8,background:C.surface }}>
                                             {ecommerceCampaignPlatforms.map((platform:string)=><option key={platform} value={platform}>{platform}</option>)}
                                           </Select>
                                         </div>
