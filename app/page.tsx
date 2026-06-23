@@ -4759,6 +4759,28 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const campaignOverviewRows = overviewItems
         .map((item:any)=>({ item, row:parseCampaignOverviewCopy(item.content) }))
         .filter(({row}:any)=>row.hasCampaignFormat);
+      const campaignOverviewGroupBy = data.campaignOverviewGroupBy || "none";
+      const campaignOverviewGroupedRows = (() => {
+        if(campaignOverviewGroupBy==="brand"){
+          const groups:any = {};
+          campaignOverviewRows.forEach((entry:any)=>{
+            const key = entry.row.brand || "No Brand";
+            if(!groups[key]) groups[key] = [];
+            groups[key].push(entry);
+          });
+          return Object.entries(groups).map(([label,rows]:any)=>({ label, rows }));
+        }
+        if(campaignOverviewGroupBy==="platform"){
+          const groups:any = {};
+          campaignOverviewRows.forEach((entry:any)=>{
+            const key = entry.row.platform || "No Platform";
+            if(!groups[key]) groups[key] = [];
+            groups[key].push(entry);
+          });
+          return Object.entries(groups).map(([label,rows]:any)=>({ label, rows }));
+        }
+        return [{ label:"", rows:campaignOverviewRows }];
+      })();
 
       if(isCampaignOverview){
         return (
@@ -4769,8 +4791,13 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Overview</h3>
                   <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Master table of campaign outputs added from E-commerce and Digital Creative.</p>
                 </div>
-                <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",justifyContent:isMobile?"stretch":"flex-end",width:isMobile?"100%":"auto" }}>
                   <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{campaignOverviewRows.length} row{campaignOverviewRows.length!==1?"s":""}</span>
+                  <Select value={campaignOverviewGroupBy} onChange={(value)=>updateAiWorkspace("overview",{ campaignOverviewGroupBy:value })} style={{ width:isMobile?"100%":180,height:32,fontSize:12,padding:"5px 32px 5px 9px" }}>
+                    <option value="none">No Grouping</option>
+                    <option value="brand">Group by Brand</option>
+                    <option value="platform">Group by Platform</option>
+                  </Select>
                   <Btn sm variant="outline" onClick={copyAllOverviewItems} disabled={!campaignOverviewRows.length}>Copy All</Btn>
                 </div>
               </div>
@@ -4792,16 +4819,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       </tr>
                     </thead>
                     <tbody>
-                      {campaignOverviewRows.map(({item,row}:any,idx:number)=>(
-                        <tr key={item.id} style={{ background:idx%2?C.surface:C.bg }}>
-                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || ""}</td>
-                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
-                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
-                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
-                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
-                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:300 }}>{row.subheadline || ""}</td>
-                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
-                        </tr>
+                      {campaignOverviewGroupedRows.map((group:any,groupIndex:number)=>(
+                        <React.Fragment key={`${group.label || "all"}-${groupIndex}`}>
+                          {campaignOverviewGroupBy!=="none"&&(
+                            <tr>
+                              <td colSpan={7} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                                {group.label} <span style={{ color:C.faint,fontWeight:800,textTransform:"none",letterSpacing:0 }}>({group.rows.length} row{group.rows.length!==1?"s":""})</span>
+                              </td>
+                            </tr>
+                          )}
+                          {group.rows.map(({item,row}:any,idx:number)=>(
+                            <tr key={item.id} style={{ background:idx%2?C.surface:C.bg }}>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:300 }}>{row.subheadline || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
