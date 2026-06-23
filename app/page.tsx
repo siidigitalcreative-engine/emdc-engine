@@ -363,7 +363,10 @@ const Select = ({ value, onChange, children, style={} }) => {
     WebkitAppearance:"none",
     MozAppearance:"none",
     boxSizing:"border-box",
-    lineHeight:"40px",
+    lineHeight:"normal",
+    whiteSpace:"nowrap",
+    overflow:"hidden",
+    textOverflow:"ellipsis",
     transition:"border-color .15s, box-shadow .15s",
     ...layoutStyle,
   };
@@ -4112,6 +4115,17 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     };
   };
 
+  const updateEcommerceCampaignBuilder = (patch:any) => {
+    const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
+    const currentBuilder = data.campaignBuilder || {};
+    updateAiWorkspace("ecommerce",{
+      campaignBuilder:{
+        ...currentBuilder,
+        ...patch,
+      },
+    });
+  };
+
   const openEcommerceCampaignInstructions = () => {
     const builder = getEcommerceCampaignBuilder();
     setCampaignInstructionDraft(builder.aiInstructions || "");
@@ -4296,11 +4310,31 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const deleteEcommerceCampaignRow = (rowId:string, rowIndex?:number) => {
+    const builder = getEcommerceCampaignBuilder();
     const rows = getEcommerceCampaignRows();
     const nextRows = rows.filter((row:any,idx:number)=>(
       typeof rowIndex==="number" ? idx!==rowIndex : row.id!==rowId
     ));
-    saveEcommerceCampaignRows(nextRows);
+    updateEcommerceCampaignBuilder({
+      productRows:nextRows.map((row:any)=>({
+        id: row.id || uid(),
+        productKey: row.productKey || "",
+        productKeys: Array.isArray(row.productKeys) ? row.productKeys : getCampaignRowProductKeys(row),
+        product: row.product || "",
+        sku: row.sku || "",
+        brand: row.brand || "",
+        collection: row.collection || "",
+        platform: row.platform || builder.platform || "All Platforms",
+        discount: row.discount || "",
+        mechanics: row.mechanics || "",
+        headline: row.headline || "",
+        subheadline: row.subheadline || "",
+        cta: row.cta || "",
+        output: row.output || "",
+      })),
+      generatedText:nextRows.map((row:any)=>formatCampaignRowOutput(row)).filter(Boolean).join("\n\n---\n\n"),
+      generatedAt:new Date().toISOString(),
+    });
   };
 
   const clearEcommerceCampaignRows = () => saveEcommerceCampaignRows([]);
@@ -4880,9 +4914,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                       {productRows.length>0&&(
                         <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
-                          <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                             <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
-                            <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(6,auto)",gap:6,width:isMobile?"100%":"auto" }}>
                               <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
                               <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
                               <Btn xs variant="outline" onClick={addSelectedEcommerceCampaignProductRows} disabled={!selectedCampaignProductKeys.length}>Add Selected as Separate Rows</Btn>
@@ -4924,23 +4958,23 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Campaign Product Rows</span>
                               </div>
                               {campaignRows.map((row:any,rowIndex:number)=>(
-                                <div key={`${row.id || row.productKey || "campaign-row"}-${rowIndex}`} style={{ borderBottom:`1px solid ${C.border}`,background:C.surface }}>
-                                  <div style={{ padding:10,display:"flex",flexDirection:"column",gap:9 }}>
+                                <div key={`${row.id || row.productKey || "campaign-row"}-${rowIndex}`} style={{ margin:10,marginBottom:rowIndex===campaignRows.length-1?10:0,border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
+                                  <div style={{ padding:isMobile?10:12,display:"flex",flexDirection:"column",gap:10 }}>
                                     <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
-                                      <div style={{ minWidth:0,flex:"1 1 360px" }}>
+                                      <div style={{ minWidth:0,flex:"1 1 320px" }}>
                                         <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text,lineHeight:1.35 }}>{row.product || "Product"}</p>
                                         <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted,lineHeight:1.35 }}>{row.brand || "No brand"} · {row.collection || "No collection/category"} · {row.sku || "No SKU"}</p>
                                         {getCampaignRowProductKeys(row).length>1&&<p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{getCampaignRowProductKeys(row).length} products inside this row</p>}
                                       </div>
-                                      <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
-                                        <button type="button" onClick={()=>generateEcommerceCampaignRow(row.id)} disabled={!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"7px 10px",fontSize:10.5,fontWeight:800,cursor:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?"not-allowed":"pointer",opacity:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?.65:1 }}>{aiBusy.ecommerceCampaignRow===row.id?"Generating":"Generate"}</button>
-                                        <button type="button" onClick={()=>deleteEcommerceCampaignRow(row.id,rowIndex)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"7px 10px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto",alignItems:"center",gap:6,justifyContent:"flex-end",width:isMobile?"100%":"auto" }}>
+                                        <button type="button" onClick={()=>generateEcommerceCampaignRow(row.id)} disabled={!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?"not-allowed":"pointer",opacity:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?.65:1,width:"100%" }}>{aiBusy.ecommerceCampaignRow===row.id?"Generating":"Generate"}</button>
+                                        <button type="button" onClick={()=>deleteEcommerceCampaignRow(row.id,rowIndex)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:"pointer",width:"100%" }}>Delete</button>
                                       </div>
                                     </div>
-                                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(220px,.85fr) minmax(160px,.65fr) minmax(240px,1fr)",gap:8,alignItems:"end" }}>
+                                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(240px,.9fr) minmax(170px,.65fr) minmax(260px,1fr)",gap:10,alignItems:"end" }}>
                                       <Field label="Platform">
                                         <div style={{ minWidth:0,width:"100%" }}>
-                                          <Select value={row.platform || campaignBuilder.platform || "All Platforms"} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ platform:value },rowIndex)} style={{ width:"100%",minWidth:0,height:42,fontSize:12.5,padding:"0 38px 0 12px",lineHeight:"normal",background:C.surface }}>
+                                          <Select value={row.platform || campaignBuilder.platform || "All Platforms"} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ platform:value },rowIndex)} style={{ width:"100%",minWidth:0,height:44,fontSize:13,padding:"0 42px 0 12px",lineHeight:"normal",background:C.surface }}>
                                             {ecommerceCampaignPlatforms.map((platform:string)=><option key={platform} value={platform}>{platform}</option>)}
                                           </Select>
                                         </div>
