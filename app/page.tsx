@@ -4061,6 +4061,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     "Custom",
   ];
 
+  const getCampaignProductKey = (item:any) => String(item?.sourceId || item?.id || item?.skuCode || item?.sku || item?.product || item?.productName || "").trim();
+
   const getEcommerceCampaignBuilder = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
     const builder = data.campaignBuilder || {};
@@ -4069,7 +4071,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       theme: builder.theme || "Payday Sale",
       customTheme: builder.customTheme || "",
       promotion: builder.promotion || "",
-      selectedSkus: Array.isArray(builder.selectedSkus) ? builder.selectedSkus : [],
+      selectedProductKey: builder.selectedProductKey || "",
+      productRows: Array.isArray(builder.productRows) ? builder.productRows : [],
       generatedText: builder.generatedText || "",
       generatedAt: builder.generatedAt || "",
     };
@@ -4080,50 +4083,84 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     updateAiWorkspace("ecommerce",{ campaignBuilder:{ ...current, ...patch } });
   };
 
-  const getEcommerceCampaignSelectedSkus = () => {
+  const getEcommerceCampaignRows = () => {
     const builder = getEcommerceCampaignBuilder();
-    return (builder.selectedSkus || []).map((saved:any)=>{
-      const match = (skuStorage || []).find((sku:any)=>sku.id===saved.id || sku.sku===saved.sku);
-      return match || saved;
-    }).filter(Boolean);
+    return (builder.productRows || []).map((row:any)=>{
+      const key = String(row.productKey || "");
+      const mapped = productRows.find((item:any)=>getCampaignProductKey(item)===key);
+      const latest = mapped || {};
+      return {
+        id: row.id || uid(),
+        productKey:key,
+        product: latest.product || row.product || row.productName || "",
+        sku: latest.skuCode || row.sku || "",
+        brand: latest.brand || row.brand || "",
+        collection: latest.collection || row.collection || row.category || "",
+        discount: row.discount || "",
+        mechanics: row.mechanics || "",
+      };
+    }).filter((row:any)=>row.product || row.sku);
   };
 
-  const getEcommerceCampaignSkuIds = () => getEcommerceCampaignSelectedSkus().map((sku:any)=>sku.id).filter(Boolean);
-
-  const toggleEcommerceCampaignSku = (sku:any) => {
-    const current = getEcommerceCampaignSelectedSkus();
-    const exists = current.some((item:any)=>item.id===sku.id || item.sku===sku.sku);
-    const next = exists ? current.filter((item:any)=>!(item.id===sku.id || item.sku===sku.sku)) : [...current,sku];
+  const saveEcommerceCampaignRows = (rows:any[]) => {
     updateEcommerceCampaignBuilder({
-      selectedSkus: next.map((item:any)=>({
-        id:item.id || uid(),
-        sku:item.sku || item.value || "",
-        productName:item.productName || item.value || "",
-        brandId:item.brandId || "",
-        brand:item.brand || "",
-        collection:item.collection || item.category || item.productCategory || "",
-        category:item.category || item.collection || item.productCategory || "",
-        extraFields:item.extraFields || {},
+      productRows: (rows || []).map((row:any)=>({
+        id: row.id || uid(),
+        productKey: row.productKey || "",
+        product: row.product || "",
+        sku: row.sku || "",
+        brand: row.brand || "",
+        collection: row.collection || "",
+        discount: row.discount || "",
+        mechanics: row.mechanics || "",
       })),
     });
   };
 
-  const clearEcommerceCampaignSkus = () => updateEcommerceCampaignBuilder({ selectedSkus:[] });
+  const addEcommerceCampaignProductRow = () => {
+    const builder = getEcommerceCampaignBuilder();
+    const selectedKey = String(builder.selectedProductKey || "").trim();
+    if(!selectedKey) return;
+    const selected = productRows.find((item:any)=>getCampaignProductKey(item)===selectedKey);
+    if(!selected) return;
 
-  const getEcommerceCampaignProductSummary = (skus:any[]) => skus.map((sku:any,idx:number)=>{
-    const brand = (brands || []).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "";
-    const collection = getSkuCollectionCategory(sku) || sku.collection || sku.category || sku.productCategory || "";
-    return `${idx+1}. Brand: ${brand || "Unbranded"} | Collection/Category: ${collection || "No collection/category"} | Product: ${sku.productName || sku.value || ""} | SKU: ${sku.sku || ""}`;
+    const rows = getEcommerceCampaignRows();
+    const nextRow = {
+      id:uid(),
+      productKey:selectedKey,
+      product:selected.product || "",
+      sku:selected.skuCode || "",
+      brand:selected.brand || "",
+      collection:selected.collection || "",
+      discount:"",
+      mechanics:"",
+    };
+    saveEcommerceCampaignRows([...rows,nextRow]);
+    updateEcommerceCampaignBuilder({ selectedProductKey:"" });
+  };
+
+  const updateEcommerceCampaignRow = (rowId:string, patch:any) => {
+    const rows = getEcommerceCampaignRows().map((row:any)=>row.id===rowId ? { ...row, ...patch } : row);
+    saveEcommerceCampaignRows(rows);
+  };
+
+  const deleteEcommerceCampaignRow = (rowId:string) => {
+    saveEcommerceCampaignRows(getEcommerceCampaignRows().filter((row:any)=>row.id!==rowId));
+  };
+
+  const clearEcommerceCampaignRows = () => saveEcommerceCampaignRows([]);
+
+  const getEcommerceCampaignProductSummary = (rows:any[]) => rows.map((row:any,idx:number)=>{
+    return `${idx+1}. Brand: ${row.brand || "Unbranded"} | Collection/Category: ${row.collection || "No collection/category"} | Product: ${row.product || ""} | SKU: ${row.sku || ""} | Discount/Offer: ${row.discount || "Not specified"} | Mechanics/Notes: ${row.mechanics || "Not specified"}`;
   }).join("\n");
 
   const generateEcommerceCampaignAssets = async () => {
-    const tab = "ecommerce";
     const builder = getEcommerceCampaignBuilder();
-    const selectedSkus = getEcommerceCampaignSelectedSkus();
+    const campaignRows = getEcommerceCampaignRows();
     const theme = builder.theme==="Custom" ? builder.customTheme.trim() : builder.theme;
 
-    if(!selectedSkus.length){
-      setAiError((p:any)=>({...p,ecommerceCampaign:"Please select at least one product/SKU."}));
+    if(!campaignRows.length){
+      setAiError((p:any)=>({...p,ecommerceCampaign:"Please add at least one mapped product row."}));
       return;
     }
     if(!theme){
@@ -4136,17 +4173,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     const instruction = [
       "You are EMDC's e-commerce campaign copy assistant.",
-      "Generate only the requested campaign text fields.",
+      "Generate campaign copy for each product row below.",
       "Output must be ready to copy and paste.",
       "Do not use markdown heading symbols like ###.",
       "Do not number the section headers.",
-      "Use these exact clean section titles only:",
+      "For each product row, use this clean structure:",
+      "Product",
       "Headline",
       "Subheadline",
       "CTA",
       "",
       "Headline should be short, catchy, marketplace-friendly, and connected to the theme.",
-      "Subheadline should explain the offer or product benefit clearly.",
+      "Subheadline should mention the product, discount/offer, or mechanics if provided.",
       "CTA should be short and action-oriented.",
       "Avoid em dashes.",
       "Do not invent product specs.",
@@ -4157,19 +4195,19 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({
-          task:"ecommerce_campaign_copy",
-          taskLabel:"E-commerce Campaign Copy Generator",
+          task:"ecommerce_campaign_copy_rows",
+          taskLabel:"Campaign E-commerce Copy Row Generator",
           tone:"commercial",
           instruction,
           input:JSON.stringify({
             platform:builder.platform,
             theme,
-            promotionMechanics:builder.promotion || "",
+            overallPromotionMechanics:builder.promotion || "",
             checklistGroup:group.groupName,
             operationalType:lt.label,
-            products:getEcommerceCampaignProductSummary(selectedSkus),
+            productRows:getEcommerceCampaignProductSummary(campaignRows),
           },null,2),
-          maxOutputTokens:1200,
+          maxOutputTokens:1800,
         }),
       });
 
@@ -4259,8 +4297,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const sectionInstructions = getEcommerceSectionInstructions();
       const mappedProducts = productRows.slice(0,30);
       const campaignBuilder = getEcommerceCampaignBuilder();
-      const campaignSelectedSkus = getEcommerceCampaignSelectedSkus();
-      const campaignSelectedSkuIds = getEcommerceCampaignSkuIds();
+      const campaignRows = getEcommerceCampaignRows();
       const campaignTheme = campaignBuilder.theme==="Custom" ? campaignBuilder.customTheme : campaignBuilder.theme;
       return (
         <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.1fr) minmax(0,.9fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
@@ -4298,37 +4335,59 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
                   <Field label="Products / SKU">
                     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                      <SKUPicker
-                        skuStorage={skuStorage}
-                        brands={brands}
-                        multiSelect
-                        selectedIds={campaignSelectedSkuIds}
-                        onSelect={toggleEcommerceCampaignSku}
-                        placeholder="Search product, SKU, brand, category, or tag..."
-                      />
-                      {campaignSelectedSkus.length>0&&(
-                        <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                          <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
-                            <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{campaignSelectedSkus.length} selected SKU{campaignSelectedSkus.length!==1?"s":""}</span>
-                            <button type="button" onClick={clearEcommerceCampaignSkus} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear</button>
-                          </div>
-                          <div style={{ maxHeight:150,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
-                            {campaignSelectedSkus.map((sku:any)=> {
-                              const brand = (brands || []).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "";
-                              const collection = getSkuCollectionCategory(sku) || sku.collection || sku.category || "";
-                              return (
-                                <div key={sku.id || sku.sku} style={{ display:"flex",justifyContent:"space-between",gap:8,padding:"8px 10px",borderBottom:`1px solid ${C.border}` }}>
-                                  <div style={{ minWidth:0 }}>
-                                    <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku.productName || sku.value || sku.sku}</p>
-                                    <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{brand || "No brand"} · {collection || "No collection/category"} · {sku.sku || ""}</p>
-                                  </div>
-                                  <button type="button" onClick={()=>toggleEcommerceCampaignSku(sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer",alignSelf:"center" }}>Remove</button>
-                                </div>
-                              );
-                            })}
-                          </div>
+                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) auto",gap:8,alignItems:"end" }}>
+                        <Select value={campaignBuilder.selectedProductKey || ""} onChange={(value)=>updateEcommerceCampaignBuilder({ selectedProductKey:value })}>
+                          <option value="">Select from mapped products only</option>
+                          {productRows.map((row:any,idx:number)=>{
+                            const key = getCampaignProductKey(row) || String(idx);
+                            return (
+                              <option key={`${key}-${idx}`} value={key}>
+                                {row.product || row.skuCode || "Unnamed Product"} {row.skuCode ? `· ${row.skuCode}` : ""}
+                              </option>
+                            );
+                          })}
+                        </Select>
+                        <Btn sm onClick={addEcommerceCampaignProductRow} disabled={!campaignBuilder.selectedProductKey}>Add Product Row</Btn>
+                      </div>
+
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{campaignRows.length} campaign product row{campaignRows.length!==1?"s":""}</span>
+                          {campaignRows.length>0&&<button type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear Rows</button>}
                         </div>
-                      )}
+
+                        {campaignRows.length===0 ? (
+                          <div style={{ padding:14,fontSize:12,color:C.muted,textAlign:"center" }}>No product row yet. Select a mapped product above, then click Add Product Row.</div>
+                        ) : (
+                          <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+                            <div style={{ minWidth:isMobile?720:0 }}>
+                              <div style={{ display:"grid",gridTemplateColumns:"1.2fr .8fr .9fr 1.2fr auto",gap:0,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                                {["Product","SKU","Discount / Offer","Mechanics / Notes",""].map((label:string)=>
+                                  <div key={label} style={{ padding:"8px 10px",fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{label}</div>
+                                )}
+                              </div>
+                              {campaignRows.map((row:any)=>(
+                                <div key={row.id} style={{ display:"grid",gridTemplateColumns:"1.2fr .8fr .9fr 1.2fr auto",gap:0,borderBottom:`1px solid ${C.border}`,alignItems:"stretch",background:C.surface }}>
+                                  <div style={{ padding:"9px 10px",minWidth:0 }}>
+                                    <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || "Product"}</p>
+                                    <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || "No collection/category"}</p>
+                                  </div>
+                                  <div style={{ padding:"9px 10px",fontSize:11,color:C.textSub,fontFamily:"monospace",alignSelf:"center" }}>{row.sku || ""}</div>
+                                  <div style={{ padding:"6px 8px" }}>
+                                    <TI value={row.discount || ""} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ discount:value })} placeholder="e.g. 20% OFF" style={{ fontSize:12,padding:"8px 9px" }} />
+                                  </div>
+                                  <div style={{ padding:"6px 8px" }}>
+                                    <TI value={row.mechanics || ""} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ mechanics:value })} placeholder="e.g. Min spend ₱599" style={{ fontSize:12,padding:"8px 9px" }} />
+                                  </div>
+                                  <div style={{ padding:"6px 8px",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                                    <button type="button" onClick={()=>deleteEcommerceCampaignRow(row.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"7px 9px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </Field>
                 </div>
@@ -4349,7 +4408,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               {aiError.ecommerceCampaign&&<div style={{ marginTop:10,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError.ecommerceCampaign}</div>}
 
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:12,flexWrap:"wrap" }}>
-                <p style={{ margin:0,fontSize:11,color:C.faint }}>Output will include Headline, Subheadline, and CTA only.</p>
+                <p style={{ margin:0,fontSize:11,color:C.faint }}>Output will include Product, Headline, Subheadline, and CTA per row.</p>
                 <Btn sm onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign}>{aiBusy.ecommerceCampaign?"Generating...":"Generate Campaign Copy"}</Btn>
               </div>
 
