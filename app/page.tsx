@@ -4548,6 +4548,57 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
         
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
+                        <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
+                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Use Listing Template</Btn>
+                      </div>
+                      <div
+                        tabIndex={0}
+                        contentEditable={false}
+                        onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
+                        onClick={(e:any)=>{ try { e.currentTarget.focus(); } catch {} }}
+                        style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${catalogFiles.length?"#86EFAC":C.border}`,borderRadius:10,background:catalogFiles.length?"#ECFDF5":C.bg,outline:"none",cursor:"text" }}
+                      >
+                        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                          <div style={{ minWidth:0,flex:"1 1 260px" }}>
+                            <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Reference images</p>
+                            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
+                              Paste or upload one or more catalog/product images. Use this for per-color collection pages or extra product references.
+                            </p>
+                            {!!catalogFiles.length&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.faint,fontWeight:700 }}>{catalogFiles.length} reference image{catalogFiles.length>1?"s":""} added</p>}
+                          </div>
+                          <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:32,padding:"0 12px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",width:isMobile?"100%":"auto" }}>
+                            Upload Reference Images
+                            <input type="file" accept="image/*" multiple onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
+                          </label>
+                        </div>
+                        {catalogFiles.length>0&&(
+                          <div style={{ marginTop:10,display:"flex",flexWrap:"wrap",gap:10 }}>
+                            {catalogFiles.map((file:any,idx:number)=>String(file?.type||"").startsWith("image/")&&(
+                              <div key={`${file.name || 'catalog-file'}-${idx}`} style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:6 }}>
+                                <img src={file.dataUrl} alt={file.name || "Catalog reference"} style={{ width:64,height:64,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}` }} />
+                                <button onClick={(e:any)=>{ e.stopPropagation(); removeCatalogFile(tab,idx); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <textarea
+                        value={data.textPrompt || ""}
+                        onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
+                        onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
+                        placeholder="Click Use Listing Template, upload reference images if needed, or write your own instruction for the e-commerce listing output."
+                        rows={9}
+                        style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:isMobile?230:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                      />
+                      {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
+                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",gap:8,justifyContent:isMobile?"stretch":"flex-end",marginTop:10 }}>
+                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Save Prompt</Btn>
+                        <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
+                      </div>
+                    </div>
+
+                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
                         <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Required Output Structure</h4>
                         <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
