@@ -4629,24 +4629,26 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const formatCampaignDigitalCreativeItem = (item:any) => [
-    "Linked Event / Campaign Context",
-    item.linkedEventContext || "",
-    "",
     "Platform",
     item.platform || "",
     "",
-    "Product Details",
-    item.product || "",
-    item.sku ? `SKU: ${item.sku}` : "",
-    item.brand ? `Brand: ${item.brand}` : "",
-    item.collection ? `Collection: ${item.collection}` : "",
-    item.discount ? `Discount / Offer: ${item.discount}` : "",
-    item.mechanics ? `Mechanics / Notes: ${item.mechanics}` : "",
+    "Brand",
+    item.brand || "",
     "",
-    "Generated Campaign Copy",
-    item.headline ? `Headline: ${item.headline}` : "",
-    item.subheadline ? `Subheadline: ${item.subheadline}` : "",
-    item.cta ? `CTA: ${item.cta}` : "",
+    "Category",
+    item.collection || "",
+    "",
+    "Product",
+    item.product || "",
+    "",
+    "Headline",
+    item.headline || "",
+    "",
+    "Subheadline",
+    item.subheadline || "",
+    "",
+    "CTA",
+    item.cta || "",
     "",
     Array.isArray(item.products) && item.products.length ? "Products Inside This Row" : "",
     ...(Array.isArray(item.products) ? item.products.map((product:any,idx:number)=>`${idx+1}. ${product.product || "Product"}${product.sku ? ` · ${product.sku}` : ""}${product.brand ? ` · ${product.brand}` : ""}${product.collection ? ` · ${product.collection}` : ""}`) : []),
@@ -4793,36 +4795,28 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   </div>
 
                   {isCampaignCopy ? (
-                    <div style={{ margin:10,display:"flex",flexDirection:"column",gap:10 }}>
-                      <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
-                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Product Details</p>
-                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
-                          {[
-                            campaignCopy.brand ? `Brand: ${campaignCopy.brand}` : "",
-                            campaignCopy.product ? `Product Name: ${campaignCopy.product}` : "",
-                            campaignCopy.sku ? `SKU: ${campaignCopy.sku}` : "",
-                          ].filter(Boolean).join("\n") || "No product details added."}
-                        </p>
-                      </div>
-                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                        <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
-                          <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Added from E-commerce</span>
-                        </div>
-                        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
-                          <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                            <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
-                            <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.headline || "No headline added."}</p>
-                          </div>
-                          <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                            <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
-                            <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.subheadline || "No subheadline added."}</p>
-                          </div>
-                          <div style={{ padding:10 }}>
-                            <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
-                            <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{campaignCopy.cta || "No CTA added."}</p>
-                          </div>
-                        </div>
+                    <div style={{ margin:10,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                      <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:360 }}>
+                        <table style={{ width:"100%",minWidth:1100,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                          <thead>
+                            <tr style={{ background:C.surfaceAlt }}>
+                              {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                                <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:700 }}>{campaignCopy.platform || "All Platforms"}</td>
+                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{campaignCopy.brand || ""}</td>
+                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{campaignCopy.collection || ""}</td>
+                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{campaignCopy.product || ""}</td>
+                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{campaignCopy.headline || ""}</td>
+                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{campaignCopy.subheadline || ""}</td>
+                              <td style={{ padding:10,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{campaignCopy.cta || ""}</td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   ) : (
@@ -4919,36 +4913,28 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
                   </div>
 
-                  <div style={{ margin:"0 10px 10px",display:"flex",flexDirection:"column",gap:10 }}>
-                    <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
-                      <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Product Details</p>
-                      <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
-                        {[
-                          item.brand ? `Brand: ${item.brand}` : "",
-                          item.product ? `Product Name: ${item.product}` : "",
-                          item.sku ? `SKU: ${item.sku}` : "",
-                        ].filter(Boolean).join("\n") || "No product details sent."}
-                      </p>
-                    </div>
-                    <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                    <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                      <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
-                      <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Sent from E-commerce</span>
-                    </div>
-                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
-                      <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
-                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{item.headline || "No headline sent."}</p>
-                      </div>
-                      <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
-                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{item.subheadline || "No subheadline sent."}</p>
-                      </div>
-                      <div style={{ padding:10 }}>
-                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
-                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{item.cta || "No CTA sent."}</p>
-                      </div>
-                    </div>
+                  <div style={{ margin:"0 10px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                    <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:360 }}>
+                      <table style={{ width:"100%",minWidth:1100,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                        <thead>
+                          <tr style={{ background:C.surfaceAlt }}>
+                            {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                              <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:700 }}>{item.platform || "All Platforms"}</td>
+                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.brand || ""}</td>
+                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.collection || ""}</td>
+                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{item.product || ""}</td>
+                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{item.headline || ""}</td>
+                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{item.subheadline || ""}</td>
+                            <td style={{ padding:10,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{item.cta || ""}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
