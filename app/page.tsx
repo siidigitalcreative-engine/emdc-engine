@@ -3339,6 +3339,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignCtaInstructionDraft,setCampaignCtaInstructionDraft] = useState("");
   const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
   const [campaignDigitalSentIds,setCampaignDigitalSentIds] = useState<string[]>([]);
+  const [campaignDcGeneratingImageId,setCampaignDcGeneratingImageId] = useState("");
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
 
   useEffect(()=>{
@@ -4913,6 +4914,65 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [];
+
+      const dcUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
+      const normalizeDcUrl = (url:any) => {
+        const raw = String(url || "").trim();
+        if(!raw) return "";
+        return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      };
+      const extractDcLinks = (value:any) => {
+        const raw = String(value || "");
+        const found = raw.match(dcUrlRegex) || [];
+        return Array.from(new Set(found.map((item:string)=>item.trim()).filter(Boolean)));
+      };
+      const getSkuStorageRowByProduct = (product:any) => {
+        const skuValue = String(product?.sku || "").trim().toLowerCase();
+        const productValue = String(product?.product || "").trim().toLowerCase();
+        return (skuStorage || []).find((sku:any)=>{
+          const skuCode = String(sku.sku || sku.skuCode || sku.value || "").trim().toLowerCase();
+          const productName = String(sku.productName || sku.product || "").trim().toLowerCase();
+          return (skuValue && skuCode===skuValue) || (productValue && productName===productValue);
+        });
+      };
+      const getCampaignDigitalProductRows = (item:any) => {
+        const baseProducts = Array.isArray(item.products) && item.products.length
+          ? item.products
+          : [{ product:item.product || "", sku:item.sku || "", brand:item.brand || "", collection:item.collection || "" }];
+        return baseProducts.map((product:any)=>{
+          const skuRow:any = getSkuStorageRowByProduct(product) || {};
+          const extraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
+          const linkSources = [
+            product.product,
+            product.sku,
+            product.brand,
+            product.collection,
+            skuRow.productName,
+            skuRow.sku,
+            skuRow.collection,
+            skuRow.category,
+            skuRow.link,
+            skuRow.url,
+            skuRow.image,
+            skuRow.imageUrl,
+            skuRow.productLink,
+            skuRow.reference,
+            ...extraValues,
+          ];
+          const links = Array.from(new Set(linkSources.flatMap((source:any)=>extractDcLinks(source))));
+          return {
+            platform:item.platform || "All Platforms",
+            brand:product.brand || skuRow.brand || item.brand || "",
+            category:product.collection || skuRow.collection || skuRow.category || item.collection || "",
+            product:product.product || skuRow.productName || item.product || "",
+            sku:product.sku || skuRow.sku || item.sku || "",
+            headline:item.headline || "",
+            subheadline:item.subheadline || "",
+            cta:item.cta || "",
+            links,
+          };
+        });
+      };
       const copyCampaignDigitalItem = async (item:any) => {
         try { await navigator.clipboard.writeText(formatCampaignDigitalCreativeItem(item)); } catch {}
       };
@@ -4929,13 +4989,64 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
       const clearCampaignDigitalItems = () => updateAiWorkspace("digital",{ campaignCreativeRows:[], generatedText:"", generatedAt:"" });
 
+      const generateCampaignDcImage = async (item:any) => {
+        const productRows = getCampaignDigitalProductRows(item);
+        const imageLinks = Array.from(new Set(productRows.flatMap((row:any)=>row.links || []))).map(normalizeDcUrl);
+        const prompt = [
+          "Create a premium ecommerce campaign image based on this campaign row.",
+          `Platform: ${item.platform || "All Platforms"}`,
+          `Brand: ${item.brand || ""}`,
+          `Category: ${item.collection || ""}`,
+          `Product: ${item.product || ""}`,
+          item.headline ? `Headline: ${item.headline}` : "",
+          item.subheadline ? `Subheadline: ${item.subheadline}` : "",
+          item.cta ? `CTA: ${item.cta}` : "",
+          item.linkedEventContext ? `Linked event/campaign context: ${item.linkedEventContext}` : "",
+          imageLinks.length ? `Use these product image/reference links as visual references:\n${imageLinks.join("\n")}` : "",
+          "Keep the product accurate. Do not invent product details. Clean premium ecommerce layout.",
+        ].filter(Boolean).join("\n");
+
+        setCampaignDcGeneratingImageId(item.id);
+        try {
+          const res = await fetch("/api/ai/generate-image", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              prompt,
+              size:"1024x1024",
+              aspectRatio:"1:1",
+              watermark:false,
+              referenceImages:imageLinks,
+              referenceImageUrls:imageLinks,
+              outputCount:1,
+            }),
+          });
+          const raw = await res.text();
+          let result:any = {};
+          try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
+          if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
+          const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks, generatedImageAt:new Date().toISOString() } : row);
+          updateAiWorkspace("digital",{
+            campaignCreativeRows:nextRows,
+            generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
+            generatedAt:new Date().toISOString(),
+          });
+        } catch (err:any) {
+          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks } : row);
+          updateAiWorkspace("digital",{ campaignCreativeRows:nextRows });
+        } finally {
+          setCampaignDcGeneratingImageId("");
+        }
+      };
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
               <div>
                 <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign Digital Creative</h3>
-                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Rows sent from Campaign E-commerce appear here with product details and AI copy for creative production.</p>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Each card has the campaign row details, product image links from SKU Storage, and an AI image placeholder.</p>
               </div>
               <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{campaignCreativeRows.length} sent</span>
@@ -4950,61 +5061,104 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             </div>
           ) : (
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              {campaignCreativeRows.map((item:any)=>(
+              {campaignCreativeRows.map((item:any)=>{
+                const productRows = getCampaignDigitalProductRows(item);
+                const allLinks = Array.from(new Set(productRows.flatMap((row:any)=>row.links || [])));
+                return (
                 <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                  <div style={{ padding:isMobile?12:14,display:"flex",flexDirection:"column",gap:8 }}>
-                    <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
-                      <div style={{ minWidth:0,flex:"1 1 360px" }}>
-                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{item.title || "Campaign Product Row"}</p>
-                        <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>
-                          {[item.brand, item.collection, item.sku].filter(Boolean).join(" · ")}
-                        </p>
-                        {Array.isArray(item.products)&&item.products.length>1&&(
-                          <p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{item.products.length} products inside this row</p>
-                        )}
-                        <p style={{ margin:"4px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>
-                          {item.linkedEventContext || "Campaign context"}
-                        </p>
-                      </div>
-                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"auto auto auto",gap:6,width:isMobile?"100%":"auto" }}>
-                        <Btn xs variant="outline" onClick={()=>copyCampaignDigitalItem(item)}>Copy</Btn>
-                        <Btn xs variant="outline" onClick={()=>addCampaignDigitalItemToOverview(item)}>Add to Overview</Btn>
-                        <Btn xs variant="danger" onClick={()=>deleteCampaignDigitalItem(item.id)}>Delete</Btn>
-                      </div>
+                  <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                    <div style={{ minWidth:0,flex:"1 1 360px" }}>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{item.title || "Campaign Product Row"}</p>
+                      <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>{item.linkedEventContext || "Campaign context"}</p>
+                    </div>
+                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"auto auto auto",gap:6,width:isMobile?"100%":"auto" }}>
+                      <Btn xs variant="outline" onClick={()=>copyCampaignDigitalItem(item)}>Copy</Btn>
+                      <Btn xs variant="outline" onClick={()=>addCampaignDigitalItemToOverview(item)}>Add to Overview</Btn>
+                      <Btn xs variant="danger" onClick={()=>deleteCampaignDigitalItem(item.id)}>Delete</Btn>
                     </div>
                   </div>
 
-                  <div style={{ margin:"0 10px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                    <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:360 }}>
-                      <table style={{ width:"100%",minWidth:1100,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
-                        <thead>
-                          <tr style={{ background:C.surfaceAlt }}>
-                            {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
-                              <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:700 }}>{item.platform || "All Platforms"}</td>
-                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.brand || ""}</td>
-                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.collection || ""}</td>
-                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{item.product || ""}</td>
-                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{item.headline || ""}</td>
-                            <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{item.subheadline || ""}</td>
-                            <td style={{ padding:10,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{item.cta || ""}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.35fr) minmax(260px,.65fr)",gap:12 }}>
+                    <div style={{ display:"flex",flexDirection:"column",gap:10,minWidth:0 }}>
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?260:340 }}>
+                          <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                            <thead>
+                              <tr style={{ background:C.surfaceAlt }}>
+                                {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                                  <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {productRows.map((row:any,idx:number)=>(
+                                <tr key={`${row.sku || row.product || "product"}-${idx}`} style={{ background:idx%2?C.surface:C.bg }}>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{row.subheadline || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Product Image Links</span>
+                          <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{allLinks.length} link{allLinks.length!==1?"s":""}</span>
+                        </div>
+                        <div style={{ maxHeight:170,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:10,display:"flex",flexDirection:"column",gap:8 }}>
+                          {productRows.map((row:any,idx:number)=>(
+                            <div key={`${row.sku || row.product || "links"}-${idx}`} style={{ padding:9,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface }}>
+                              <p style={{ margin:"0 0 5px",fontSize:11,fontWeight:900,color:C.text }}>{row.product || row.sku || `Product ${idx+1}`}</p>
+                              {row.links.length ? (
+                                <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                                  {row.links.map((link:string,linkIdx:number)=>(
+                                    <a key={`${link}-${linkIdx}`} href={normalizeDcUrl(link)} target="_blank" rel="noreferrer" style={{ fontSize:11,color:C.accent,fontWeight:750,textDecoration:"underline",textUnderlineOffset:2,wordBreak:"break-all" }}>{link}</a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p style={{ margin:0,fontSize:11,color:C.faint }}>No image/reference link found in SKU Storage for this product.</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
+                      <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                        <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Image</span>
+                        <Btn xs onClick={()=>generateCampaignDcImage(item)} disabled={campaignDcGeneratingImageId===item.id}>{campaignDcGeneratingImageId===item.id?"Generating...":"Generate Image"}</Btn>
+                      </div>
+                      <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
+                        {item.generatedImageUrl ? (
+                          <img src={item.generatedImageUrl} alt="Generated campaign creative" style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}` }} />
+                        ) : (
+                          <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
+                            <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
+                            <p style={{ margin:0,fontWeight:800,color:C.textSub }}>AI image placeholder</p>
+                            <p style={{ margin:"4px 0 0" }}>Uses the product links above as references when generating.</p>
+                            {item.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{item.generatedImageError}</p>}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       );
     }
+
 
     if(tab==="ecommerce"){
       const catalogFiles = data.catalogFiles || [];
