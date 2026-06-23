@@ -748,22 +748,20 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
       />
       {open&&(
         <div style={{
-          position:"fixed",
-          top:"max(96px, 12vh)",
-          left:"50%",
-          transform:"translateX(-50%)",
-          width:"min(92vw, 720px)",
-          maxWidth:"calc(100vw - 24px)",
+          position:"relative",
+          width:"100%",
+          maxWidth:"100%",
+          marginTop:6,
           background:C.surface,
           border:`1.5px solid ${C.border}`,
-          borderRadius:12,
-          boxShadow:"0 18px 60px rgba(15,23,42,.22)",
-          zIndex:9999,
-          maxHeight:"min(70vh, 620px)",
+          borderRadius:10,
+          boxShadow:"0 8px 28px rgba(15,23,42,.10)",
+          zIndex:50,
+          maxHeight:isMobile?"min(52vh, 420px)":"min(46vh, 440px)",
           overflowY:"auto",
           WebkitOverflowScrolling:"touch"
         }}>
-          <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+          <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
             <span style={{ fontSize:11,color:C.muted,fontWeight:700 }}>
               {results.length} SKU{results.length===1?"":"s"} found{brandFilter!=="all"?` · ${(brands||[]).find((b:any)=>b.id===brandFilter)?.name || "Brand"}`:""}{categoryFilter!=="all"?` · ${categoryFilter}`:""}
             </span>
