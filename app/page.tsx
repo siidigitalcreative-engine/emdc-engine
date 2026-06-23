@@ -5038,7 +5038,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
           const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageUrl:url, generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks, generatedImageAt:new Date().toISOString(), generatedImageError:"" } : row);
-          if(url) setCampaignDcPreview({ id:item.id, url, prompt, title:item.title || item.product || "Campaign Digital Creative" });
           updateAiWorkspace("digital",{
             campaignCreativeRows:nextRows,
             generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
