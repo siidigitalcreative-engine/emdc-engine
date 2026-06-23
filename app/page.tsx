@@ -118,6 +118,26 @@ const TEMPLATES = {
 };
 
 const uid = () => Math.random().toString(36).slice(2,9);
+const PERF_SKU_PICKER_LIMIT = 80;
+const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
+const PERF_IDLE_SAVE_DELAY = 450;
+const PERF_CLOUD_SAVE_DELAY = 1600;
+const PERF_CLOUD_POLL_INTERVAL = 12000;
+
+const scheduleIdleWork = (cb:()=>void, timeout=900) => {
+  if (typeof window === "undefined") return setTimeout(cb, 0);
+  const ric = (window as any).requestIdleCallback;
+  if (typeof ric === "function") return ric(cb, { timeout });
+  return window.setTimeout(cb, Math.min(timeout, 500));
+};
+
+const cancelIdleWork = (id:any) => {
+  if (typeof window === "undefined" || !id) return;
+  const cic = (window as any).cancelIdleCallback;
+  if (typeof cic === "function") cic(id);
+  else clearTimeout(id);
+};
+
 const getDaysInMonth = (y:number,m:number) => new Date(y,m+1,0).getDate();
 const getFirstDay    = (y:number,m:number) => new Date(y,m,1).getDay();
 const pad = (n:number) => String(n).padStart(2,"0");
@@ -565,6 +585,7 @@ const Empty = ({ icon="", title, sub, action }) => (
 const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU storage...", multiSelect=false, selectedIds=[] }) => {
   const { isMobile } = useBreakpoint();
   const [query,setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [open,setOpen]   = useState(false);
   const [brandFilter,setBrandFilter] = useState("all");
   const [categoryFilter,setCategoryFilter] = useState("all");
@@ -614,7 +635,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
   },[categoryFilter,categoryOptions]);
 
   const results = useMemo(() => {
-    const rawQ = query.trim();
+    const rawQ = deferredQuery.trim();
     const q = rawQ.toLowerCase();
     const compactQ = q.replace(/[^a-z0-9]+/g,"");
     const qLooksLikeSku = /[a-z]+[-_][a-z0-9_-]+/i.test(rawQ) || /\d/.test(rawQ);
@@ -675,7 +696,9 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
     });
 
     return list;
-  }, [query,skuStorage,brands,brandFilter,categoryFilter]);
+  }, [deferredQuery,skuStorage,brands,brandFilter,categoryFilter]);
+
+  const visibleResults = useMemo(()=>results.slice(0,PERF_SKU_PICKER_LIMIT),[results]);
 
   useEffect(()=>{
     const fn = e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
@@ -693,14 +716,14 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
 
   const selectAllVisible = () => {
     if (!multiSelect) return;
-    results.forEach((s:any)=>{
+    visibleResults.forEach((s:any)=>{
       if (!selectedSet.has(s.id)) onSelect(s);
     });
   };
 
   const unselectAllVisible = () => {
     if (!multiSelect) return;
-    results.forEach((s:any)=>{
+    visibleResults.forEach((s:any)=>{
       if (selectedSet.has(s.id)) onSelect(s);
     });
   };
@@ -761,7 +784,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
         }}>
           <div style={{ position:"sticky",top:0,zIndex:1,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
             <span style={{ fontSize:11,color:C.muted,fontWeight:700 }}>
-              {results.length} SKU{results.length===1?"":"s"} found{brandFilter!=="all"?` · ${(brands||[]).find((b:any)=>b.id===brandFilter)?.name || "Brand"}`:""}{categoryFilter!=="all"?` · ${categoryFilter}`:""}
+              {results.length} SKU{results.length===1?"":"s"} found{results.length>PERF_SKU_PICKER_LIMIT?` · showing first ${PERF_SKU_PICKER_LIMIT}`:""}{brandFilter!=="all"?` · ${(brands||[]).find((b:any)=>b.id===brandFilter)?.name || "Brand"}`:""}{categoryFilter!=="all"?` · ${categoryFilter}`:""}
             </span>
             {multiSelect&&results.length>0&&(
               <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
@@ -781,7 +804,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
             </div>
           )}
 
-          {results.map((s:any)=>{ const brand=brands.find((b:any)=>b.id===s.brandId); const checked=selectedSet.has(s.id); const collectionName=getPickerCollection(s); return (
+          {visibleResults.map((s:any)=>{ const brand=brandById[s.brandId]; const checked=selectedSet.has(s.id); const collectionName=getPickerCollection(s); return (
             <div key={s.id} onMouseDown={e=>{ e.preventDefault(); handlePick(s); }}
               className="emdc-row"
               style={{ padding:"9px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,background:checked?C.surfaceAlt:C.surface }}>
@@ -5516,6 +5539,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
   const [skuTableEditMode,setSkuTableEditMode] = useState(false);
   const [skuSearch,setSkuSearch] = useState("");
+  const deferredSkuSearch = useDeferredValue(skuSearch);
   const [activeSkuTag,setActiveSkuTag] = useState("all");
   const DEFAULT_BULK_COLUMNS = [
     { key:"productName", label:"Product Name", placeholder:"Desk Organizer", locked:true },
@@ -5597,6 +5621,18 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return next;
     });
   };
+  const brandById = useMemo(()=>{
+    const map:any = {};
+    (brands||[]).forEach((brand:any)=>{ map[brand.id] = brand; });
+    return map;
+  },[brands]);
+
+  const skuCountByBrandId = useMemo(()=>{
+    const counts:any = {};
+    (skuStorage||[]).forEach((sku:any)=>{ counts[sku.brandId] = (counts[sku.brandId] || 0) + 1; });
+    return counts;
+  },[skuStorage]);
+
   const skuTagOptions = useMemo(()=>{
     const byKey:any = {};
     (skuStorage||[]).forEach((sku:any)=>{
@@ -5613,11 +5649,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const filteredSkus = useMemo(() => {
     const brandFiltered = activeBrand ? skuStorage.filter((s:any)=>s.brandId===activeBrand) : skuStorage;
     const tagFiltered = activeSkuTag==="all" ? brandFiltered : brandFiltered.filter((s:any)=>hasSkuTag(s,activeSkuTag));
-    const terms = skuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const terms = deferredSkuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if(!terms.length) return tagFiltered;
 
     return tagFiltered.filter((s:any)=>{
-      const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
+      const brandName = brandById[s.brandId]?.name || "";
       const statusLabel = s.status==="active" ? "active" : s.status==="nostocks" ? "no stocks out of stock sold out" : (s.customStatus || "custom");
       const tagText = getSkuTags(s).join(" ");
       const extraText = Object.values(s.extraFields || {}).join(" ");
@@ -5637,7 +5673,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
       return terms.every((term:string)=>searchable.includes(term));
     });
-  }, [activeBrand,activeSkuTag,skuStorage,skuSearch,brands]);
+  }, [activeBrand,activeSkuTag,skuStorage,deferredSkuSearch,brandById]);
   const collectionOptions = useMemo(() => Array.from(new Set(
     skuStorage
       .filter(s => !sForm.brandId || s.brandId===sForm.brandId)
@@ -5672,8 +5708,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return a.label.localeCompare(b.label);
     });
   }, [filteredSkus]);
-  const activeBrandObj = brands.find(b=>b.id===activeBrand);
-  const bulkEditBrandObj = brands.find((b:any)=>b.id===bulkEditBrandId);
+  const activeBrandObj = brandById[activeBrand];
+  const bulkEditBrandObj = brandById[bulkEditBrandId];
   const addBrand  = ()=>{ if(!bForm.name.trim()) return; commitBrands((p:any[])=>[...p,{id:uid(),name:bForm.name.trim(),color:"#111827"}]); setBForm({name:"",color:"#111827"}); setBrandModal(false); };
   const openEditBrand = b=>{ setEditBrandForm({...b}); setEditBrandModal(true); };
   const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; commitBrands((p:any[])=>p.map((b:any)=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
@@ -6326,7 +6362,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         <span style={{ fontSize:13,fontWeight:activeBrand===null?700:500,color:C.text,flex:1 }}>All Brands</span>
         <span style={{ fontSize:12,fontWeight:600,color:activeBrand===null?C.accent:C.faint,background:activeBrand===null?C.accent+"15":C.surfaceAlt,padding:"1px 7px",borderRadius:10 }}>{skuStorage.length}</span>
       </button>
-      {brands.map(b=>{ const count=skuStorage.filter(s=>s.brandId===b.id).length; return (
+      {brands.map(b=>{ const count=skuCountByBrandId[b.id] || 0; return (
         <div key={b.id} style={{ display:"flex",alignItems:"center",borderBottom:`1px solid ${C.border}`,background:activeBrand===b.id?"#F9FAFB":C.surface }}>
           <button onClick={()=>{setActiveBrand(b.id);if(isMobile)setShowSidebar(false);}} style={{ display:"flex",alignItems:"center",gap:10,flex:1,padding:"11px 14px",background:"transparent",border:"none",cursor:"pointer",textAlign:"left",minWidth:0 }}>
             <div style={{ width:10,height:10,borderRadius:"50%",background:b.color,flexShrink:0 }} />
@@ -6460,8 +6496,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                               <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
                             </span>
                           </div>
-                          {group.skus.map((s:any,i:number)=>{
-                            const brand=brands.find(b=>b.id===s.brandId), st=getSD(s);
+                          {group.skus.slice(0,PERF_SKU_STORAGE_GROUP_LIMIT).map((s:any,i:number)=>{
+                            const brand=brandById[s.brandId], st=getSD(s);
                             const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
                             return (
                               <div key={s.id} className="emdc-row"
@@ -6486,6 +6522,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                               </div>
                             );
                           })}
+                          {group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
+                            <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
+                              <div style={{ gridColumn:"1 / -1",padding:"10px 16px",fontSize:12,fontWeight:800,color:C.muted }}>
+                                Showing first {PERF_SKU_STORAGE_GROUP_LIMIT} of {group.skus.length} SKUs in this category. Use search to narrow results.
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                       </div>
@@ -6500,8 +6543,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                         <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
                       </span>
                     </div>
-                    {group.skus.map((s:any,i:number)=>{
-                      const brand=brands.find(b=>b.id===s.brandId), st=getSD(s);
+                    {group.skus.slice(0,PERF_SKU_STORAGE_GROUP_LIMIT).map((s:any,i:number)=>{
+                      const brand=brandById[s.brandId], st=getSD(s);
                       const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
                       return (
                         <div key={s.id} className="emdc-row" style={{ padding:"14px 16px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
@@ -6525,6 +6568,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                         </div>
                       );
                     })}
+                    {group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
+                      <div style={{ padding:"10px 16px",fontSize:12,fontWeight:800,color:C.muted,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                        Showing first {PERF_SKU_STORAGE_GROUP_LIMIT} of {group.skus.length} SKUs in this category. Use search to narrow results.
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -9161,7 +9209,7 @@ export default function App({
         if(!Array.isArray(group.skus) || !group.skus.length) return group;
         const nextSkus = group.skus.map((sku:any,idx:number)=>{
           const synced = syncSkuFromStorage(sku,idx,group.skus || []);
-          if(JSON.stringify(synced)!==JSON.stringify(sku)) changed = true;
+          if(synced !== sku && JSON.stringify(synced)!==JSON.stringify(sku)) changed = true;
           return synced;
         });
         return changed ? { ...group, skus:nextSkus } : group;
@@ -9334,7 +9382,7 @@ export default function App({
 
   useEffect(() => {
     if (!cloudHydrated) return;
-    const timer = setInterval(()=>fetchCloudState("poll"), 3000);
+    const timer = setInterval(()=>fetchCloudState("poll"), PERF_CLOUD_POLL_INTERVAL);
     return () => clearInterval(timer);
   }, [cloudHydrated]);
 
@@ -9346,9 +9394,18 @@ export default function App({
 
   useEffect(() => {
     if (!appStateHydrated) return;
-    try {
-      localStorage.setItem("emdc_app_state_v1", JSON.stringify(makeAppStatePayload()));
-    } catch {}
+    let idleJob:any = null;
+    const timer = setTimeout(()=>{
+      idleJob = scheduleIdleWork(()=>{
+        try {
+          localStorage.setItem("emdc_app_state_v1", JSON.stringify(makeAppStatePayload()));
+        } catch {}
+      }, 1200);
+    }, PERF_IDLE_SAVE_DELAY);
+    return () => {
+      clearTimeout(timer);
+      cancelIdleWork(idleJob);
+    };
   }, [
     appStateHydrated,
     brands,
@@ -9364,7 +9421,7 @@ export default function App({
   useEffect(() => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
     if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), 600);
+    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), PERF_CLOUD_SAVE_DELAY);
     return () => {
       if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
     };
