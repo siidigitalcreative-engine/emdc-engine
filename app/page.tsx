@@ -11,14 +11,28 @@ const C = {
 };
 
 // ─── RESPONSIVE HOOK ────────────────────────────────────────────────────────
+const getResponsiveWidth = () => {
+  if (typeof window === "undefined") return 768;
+  const visual = (window as any).visualViewport?.width || window.innerWidth || 768;
+  const screenW = window.screen?.width || visual;
+  return Math.min(visual, screenW);
+};
+
 const useBreakpoint = () => {
-  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 768);
+  const [w, setW] = useState(getResponsiveWidth);
   useEffect(() => {
-    const fn = () => setW(window.innerWidth);
+    const fn = () => setW(getResponsiveWidth());
     window.addEventListener("resize", fn);
-    return () => window.removeEventListener("resize", fn);
+    (window as any).visualViewport?.addEventListener?.("resize", fn);
+    window.addEventListener("orientationchange", fn);
+    fn();
+    return () => {
+      window.removeEventListener("resize", fn);
+      (window as any).visualViewport?.removeEventListener?.("resize", fn);
+      window.removeEventListener("orientationchange", fn);
+    };
   }, []);
-  return { isMobile: w < 640, isTablet: w < 1024, w };
+  return { isMobile: w < 760, isTablet: w < 1024, w };
 };
 
 // ─── GLOBAL STYLES (injected once) ──────────────────────────────────────────
@@ -28,10 +42,23 @@ const GlobalStyles = () => {
     if (document.getElementById(id)) return;
     const s = document.createElement("style");
     s.id = id;
+    const existingViewport = document.querySelector('meta[name="viewport"]');
+    if (!existingViewport) {
+      const meta = document.createElement("meta");
+      meta.name = "viewport";
+      meta.content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+      document.head.appendChild(meta);
+    } else {
+      existingViewport.setAttribute("content","width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover");
+    }
+
     s.textContent = `
       *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-      body{margin:0;font-family:'Inter',system-ui,sans-serif;}
-      input,select,button,textarea{font-family:inherit;}
+      html,body{margin:0;width:100%;max-width:100%;overflow-x:hidden;font-family:'Inter',system-ui,sans-serif;}
+      body{position:relative;}
+      #__next,main{max-width:100%;overflow-x:hidden;}
+      input,select,button,textarea{font-family:inherit;max-width:100%;}
+      textarea{display:block;}
       ::-webkit-scrollbar{width:4px;height:4px;}
       ::-webkit-scrollbar-track{background:transparent;}
       ::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px;}
@@ -39,7 +66,7 @@ const GlobalStyles = () => {
       .emdc-row:hover{background:#F9FAFB;}
       .emdc-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.07);}
       .emdc-chip:hover{background:#F3F4F6;}
-      @media(max-width:639px){
+      @media(max-width:759px){
         .hide-mobile{display:none!important;}
         .stack-mobile{flex-direction:column!important;}
         .full-mobile{width:100%!important;}
@@ -586,21 +613,33 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
   },[categoryFilter,categoryOptions]);
 
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const rawQ = query.trim();
+    const q = rawQ.toLowerCase();
     const compactQ = q.replace(/[^a-z0-9]+/g,"");
-    const terms = q.split(/\s+/).filter(Boolean);
+    const qLooksLikeSku = /[a-z]+[-_][a-z0-9_-]+/i.test(rawQ) || /\d/.test(rawQ);
+    const normalizedTerms = q.split(/\s+/).map((term:string)=>term.trim()).filter((term:string)=>term.length>=2);
+
+    const normalizeCompact = (value:any) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
 
     const list = (skuStorage||[]).filter((s:any) => {
       const brandName = brands.find((b:any)=>b.id===s.brandId)?.name || "";
       const collectionName = getPickerCollection(s);
       const tagText = getSkuTags(s).join(" ");
+      const extraValues = Object.values(s.extraFields || {}).join(" ");
 
       if(brandFilter!=="all" && s.brandId !== brandFilter) return false;
       if(categoryFilter!=="all" && collectionName !== categoryFilter) return false;
 
       if(!q) return true;
 
-      const searchable = [
+      const skuCompact = normalizeCompact(s.sku);
+      const productCompact = normalizeCompact(s.productName);
+      const brandCompact = normalizeCompact(brandName);
+      const collectionCompact = normalizeCompact(collectionName);
+      const tagCompact = normalizeCompact(tagText || getSkuTagText(s));
+      const extraCompact = normalizeCompact(extraValues);
+
+      const wordSearchable = [
         s.productName,
         s.sku,
         collectionName,
@@ -612,15 +651,29 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
         brandName,
         tagText,
         getSkuTagText(s),
-        Object.keys(s.extraFields || {}).join(" "),
-        Object.values(s.extraFields || {}).join(" "),
+        extraValues,
       ].filter(Boolean).join(" ").toLowerCase();
 
-      const compactSearchable = searchable.replace(/[^a-z0-9]+/g,"");
+      // SKU-like or short searches should not match every random extra field.
+      // Example: "SLQ-OV" should only look at SKU/product/brand/category/tag fields.
+      if(qLooksLikeSku || compactQ.length <= 4){
+        return [
+          skuCompact,
+          productCompact,
+          brandCompact,
+          collectionCompact,
+          tagCompact,
+        ].some((field:string)=>field.includes(compactQ));
+      }
 
-      return searchable.includes(q) ||
-        (!!compactQ && compactSearchable.includes(compactQ)) ||
-        terms.every((term:string)=>searchable.includes(term) || compactSearchable.includes(term.replace(/[^a-z0-9]+/g,"")));
+      return wordSearchable.includes(q) ||
+        [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact,extraCompact].some((field:string)=>field.includes(compactQ)) ||
+        normalizedTerms.every((term:string)=>{
+          const compactTerm = normalizeCompact(term);
+          if(compactTerm.length < 2) return true;
+          return wordSearchable.includes(term) ||
+            [skuCompact,productCompact,brandCompact,collectionCompact,tagCompact,extraCompact].some((field:string)=>field.includes(compactTerm));
+        });
     });
 
     return list;
@@ -2453,7 +2506,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
       <Modal open={!!phaseoutTagEdit} onClose={()=>{setPhaseoutTagEdit(null);setPhaseoutTagValue("");setPhaseoutSelectedEventIds([]);}} title="Edit SKU Tags & Events" width={560}>
         {phaseoutTagEdit&&(
-          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,minWidth:0,maxWidth:"100%" }}>
             <div style={{ padding:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10 }}>
               <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{phaseoutTagEdit.productName || phaseoutTagEdit.sku}</p>
               <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,fontFamily:"monospace" }}>{phaseoutTagEdit.sku}</p>
@@ -3977,7 +4030,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const sectionInstructions = getEcommerceSectionInstructions();
       const mappedProducts = productRows.slice(0,30);
       return (
-        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.1fr) minmax(0,.9fr)",gap:14 }}>
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.1fr) minmax(0,.9fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
             <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
@@ -4009,7 +4062,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </p>
                     {!!catalogFiles.length&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.faint,fontWeight:700 }}>{catalogFiles.length} reference image{catalogFiles.length>1?"s":""} added</p>}
                   </div>
-                  <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:32,padding:"0 12px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap" }}>
+                  <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:32,padding:"0 12px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",width:isMobile?"100%":"auto" }}>
                     Upload Reference Images
                     <input type="file" accept="image/*" multiple onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
                   </label>
@@ -4031,10 +4084,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
                 placeholder="Click Use Listing Template, upload reference images if needed, or write your own instruction for the e-commerce listing output."
                 rows={9}
-                style={{ width:"100%",minHeight:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:isMobile?230:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
               />
               {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
-              <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",marginTop:10 }}>
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",gap:8,justifyContent:isMobile?"stretch":"flex-end",marginTop:10 }}>
                 <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt() })}>Save Prompt</Btn>
                 <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
               </div>
@@ -4043,7 +4096,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
                 <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Required Output Structure</h4>
-                <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
                   <Btn xs variant="outline" onClick={setAllEcommerceSections}>Select All</Btn>
                   <Btn xs variant="outline" onClick={clearAllEcommerceSections}>Clear All</Btn>
                   <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt() })}>Save Changes</Btn>
@@ -4311,7 +4364,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   return (
-    <div>
+    <div style={{ width:"100%",maxWidth:"100%",minWidth:0,overflowX:"hidden" }}>
       {/* Header */}
       <div style={{ marginBottom:20 }}>
         <button onClick={onBack} style={{ background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:13,fontWeight:600,padding:"0 0 10px",display:"flex",alignItems:"center",gap:5 }}>&#8249; All Groups</button>
@@ -4348,7 +4401,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <div style={{ maxHeight:isMobile?168:138,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                 {productRows.map((row:any,idx:number)=>(
                   <button key={`${row.skuCode}-${idx}`} type="button" onClick={()=>openProductDetail(row)}
-                    style={{ width:"100%",display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(150px,1fr) minmax(180px,1.4fr)",gap:isMobile?2:10,padding:isMobile?"7px 10px":"8px 10px",background:idx%2?C.surface:C.surfaceAlt,border:"none",borderBottom:idx===productRows.length-1?"none":`1px solid ${C.border}`,textAlign:"left",cursor:"pointer" }}>
+                    style={{ width:"100%",maxWidth:"100%",display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(120px,.8fr) minmax(150px,1fr) minmax(180px,1.4fr)",gap:isMobile?2:10,padding:isMobile?"7px 10px":"8px 10px",background:idx%2?C.surface:C.surfaceAlt,border:"none",borderBottom:idx===productRows.length-1?"none":`1px solid ${C.border}`,textAlign:"left",cursor:"pointer",overflow:"hidden" }}>
                     <div style={{ minWidth:0,fontSize:11,fontWeight:800,color:C.textSub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"}</div>
                     <div style={{ minWidth:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.collection || "No collection/category"}</div>
                     <div style={{ minWidth:0,fontSize:11,color:C.text,fontWeight:750,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}{row.skuCode&&<span style={{ color:C.faint,fontWeight:600 }}> · {row.skuCode}</span>}</div>
@@ -9421,10 +9474,10 @@ export default function App({
   return (
     <>
       <GlobalStyles />
-      <div style={{ minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.text }}>
+      <div style={{ minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.text,width:"100%",maxWidth:"100%",overflowX:"hidden" }}>
         {/* ── Top nav ─────────────────────────────────────────────────────── */}
         <div style={{ background:C.surface,borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:100 }}>
-          <div style={{ maxWidth:1280,margin:"0 auto",padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52 }}>
+          <div style={{ maxWidth:1280,margin:"0 auto",padding:isMobile?"0 12px":"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52,width:"100%",minWidth:0 }}>
             <div style={{ display:"flex",alignItems:"center",gap:9 }}>
               <div style={{ width:28,height:28,borderRadius:7,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -9452,7 +9505,7 @@ export default function App({
         </div>
 
         {/* ── Page content ─────────────────────────────────────────────────── */}
-        <div style={{ maxWidth:pageMaxWidth,margin:"0 auto",padding:pagePadding }}>
+        <div style={{ maxWidth:pageMaxWidth,margin:"0 auto",padding:pagePadding,width:"100%",minWidth:0,overflowX:"hidden" }}>
           <div style={{ marginBottom:isMobile?16:20 }}>
             <h1 style={{ margin:"0 0 2px",fontSize:isMobile?16:18,fontWeight:700,color:C.text,letterSpacing:"-.02em" }}>{TABS.find(t=>t.id===tab)?.label}</h1>
             <p style={{ margin:0,fontSize:12,color:C.faint }}>
