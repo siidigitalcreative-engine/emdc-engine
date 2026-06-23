@@ -4435,6 +4435,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const formatCampaignRowOutput = (row:any) => [
     "Product",
     row.product || "",
+    row.sku ? `SKU: ${row.sku}` : "",
+    row.brand ? `Brand: ${row.brand}` : "",
+    row.collection ? `Collection: ${row.collection}` : "",
     "",
     "Product Count",
     String(getCampaignRowProductKeys(row).length || 1),
@@ -4596,7 +4599,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const builder = getEcommerceCampaignBuilder();
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     const rowKey = String(row.id || row.productKey || row.product || uid());
-    addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.platform || builder.platform} · ${theme}`);
+    addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.product || "Product"} · ${row.platform || builder.platform} · ${theme}`);
     setCampaignOverviewAddedIds((prev:string[])=>Array.from(new Set([...prev,rowKey])));
     window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
@@ -4742,11 +4745,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const product = getAfter("Product") || getAfter("Product Details");
         const productCount = getAfter("Product Count");
         const platform = getAfter("Platform");
+        const sku = getPrefixed("SKU:");
+        const brand = getPrefixed("Brand:");
+        const collection = getPrefixed("Collection:");
         const headline = getAfter("Headline") || getPrefixed("Headline:");
         const subheadline = getAfter("Subheadline") || getPrefixed("Subheadline:");
         const cta = getAfter("CTA") || getPrefixed("CTA:");
         const hasCampaignFormat = !!(product || headline || subheadline || cta);
-        return { product, productCount, platform, headline, subheadline, cta, hasCampaignFormat };
+        return { product, productCount, platform, sku, brand, collection, headline, subheadline, cta, hasCampaignFormat };
       };
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
@@ -4779,7 +4785,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35,whiteSpace:isCampaignCopy?"normal":"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{isCampaignCopy ? (campaignCopy.product || item.title || "Campaign Copy") : (item.title || "Overview Item")}</p>
                       <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>{item.sourceTab || "output"} · {item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
                       {isCampaignCopy&&campaignCopy.productCount&&<p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{campaignCopy.productCount} products inside this row</p>}
-                      {isCampaignCopy&&item.kind&&<p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted,lineHeight:1.35 }}>{item.kind}</p>}
                     </div>
                     <div style={{ display:"flex",gap:6,flexShrink:0 }}>
                       <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
@@ -4788,23 +4793,35 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   </div>
 
                   {isCampaignCopy ? (
-                    <div style={{ margin:"10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                      <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                        <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
-                        <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Added from E-commerce</span>
+                    <div style={{ margin:10,display:"flex",flexDirection:"column",gap:10 }}>
+                      <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                        <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Product Details</p>
+                        <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
+                          {[
+                            campaignCopy.brand ? `Brand: ${campaignCopy.brand}` : "",
+                            campaignCopy.product ? `Product Name: ${campaignCopy.product}` : "",
+                            campaignCopy.sku ? `SKU: ${campaignCopy.sku}` : "",
+                          ].filter(Boolean).join("\n") || "No product details added."}
+                        </p>
                       </div>
-                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
-                        <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
-                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.headline || "No headline added."}</p>
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                        <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
+                          <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Added from E-commerce</span>
                         </div>
-                        <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
-                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.subheadline || "No subheadline added."}</p>
-                        </div>
-                        <div style={{ padding:10 }}>
-                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
-                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{campaignCopy.cta || "No CTA added."}</p>
+                        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
+                          <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
+                            <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
+                            <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.headline || "No headline added."}</p>
+                          </div>
+                          <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
+                            <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
+                            <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.subheadline || "No subheadline added."}</p>
+                          </div>
+                          <div style={{ padding:10 }}>
+                            <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
+                            <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{campaignCopy.cta || "No CTA added."}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -4824,6 +4841,20 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     const workspaceTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
     const isCampaignChecklist = workspaceTypeLabel.includes("campaign");
+
+    if(tab==="marketing" && isCampaignChecklist){
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+          <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign Marketing</h3>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Blank campaign marketing workspace.</p>
+          </div>
+          <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No campaign marketing content yet.</p>
+          </div>
+        </div>
+      );
+    }
 
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [];
@@ -4888,7 +4919,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
                   </div>
 
-                  <div style={{ margin:"0 10px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                  <div style={{ margin:"0 10px 10px",display:"flex",flexDirection:"column",gap:10 }}>
+                    <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                      <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Product Details</p>
+                      <p style={{ margin:0,fontSize:12.5,lineHeight:1.45,color:C.textSub,whiteSpace:"pre-wrap" }}>
+                        {[
+                          item.brand ? `Brand: ${item.brand}` : "",
+                          item.product ? `Product Name: ${item.product}` : "",
+                          item.sku ? `SKU: ${item.sku}` : "",
+                        ].filter(Boolean).join("\n") || "No product details sent."}
+                      </p>
+                    </div>
+                    <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                     <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                       <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
                       <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Sent from E-commerce</span>
@@ -4906,6 +4948,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
                         <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{item.cta || "No CTA sent."}</p>
                       </div>
+                    </div>
                     </div>
                   </div>
                 </div>
