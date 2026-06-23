@@ -4734,6 +4734,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     if(tab==="overview"){
       const overviewItems = getOverviewItems();
+      const isCampaignOverview = String(lt?.label || group?.launchType || group?.type || "").toLowerCase().includes("campaign");
       const parseCampaignOverviewCopy = (content:any) => {
         const lines = String(content || "").split(/\r?\n/).map((line:string)=>line.trim());
         const getAfter = (label:string) => {
@@ -4747,15 +4748,70 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const product = getAfter("Product") || getAfter("Product Details");
         const productCount = getAfter("Product Count");
         const platform = getAfter("Platform");
-        const sku = getPrefixed("SKU:");
-        const brand = getPrefixed("Brand:");
-        const collection = getPrefixed("Collection:");
+        const brand = getAfter("Brand") || getPrefixed("Brand:");
+        const category = getAfter("Category") || getAfter("Collection") || getPrefixed("Collection:");
         const headline = getAfter("Headline") || getPrefixed("Headline:");
         const subheadline = getAfter("Subheadline") || getPrefixed("Subheadline:");
         const cta = getAfter("CTA") || getPrefixed("CTA:");
-        const hasCampaignFormat = !!(product || headline || subheadline || cta);
-        return { product, productCount, platform, sku, brand, collection, headline, subheadline, cta, hasCampaignFormat };
+        const hasCampaignFormat = !!(platform || brand || category || product || headline || subheadline || cta);
+        return { platform, brand, category, product, productCount, headline, subheadline, cta, hasCampaignFormat };
       };
+      const campaignOverviewRows = overviewItems
+        .map((item:any)=>({ item, row:parseCampaignOverviewCopy(item.content) }))
+        .filter(({row}:any)=>row.hasCampaignFormat);
+
+      if(isCampaignOverview){
+        return (
+          <div style={{ display:"flex",flexDirection:"column",gap:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+                <div>
+                  <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Overview</h3>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Master table of campaign outputs added from E-commerce and Digital Creative.</p>
+                </div>
+                <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                  <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{campaignOverviewRows.length} row{campaignOverviewRows.length!==1?"s":""}</span>
+                  <Btn sm variant="outline" onClick={copyAllOverviewItems} disabled={!campaignOverviewRows.length}>Copy All</Btn>
+                </div>
+              </div>
+            </div>
+
+            {campaignOverviewRows.length===0 ? (
+              <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No rows yet. Click Add to Overview from Campaign E-commerce or Campaign Digital Creative.</p>
+              </div>
+            ) : (
+              <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?430:620 }}>
+                  <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                    <thead>
+                      <tr style={{ background:C.surfaceAlt }}>
+                        {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                          <th key={label} style={{ position:"sticky",top:0,zIndex:2,background:C.surfaceAlt,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campaignOverviewRows.map(({item,row}:any,idx:number)=>(
+                        <tr key={item.id} style={{ background:idx%2?C.surface:C.bg }}>
+                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || ""}</td>
+                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
+                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
+                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
+                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:300 }}>{row.subheadline || ""}</td>
+                          <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -4777,56 +4833,23 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             </div>
           ) : (
             <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14 }}>
-              {overviewItems.map((item:any)=>{
-                const campaignCopy = parseCampaignOverviewCopy(item.content);
-                const isCampaignCopy = (item.title==="Campaign Copy" || item.kind==="Campaign Copy" || item.sourceTab==="E-commerce") && campaignCopy.hasCampaignFormat;
-                return (
-                <div key={item.id} style={{ gridColumn:isCampaignCopy&&!isMobile?"1 / -1":"auto",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                  <div style={{ padding:"12px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
-                    <div style={{ minWidth:0,flex:"1 1 320px" }}>
-                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35,whiteSpace:isCampaignCopy?"normal":"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{isCampaignCopy ? (campaignCopy.product || item.title || "Campaign Copy") : (item.title || "Overview Item")}</p>
-                      <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>{item.sourceTab || "output"} · {item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
-                      {isCampaignCopy&&campaignCopy.productCount&&<p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{campaignCopy.productCount} products inside this row</p>}
+              {overviewItems.map((item:any)=>(
+                <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                  <div style={{ padding:"12px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start" }}>
+                    <div style={{ minWidth:0 }}>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Overview Item"}</p>
+                      <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.sourceTab || "output"} · {item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
                     </div>
                     <div style={{ display:"flex",gap:6,flexShrink:0 }}>
                       <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
                       <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                     </div>
                   </div>
-
-                  {isCampaignCopy ? (
-                    <div style={{ margin:10,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                      <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:360 }}>
-                        <table style={{ width:"100%",minWidth:1100,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
-                          <thead>
-                            <tr style={{ background:C.surfaceAlt }}>
-                              {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
-                                <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:700 }}>{campaignCopy.platform || "All Platforms"}</td>
-                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{campaignCopy.brand || ""}</td>
-                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{campaignCopy.collection || ""}</td>
-                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{campaignCopy.product || ""}</td>
-                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{campaignCopy.headline || ""}</td>
-                              <td style={{ padding:10,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{campaignCopy.subheadline || ""}</td>
-                              <td style={{ padding:10,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{campaignCopy.cta || ""}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:14,background:C.bg }}>
-                      <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.55,color:C.text }}>{item.content || ""}</pre>
-                    </div>
-                  )}
+                  <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:14,background:C.bg }}>
+                    <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.55,color:C.text }}>{item.content || ""}</pre>
+                  </div>
                 </div>
-                );
-              })}
+              ))}
             </div>
           )}
         </div>
