@@ -4028,10 +4028,159 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     }
   };
 
-  const copyGeneratedEcommerce = async () => {
-    const output = String(((group.aiWorkspace || {}).ecommerce || {}).generatedText || "");
+  const ecommerceCampaignPlatforms = ["All Platforms","Shopee","Lazada","TikTok Shop","Shopify","Meta Ads"];
+  const ecommerceCampaignThemes = [
+    "Payday Sale",
+    "Double Digit Sale",
+    "Product Launch",
+    "Product Relaunch",
+    "Clearance / Phase-Out",
+    "Bundle Promo",
+    "Back to School",
+    "Rainy Season",
+    "Christmas / Ber Months",
+    "Custom",
+  ];
+
+  const getEcommerceCampaignBuilder = () => {
+    const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
+    const builder = data.campaignBuilder || {};
+    return {
+      platform: builder.platform || "All Platforms",
+      theme: builder.theme || "Payday Sale",
+      customTheme: builder.customTheme || "",
+      promotion: builder.promotion || "",
+      selectedSkus: Array.isArray(builder.selectedSkus) ? builder.selectedSkus : [],
+      generatedText: builder.generatedText || "",
+      generatedAt: builder.generatedAt || "",
+    };
+  };
+
+  const updateEcommerceCampaignBuilder = (patch:any) => {
+    const current = getEcommerceCampaignBuilder();
+    updateAiWorkspace("ecommerce",{ campaignBuilder:{ ...current, ...patch } });
+  };
+
+  const getEcommerceCampaignSelectedSkus = () => {
+    const builder = getEcommerceCampaignBuilder();
+    return (builder.selectedSkus || []).map((saved:any)=>{
+      const match = (skuStorage || []).find((sku:any)=>sku.id===saved.id || sku.sku===saved.sku);
+      return match || saved;
+    }).filter(Boolean);
+  };
+
+  const getEcommerceCampaignSkuIds = () => getEcommerceCampaignSelectedSkus().map((sku:any)=>sku.id).filter(Boolean);
+
+  const toggleEcommerceCampaignSku = (sku:any) => {
+    const current = getEcommerceCampaignSelectedSkus();
+    const exists = current.some((item:any)=>item.id===sku.id || item.sku===sku.sku);
+    const next = exists ? current.filter((item:any)=>!(item.id===sku.id || item.sku===sku.sku)) : [...current,sku];
+    updateEcommerceCampaignBuilder({
+      selectedSkus: next.map((item:any)=>({
+        id:item.id || uid(),
+        sku:item.sku || item.value || "",
+        productName:item.productName || item.value || "",
+        brandId:item.brandId || "",
+        brand:item.brand || "",
+        collection:item.collection || item.category || item.productCategory || "",
+        category:item.category || item.collection || item.productCategory || "",
+        extraFields:item.extraFields || {},
+      })),
+    });
+  };
+
+  const clearEcommerceCampaignSkus = () => updateEcommerceCampaignBuilder({ selectedSkus:[] });
+
+  const getEcommerceCampaignProductSummary = (skus:any[]) => skus.map((sku:any,idx:number)=>{
+    const brand = (brands || []).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "";
+    const collection = getSkuCollectionCategory(sku) || sku.collection || sku.category || sku.productCategory || "";
+    return `${idx+1}. Brand: ${brand || "Unbranded"} | Collection/Category: ${collection || "No collection/category"} | Product: ${sku.productName || sku.value || ""} | SKU: ${sku.sku || ""}`;
+  }).join("\n");
+
+  const generateEcommerceCampaignAssets = async () => {
+    const tab = "ecommerce";
+    const builder = getEcommerceCampaignBuilder();
+    const selectedSkus = getEcommerceCampaignSelectedSkus();
+    const theme = builder.theme==="Custom" ? builder.customTheme.trim() : builder.theme;
+
+    if(!selectedSkus.length){
+      setAiError((p:any)=>({...p,ecommerceCampaign:"Please select at least one product/SKU."}));
+      return;
+    }
+    if(!theme){
+      setAiError((p:any)=>({...p,ecommerceCampaign:"Please choose a theme or enter a custom theme."}));
+      return;
+    }
+
+    setAiBusy((p:any)=>({...p,ecommerceCampaign:true}));
+    setAiError((p:any)=>({...p,ecommerceCampaign:""}));
+
+    const instruction = [
+      "You are EMDC's e-commerce campaign copy assistant.",
+      "Generate only the requested campaign text fields.",
+      "Output must be ready to copy and paste.",
+      "Do not use markdown heading symbols like ###.",
+      "Do not number the section headers.",
+      "Use these exact clean section titles only:",
+      "Headline",
+      "Subheadline",
+      "CTA",
+      "",
+      "Headline should be short, catchy, marketplace-friendly, and connected to the theme.",
+      "Subheadline should explain the offer or product benefit clearly.",
+      "CTA should be short and action-oriented.",
+      "Avoid em dashes.",
+      "Do not invent product specs.",
+    ].join("\n");
+
+    try {
+      const res = await fetch("/api/ai/generate-text", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          task:"ecommerce_campaign_copy",
+          taskLabel:"E-commerce Campaign Copy Generator",
+          tone:"commercial",
+          instruction,
+          input:JSON.stringify({
+            platform:builder.platform,
+            theme,
+            promotionMechanics:builder.promotion || "",
+            checklistGroup:group.groupName,
+            operationalType:lt.label,
+            products:getEcommerceCampaignProductSummary(selectedSkus),
+          },null,2),
+          maxOutputTokens:1200,
+        }),
+      });
+
+      const raw = await res.text();
+      let payload:any = {};
+      try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "Campaign copy generation failed."); }
+      if(!res.ok) throw new Error(payload?.error || payload?.message || "Campaign copy generation failed.");
+
+      updateEcommerceCampaignBuilder({
+        generatedText:cleanReadyToUseOutput(payload?.text || ""),
+        generatedAt:new Date().toISOString(),
+      });
+    } catch (err:any) {
+      setAiError((p:any)=>({...p,ecommerceCampaign:err?.message || "Campaign copy generation failed."}));
+    } finally {
+      setAiBusy((p:any)=>({...p,ecommerceCampaign:false}));
+    }
+  };
+
+  const copyEcommerceCampaignOutput = async () => {
+    const builder = getEcommerceCampaignBuilder();
+    const output = String(builder.generatedText || "");
     if(!output) return;
     try { await navigator.clipboard.writeText(output); } catch {}
+  };
+
+  const addEcommerceCampaignToOverview = () => {
+    const builder = getEcommerceCampaignBuilder();
+    const theme = builder.theme==="Custom" ? builder.customTheme : builder.theme;
+    addToOverview("E-commerce","Campaign Copy",builder.generatedText || "",`${builder.platform} · ${theme}`);
   };
 
   const renderAiWorkspace = (tab:string) => {
@@ -4090,9 +4239,122 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const selectedSections = getSelectedEcommerceSections();
       const sectionInstructions = getEcommerceSectionInstructions();
       const mappedProducts = productRows.slice(0,30);
+      const campaignBuilder = getEcommerceCampaignBuilder();
+      const campaignSelectedSkus = getEcommerceCampaignSelectedSkus();
+      const campaignSelectedSkuIds = getEcommerceCampaignSkuIds();
+      const campaignTheme = campaignBuilder.theme==="Custom" ? campaignBuilder.customTheme : campaignBuilder.theme;
       return (
         <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.1fr) minmax(0,.9fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12 }}>
+                <div>
+                  <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign E-commerce Copy Builder</h3>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Create quick campaign copy for checklist groups. Select the platform, theme, products/SKUs, and promotion mechanics, then generate headline, subheadline, and CTA.</p>
+                </div>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>Headline · Subheadline · CTA</span>
+              </div>
+
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
+                <Field label="Platform">
+                  <Select value={campaignBuilder.platform} onChange={(value)=>updateEcommerceCampaignBuilder({ platform:value })}>
+                    {ecommerceCampaignPlatforms.map((platform:string)=><option key={platform} value={platform}>{platform}</option>)}
+                  </Select>
+                </Field>
+
+                <Field label="Theme">
+                  <Select value={campaignBuilder.theme} onChange={(value)=>updateEcommerceCampaignBuilder({ theme:value })}>
+                    {ecommerceCampaignThemes.map((theme:string)=><option key={theme} value={theme}>{theme}</option>)}
+                  </Select>
+                </Field>
+
+                {campaignBuilder.theme==="Custom"&&(
+                  <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
+                    <Field label="Custom Theme">
+                      <TI value={campaignBuilder.customTheme} onChange={(value)=>updateEcommerceCampaignBuilder({ customTheme:value })} placeholder="e.g. 7.7 Rainy Deals, Payday Bundle, Clearance Weekend" />
+                    </Field>
+                  </div>
+                )}
+
+                <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
+                  <Field label="Products / SKU">
+                    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                      <SKUPicker
+                        skuStorage={skuStorage}
+                        brands={brands}
+                        multiSelect
+                        selectedIds={campaignSelectedSkuIds}
+                        onSelect={toggleEcommerceCampaignSku}
+                        placeholder="Search product, SKU, brand, category, or tag..."
+                      />
+                      {campaignSelectedSkus.length>0&&(
+                        <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                          <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
+                            <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{campaignSelectedSkus.length} selected SKU{campaignSelectedSkus.length!==1?"s":""}</span>
+                            <button type="button" onClick={clearEcommerceCampaignSkus} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight:150,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                            {campaignSelectedSkus.map((sku:any)=> {
+                              const brand = (brands || []).find((b:any)=>b.id===sku.brandId)?.name || sku.brand || "";
+                              const collection = getSkuCollectionCategory(sku) || sku.collection || sku.category || "";
+                              return (
+                                <div key={sku.id || sku.sku} style={{ display:"flex",justifyContent:"space-between",gap:8,padding:"8px 10px",borderBottom:`1px solid ${C.border}` }}>
+                                  <div style={{ minWidth:0 }}>
+                                    <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku.productName || sku.value || sku.sku}</p>
+                                    <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{brand || "No brand"} · {collection || "No collection/category"} · {sku.sku || ""}</p>
+                                  </div>
+                                  <button type="button" onClick={()=>toggleEcommerceCampaignSku(sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer",alignSelf:"center" }}>Remove</button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Field>
+                </div>
+
+                <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
+                  <Field label="Promotion / Mechanics">
+                    <textarea
+                      value={campaignBuilder.promotion}
+                      onChange={(e)=>updateEcommerceCampaignBuilder({ promotion:e.target.value })}
+                      placeholder="Example: 6.30 Payday Sale, 20% off minimum spend ₱599, free shipping voucher, bundle promo, limited-time offer..."
+                      rows={4}
+                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.45,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              {aiError.ecommerceCampaign&&<div style={{ marginTop:10,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError.ecommerceCampaign}</div>}
+
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:12,flexWrap:"wrap" }}>
+                <p style={{ margin:0,fontSize:11,color:C.faint }}>Output will include Headline, Subheadline, and CTA only.</p>
+                <Btn sm onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign}>{aiBusy.ecommerceCampaign?"Generating...":"Generate Campaign Copy"}</Btn>
+              </div>
+
+              {(campaignBuilder.generatedText || aiBusy.ecommerceCampaign)&&(
+                <div style={{ marginTop:12,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.bg,overflow:"hidden" }}>
+                  <div style={{ padding:"9px 11px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                    <div>
+                      <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>AI Text Generation Output</p>
+                      <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted }}>{campaignBuilder.platform} · {campaignTheme || "Theme"}</p>
+                    </div>
+                    {campaignBuilder.generatedText&&(
+                      <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                        <Btn xs variant="outline" onClick={copyEcommerceCampaignOutput}>Copy</Btn>
+                        <Btn xs variant="outline" onClick={addEcommerceCampaignToOverview}>Add to Overview</Btn>
+                      </div>
+                    )}
+                  </div>
+                  <pre style={{ margin:0,padding:12,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:13,lineHeight:1.55,color:C.textSub,minHeight:120 }}>
+                    {aiBusy.ecommerceCampaign?"Generating headline, subheadline, and CTA...":campaignBuilder.generatedText}
+                  </pre>
+                </div>
+              )}
+            </div>
+
             <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
                 <div>
