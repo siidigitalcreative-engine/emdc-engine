@@ -3618,6 +3618,22 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     try { await navigator.clipboard.writeText(output); } catch {}
   };
 
+  const formatProductIntroOverviewRows = (extraOutput:any="") => {
+    const header = "PLATFORM\tBRAND\tCATEGORY\tPRODUCT\tHEADLINE\tSUBHEADLINE\tCTA";
+    const rows = productRows.map((row:any)=>[
+      "All Platforms",
+      row.brand || "",
+      row.collection || row.category || "",
+      row.product || row.productName || "",
+      "",
+      "",
+      "",
+    ].join("\t"));
+    const table = [header,...rows].join("\n");
+    const extra = String(extraOutput || "").trim();
+    return extra ? `${table}\n\nGenerated E-commerce Output\n${extra}` : table;
+  };
+
   const defaultEcommerceOutputSections = [
     "Product Overview",
     "Key Features",
@@ -5007,6 +5023,32 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         });
       };
 
+      const saveCampaignDcImageOutput = (item:any) => {
+        if(!item.generatedImageUrl) return;
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          savedImageOutputs:[{
+            id:uid(),
+            source:"Campaign Digital Creative",
+            title:item.title || item.product || "Campaign Digital Creative",
+            url:item.generatedImageUrl,
+            prompt:item.generatedImagePrompt || item.imagePrompt || "",
+            createdAt:new Date().toISOString(),
+          },...saved].slice(0,60),
+        });
+      };
+
+      const deleteCampaignDcImageOutput = (item:any) => {
+        updateCampaignDigitalItem(item.id,{
+          generatedImageUrl:"",
+          generatedImagePrompt:"",
+          generatedImageAt:"",
+          generatedImageError:"",
+          imageLinks:item.imageLinks || [],
+        });
+      };
+
       const generateCampaignDcImage = async (item:any) => {
         const productRows = getCampaignDigitalProductRows(item);
         const imageLinks = Array.from(new Set(productRows.flatMap((row:any)=>row.links || []))).map(normalizeDcUrl);
@@ -5184,12 +5226,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       </div>
                       <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
                         {item.generatedImageUrl ? (
-                          <img
-                            src={item.generatedImageUrl}
-                            alt="Generated campaign creative"
-                            onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.title || item.product || "Campaign Digital Creative" })}
-                            style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
-                          />
+                          <div style={{ width:"100%",display:"flex",flexDirection:"column",gap:10,alignItems:"center" }}>
+                            <img
+                              src={item.generatedImageUrl}
+                              alt="Generated campaign creative"
+                              onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.title || item.product || "Campaign Digital Creative" })}
+                              style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
+                            />
+                            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
+                              <Btn xs variant="outline" onClick={()=>saveCampaignDcImageOutput(item)}>Save</Btn>
+                              <Btn xs variant="danger" onClick={()=>deleteCampaignDcImageOutput(item)}>Delete</Btn>
+                            </div>
+                          </div>
                         ) : (
                           <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
                             <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
@@ -5231,8 +5279,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if(tab==="digital" && !isCampaignChecklist){
       const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
       const productIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
-      const sourceRows = productIntroRows.length ? productIntroRows : productRows.map((row:any)=>({
-        id:String(row.id || row.skuCode || row.sku || uid()),
+      const makeProductIntroDcItem = (row:any) => ({
+        id:uid(),
         sourceRowId:String(row.id || row.skuCode || row.sku || ""),
         platform:"All Platforms",
         brand:row.brand || "",
@@ -5242,10 +5290,31 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         headline:"",
         subheadline:"",
         cta:"",
+        imagePrompt:"",
         products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" }],
         linkedEventContext:group.groupName || "Product Introduction",
         createdAt:new Date().toISOString(),
-      }));
+      });
+      const makeProductIntroDcGroupedItem = (rows:any[]) => {
+        const cleanRows = rows.filter(Boolean);
+        return {
+          id:uid(),
+          sourceRowId:`group-${Date.now()}`,
+          platform:"All Platforms",
+          brand:Array.from(new Set(cleanRows.map((row:any)=>row.brand).filter(Boolean))).join(", "),
+          category:Array.from(new Set(cleanRows.map((row:any)=>row.collection || row.category).filter(Boolean))).join(", "),
+          product:cleanRows.map((row:any)=>row.product || row.productName || row.skuCode || row.sku).filter(Boolean).join(" + "),
+          sku:cleanRows.map((row:any)=>row.skuCode || row.sku).filter(Boolean).join(", "),
+          headline:"",
+          subheadline:"",
+          cta:"",
+          imagePrompt:"",
+          products:cleanRows.map((row:any)=>({ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" })),
+          linkedEventContext:group.groupName || "Product Introduction",
+          createdAt:new Date().toISOString(),
+        };
+      };
+      const sourceRows = productIntroRows.length ? productIntroRows : productRows.map(makeProductIntroDcItem);
       const copyProductIntroDigitalItem = async (item:any) => {
         const output = [
           "Platform", item.platform || "All Platforms", "",
@@ -5267,13 +5336,38 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           generatedAt:new Date().toISOString(),
         });
       };
+      const saveProductIntroDcImageOutput = (item:any) => {
+        if(!item.generatedImageUrl) return;
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          savedImageOutputs:[{
+            id:uid(),
+            source:"Product Introduction Digital Creative",
+            title:item.product || "Product Introduction Digital Creative",
+            url:item.generatedImageUrl,
+            prompt:item.generatedImagePrompt || item.imagePrompt || "",
+            createdAt:new Date().toISOString(),
+          },...saved].slice(0,60),
+        });
+      };
+      const deleteProductIntroDcImageOutput = (item:any) => {
+        updateProductIntroDigitalItem(item.id,{
+          generatedImageUrl:"",
+          generatedImagePrompt:"",
+          generatedImageAt:"",
+          generatedImageError:"",
+          imageLinks:item.imageLinks || [],
+        });
+      };
       const deleteProductIntroDigitalItem = (id:string) => {
         const nextRows = (productIntroRows.length ? productIntroRows : sourceRows).filter((row:any)=>row.id!==id);
         updateAiWorkspace("digital",{ productIntroCreativeRows:nextRows, generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"), generatedAt:new Date().toISOString() });
       };
       const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], generatedText:"", generatedAt:"" });
       const generateProductIntroDcImage = async (item:any) => {
-        const links = getDcProductLinks({ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }).map(normalizeDcUrl);
+        const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
+        const links = Array.from(new Set(cardProducts.flatMap((product:any)=>getDcProductLinks(product)))).map(normalizeDcUrl);
         const prompt = [
           "Create a premium ecommerce product introduction image based on this product row.",
           item.imagePrompt ? `User image prompt instruction:\n${item.imagePrompt}` : "",
@@ -5337,7 +5431,20 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           ) : (
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               {sourceRows.map((item:any)=>{
-                const links = getDcProductLinks({ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection });
+                const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
+                const tableProducts = cardProducts.map((product:any)=>({
+                  platform:item.platform || "All Platforms",
+                  brand:product.brand || item.brand || "",
+                  category:product.collection || item.category || item.collection || "",
+                  product:product.product || item.product || "",
+                  sku:product.sku || item.sku || "",
+                  headline:item.headline || "",
+                  subheadline:item.subheadline || "",
+                  cta:item.cta || "",
+                  links:getDcProductLinks(product),
+                }));
+                const links = Array.from(new Set(tableProducts.flatMap((row:any)=>row.links || [])));
+                const mergeCopyCells = tableProducts.length>1 && tableProducts.every((row:any)=>String(row.headline||"")===String(tableProducts[0]?.headline||"") && String(row.subheadline||"")===String(tableProducts[0]?.subheadline||"") && String(row.cta||"")===String(tableProducts[0]?.cta||""));
                 return (
                 <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                   <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
@@ -5364,15 +5471,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                               </tr>
                             </thead>
                             <tbody>
-                              <tr>
-                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{item.platform || "All Platforms"}</td>
-                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.brand || ""}</td>
-                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{item.category || item.collection || ""}</td>
-                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{item.product || ""}</td>
-                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{item.headline || ""}</td>
-                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{item.subheadline || ""}</td>
-                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{item.cta || ""}</td>
-                              </tr>
+                              {tableProducts.map((row:any,idx:number)=>(
+                                <tr key={`${row.sku || row.product || "product"}-${idx}`} style={{ background:idx%2?C.surface:C.bg }}>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || "All Platforms"}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                                  {mergeCopyCells ? (
+                                    idx===0&&<>
+                                      <td rowSpan={tableProducts.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:190 }}>{row.headline || ""}</td>
+                                      <td rowSpan={tableProducts.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:260 }}>{row.subheadline || ""}</td>
+                                      <td rowSpan={tableProducts.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{row.subheadline || ""}</td>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
+                                    </>
+                                  )}
+                                </tr>
+                              ))}
                             </tbody>
                           </table>
                         </div>
@@ -5383,16 +5502,21 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Product Image Links</span>
                           <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{links.length} link{links.length!==1?"s":""}</span>
                         </div>
-                        <div style={{ maxHeight:150,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:10 }}>
-                          {links.length ? (
-                            <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
-                              {links.map((link:string,linkIdx:number)=>(
-                                <a key={`${link}-${linkIdx}`} href={normalizeDcUrl(link)} target="_blank" rel="noreferrer" style={{ fontSize:11,color:C.accent,fontWeight:750,textDecoration:"underline",textUnderlineOffset:2,wordBreak:"break-all" }}>{link}</a>
-                              ))}
+                        <div style={{ maxHeight:170,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:10,display:"flex",flexDirection:"column",gap:8 }}>
+                          {tableProducts.map((row:any,idx:number)=>(
+                            <div key={`${row.sku || row.product || "links"}-${idx}`} style={{ padding:9,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface }}>
+                              <p style={{ margin:"0 0 5px",fontSize:11,fontWeight:900,color:C.text }}>{row.product || row.sku || `Product ${idx+1}`}</p>
+                              {row.links.length ? (
+                                <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                                  {row.links.map((link:string,linkIdx:number)=>(
+                                    <a key={`${link}-${linkIdx}`} href={normalizeDcUrl(link)} target="_blank" rel="noreferrer" style={{ fontSize:11,color:C.accent,fontWeight:750,textDecoration:"underline",textUnderlineOffset:2,wordBreak:"break-all" }}>{link}</a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p style={{ margin:0,fontSize:11,color:C.faint }}>No image/reference link found in SKU Storage for this product.</p>
+                              )}
                             </div>
-                          ) : (
-                            <p style={{ margin:0,fontSize:11,color:C.faint }}>No image/reference link found in SKU Storage for this product.</p>
-                          )}
+                          ))}
                         </div>
                       </div>
 
@@ -5420,12 +5544,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       </div>
                       <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
                         {item.generatedImageUrl ? (
-                          <img
-                            src={item.generatedImageUrl}
-                            alt="Generated product introduction creative"
-                            onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.product || "Product Introduction Digital Creative" })}
-                            style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
-                          />
+                          <div style={{ width:"100%",display:"flex",flexDirection:"column",gap:10,alignItems:"center" }}>
+                            <img
+                              src={item.generatedImageUrl}
+                              alt="Generated product introduction creative"
+                              onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.product || "Product Introduction Digital Creative" })}
+                              style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
+                            />
+                            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
+                              <Btn xs variant="outline" onClick={()=>saveProductIntroDcImageOutput(item)}>Save</Btn>
+                              <Btn xs variant="danger" onClick={()=>deleteProductIntroDcImageOutput(item)}>Delete</Btn>
+                            </div>
+                          </div>
                         ) : (
                           <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
                             <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
@@ -5653,27 +5783,17 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
-                          <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Generated Output",data.generatedText,"Generated Output")} disabled={!data.generatedText}>Add to Overview</Btn>
+                          <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows")} disabled={!productRows.length}>Add to Overview</Btn>
                           <Btn sm variant="outline" onClick={()=>{
-                            const rows = productRows.map((row:any)=>({
-                              id:uid(),
-                              sourceRowId:String(row.id || row.skuCode || row.sku || ""),
-                              platform:"All Platforms",
-                              brand:row.brand || "",
-                              category:row.collection || row.category || "",
-                              product:row.product || row.productName || "",
-                              sku:row.skuCode || row.sku || "",
-                              headline:"",
-                              subheadline:"",
-                              cta:"",
-                              imagePrompt:"",
-                              products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" }],
-                              linkedEventContext:group.groupName || "Product Introduction",
-                              createdAt:new Date().toISOString(),
-                            }));
+                            const rows = productRows.map(makeProductIntroDcItem);
                             updateAiWorkspace("digital",{ productIntroCreativeRows:rows, generatedText:"", generatedAt:new Date().toISOString() });
                             setActiveGroupTab("digital");
-                          }} disabled={!productRows.length}>Send to DC</Btn>
+                          }} disabled={!productRows.length}>Send DC Separate Rows</Btn>
+                          <Btn sm variant="outline" onClick={()=>{
+                            const rows = productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : [];
+                            updateAiWorkspace("digital",{ productIntroCreativeRows:rows, generatedText:"", generatedAt:new Date().toISOString() });
+                            setActiveGroupTab("digital");
+                          }} disabled={!productRows.length}>Send DC as 1 Row</Btn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                         </div>
                       </div>
