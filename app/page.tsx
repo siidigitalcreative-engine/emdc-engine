@@ -4596,7 +4596,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const builder = getEcommerceCampaignBuilder();
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     const rowKey = String(row.id || row.productKey || row.product || uid());
-    addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.product || "Product"} · ${row.platform || builder.platform} · ${theme}`);
+    addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.platform || builder.platform} · ${theme}`);
     setCampaignOverviewAddedIds((prev:string[])=>Array.from(new Set([...prev,rowKey])));
     window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
@@ -4729,6 +4729,25 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     if(tab==="overview"){
       const overviewItems = getOverviewItems();
+      const parseCampaignOverviewCopy = (content:any) => {
+        const lines = String(content || "").split(/\r?\n/).map((line:string)=>line.trim());
+        const getAfter = (label:string) => {
+          const idx = lines.findIndex((line:string)=>line.toLowerCase()===label.toLowerCase());
+          return idx>=0 ? (lines[idx+1] || "") : "";
+        };
+        const getPrefixed = (prefix:string) => {
+          const line = lines.find((item:string)=>item.toLowerCase().startsWith(prefix.toLowerCase()));
+          return line ? line.slice(prefix.length).trim() : "";
+        };
+        const product = getAfter("Product") || getAfter("Product Details");
+        const productCount = getAfter("Product Count");
+        const platform = getAfter("Platform");
+        const headline = getAfter("Headline") || getPrefixed("Headline:");
+        const subheadline = getAfter("Subheadline") || getPrefixed("Subheadline:");
+        const cta = getAfter("CTA") || getPrefixed("CTA:");
+        const hasCampaignFormat = !!(product || headline || subheadline || cta);
+        return { product, productCount, platform, headline, subheadline, cta, hasCampaignFormat };
+      };
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -4750,23 +4769,53 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             </div>
           ) : (
             <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14 }}>
-              {overviewItems.map((item:any)=>(
-                <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                  <div style={{ padding:"12px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start" }}>
-                    <div style={{ minWidth:0 }}>
-                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Overview Item"}</p>
-                      <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.sourceTab || "output"} · {item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+              {overviewItems.map((item:any)=>{
+                const campaignCopy = parseCampaignOverviewCopy(item.content);
+                const isCampaignCopy = (item.title==="Campaign Copy" || item.kind==="Campaign Copy" || item.sourceTab==="E-commerce") && campaignCopy.hasCampaignFormat;
+                return (
+                <div key={item.id} style={{ gridColumn:isCampaignCopy&&!isMobile?"1 / -1":"auto",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                  <div style={{ padding:"12px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                    <div style={{ minWidth:0,flex:"1 1 320px" }}>
+                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35,whiteSpace:isCampaignCopy?"normal":"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{isCampaignCopy ? (campaignCopy.product || item.title || "Campaign Copy") : (item.title || "Overview Item")}</p>
+                      <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>{item.sourceTab || "output"} · {item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+                      {isCampaignCopy&&campaignCopy.productCount&&<p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{campaignCopy.productCount} products inside this row</p>}
+                      {isCampaignCopy&&item.kind&&<p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted,lineHeight:1.35 }}>{item.kind}</p>}
                     </div>
                     <div style={{ display:"flex",gap:6,flexShrink:0 }}>
                       <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
                       <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                     </div>
                   </div>
-                  <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:14,background:C.bg }}>
-                    <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.55,color:C.text }}>{item.content || ""}</pre>
-                  </div>
+
+                  {isCampaignCopy ? (
+                    <div style={{ margin:"10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                      <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                        <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
+                        <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Added from E-commerce</span>
+                      </div>
+                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
+                        <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
+                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
+                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.headline || "No headline added."}</p>
+                        </div>
+                        <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
+                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
+                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{campaignCopy.subheadline || "No subheadline added."}</p>
+                        </div>
+                        <div style={{ padding:10 }}>
+                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
+                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{campaignCopy.cta || "No CTA added."}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:14,background:C.bg }}>
+                      <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.55,color:C.text }}>{item.content || ""}</pre>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
