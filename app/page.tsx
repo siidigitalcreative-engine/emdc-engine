@@ -4906,8 +4906,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign E-commerce Copy Builder</h3>
                   <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Campaign checklist mode: create campaign copy per selected mapped product row. The typed theme is sent to AI and applied to the generated output.</p>
                 </div>
-                <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
-                  <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>Headline · Subheadline · CTA</span>
+                <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto auto auto",gap:8,alignItems:"center",justifyContent:isMobile?"stretch":"flex-end",width:isMobile?"100%":"auto" }}>
+                  <span style={{ gridColumn:isMobile?"1 / -1":"auto",textAlign:isMobile?"center":"left",fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"6px 9px" }}>Headline · Subheadline · CTA</span>
                   <Btn xs variant="outline" onClick={openEcommerceCampaignInstructions}>AI Instructions</Btn>
                   <Btn xs variant="outline" onClick={saveEcommerceCampaignOutput} disabled={!campaignHasOutput}>Save Output</Btn>
                   <Btn xs onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}>{aiBusy.ecommerceCampaign?"Generating All...":"Generate All Rows"}</Btn>
@@ -4934,9 +4934,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                       {productRows.length>0&&(
                         <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
-                          <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                             <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
-                            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(6,auto)",gap:6,width:isMobile?"100%":"auto" }}>
+                            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(6,auto)",gap:6,width:isMobile?"100%":"auto" }}>
                               <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
                               <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
                               <Btn xs variant="outline" onClick={addSelectedEcommerceCampaignProductRows} disabled={!selectedCampaignProductKeys.length}>Add Selected as Separate Rows</Btn>
@@ -4945,7 +4945,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                               <Btn xs variant="outline" onClick={addAllAsOneEcommerceCampaignProductRow} disabled={!productRows.length}>Add All as 1 Row</Btn>
                             </div>
                           </div>
-                          <div style={{ maxHeight:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                          <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                             {productRows.map((row:any,idx:number)=>{
                               const key = getCampaignProductOptionKey(row,idx);
                               const checked = selectedCampaignProductKeys.includes(key);
@@ -4972,8 +4972,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         {campaignRows.length===0 ? (
                           <div style={{ padding:14,fontSize:12,color:C.muted,textAlign:"center" }}>No product row yet. Select mapped products above, then click Add Selected or Add All.</div>
                         ) : (
-                          <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
-                            <div style={{ minWidth:isMobile?760:0 }}>
+                          <div style={{ overflowX:isMobile?"visible":"auto",WebkitOverflowScrolling:"touch" }}>
+                            <div style={{ minWidth:isMobile?0:760 }}>
                               <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
                                 <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Campaign Product Rows</span>
                               </div>
@@ -5052,14 +5052,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <Modal open={campaignInstructionOpen} onClose={()=>setCampaignInstructionOpen(false)} title="AI Output Instructions" width={680}>
                 <p style={{ margin:"0 0 10px",fontSize:13,color:C.muted,lineHeight:1.5 }}>Add instructions for the overall output and for each section. These apply to both per-row Generate and Generate All Rows.</p>
 
-                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                <div style={{ display:"flex",flexDirection:"column",gap:isMobile?12:10,maxHeight:isMobile?"62vh":"none",overflowY:isMobile?"auto":"visible",paddingRight:isMobile?2:0 }}>
                   <Field label="General Instructions">
                     <textarea
                       value={campaignInstructionDraft}
                       onChange={(e)=>setCampaignInstructionDraft(e.target.value)}
                       placeholder="Example: Use Taglish, focus on urgency, make it premium, avoid hard-selling..."
                       rows={4}
-                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                      style={{ width:"100%",minHeight:isMobile?88:undefined,padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
                     />
                   </Field>
 
@@ -5069,7 +5069,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       onChange={(e)=>setCampaignHeadlineInstructionDraft(e.target.value)}
                       placeholder="Example: Maximum 6 words, strong sale hook, mention the campaign theme."
                       rows={3}
-                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                      style={{ width:"100%",minHeight:isMobile?88:undefined,padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
                     />
                   </Field>
 
@@ -5079,7 +5079,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       onChange={(e)=>setCampaignSubheadlineInstructionDraft(e.target.value)}
                       placeholder="Example: Mention the product benefit, discount, or mechanics in one clean sentence."
                       rows={3}
-                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                      style={{ width:"100%",minHeight:isMobile?88:undefined,padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
                     />
                   </Field>
 
@@ -5089,14 +5089,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       onChange={(e)=>setCampaignCtaInstructionDraft(e.target.value)}
                       placeholder="Example: Keep CTA under 3 words, direct, urgent, marketplace-ready."
                       rows={3}
-                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                      style={{ width:"100%",minHeight:isMobile?88:undefined,padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
                     />
                   </Field>
                 </div>
 
-                <div style={{ display:"flex",justifyContent:"space-between",gap:8,marginTop:14,flexWrap:"wrap" }}>
+                <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",justifyContent:isMobile?"stretch":"space-between",gap:8,marginTop:14 }}>
                   <Btn variant="outline" onClick={()=>{ setCampaignInstructionDraft(""); setCampaignHeadlineInstructionDraft(""); setCampaignSubheadlineInstructionDraft(""); setCampaignCtaInstructionDraft(""); updateEcommerceCampaignBuilder({ aiInstructions:"", headlineInstructions:"", subheadlineInstructions:"", ctaInstructions:"" }); setCampaignInstructionOpen(false); }}>Clear Instructions</Btn>
-                  <div style={{ display:"flex",gap:8 }}>
+                  <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto",gap:8 }}>
                     <Btn variant="outline" onClick={()=>setCampaignInstructionOpen(false)}>Cancel</Btn>
                     <Btn onClick={saveEcommerceCampaignInstructions}>Save Instructions</Btn>
                   </div>
@@ -5121,12 +5121,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               ) : (
                 <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                   {campaignSavedOutputs.map((item:any)=>(
-                    <div key={item.id} style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
-                      <button type="button" onClick={()=>openSavedEcommerceOutput(item)} style={{ flex:1,minWidth:0,textAlign:"left",border:"none",background:"transparent",padding:0,cursor:"pointer" }}>
+                    <div key={item.id} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) auto",gap:10,alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                      <button type="button" onClick={()=>openSavedEcommerceOutput(item)} style={{ minWidth:0,textAlign:"left",border:"none",background:"transparent",padding:0,cursor:"pointer" }}>
                         <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Campaign Copy"}</p>
                         <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.platform || campaignBuilder.platform} · {item.theme || campaignTheme} · Click to view</p>
                       </button>
-                      <button type="button" onClick={()=>deleteEcommerceCampaignSavedOutput(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                      <button type="button" onClick={()=>deleteEcommerceCampaignSavedOutput(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:8,padding:"8px 10px",fontSize:10.5,fontWeight:850,cursor:"pointer",width:isMobile?"100%":"auto" }}>Delete</button>
                     </div>
                   ))}
                 </div>
