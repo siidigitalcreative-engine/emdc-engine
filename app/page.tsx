@@ -3308,6 +3308,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [editingEcommerceSectionValue,setEditingEcommerceSectionValue] = useState("");
   const [editingEcommerceInstructionValue,setEditingEcommerceInstructionValue] = useState("");
   const [draggingEcommerceSection,setDraggingEcommerceSection] = useState("");
+  const [campaignInstructionOpen,setCampaignInstructionOpen] = useState(false);
+  const [campaignInstructionDraft,setCampaignInstructionDraft] = useState("");
 
   useEffect(()=>{
     if(!initialItems) return;
@@ -4071,6 +4073,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       theme: builder.theme || "Payday Sale",
       customTheme: builder.customTheme || "",
       promotion: builder.promotion || "",
+      aiInstructions: builder.aiInstructions || "",
       selectedProductKey: builder.selectedProductKey || "",
       productRows: Array.isArray(builder.productRows) ? builder.productRows : [],
       generatedText: builder.generatedText || "",
@@ -4078,9 +4081,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     };
   };
 
-  const updateEcommerceCampaignBuilder = (patch:any) => {
-    const current = getEcommerceCampaignBuilder();
-    updateAiWorkspace("ecommerce",{ campaignBuilder:{ ...current, ...patch } });
+  const openEcommerceCampaignInstructions = () => {
+    const builder = getEcommerceCampaignBuilder();
+    setCampaignInstructionDraft(builder.aiInstructions || "");
+    setCampaignInstructionOpen(true);
+  };
+
+  const saveEcommerceCampaignInstructions = () => {
+    updateEcommerceCampaignBuilder({ aiInstructions:campaignInstructionDraft });
+    setCampaignInstructionOpen(false);
   };
 
   const getEcommerceCampaignRows = () => {
@@ -4223,23 +4232,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     row.cta || "",
   ].join("\\n").trim();
 
-  const generateEcommerceCampaignAssets = async () => {
-    const builder = getEcommerceCampaignBuilder();
-    const campaignRows = getEcommerceCampaignRows();
-    const theme = builder.theme==="Custom" ? builder.customTheme.trim() : builder.theme;
-
-    if(!campaignRows.length){
-      setAiError((p:any)=>({...p,ecommerceCampaign:"Please add at least one mapped product row."}));
-      return;
-    }
-    if(!theme){
-      setAiError((p:any)=>({...p,ecommerceCampaign:"Please choose a theme or enter a custom theme."}));
-      return;
-    }
-
-    setAiBusy((p:any)=>({...p,ecommerceCampaign:true}));
-    setAiError((p:any)=>({...p,ecommerceCampaign:""}));
-
+  const requestEcommerceCampaignRowCopy = async (row:any, builder:any, theme:string) => {
+    const customInstructions = String(builder.aiInstructions || "").trim();
     const instruction = [
       "You are EMDC's e-commerce campaign copy assistant.",
       "Generate campaign copy for one product row only.",
@@ -4256,50 +4250,105 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       "CTA should be short and action-oriented.",
       "Avoid em dashes.",
       "Do not invent product specs.",
-    ].join("\\n");
+      customInstructions ? `Additional user instructions:\\n${customInstructions}` : "",
+    ].filter(Boolean).join("\\n");
+
+    const res = await fetch("/api/ai/generate-text", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({
+        task:"ecommerce_campaign_copy_single_row",
+        taskLabel:"Campaign E-commerce Copy Per Product Row",
+        tone:"commercial",
+        instruction,
+        input:JSON.stringify({
+          platform:builder.platform,
+          theme,
+          checklistGroup:group.groupName,
+          operationalType:lt.label,
+          product:row.product,
+          sku:row.sku,
+          brand:row.brand,
+          collection:row.collection,
+          discountOrOffer:row.discount || "",
+          mechanicsOrNotes:row.mechanics || "",
+        },null,2),
+        maxOutputTokens:700,
+      }),
+    });
+
+    const raw = await res.text();
+    let payload:any = {};
+    try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "Campaign copy generation failed."); }
+    if(!res.ok) throw new Error(payload?.error || payload?.message || "Campaign copy generation failed.");
+
+    const parsed = parseCampaignCopySections(payload?.text || "");
+    return {
+      ...row,
+      headline:parsed.headline,
+      subheadline:parsed.subheadline,
+      cta:parsed.cta,
+      output:parsed.output,
+    };
+  };
+
+  const generateEcommerceCampaignRow = async (rowId:string) => {
+    const builder = getEcommerceCampaignBuilder();
+    const rows = getEcommerceCampaignRows();
+    const row = rows.find((item:any)=>item.id===rowId);
+    const theme = builder.theme==="Custom" ? builder.customTheme.trim() : builder.theme;
+
+    if(!row){
+      setAiError((p:any)=>({...p,ecommerceCampaign:"Please add a product row first."}));
+      return;
+    }
+    if(!theme){
+      setAiError((p:any)=>({...p,ecommerceCampaign:"Please choose a theme or enter a custom theme."}));
+      return;
+    }
+
+    setAiBusy((p:any)=>({...p,ecommerceCampaignRow:rowId}));
+    setAiError((p:any)=>({...p,ecommerceCampaign:""}));
+
+    try {
+      const generated = await requestEcommerceCampaignRowCopy(row,builder,theme);
+      const nextRows = rows.map((item:any)=>item.id===rowId ? generated : item);
+      updateEcommerceCampaignBuilder({
+        productRows:nextRows,
+        generatedText:nextRows.map((item:any)=>formatCampaignRowOutput(item)).filter(Boolean).join("\\n\\n---\\n\\n"),
+        generatedAt:new Date().toISOString(),
+      });
+    } catch (err:any) {
+      setAiError((p:any)=>({...p,ecommerceCampaign:err?.message || "Campaign copy generation failed."}));
+    } finally {
+      setAiBusy((p:any)=>({...p,ecommerceCampaignRow:""}));
+    }
+  };
+
+  const generateEcommerceCampaignAssets = async () => {
+    const builder = getEcommerceCampaignBuilder();
+    const campaignRows = getEcommerceCampaignRows();
+    const theme = builder.theme==="Custom" ? builder.customTheme.trim() : builder.theme;
+
+    if(!campaignRows.length){
+      setAiError((p:any)=>({...p,ecommerceCampaign:"Please add at least one mapped product row."}));
+      return;
+    }
+    if(!theme){
+      setAiError((p:any)=>({...p,ecommerceCampaign:"Please choose a theme or enter a custom theme."}));
+      return;
+    }
+
+    setAiBusy((p:any)=>({...p,ecommerceCampaign:true,ecommerceCampaignRow:""}));
+    setAiError((p:any)=>({...p,ecommerceCampaign:""}));
 
     const generatedRows:any[] = [];
 
     try {
       for (const row of campaignRows) {
-        const res = await fetch("/api/ai/generate-text", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body:JSON.stringify({
-            task:"ecommerce_campaign_copy_single_row",
-            taskLabel:"Campaign E-commerce Copy Per Product Row",
-            tone:"commercial",
-            instruction,
-            input:JSON.stringify({
-              platform:builder.platform,
-              theme,
-              overallPromotionMechanics:builder.promotion || "",
-              checklistGroup:group.groupName,
-              operationalType:lt.label,
-              product:row.product,
-              sku:row.sku,
-              brand:row.brand,
-              collection:row.collection,
-              discountOrOffer:row.discount || "",
-              mechanicsOrNotes:row.mechanics || "",
-            },null,2),
-            maxOutputTokens:700,
-          }),
-        });
-
-        const raw = await res.text();
-        let payload:any = {};
-        try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "Campaign copy generation failed."); }
-        if(!res.ok) throw new Error(payload?.error || payload?.message || "Campaign copy generation failed.");
-
-        const parsed = parseCampaignCopySections(payload?.text || "");
-        generatedRows.push({
-          ...row,
-          headline:parsed.headline,
-          subheadline:parsed.subheadline,
-          cta:parsed.cta,
-          output:parsed.output,
-        });
+        setAiBusy((p:any)=>({...p,ecommerceCampaign:true,ecommerceCampaignRow:row.id}));
+        const generated = await requestEcommerceCampaignRowCopy(row,builder,theme);
+        generatedRows.push(generated);
       }
 
       const combinedOutput = generatedRows.map((row:any)=>formatCampaignRowOutput(row)).join("\\n\\n---\\n\\n");
@@ -4311,7 +4360,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     } catch (err:any) {
       setAiError((p:any)=>({...p,ecommerceCampaign:err?.message || "Campaign copy generation failed."}));
     } finally {
-      setAiBusy((p:any)=>({...p,ecommerceCampaign:false}));
+      setAiBusy((p:any)=>({...p,ecommerceCampaign:false,ecommerceCampaignRow:""}));
     }
   };
 
@@ -4401,7 +4450,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign E-commerce Copy Builder</h3>
                   <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Create campaign copy per selected mapped product row.</p>
                 </div>
-                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>Headline · Subheadline · CTA</span>
+                <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
+                  <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>Headline · Subheadline · CTA</span>
+                  <Btn xs variant="outline" onClick={openEcommerceCampaignInstructions}>AI Instructions</Btn>
+                  <Btn xs onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}>{aiBusy.ecommerceCampaign?"Generating All...":"Generate All Rows"}</Btn>
+                </div>
               </div>
 
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
@@ -4455,7 +4508,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
                             <div style={{ minWidth:isMobile?720:0 }}>
                               <div style={{ display:"grid",gridTemplateColumns:"1.2fr .8fr .9fr 1.2fr auto",gap:0,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-                                {["Product","SKU","Discount / Offer","Mechanics / Notes",""].map((label:string)=>
+                                {["Product","SKU","Discount / Offer","Mechanics / Notes","Actions"].map((label:string)=>
                                   <div key={label} style={{ padding:"8px 10px",fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{label}</div>
                                 )}
                               </div>
@@ -4473,12 +4526,13 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                     <div style={{ padding:"6px 8px" }}>
                                       <TI value={row.mechanics || ""} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ mechanics:value })} placeholder="e.g. Min spend ₱599" style={{ fontSize:12,padding:"8px 9px" }} />
                                     </div>
-                                    <div style={{ padding:"6px 8px",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                                    <div style={{ padding:"6px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap" }}>
+                                      <button type="button" onClick={()=>generateEcommerceCampaignRow(row.id)} disabled={!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"7px 9px",fontSize:10.5,fontWeight:800,cursor:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?"not-allowed":"pointer",opacity:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?.65:1 }}>{aiBusy.ecommerceCampaignRow===row.id?"Generating":"Generate"}</button>
                                       <button type="button" onClick={()=>deleteEcommerceCampaignRow(row.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"7px 9px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Delete</button>
                                     </div>
                                   </div>
 
-                                  {(row.headline || row.subheadline || row.cta || aiBusy.ecommerceCampaign)&&(
+                                  {(row.headline || row.subheadline || row.cta || aiBusy.ecommerceCampaignRow===row.id)&&(
                                     <div style={{ margin:"0 10px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                                       <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                                         <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
@@ -4492,15 +4546,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                       <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
                                         <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
                                           <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
-                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{aiBusy.ecommerceCampaign&&!row.headline?"Generating...":row.headline || "No output yet"}</p>
+                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{aiBusy.ecommerceCampaignRow===row.id&&!row.headline?"Generating...":row.headline || "No output yet"}</p>
                                         </div>
                                         <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
                                           <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
-                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{aiBusy.ecommerceCampaign&&!row.subheadline?"Generating...":row.subheadline || "No output yet"}</p>
+                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{aiBusy.ecommerceCampaignRow===row.id&&!row.subheadline?"Generating...":row.subheadline || "No output yet"}</p>
                                         </div>
                                         <div style={{ padding:10 }}>
                                           <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
-                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{aiBusy.ecommerceCampaign&&!row.cta?"Generating...":row.cta || "No output yet"}</p>
+                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{aiBusy.ecommerceCampaignRow===row.id&&!row.cta?"Generating...":row.cta || "No output yet"}</p>
                                         </div>
                                       </div>
                                     </div>
@@ -4515,25 +4569,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   </Field>
                 </div>
 
-                <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
-                  <Field label="Promotion / Mechanics">
-                    <textarea
-                      value={campaignBuilder.promotion}
-                      onChange={(e)=>updateEcommerceCampaignBuilder({ promotion:e.target.value })}
-                      placeholder="Example: 6.30 Payday Sale, 20% off minimum spend ₱599, free shipping voucher, bundle promo, limited-time offer..."
-                      rows={4}
-                      style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.45,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }}
-                    />
-                  </Field>
-                </div>
               </div>
 
               {aiError.ecommerceCampaign&&<div style={{ marginTop:10,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError.ecommerceCampaign}</div>}
 
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:12,flexWrap:"wrap" }}>
-                <p style={{ margin:0,fontSize:11,color:C.faint }}>Output will include Product, Headline, Subheadline, and CTA per row.</p>
-                <Btn sm onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign}>{aiBusy.ecommerceCampaign?"Generating...":"Generate Campaign Copy"}</Btn>
-              </div>
+              <Modal open={campaignInstructionOpen} onClose={()=>setCampaignInstructionOpen(false)} title="AI Output Instructions" width={560}>
+                <p style={{ margin:"0 0 10px",fontSize:13,color:C.muted,lineHeight:1.5 }}>Add extra instructions for the AI output. This applies to both per-row Generate and Generate All Rows.</p>
+                <textarea
+                  value={campaignInstructionDraft}
+                  onChange={(e)=>setCampaignInstructionDraft(e.target.value)}
+                  placeholder="Example: Make the headline shorter, use Taglish, focus on urgency, mention payday sale, keep CTA under 3 words..."
+                  rows={7}
+                  style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",resize:"vertical",boxSizing:"border-box",color:C.text,background:C.surface }}
+                />
+                <div style={{ display:"flex",justifyContent:"space-between",gap:8,marginTop:14,flexWrap:"wrap" }}>
+                  <Btn variant="outline" onClick={()=>{ setCampaignInstructionDraft(""); updateEcommerceCampaignBuilder({ aiInstructions:"" }); setCampaignInstructionOpen(false); }}>Clear Instructions</Btn>
+                  <div style={{ display:"flex",gap:8 }}>
+                    <Btn variant="outline" onClick={()=>setCampaignInstructionOpen(false)}>Cancel</Btn>
+                    <Btn onClick={saveEcommerceCampaignInstructions}>Save Instructions</Btn>
+                  </div>
+                </div>
+              </Modal>
 
             </div>
 
