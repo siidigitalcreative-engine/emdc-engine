@@ -4530,6 +4530,201 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const campaignTheme = String(campaignBuilder.theme || "").trim() || "Campaign";
       const campaignSavedOutputs = Array.isArray(campaignBuilder.savedOutputs) ? campaignBuilder.savedOutputs : [];
       const campaignHasOutput = !!getEcommerceCampaignCombinedOutput().trim();
+            const ecommerceTabMode = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
+      const isCampaignChecklist = ecommerceTabMode.includes("campaign");
+
+      if(!isCampaignChecklist){
+        return (
+                <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.1fr) minmax(0,.9fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+                  <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                        <div>
+                          <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>E-commerce Listing Builder</h3>
+                          <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Generate the complete marketplace listing structure for the selected products. Use Required Output Structure below to control which listing sections are included.</p>
+                        </div>
+                        <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{productRows.length} products</span>
+                      </div>
+                    </div>
+        
+                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                        <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Required Output Structure</h4>
+                        <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
+                          <Btn xs variant="outline" onClick={setAllEcommerceSections}>Select All</Btn>
+                          <Btn xs variant="outline" onClick={clearAllEcommerceSections}>Clear All</Btn>
+                          <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Save Changes</Btn>
+                        </div>
+                      </div>
+        
+                      <div style={{ display:"flex",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                        <input
+                          value={newEcommerceSection}
+                          onChange={e=>setNewEcommerceSection(e.target.value)}
+                          onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addEcommerceSection(); } }}
+                          placeholder="Add output section"
+                          style={{ flex:"1 1 220px",height:32,padding:"0 10px",borderRadius:8,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12,color:C.text,background:C.bg }}
+                        />
+                        <Btn xs onClick={addEcommerceSection} disabled={!newEcommerceSection.trim()}>Add</Btn>
+                      </div>
+        
+                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
+                        {ecommerceOutputSections.map((section:string,index:number)=>{
+                          const active = selectedSections.includes(section);
+                          const hasInstruction = !!String(sectionInstructions[section] || "").trim();
+                          const isDragging = draggingEcommerceSection===section;
+                          return (
+                            <div
+                              key={section}
+                              draggable
+                              onDragStart={(e)=>{ setDraggingEcommerceSection(section); try { e.dataTransfer.setData("text/plain",section); e.dataTransfer.effectAllowed="move"; } catch {} }}
+                              onDragOver={(e)=>{ e.preventDefault(); try { e.dataTransfer.dropEffect="move"; } catch {} }}
+                              onDrop={(e)=>{ e.preventDefault(); const from = draggingEcommerceSection || e.dataTransfer.getData("text/plain"); reorderEcommerceSection(from,section); setDraggingEcommerceSection(""); }}
+                              onDragEnd={()=>setDraggingEcommerceSection("")}
+                              style={{ display:"grid",gridTemplateColumns:"auto auto minmax(0,1fr) auto",alignItems:"center",gap:8,padding:"9px 10px",background:isDragging?"#DBEAFE":active?"#EEF2FF":C.bg,border:`1.5px solid ${isDragging?C.accent:active?C.accent:C.border}`,borderRadius:8,boxShadow:isDragging?"0 8px 24px rgba(59,130,246,.18)":"none",opacity:isDragging?.7:1,cursor:"grab" }}
+                            >
+                              <span title="Drag to rearrange" style={{ width:20,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:15,fontWeight:900,letterSpacing:-2,cursor:"grab",userSelect:"none",lineHeight:1 }}>
+                                ⋮⋮
+                              </span>
+        
+                              <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ width:18,height:18,borderRadius:4,display:"inline-flex",alignItems:"center",justifyContent:"center",background:active?C.accent:"transparent",border:`1.5px solid ${active?C.accent:C.borderStrong}`,color:"#fff",fontSize:11,fontWeight:900,flexShrink:0,cursor:"pointer" }}>{active?"✓":""}</button>
+        
+                              <button type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>
+                                <span style={{ display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{index+1}. {section}</span>
+                                {hasInstruction&&<span style={{ display:"block",marginTop:2,fontSize:10.5,fontWeight:700,color:"#047857" }}>Has instruction</span>}
+                              </button>
+        
+                              <button type="button" onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>Drag the ⋮⋮ handle to rearrange the output order. Then click Save Changes so the listing template prompt above follows the new order.</p>
+                    </div>
+        
+                    {editingEcommerceSection&&(
+                      <Modal open={!!editingEcommerceSection} onClose={cancelEditEcommerceSection} title="Edit Output Section" width={560}>
+                        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+                          <Field label="Section Name">
+                            <TI value={editingEcommerceSectionValue} onChange={setEditingEcommerceSectionValue} placeholder="e.g. Product Overview" />
+                          </Field>
+        
+                          <Field label="Section Instruction">
+                            <textarea
+                              value={editingEcommerceInstructionValue}
+                              onChange={e=>setEditingEcommerceInstructionValue(e.target.value)}
+                              placeholder="Add specific instructions to refine how AI writes this section..."
+                              style={{ width:"100%",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                            />
+                          </Field>
+        
+                          <div style={{ padding:10,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                            <p style={{ margin:0,fontSize:11.5,color:C.muted,lineHeight:1.5 }}>This instruction will be added under this section in the AI prompt after you click Save, then Save Changes.</p>
+                          </div>
+        
+                          <div style={{ display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}>
+                            <Btn variant="danger" onClick={()=>deleteEcommerceSection(editingEcommerceSection)}>Delete Section</Btn>
+                            <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                              <Btn variant="outline" onClick={cancelEditEcommerceSection}>Cancel</Btn>
+                              <Btn onClick={saveEditedEcommerceSection} disabled={!editingEcommerceSectionValue.trim()}>Save</Btn>
+                            </div>
+                          </div>
+                        </div>
+                      </Modal>
+                    )}
+                  </div>
+        
+                  <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                      <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Mapped Products</h4>
+                      <div style={{ maxHeight:260,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:9,WebkitOverflowScrolling:"touch" }}>
+                        {mappedProducts.map((row:any,idx:number)=>(
+                          <div key={`${row.skuCode}-${idx}`} style={{ padding:"8px 10px",borderBottom:idx===mappedProducts.length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
+                            <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}</p>
+                            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || "No collection/category"} · {row.skuCode}</p>
+                          </div>
+                        ))}
+                        {productRows.length===0&&<div style={{ padding:12,fontSize:12,color:C.faint }}>No selected products yet.</div>}
+                        {productRows.length>mappedProducts.length&&<div style={{ padding:8,fontSize:11,color:C.faint,fontWeight:700 }}>+{productRows.length-mappedProducts.length} more products</div>}
+                      </div>
+                    </div>
+        
+                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                        <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>E-commerce Generated Output</h4>
+                        <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
+                          {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
+                          <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
+                          <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
+                          <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Generated Output",data.generatedText,"Generated Output")} disabled={!data.generatedText}>Add to Overview</Btn>
+                          <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
+                        </div>
+                      </div>
+                      {data.generatedText ? (
+                        <textarea
+                          value={data.generatedText || ""}
+                          onChange={e=>updateAiWorkspace(tab,{ generatedText:e.target.value })}
+                          rows={18}
+                          style={{ width:"100%",minHeight:360,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.55,color:C.text,background:C.bg,whiteSpace:"pre-wrap" }}
+                        />
+                      ) : (
+                        <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.bg,border:`1.5px dashed ${C.border}`,borderRadius:10,padding:16 }}>
+                          <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Generated e-commerce listing will appear here. Upload reference images if needed, select the output sections you want, then generate the listing.</p>
+                        </div>
+                      )}
+                    </div>
+        
+                    {Array.isArray(data.savedOutputs)&&data.savedOutputs.length>0&&(
+                      <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10 }}>
+                          <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Saved E-commerce Outputs</h4>
+                          <span style={{ padding:"3px 8px",borderRadius:999,background:C.surfaceAlt,border:`1px solid ${C.border}`,fontSize:10.5,fontWeight:800,color:C.muted }}>{data.savedOutputs.length} saved</span>
+                        </div>
+                        <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:220,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                          {data.savedOutputs.map((item:any)=>(
+                            <div key={item.id} style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",padding:"10px 12px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                              <button onClick={()=>openSavedEcommerceOutput(item)} style={{ minWidth:0,flex:1,textAlign:"left",border:"none",background:"transparent",cursor:"pointer",padding:0 }}>
+                                <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Saved Output"}</p>
+                                <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"} · Click to view</p>
+                              </button>
+                              <button onClick={(e:any)=>{ e.stopPropagation(); addToOverview("E-commerce",item.title || "Saved E-commerce Output",item.text,"Saved Output"); }} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Add to Overview</button>
+                              <button onClick={(e:any)=>{ e.stopPropagation(); deleteSavedEcommerceOutput(item.id); if(savedEcommercePreview?.id===item.id) setSavedEcommercePreview(null); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+        
+                    {savedEcommercePreview&&(
+                      <Modal open={!!savedEcommercePreview} onClose={()=>setSavedEcommercePreview(null)} title="Saved E-commerce Output" width={760}>
+                        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                          <div style={{ padding:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10 }}>
+                            <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{savedEcommercePreview.title || "Saved Output"}</p>
+                            <p style={{ margin:"4px 0 0",fontSize:11,color:C.faint }}>
+                              {savedEcommercePreview.createdAt ? new Date(savedEcommercePreview.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved output"}
+                            </p>
+                          </div>
+                          <div style={{ maxHeight:isMobile?"58vh":"62vh",overflowY:"auto",WebkitOverflowScrolling:"touch",background:C.bg,border:`1.5px solid ${C.border}`,borderRadius:12,padding:14 }}>
+                            <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:13,lineHeight:1.55,color:C.text }}>{savedEcommercePreview.text || ""}</pre>
+                          </div>
+                          <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
+                            <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
+                            <Btn variant="outline" onClick={()=>addToOverview("E-commerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output")}>Add to Overview</Btn>
+                            <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
+                          </div>
+                        </div>
+                      </Modal>
+                    )}
+        
+                    <div style={{ padding:14,background:"#ECFDF5",border:"1.5px solid #A7F3D0",borderRadius:12 }}>
+                      <h4 style={{ margin:"0 0 6px",fontSize:13,fontWeight:900,color:"#065F46" }}>Gemini Connected</h4>
+                      <p style={{ margin:0,fontSize:12,color:"#065F46",lineHeight:1.5 }}>This tab now sends the selected products, prompt, and uploaded catalog files to Gemini through /api/ai/generate-text.</p>
+                    </div>
+                  </div>
+                </div>
+              );
+      }
+
       return (
         <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
@@ -4537,7 +4732,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12 }}>
                 <div>
                   <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign E-commerce Copy Builder</h3>
-                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Create campaign copy per selected mapped product row. The typed theme is sent to AI and applied to the generated output.</p>
+                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45,maxWidth:980 }}>Campaign checklist mode: create campaign copy per selected mapped product row. The typed theme is sent to AI and applied to the generated output.</p>
                 </div>
                 <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
                   <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>Headline · Subheadline · CTA</span>
