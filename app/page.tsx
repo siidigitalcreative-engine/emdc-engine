@@ -10608,9 +10608,9 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                 <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "2. Choose Platform & Ad Format" : "4. Choose Your Ad Order"}</h4>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
                   <Btn xs variant="outline" onClick={clearSelectedAdFormatKeys} disabled={!selectedAdFormatKeys.length}>Clear Ad Selection</Btn>
-                  <Btn xs onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>Generate Selected Ads</Btn>
                 </div>
               </div>
+              <p style={{ margin:"0 0 10px",fontSize:11.5,color:C.muted,lineHeight:1.45 }}>Tick one or more ad formats using the small checkbox, then use the Generate Ads button at the bottom to generate all selected outputs.</p>
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10 }}>
                 {platforms.map((platform:any)=>(
                   <div key={platform.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
@@ -10627,7 +10627,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                           <div key={format.id} style={{ position:"relative" }}>
                             <label onClick={(e:any)=>e.stopPropagation()} style={{ position:"absolute",top:8,right:8,zIndex:2,display:"inline-flex",alignItems:"center",gap:4,fontSize:10.5,fontWeight:900,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 7px",cursor:"pointer" }}>
                               <input type="checkbox" checked={selectedForBatch} onChange={()=>toggleSelectedAdFormatKey(formatKey)} />
-                              Select
+                              Add
                             </label>
                           <button type="button" onClick={()=>{
                               setSelectedPlatformId(platform.id);
@@ -10648,7 +10648,14 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   </div>
                 ))}
               </div>
-              {hideProductSelector&&!effectiveAdSkus.length&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:800 }}>Select products above, then click Add Selected to Ad Menu. Each Generate button will read the products placed there.</p>}
+              <div style={{ marginTop:12,padding:"10px 12px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+                <div style={{ minWidth:0,flex:"1 1 240px" }}>
+                  <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>Selected ad outputs</p>
+                  <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>{selectedAdFormatKeys.length} ad format{selectedAdFormatKeys.length!==1?"s":""} selected. Click Generate Ads to create all selected ad outputs using the products placed in the Ad Menu.</p>
+                </div>
+                <Btn sm onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>{adGenerating?"Generating...":"Generate Ads"}</Btn>
+              </div>
+              {hideProductSelector&&!effectiveAdSkus.length&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:800 }}>Select products above, then click Add Selected to Ad Menu. The Generate Ads button will read only the products placed there.</p>}
               {adError&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:700 }}>{adError}</p>}
             </div>
 
