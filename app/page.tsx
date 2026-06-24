@@ -118,6 +118,7 @@ const TEMPLATES = {
 };
 
 const uid = () => Math.random().toString(36).slice(2,9);
+const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) ? "video" : "image");
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
 const PERF_IDLE_SAVE_DELAY = 450;
