@@ -5022,12 +5022,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           brand:p.brand || row.brand || "",
           collection:p.collection || row.category || row.collection || "",
           category:p.collection || row.category || row.collection || "",
+          headline:row.headline || "",
+          subheadline:row.subheadline || "",
+          cta:row.cta || "",
         })) : [{
           product:row.product || "",
           sku:row.sku || "",
           brand:row.brand || "",
           collection:row.category || row.collection || "",
           category:row.category || row.collection || "",
+          headline:row.headline || "",
+          subheadline:row.subheadline || "",
+          cta:row.cta || "",
         }]);
       const campaignMarketingProducts = isCampaignChecklist ? productRows.map((row:any)=>({
         product:row.product || row.productName || "",
@@ -5037,57 +5043,71 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         category:row.collection || row.category || "",
       })) : [];
       const marketingAdProducts = isProductIntroductionChecklist ? productIntroMarketingProducts : campaignMarketingProducts;
+      const marketingProductKey = (item:any,idx:number) => `${item.sku || item.product || "marketing-product"}__${idx}`;
+      const selectedMarketingProductKeys = Array.isArray(data.selectedMarketingProductKeys) ? data.selectedMarketingProductKeys : [];
+      const selectedMarketingProducts = marketingAdProducts.filter((item:any,idx:number)=>selectedMarketingProductKeys.includes(marketingProductKey(item,idx)));
 
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>{isProductIntroductionChecklist ? "Product Introduction Marketing" : "Campaign Marketing"}</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>{isProductIntroductionChecklist ? "Uses the same product rows sent from E-commerce to Digital Creative. Product selection is removed from the Ad Menu Builder here." : "Ad Menu Builder duplicated from AI Engine."}</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>{isProductIntroductionChecklist ? "Step 1: select one or more products from the E-commerce product rows. Step 2: choose platform and ad format from the Ad Menu Builder." : "Step 1: select one or more checklist products. Step 2: choose platform and ad format from the Ad Menu Builder."}</p>
           </div>
 
-          {isProductIntroductionChecklist&&(
-            <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-              <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Product Rows Sent to Marketing</span>
-                <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{productIntroMarketingRows.length} row{productIntroMarketingRows.length!==1?"s":""}</span>
+          <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+            <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+              <div>
+                <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>1. Select Products for Marketing</span>
+                <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedMarketingProducts.length} selected · {marketingAdProducts.length} available</span>
               </div>
-              {productIntroMarketingRows.length ? (
-                <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:380 }}>
-                  <table style={{ width:"100%",minWidth:980,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
-                    <thead>
-                      <tr style={{ background:C.surfaceAlt }}>
-                        {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
-                          <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {productIntroMarketingRows.flatMap((item:any)=>{
-                        const products = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
-                        return products.map((product:any,idx:number)=>(
-                          <tr key={`${item.id || item.product}-${idx}`} style={{ background:idx%2?C.surface:C.bg }}>
-                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>{item.platform || "All Platforms"}</td>
-                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || item.brand || ""}</td>
-                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || item.category || item.collection || ""}</td>
-                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || item.product || ""}</td>
-                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:170 }}>{item.headline || ""}</td>
-                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:240 }}>{item.subheadline || ""}</td>
-                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,minWidth:130,fontWeight:850,color:C.text }}>{item.cta || ""}</td>
-                          </tr>
-                        ));
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div style={{ minHeight:160,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18 }}>
-                  <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No product rows sent yet. Go to E-commerce and click Send DC Separate Rows or Send DC as 1 Row.</p>
-                </div>
-              )}
+              <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
+                <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ selectedMarketingProductKeys:marketingAdProducts.map((item:any,idx:number)=>marketingProductKey(item,idx)) })} disabled={!marketingAdProducts.length}>Select All</Btn>
+                <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ selectedMarketingProductKeys:[] })} disabled={!selectedMarketingProductKeys.length}>Clear Selection</Btn>
+              </div>
             </div>
-          )}
+            {marketingAdProducts.length ? (
+              <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:380 }}>
+                <table style={{ width:"100%",minWidth:980,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                  <thead>
+                    <tr style={{ background:C.surfaceAlt }}>
+                      {["Select","Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                        <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marketingAdProducts.map((product:any,idx:number)=>{
+                      const key = marketingProductKey(product,idx);
+                      const checked = selectedMarketingProductKeys.includes(key);
+                      return (
+                        <tr key={key} style={{ background:checked?"#EEF2FF":idx%2?C.surface:C.bg }}>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>
+                            <input type="checkbox" checked={checked} onChange={()=>{
+                              const next = checked ? selectedMarketingProductKeys.filter((item:string)=>item!==key) : [...selectedMarketingProductKeys,key];
+                              updateAiWorkspace("marketing",{ selectedMarketingProductKeys:next });
+                            }} />
+                          </td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>All Platforms</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:170 }}>{product.headline || ""}</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:240 }}>{product.subheadline || ""}</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,minWidth:130,fontWeight:850,color:C.text }}>{product.cta || ""}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ minHeight:160,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18 }}>
+                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>{isProductIntroductionChecklist ? "No product rows sent yet. Go to E-commerce and click Send DC Separate Rows or Send DC as 1 Row." : "No products found in this checklist group yet."}</p>
+              </div>
+            )}
+          </div>
 
-          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={marketingAdProducts} />
+          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={selectedMarketingProducts} />
         </div>
       );
     }
@@ -10285,7 +10305,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:16,flexWrap:"wrap" }}>
         <div>
           <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Ad Menu Builder</h3>
-          <p style={{ margin:0,fontSize:13,color:C.muted }}>Choose products, pick an ad format, then generate ready-to-use copy. Image areas are placeholders for now.</p>
+          <p style={{ margin:0,fontSize:13,color:C.muted }}>{hideProductSelector ? "Use the selected Marketing product rows, pick a platform and ad format, then generate ready-to-use copy. Image areas are placeholders for now." : "Choose products, pick an ad format, then generate ready-to-use copy. Image areas are placeholders for now."}</p>
         </div>
         <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
           <Btn sm variant={adMenuView==="generate"?"primary":"outline"} onClick={()=>setAdMenuView("generate")}>Generate Ads</Btn>
@@ -10341,7 +10361,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
             )}
 
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
-              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "1. Campaign Notes" : "2. Campaign Notes"}</h4>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "Optional Campaign Notes" : "2. Campaign Notes"}</h4>
               <textarea
                 value={adBrief}
                 onChange={e=>setAdBrief(e.target.value)}
@@ -10351,8 +10371,9 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
               />
             </div>
 
+            {isCarouselFormat&&(
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
-              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "2. Media Plan" : "3. Media Plan"}</h4>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "3. Media Plan" : "3. Media Plan"}</h4>
               <Field label="Carousel Cards">
                 <Select value={carouselMediaMode} onChange={setCarouselMediaMode}>
                   <option value="recommended">Recommended mix</option>
@@ -10370,19 +10391,13 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   </div>
                 ))}
               </div>
-              <Field label="Collection Ad Hero">
-                <Select value={collectionHeroMedia} onChange={setCollectionHeroMedia}>
-                  <option value="recommended">Recommend image or video</option>
-                  <option value="image">Single image hero</option>
-                  <option value="video">Single video hero</option>
-                </Select>
-              </Field>
             </div>
+            )}
           </div>
 
           <div style={{ display:"flex",flexDirection:"column",gap:12,minWidth:0 }}>
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg }}>
-              <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>4. Choose Your Ad Order</h4>
+              <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "2. Choose Platform & Ad Format" : "4. Choose Your Ad Order"}</h4>
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10 }}>
                 {platforms.map((platform:any)=>(
                   <div key={platform.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
