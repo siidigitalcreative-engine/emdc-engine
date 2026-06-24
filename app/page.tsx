@@ -5130,7 +5130,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             )}
           </div>
 
-          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} onSendToDC={(ad:any)=>{
+          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}`} onSendToDC={(ad:any)=>{
             const adText = String(ad?.text || "").trim();
             const adProducts = Array.isArray(ad?.products) && ad.products.length ? ad.products : selectedMarketingProducts;
             const selectedProductList = adProducts.map((product:any,idx:number)=>`${idx+1}. ${product?.productName || product?.product || "Product"}${product?.sku ? ` · SKU: ${product.sku}` : ""}`).join("\n");
@@ -10239,7 +10239,7 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
   },
 ];
 
-const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, presetProducts=[], onSendToDC=null }: any) => {
+const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, presetProducts=[], onSendToDC=null, generatedOutputsStorageKey="global" }: any) => {
   const { isMobile } = useBreakpoint();
   const [platforms,setPlatforms] = useState<any[]>(() => {
     if (typeof window === "undefined") return DEFAULT_AD_TEMPLATE_PLATFORMS;
@@ -10258,7 +10258,18 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   const [adError,setAdError] = useState("");
   const [generatedAdText,setGeneratedAdText] = useState("");
   const [generatedAdCards,setGeneratedAdCards] = useState<any[]>([]);
-  const [generatedBatchOutputs,setGeneratedBatchOutputs] = useState<any[]>([]);
+  const generatedBatchOutputsStorageKey = `emdc_marketing_generated_batch_outputs_v1_${generatedOutputsStorageKey || "global"}`;
+  const [generatedBatchOutputsHydrated,setGeneratedBatchOutputsHydrated] = useState(false);
+  const [generatedBatchOutputs,setGeneratedBatchOutputs] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem(generatedBatchOutputsStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [editingBatchOutputIds,setEditingBatchOutputIds] = useState<string[]>([]);
   const [editingCarouselCardKeys,setEditingCarouselCardKeys] = useState<string[]>([]);
   const [savedAdTemplates,setSavedAdTemplates] = useState<any[]>([]);
@@ -10268,6 +10279,25 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   const [adMenuView,setAdMenuView] = useState("generate");
   const [carouselMediaMode,setCarouselMediaMode] = useState("recommended");
   const [collectionHeroMedia,setCollectionHeroMedia] = useState("recommended");
+
+  useEffect(()=>{
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(generatedBatchOutputsStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      setGeneratedBatchOutputs(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setGeneratedBatchOutputs([]);
+    }
+    setGeneratedBatchOutputsHydrated(true);
+  },[generatedBatchOutputsStorageKey]);
+
+  useEffect(()=>{
+    if (!generatedBatchOutputsHydrated || typeof window === "undefined") return;
+    try {
+      localStorage.setItem(generatedBatchOutputsStorageKey, JSON.stringify(generatedBatchOutputs));
+    } catch {}
+  },[generatedBatchOutputs,generatedBatchOutputsHydrated,generatedBatchOutputsStorageKey]);
 
   useEffect(()=>{
     setPlatforms((prev:any[])=>{
@@ -11868,7 +11898,7 @@ const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
       )}
 
       {aiPage==="ads" && (
-        <AIAdTemplates skuStorage={skuStorage} brands={brands} />
+        <AIAdTemplates skuStorage={skuStorage} brands={brands} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_default`} />
       )}
 
       <Modal open={!!previewOutput} onClose={()=>setPreviewOutput(null)} title="Output Preview" width={820}>
