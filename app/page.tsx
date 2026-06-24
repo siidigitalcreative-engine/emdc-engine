@@ -5045,32 +5045,41 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const marketingAdProducts = isProductIntroductionChecklist ? productIntroMarketingProducts : campaignMarketingProducts;
       const marketingProductKey = (item:any,idx:number) => `${item.sku || item.product || "marketing-product"}__${idx}`;
       const selectedMarketingProductKeys = Array.isArray(data.selectedMarketingProductKeys) ? data.selectedMarketingProductKeys : [];
+      const placedMarketingProductKeys = Array.isArray(data.placedMarketingProductKeys) ? data.placedMarketingProductKeys : [];
       const selectedMarketingProducts = marketingAdProducts.filter((item:any,idx:number)=>selectedMarketingProductKeys.includes(marketingProductKey(item,idx)));
+      const placedMarketingProducts = marketingAdProducts.filter((item:any,idx:number)=>placedMarketingProductKeys.includes(marketingProductKey(item,idx)));
 
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>{isProductIntroductionChecklist ? "Product Introduction Marketing" : "Campaign Marketing"}</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>{isProductIntroductionChecklist ? "Step 1: select one or more products from the E-commerce product rows. Step 2: choose platform and ad format from the Ad Menu Builder." : "Step 1: select one or more checklist products. Step 2: choose platform and ad format from the Ad Menu Builder."}</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>{isProductIntroductionChecklist ? "Step 1: select products from the E-commerce product rows, then click Add Selected to Ad Menu. Step 2: choose platform and ad format. Each ad format generate button reads only the products placed in the Ad Menu." : "Step 1: select checklist products, then click Add Selected to Ad Menu. Step 2: choose platform and ad format."}</p>
           </div>
 
           <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
             <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
               <div>
                 <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>1. Select Products for Marketing</span>
-                <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedMarketingProducts.length} selected · {marketingAdProducts.length} available</span>
+                <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedMarketingProducts.length} selected · {placedMarketingProducts.length} placed in Ad Menu · {marketingAdProducts.length} available</span>
               </div>
               <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
                 <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ selectedMarketingProductKeys:marketingAdProducts.map((item:any,idx:number)=>marketingProductKey(item,idx)) })} disabled={!marketingAdProducts.length}>Select All</Btn>
                 <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ selectedMarketingProductKeys:[] })} disabled={!selectedMarketingProductKeys.length}>Clear Selection</Btn>
+                <Btn xs onClick={()=>updateAiWorkspace("marketing",{ placedMarketingProductKeys:selectedMarketingProductKeys })} disabled={!selectedMarketingProductKeys.length}>Add Selected to Ad Menu</Btn>
+                <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ placedMarketingProductKeys:[] })} disabled={!placedMarketingProductKeys.length}>Clear Ad Menu Products</Btn>
               </div>
             </div>
+            {placedMarketingProducts.length>0&&(
+              <div style={{ padding:"8px 12px",background:"#ECFDF5",borderBottom:`1px solid ${C.border}`,fontSize:11.5,color:"#047857",fontWeight:850 }}>
+                Ad Menu will generate using {placedMarketingProducts.length} placed product{placedMarketingProducts.length!==1?"s":""}: {placedMarketingProducts.map((item:any)=>item.product || item.productName || item.sku).filter(Boolean).join(", ")}
+              </div>
+            )}
             {marketingAdProducts.length ? (
               <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:380 }}>
                 <table style={{ width:"100%",minWidth:980,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                   <thead>
                     <tr style={{ background:C.surfaceAlt }}>
-                      {["Select","Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                      {["Select","Ad Menu","Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
                         <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                       ))}
                     </tr>
@@ -5079,14 +5088,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     {marketingAdProducts.map((product:any,idx:number)=>{
                       const key = marketingProductKey(product,idx);
                       const checked = selectedMarketingProductKeys.includes(key);
+                      const placed = placedMarketingProductKeys.includes(key);
                       return (
-                        <tr key={key} style={{ background:checked?"#EEF2FF":idx%2?C.surface:C.bg }}>
+                        <tr key={key} style={{ background:placed?"#ECFDF5":checked?"#EEF2FF":idx%2?C.surface:C.bg }}>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>
                             <input type="checkbox" checked={checked} onChange={()=>{
                               const next = checked ? selectedMarketingProductKeys.filter((item:string)=>item!==key) : [...selectedMarketingProductKeys,key];
                               updateAiWorkspace("marketing",{ selectedMarketingProductKeys:next });
                             }} />
                           </td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850,color:placed?"#047857":C.faint }}>{placed ? "Placed" : "Not placed"}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>All Platforms</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
@@ -5107,7 +5118,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             )}
           </div>
 
-          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={selectedMarketingProducts} onSendToDC={(ad:any)=>{
+          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} onSendToDC={(ad:any)=>{
             const adText = String(ad?.text || "").trim();
             const adProducts = Array.isArray(ad?.products) && ad.products.length ? ad.products : selectedMarketingProducts;
             const rows = adProducts.map((product:any,idx:number)=>({
@@ -10381,7 +10392,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:16,flexWrap:"wrap" }}>
         <div>
           <h3 style={{ margin:"0 0 4px",fontSize:18,fontWeight:800,color:C.text }}>Ad Menu Builder</h3>
-          <p style={{ margin:0,fontSize:13,color:C.muted }}>{hideProductSelector ? "Use the selected Marketing product rows, pick a platform and ad format, then generate ready-to-use copy. Image areas are placeholders for now." : "Choose products, pick an ad format, then generate ready-to-use copy. Image areas are placeholders for now."}</p>
+          <p style={{ margin:0,fontSize:13,color:C.muted }}>{hideProductSelector ? (effectiveAdSkus.length ? "Using the products placed from the Marketing table. Pick a platform and ad format, then generate ready-to-use copy." : "Select products above and click Add Selected to Ad Menu before generating ads.") : "Choose products, pick an ad format, then generate ready-to-use copy. Image areas are placeholders for now."}</p>
         </div>
         <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
           <Btn sm variant={adMenuView==="generate"?"primary":"outline"} onClick={()=>setAdMenuView("generate")}>Generate Ads</Btn>
@@ -10491,7 +10502,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                               if(firstTemplate?.id) setSelectedTemplateId(firstTemplate.id);
                               generateAdForFormat(format,firstTemplate);
                             }}
-                            disabled={adGenerating}
+                            disabled={adGenerating || (hideProductSelector && !effectiveAdSkus.length)}
                             style={{ width:"100%",textAlign:"left",border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.bg,borderRadius:10,padding:10,cursor:adGenerating?"not-allowed":"pointer",opacity:adGenerating?.8:1 }}>
                             <span style={{ display:"block",fontSize:12.5,fontWeight:900,color:C.text }}>{format.name}</span>
                             <span style={{ display:"block",marginTop:2,fontSize:11,color:C.muted }}>{firstTemplate?.name || "Custom ad format"}</span>
@@ -10503,6 +10514,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   </div>
                 ))}
               </div>
+              {hideProductSelector&&!effectiveAdSkus.length&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:800 }}>Select products above, then click Add Selected to Ad Menu. Each Generate button will read the products placed there.</p>}
               {adError&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:700 }}>{adError}</p>}
             </div>
 
