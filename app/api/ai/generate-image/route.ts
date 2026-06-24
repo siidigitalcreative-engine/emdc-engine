@@ -71,26 +71,32 @@ const validateImageUrl = async (url: string) => {
 const toBytePlusSize = (value: unknown) => {
   const size = clean(value) || "1024x1024";
   const map: Record<string, string> = {
-    "1024x1024": "1K",
-    "1024x1536": "1K",
-    "1536x1024": "1K",
+    "1024x1024": "2K",
+    "1024x1536": "2K",
+    "1536x1024": "2K",
     "1080x1920": "2K",
     "1920x1080": "2K",
     "2048x2048": "2K",
     "4096x4096": "4K",
+    "1K": "1K",
+    "2K": "2K",
+    "4K": "4K",
   };
   return map[size] || size;
 };
 
 const getBytePlusEndpoint = () => {
   const base = clean(process.env.BYTEPLUS_BASE_URL).replace(/\/+$/g, "");
-  if (!base) return "";
+  if (!base) return "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations";
+  if (/\/api\/v3\/images\/generations$/i.test(base)) return base;
   if (/\/images\/generations$/i.test(base)) return base;
-  return `${base}/images/generations`;
+  if (/\/api\/v3$/i.test(base)) return `${base}/images/generations`;
+  return `${base}/api/v3/images/generations`;
 };
 
-const extractGeneratedImage = (data: any) => {
+const extractGeneratedImage = (data: any): string => {
   if (!data) return "";
+  if (typeof data === "string") return extractGeneratedImageFromText(data);
   if (typeof data?.url === "string") return data.url;
   if (typeof data?.image === "string") return data.image;
   if (typeof data?.image_url === "string") return data.image_url;
@@ -100,7 +106,37 @@ const extractGeneratedImage = (data: any) => {
   if (Array.isArray(data?.images) && typeof data.images[0] === "string") return data.images[0];
   if (Array.isArray(data?.data) && data.data[0]?.url) return data.data[0].url;
   if (Array.isArray(data?.data) && data.data[0]?.b64_json) return `data:image/png;base64,${data.data[0].b64_json}`;
+  if (Array.isArray(data?.data) && data.data[0]?.content?.[0]?.url) return data.data[0].content[0].url;
   return "";
+};
+
+const extractGeneratedImageFromText = (text: string): string => {
+  const raw = clean(text);
+  if (!raw) return "";
+
+  const lines = raw.split(/\r?\n/);
+  const parsedObjects: any[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === "data: [DONE]" || trimmed === "[DONE]") continue;
+    const jsonText = trimmed.startsWith("data:") ? trimmed.replace(/^data:\s*/i, "") : trimmed;
+    if (!jsonText || jsonText === "[DONE]") continue;
+    try {
+      parsedObjects.push(JSON.parse(jsonText));
+    } catch {
+      // Ignore non-JSON stream lines.
+    }
+  }
+
+  for (let i = parsedObjects.length - 1; i >= 0; i -= 1) {
+    const url = extractGeneratedImage(parsedObjects[i]);
+    if (url) return url;
+  }
+
+  const urls = raw.match(/https?:\/\/[^\s"'<>]+/gi) || [];
+  const imageUrl = urls.find(url => /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) || urls[urls.length - 1] || "";
+  return imageUrl.replace(/[),.;]+$/g, "");
 };
 
 export async function POST(req: NextRequest) {
@@ -143,20 +179,12 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const apiKey = clean(process.env.BYTEPLUS_API_KEY);
-    const model = clean(process.env.BYTEPLUS_IMAGE_MODEL);
+    const apiKey = clean(process.env.BYTEPLUS_API_KEY || process.env.ARK_API_KEY);
+    const model = clean(process.env.BYTEPLUS_IMAGE_MODEL) || "seedream-4-5-251128";
     const endpoint = getBytePlusEndpoint();
 
     if (!apiKey) {
       return NextResponse.json({ error: "BYTEPLUS_API_KEY is not configured in Vercel Environment Variables." }, { status: 500 });
-    }
-
-    if (!model) {
-      return NextResponse.json({ error: "BYTEPLUS_IMAGE_MODEL is not configured in Vercel Environment Variables." }, { status: 500 });
-    }
-
-    if (!endpoint) {
-      return NextResponse.json({ error: "BYTEPLUS_BASE_URL is not configured in Vercel Environment Variables." }, { status: 500 });
     }
 
     const strictPrompt = [
@@ -180,12 +208,11 @@ export async function POST(req: NextRequest) {
       model,
       prompt: strictPrompt,
       image: validProductImageLinks,
-      image_urls: validProductImageLinks,
-      reference_images: validProductImageLinks,
-      size: toBytePlusSize(body?.size),
+      sequential_image_generation: "disabled",
       response_format: "url",
+      size: toBytePlusSize(body?.size),
+      stream: true,
       watermark: false,
-      n: 1,
     };
 
     const response = await fetch(endpoint, {
@@ -197,26 +224,32 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const responseText = await response.text();
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      parsed = null;
+    }
 
     if (!response.ok) {
       return NextResponse.json({
-        error: data?.error?.message || data?.message || data?.error || "BytePlus Seedream image generation failed.",
+        error: parsed?.error?.message || parsed?.message || parsed?.error || extractGeneratedImageFromText(responseText) || "BytePlus Seedream image generation failed.",
         endpoint,
         model,
         productImageLinks: validProductImageLinks,
         unreadableLinks,
-        raw: data,
+        raw: parsed || responseText,
       }, { status: response.status });
     }
 
-    const url = extractGeneratedImage(data);
+    const url = extractGeneratedImage(parsed) || extractGeneratedImageFromText(responseText);
     if (!url) {
       return NextResponse.json({
         error: "BytePlus Seedream returned no image URL.",
         endpoint,
         model,
-        raw: data,
+        raw: parsed || responseText,
       }, { status: 502 });
     }
 
