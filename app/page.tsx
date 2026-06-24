@@ -10250,16 +10250,66 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
   },
 ];
 
+
+const cloneAdTemplatePlatforms = (platforms:any[] = []) => JSON.parse(JSON.stringify(Array.isArray(platforms) ? platforms : []));
+
+const mergeAdTemplatePlatforms = (savedPlatforms:any[] = []) => {
+  const defaults = cloneAdTemplatePlatforms(DEFAULT_AD_TEMPLATE_PLATFORMS);
+  const saved = Array.isArray(savedPlatforms) && savedPlatforms.length ? cloneAdTemplatePlatforms(savedPlatforms) : [];
+  const merged = saved.length ? saved : defaults;
+
+  defaults.forEach((defaultPlatform:any)=>{
+    let platform = merged.find((item:any)=>String(item.id)===String(defaultPlatform.id));
+    if(!platform){
+      merged.push(defaultPlatform);
+      return;
+    }
+
+    platform.formats = Array.isArray(platform.formats) ? platform.formats : [];
+
+    (defaultPlatform.formats || []).forEach((defaultFormat:any)=>{
+      let format = platform.formats.find((item:any)=>String(item.id)===String(defaultFormat.id));
+      if(!format){
+        platform.formats.push(defaultFormat);
+        return;
+      }
+
+      format.templates = Array.isArray(format.templates) ? format.templates : [];
+      (defaultFormat.templates || []).forEach((defaultTemplate:any)=>{
+        const hasTemplate = format.templates.some((item:any)=>String(item.id)===String(defaultTemplate.id));
+        if(!hasTemplate) format.templates.push(defaultTemplate);
+      });
+    });
+  });
+
+  const gmvFormat = defaults
+    .flatMap((platform:any)=>platform.formats || [])
+    .find((format:any)=>String(format.id)==="tiktok-product-gmv-max");
+
+  if(gmvFormat){
+    const tiktok = merged.find((platform:any)=>String(platform.id)==="tiktok") || merged.find((platform:any)=>String(platform.name || "").toLowerCase().includes("tiktok"));
+    if(tiktok){
+      tiktok.formats = Array.isArray(tiktok.formats) ? tiktok.formats : [];
+      const hasGmv = tiktok.formats.some((format:any)=>String(format.id || "").includes("product-gmv-max") || String(format.name || "").toLowerCase().includes("product gmv max"));
+      if(!hasGmv) tiktok.formats.push(cloneAdTemplatePlatforms([gmvFormat])[0]);
+    } else {
+      merged.push({ id:"tiktok", name:"TikTok", formats:[cloneAdTemplatePlatforms([gmvFormat])[0]] });
+    }
+  }
+
+  return merged;
+};
+
 const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, presetProducts=[], onSendToDC=null, generatedOutputsStorageKey="global" }: any) => {
   const { isMobile } = useBreakpoint();
   const [platforms,setPlatforms] = useState<any[]>(() => {
-    if (typeof window === "undefined") return DEFAULT_AD_TEMPLATE_PLATFORMS;
+    if (typeof window === "undefined") return mergeAdTemplatePlatforms(DEFAULT_AD_TEMPLATE_PLATFORMS);
     try {
       const raw = localStorage.getItem("emdc_ad_template_platforms_v1");
       const parsed = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(parsed) && parsed.length) return parsed;
+      return mergeAdTemplatePlatforms(Array.isArray(parsed) ? parsed : DEFAULT_AD_TEMPLATE_PLATFORMS);
     } catch {}
-    return DEFAULT_AD_TEMPLATE_PLATFORMS;
+    return mergeAdTemplatePlatforms(DEFAULT_AD_TEMPLATE_PLATFORMS);
   });
   const [selectedPlatformId,setSelectedPlatformId] = useState("meta");
   const [selectedFormatId,setSelectedFormatId] = useState("meta-single-image");
@@ -10312,48 +10362,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
 
   useEffect(()=>{
     setPlatforms((prev:any[])=>{
-      let changed = false;
-      let next = [...(prev || [])];
-
-      const hasMetaCollection = next.some((platform:any)=>platform.id==="meta" && (platform.formats||[]).some((format:any)=>format.id==="meta-collection"));
-      if(!hasMetaCollection){
-        changed = true;
-        next = next.map((platform:any)=>platform.id==="meta" ? {
-          ...platform,
-          formats:[
-            ...(platform.formats || []),
-            {
-              id:"meta-collection",
-              name:"Collection Ad",
-              templates:[{
-                id:"meta-collection-template-1",
-                name:"Instant Experience Collection",
-                body:"Hero Asset: Single image or single video showing the main product story\nPrimary Text: [Short collection intro]\nHeadline: [Benefit-led headline]\nProduct Tiles: 4 product placeholders below the hero asset\nCTA: Shop Now",
-              }],
-            },
-          ],
-        } : platform);
-      }
-
-      const hasProductGmvMax = next.some((platform:any)=>(platform.formats||[]).some((format:any)=>String(format.id || "").includes("product-gmv-max") || String(format.name || "").toLowerCase().includes("product gmv max")));
-      if(!hasProductGmvMax){
-        changed = true;
-        const gmvFormat = {
-          id:"tiktok-product-gmv-max",
-          name:"Product GMV Max Ad",
-          templates:[{
-            id:"tiktok-product-gmv-max-template-1",
-            name:"5 Content Pillar Framework",
-            body:"Generate 5 separate marketing content outputs based on the selected product and these content pillars: Storytelling, 7-Second Rule, Showcase, Consumables, and Journey. For each pillar, include Content Theme, Creative Direction, and Caption Copy.",
-          }],
-        };
-        const hasTiktok = next.some((platform:any)=>platform.id==="tiktok");
-        next = hasTiktok
-          ? next.map((platform:any)=>platform.id==="tiktok" ? { ...platform, formats:[...(platform.formats || []), gmvFormat] } : platform)
-          : [...next,{ id:"tiktok", name:"TikTok", formats:[gmvFormat] }];
-      }
-
-      return changed ? next : prev;
+      const merged = mergeAdTemplatePlatforms(prev);
+      return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
     });
   },[]);
 
@@ -11268,9 +11278,11 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   };
 
   const resetAdTemplates = () => {
-    setPlatforms(DEFAULT_AD_TEMPLATE_PLATFORMS);
-    setSelectedPlatformId("meta");
-    setSelectedFormatId("meta-single-image");
+    // Keep custom platforms, custom ad formats, and custom templates.
+    // This only restores any missing default formats, including Product GMV Max Ad.
+    setPlatforms((prev:any[])=>mergeAdTemplatePlatforms(prev));
+    setSelectedPlatformId("tiktok");
+    setSelectedFormatId("tiktok-product-gmv-max");
   };
 
   return (
