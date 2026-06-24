@@ -10386,13 +10386,46 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
     name: "TikTok",
     formats: [
       {
-        id: "tiktok-in-feed",
-        name: "In-Feed Video Ad",
+        id: "tiktok-reach",
+        name: "Reach Ad",
         templates: [
           {
-            id: "tiktok-in-feed-template-1",
-            name: "UGC Hook Template",
-            body: "0-2s Hook: [Relatable problem or bold claim]\n3-6s Demo: Show the product solving the problem\n7-10s Proof: Feature or benefit close-up\n11-15s CTA: [Shop now / Try it today]\nTone: Natural, fast-paced, not too scripted.",
+            id: "tiktok-reach-template-1",
+            name: "Reach Awareness Instructions",
+            body: "Create a fast-scrolling TikTok awareness ad. Focus on instant product recognition, simple visual hook, clear brand/product moment, and broad audience appeal. Caption must be 100 characters maximum including spaces.",
+          },
+        ],
+      },
+      {
+        id: "tiktok-consideration",
+        name: "Consideration Ad",
+        templates: [
+          {
+            id: "tiktok-consideration-template-1",
+            name: "UGC Consideration Instructions",
+            body: "0-2s Hook: [Relatable problem or bold claim]\n3-6s Demo: Show the product solving the problem\n7-10s Proof: Feature or benefit close-up\n11-15s CTA: [Shop now / Try it today]\nTone: Natural, fast-paced, not too scripted. Caption must be 100 characters maximum including spaces.",
+          },
+        ],
+      },
+      {
+        id: "tiktok-product-gmv-max",
+        name: "Product GMV Max Ad",
+        templates: [
+          {
+            id: "tiktok-product-gmv-max-template-1",
+            name: "5 Content Pillar Instructions",
+            body: "Generate 5 separate marketing content outputs based on the selected product and these content pillars: Storytelling, 7-Second Rule, Showcase, Consumables, and Journey. For each pillar, include Content Theme, Creative Direction, and Caption Copy. Caption Copy must be 100 characters maximum including spaces.",
+          },
+        ],
+      },
+      {
+        id: "tiktok-live-gmv-max",
+        name: "Live GMV Max Ad",
+        templates: [
+          {
+            id: "tiktok-live-gmv-max-template-1",
+            name: "Live Selling Push Instructions",
+            body: "Opening Line: [Introduce product + deal]\nDemo: Show product function clearly\nSelling Points: [3 quick benefits]\nUrgency: [Limited stock / live-only offer]\nCTA: Tap the yellow cart now. Caption must be 100 characters maximum including spaces.",
           },
         ],
       },
@@ -10404,28 +10437,6 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
             id: "tiktok-spark-template-1",
             name: "Creator Testimonial Template",
             body: "Opening: Creator shows product in real use\nMiddle: 2-3 honest benefits\nClose-up: Product detail shot\nEnding: Personal recommendation + CTA",
-          },
-        ],
-      },
-      {
-        id: "tiktok-live",
-        name: "LIVE Shopping Ad",
-        templates: [
-          {
-            id: "tiktok-live-template-1",
-            name: "Live Selling Push Template",
-            body: "Opening Line: [Introduce product + deal]\nDemo: Show product function clearly\nSelling Points: [3 quick benefits]\nUrgency: [Limited stock / live-only offer]\nCTA: Tap the yellow cart now",
-          },
-        ],
-      },
-      {
-        id: "tiktok-product-gmv-max",
-        name: "Product GMV Max Ad",
-        templates: [
-          {
-            id: "tiktok-product-gmv-max-template-1",
-            name: "5 Content Pillar Framework",
-            body: "Generate 5 separate marketing content outputs based on the selected product and these content pillars: Storytelling, 7-Second Rule, Showcase, Consumables, and Journey. For each pillar, include Content Theme, Creative Direction, and Caption Copy.",
           },
         ],
       },
@@ -10486,6 +10497,48 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
 
 const cloneAdTemplatePlatforms = (platforms:any[] = []) => JSON.parse(JSON.stringify(Array.isArray(platforms) ? platforms : []));
 
+const TIKTOK_AD_FORMAT_ORDER = [
+  { id:"tiktok-reach", name:"Reach Ad" },
+  { id:"tiktok-consideration", name:"Consideration Ad" },
+  { id:"tiktok-product-gmv-max", name:"Product GMV Max Ad" },
+  { id:"tiktok-live-gmv-max", name:"Live GMV Max Ad" },
+  { id:"tiktok-spark", name:"Spark Ad" },
+];
+
+const getDefaultAdFormatById = (platformId:string, formatId:string) => {
+  const platform = (DEFAULT_AD_TEMPLATE_PLATFORMS || []).find((item:any)=>String(item.id)===String(platformId));
+  return cloneAdTemplatePlatforms([(platform?.formats || []).find((format:any)=>String(format.id)===String(formatId))].filter(Boolean))[0];
+};
+
+const normalizeTikTokAdFormats = (formats:any[] = []) => {
+  const list = Array.isArray(formats) ? cloneAdTemplatePlatforms(formats) : [];
+  const byKey = (target:any) => {
+    const targetId = String(target.id || "").toLowerCase();
+    const targetName = String(target.name || "").toLowerCase();
+    return list.find((format:any)=>{
+      const id = String(format?.id || "").toLowerCase();
+      const name = String(format?.name || "").toLowerCase();
+      if(targetId === "tiktok-consideration") return id.includes("consideration") || name.includes("consideration") || id.includes("in-feed") || name.includes("in-feed");
+      if(targetId === "tiktok-live-gmv-max") return id.includes("live") || name.includes("live");
+      if(targetId === "tiktok-product-gmv-max") return id.includes("product-gmv-max") || name.includes("product gmv max") || name.includes("gmv max");
+      if(targetId === "tiktok-reach") return id.includes("reach") || name.includes("reach");
+      if(targetId === "tiktok-spark") return id.includes("spark") || name.includes("spark");
+      return id === targetId || name === targetName;
+    });
+  };
+
+  const ordered = TIKTOK_AD_FORMAT_ORDER.map((target:any)=>{
+    const existing = byKey(target);
+    const defaultFormat = getDefaultAdFormatById("tiktok", target.id);
+    const base = existing || defaultFormat || { id:target.id, name:target.name, templates:[] };
+    return { ...base, id:target.id, name:target.name, templates:Array.isArray(base.templates) ? base.templates : [] };
+  });
+
+  const usedIds = new Set(ordered.map((format:any)=>String(format.id)));
+  const extras = list.filter((format:any)=>!usedIds.has(String(format.id)) && !TIKTOK_AD_FORMAT_ORDER.some((target:any)=>byKey(target)?.id===format.id));
+  return [...ordered, ...extras];
+};
+
 const mergeAdTemplatePlatforms = (savedPlatforms:any[] = []) => {
   const defaults = cloneAdTemplatePlatforms(DEFAULT_AD_TEMPLATE_PLATFORMS);
   const saved = Array.isArray(savedPlatforms) && savedPlatforms.length ? cloneAdTemplatePlatforms(savedPlatforms) : [];
@@ -10529,6 +10582,9 @@ const mergeAdTemplatePlatforms = (savedPlatforms:any[] = []) => {
       merged.push({ id:"tiktok", name:"TikTok", formats:[cloneAdTemplatePlatforms([gmvFormat])[0]] });
     }
   }
+
+  const tiktokPlatform = merged.find((platform:any)=>String(platform.id)==="tiktok") || merged.find((platform:any)=>String(platform.name || "").toLowerCase().includes("tiktok"));
+  if(tiktokPlatform) tiktokPlatform.formats = normalizeTikTokAdFormats(tiktokPlatform.formats || []);
 
   return merged;
 };
@@ -10804,7 +10860,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       `Missing card numbers: ${missingIndexes.map(i=>i+1).join(", ")}.`,
       "Return compact valid JSON only, no markdown, using this exact structure: { \"cards\": [ { \"cardNumber\": 2, \"mediaType\": \"image or video\", \"headline\": \"...\", \"copy\": \"...\", \"visual\": \"...\", \"cta\": \"...\" } ] }.",
       "Keep each field short and ecommerce-ready.",
-      selectedTemplate?.body ? `Use this custom template as the structure and inspiration:\n${selectedTemplate.body}` : "",
+      selectedTemplate?.body ? `Strictly follow these custom instructions:\n${selectedTemplate.body}` : "",
     ].filter(Boolean).join("\n\n");
 
     const res = await fetch("/api/ai/generate-text", {
@@ -10895,7 +10951,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
         `Generate a ${activePlatform.name} ad for the selected format: ${activeFormat.name}.`,
         carouselInstruction,
         productInstruction,
-        activeTemplate?.body ? `Use this template as the structure and inspiration:\n${activeTemplate.body}` : "",
+        activeTemplate?.body ? `Strictly follow these custom instructions:\n${activeTemplate.body}` : "",
         "Keep it clear, ecommerce-ready, and easy to copy.",
         "Avoid em dashes.",
         "Do not invent technical specs that are not provided.",
@@ -11095,6 +11151,11 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     return fenced ? fenced[1].trim() : text;
   };
 
+  const limitMarketingCaption100 = (value:any) => {
+    const clean = String(value || "").replace(/\s+/g," ").trim();
+    return clean.length > 100 ? clean.slice(0,100).trimEnd() : clean;
+  };
+
   const parseProductGmvMaxPillarOutputs = (raw:any) => {
     const cleaned = cleanAiJsonText(raw);
     try {
@@ -11107,7 +11168,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
             pillar:pillar.name,
             contentTheme:String(found.contentTheme || found.theme || "").trim(),
             creativeDirection:String(found.creativeDirection || found.direction || "").trim(),
-            captionCopy:String(found.captionCopy || found.caption || found.copy || "").trim(),
+            captionCopy:limitMarketingCaption100(found.captionCopy || found.caption || found.copy || ""),
           };
         });
       }
@@ -11164,7 +11225,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     pillar:pillar.name,
     contentTheme:`${pillar.name} concept for ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "the selected product"}`,
     creativeDirection:`Use the ${pillar.name} framework: ${pillar.guide}. Base the visuals on the selected product information, features, benefits, and target audience.`,
-    captionCopy:`Discover ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "this product"} in a fresh way. Shop now and see how it fits your everyday routine.`,
+    captionCopy:limitMarketingCaption100(`Discover ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "this product"}. Shop now.`),
   }));
 
   const generateProductGmvMaxOutputs = async (entry:any) => {
@@ -11183,10 +11244,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       "Use the product information, features, benefits, and target audience of the selected product. Do not invent unsupported technical specs.",
       "Follow these 5 Content Pillar Templates exactly as the framework:",
       PRODUCT_GMV_MAX_PILLARS.map((pillar:any,index:number)=>`${index+1}. ${pillar.name}: ${pillar.guide}`).join("\n"),
-      "For each pillar, generate Content Theme, Creative Direction, and Caption Copy. Creative Direction must include visual concept, shot suggestions, mood, and key messaging. Caption Copy must be engaging, platform-ready, with a strong hook and call-to-action.",
-      `Return compact valid JSON only, no markdown, no explanation, using this exact structure: { "outputs": [ { "contentPillar": "Storytelling", "contentTheme": "...", "creativeDirection": "...", "captionCopy": "..." } ] }.`,
+      "For each pillar, generate Content Theme, Creative Direction, and Caption Copy. Creative Direction must include visual concept, shot suggestions, mood, and key messaging. Caption Copy must be engaging, platform-ready, with a strong hook and call-to-action. Caption Copy must be 100 characters maximum, including spaces.",
+      `Return compact valid JSON only, no markdown, no explanation, using this exact structure: { "outputs": [ { "contentPillar": "Storytelling", "contentTheme": "...", "creativeDirection": "...", "captionCopy": "100 characters max including spaces" } ] }.`,
       "The outputs array must contain exactly these 5 pillars in order: Storytelling, 7-Second Rule, Showcase, Consumables, Journey.",
-      activeTemplate?.body ? `Template note:\n${activeTemplate.body}` : "",
+      activeTemplate?.body ? `Strict custom instructions from Manage Templates:\n${activeTemplate.body}` : "",
       "Avoid em dashes.",
     ].filter(Boolean).join("\n\n");
 
@@ -11746,7 +11807,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>Selected ad outputs</p>
                   <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>{selectedAdFormatKeys.length} ad format{selectedAdFormatKeys.length!==1?"s":""} selected. Click Generate Ads to create all selected ad outputs using the products placed in the Ad Menu.</p>
                 </div>
-                <Btn sm onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>{adGenerating?"✓ Generating...":adGeneratedTick?"✓ Generated":"Generate Ads"}</Btn>
+                <Btn sm onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>{adGenerating?"✓ Generating...":adGeneratedTick?"✓ Generate":"Generate Ads"}</Btn>
               </div>
               {generatedBatchOutputs.length>0&&(
                 <div style={{ marginTop:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(320px,1fr))",gap:10 }}>
@@ -11812,7 +11873,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                                           {rowEditing ? <textarea value={row.creativeDirection || ""} onChange={(e:any)=>updateGeneratedBatchGmvRow(item.id,index,{ creativeDirection:e.target.value })} rows={7} style={{ ...inputStyle,resize:"vertical" }} /> : <p style={{ margin:0,whiteSpace:"pre-wrap",lineHeight:1.45 }}>{row.creativeDirection || ""}</p>}
                                         </td>
                                         <td style={{ padding:10,verticalAlign:"top",minWidth:240 }}>
-                                          {rowEditing ? <textarea value={row.captionCopy || ""} onChange={(e:any)=>updateGeneratedBatchGmvRow(item.id,index,{ captionCopy:e.target.value })} rows={7} style={{ ...inputStyle,resize:"vertical" }} /> : <p style={{ margin:0,whiteSpace:"pre-wrap",lineHeight:1.45 }}>{row.captionCopy || ""}</p>}
+                                          {rowEditing ? <textarea value={row.captionCopy || ""} onChange={(e:any)=>updateGeneratedBatchGmvRow(item.id,index,{ captionCopy:limitMarketingCaption100(e.target.value) })} rows={7} style={{ ...inputStyle,resize:"vertical" }} /> : <p style={{ margin:0,whiteSpace:"pre-wrap",lineHeight:1.45 }}>{row.captionCopy || ""}</p>}
                                         </td>
                                         <td style={{ padding:10,verticalAlign:"top",width:120 }}>
                                           <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
@@ -12002,11 +12063,12 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                       <input value={template.name} onChange={e=>updateTemplate(template.id, { name:e.target.value })} placeholder="Template name"
                         style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }} />
                     </Field>
-                    <Field label="Template">
-                      <textarea value={template.body} onChange={e=>updateTemplate(template.id, { body:e.target.value })} placeholder="Write your custom ad template here..." rows={7}
+                    <Field label="Instructions">
+                      <textarea value={template.body} onChange={e=>updateTemplate(template.id, { body:e.target.value })} placeholder="Write strict instructions for this ad format. The generator will follow these instructions." rows={7}
                         style={{ width:"100%",padding:"12px 14px",fontSize:13,lineHeight:1.5,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }} />
                     </Field>
                     <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                      <Btn xs onClick={()=>updateTemplate(template.id, { name:template.name, body:template.body })}>Save</Btn>
                       <Btn xs variant="outline" onClick={()=>copyTemplate(template)}>Copy</Btn>
                       <Btn xs variant="outline" onClick={()=>duplicateTemplate(template)}>Duplicate</Btn>
                       <Btn xs variant="danger" onClick={()=>deleteTemplate(template.id)}>Delete</Btn>
