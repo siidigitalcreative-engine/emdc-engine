@@ -5197,21 +5197,201 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     if(tab==="livestream"){
       const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
+      const livestreamTabs = [
+        { id:"main", label:"Main Livestream" },
+        { id:"johnsmithShopee", label:"Johnsmith Shopee SL" },
+        { id:"johnsmithTiktok", label:"Johnsmith TikTok SL" },
+        { id:"humanLive", label:"Human Live (TikTok QNH)" },
+      ];
+      const activeLivestreamTab = livestreamTabs.some((item:any)=>item.id===livestreamData.activeTab) ? livestreamData.activeTab : "main";
+      const livestreamProductKey = (item:any,idx:number) => `${item.sku || item.skuCode || item.product || item.productName || "livestream-product"}__${idx}`;
+      const livestreamMappedProducts = (productRows || []).map((row:any)=>({
+        product:row.product || row.productName || row.name || "",
+        sku:row.skuCode || row.sku || row.value || "",
+        brand:row.brand || "",
+        collection:row.collection || row.category || "",
+        category:row.category || row.collection || "",
+      })).filter((item:any)=>String(item.product || item.sku).trim());
+      const selectedLivestreamProductKeys = Array.isArray(livestreamData.selectedProductKeys) ? livestreamData.selectedProductKeys : [];
+      const placedLivestreamProductKeys = Array.isArray(livestreamData.placedProductKeys) ? livestreamData.placedProductKeys : [];
+      const selectedLivestreamProducts = livestreamMappedProducts.filter((item:any,idx:number)=>selectedLivestreamProductKeys.includes(livestreamProductKey(item,idx)));
+      const placedLivestreamProducts = livestreamMappedProducts.filter((item:any,idx:number)=>placedLivestreamProductKeys.includes(livestreamProductKey(item,idx)));
+      const livestreamPromotions = Array.isArray(livestreamData.promotions) ? livestreamData.promotions : [];
+      const livestreamVoucherCards = Array.isArray(livestreamData.voucherCards) ? livestreamData.voucherCards : [];
+      const updateLivestream = (patch:any) => updateAiWorkspace("livestream",{ ...livestreamData,...patch });
+      const addLivestreamPromotion = () => {
+        const text = String(livestreamData.promotionDraft || "").trim();
+        if(!text) return;
+        updateLivestream({ promotions:[...livestreamPromotions,{ id:uid(), text }], promotionDraft:"" });
+      };
+      const updateLivestreamPromotion = (id:string,patch:any) => updateLivestream({ promotions:livestreamPromotions.map((item:any)=>item.id===id?{...item,...patch}:item) });
+      const deleteLivestreamPromotion = (id:string) => updateLivestream({ promotions:livestreamPromotions.filter((item:any)=>item.id!==id), editingPromotionId:livestreamData.editingPromotionId===id?"":livestreamData.editingPromotionId });
+      const addLivestreamVoucher = () => {
+        const text = String(livestreamData.voucherDraft || "").trim();
+        if(!text) return;
+        updateLivestream({ voucherCards:[...livestreamVoucherCards,{ id:uid(), text }], voucherDraft:"" });
+      };
+      const updateLivestreamVoucher = (id:string,patch:any) => updateLivestream({ voucherCards:livestreamVoucherCards.map((item:any)=>item.id===id?{...item,...patch}:item) });
+      const deleteLivestreamVoucher = (id:string) => updateLivestream({ voucherCards:livestreamVoucherCards.filter((item:any)=>item.id!==id), editingVoucherId:livestreamData.editingVoucherId===id?"":livestreamData.editingVoucherId });
+
+      const LivestreamPlaceholder = ({ title }:any) => (
+        <div style={{ minHeight:280,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+          <div>
+            <p style={{ margin:"0 0 6px",fontSize:14,fontWeight:900,color:C.text }}>{title}</p>
+            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>This livestream sub-page is ready for the next workflow setup.</p>
+          </div>
+        </div>
+      );
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Livestream</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Plan live selling scripts, talking points, demo flow, product callouts, offer pushes, and closing CTAs.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:920 }}>Plan live selling product selections, promotions, voucher card text, AI topic, scripts, talking points, demo flow, offer pushes, and closing CTAs.</p>
           </div>
-          {!!String(livestreamData.mainPromotion || "").trim()&&(
-            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-              <p style={{ margin:"0 0 6px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Main Promotion</p>
-              <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.5,whiteSpace:"pre-wrap" }}>{livestreamData.mainPromotion}</p>
-            </div>
+
+          <div style={{ display:"flex",gap:8,flexWrap:"wrap",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:8 }}>
+            {livestreamTabs.map((item:any)=>(
+              <button key={item.id} type="button" onClick={()=>updateLivestream({ activeTab:item.id })}
+                style={{ padding:"9px 14px",borderRadius:9,border:`1.5px solid ${activeLivestreamTab===item.id?C.accent:C.border}`,background:activeLivestreamTab===item.id?C.accent:C.surface,color:activeLivestreamTab===item.id?"#fff":C.textSub,fontSize:12.5,fontWeight:900,cursor:"pointer" }}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {activeLivestreamTab!=="main" ? (
+            <LivestreamPlaceholder title={livestreamTabs.find((item:any)=>item.id===activeLivestreamTab)?.label || "Livestream Sub Page"} />
+          ) : (
+            <>
+              <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                  <div>
+                    <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Main Livestream Products</span>
+                    <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedLivestreamProducts.length} selected · {placedLivestreamProducts.length} placed · {livestreamMappedProducts.length} available</span>
+                  </div>
+                  <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
+                    <Btn xs variant="outline" onClick={()=>updateLivestream({ selectedProductKeys:livestreamMappedProducts.map((item:any,idx:number)=>livestreamProductKey(item,idx)) })} disabled={!livestreamMappedProducts.length}>Select All</Btn>
+                    <Btn xs variant="outline" onClick={()=>updateLivestream({ selectedProductKeys:[] })} disabled={!selectedLivestreamProductKeys.length}>Clear Selection</Btn>
+                    <Btn xs onClick={()=>updateLivestream({ placedProductKeys:selectedLivestreamProductKeys })} disabled={!selectedLivestreamProductKeys.length}>Add Selected</Btn>
+                    <Btn xs variant="danger" onClick={()=>updateLivestream({ placedProductKeys:[] })} disabled={!placedLivestreamProductKeys.length}>Clear Products</Btn>
+                  </div>
+                </div>
+                {placedLivestreamProducts.length>0&&(
+                  <div style={{ padding:"8px 12px",background:"#ECFDF5",borderBottom:`1px solid ${C.border}`,fontSize:11.5,color:"#047857",fontWeight:850 }}>
+                    Main Livestream will use {placedLivestreamProducts.length} product{placedLivestreamProducts.length!==1?"s":""}: {placedLivestreamProducts.map((item:any)=>item.product || item.sku).filter(Boolean).join(", ")}
+                  </div>
+                )}
+                {livestreamMappedProducts.length ? (
+                  <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:360 }}>
+                    <table style={{ width:"100%",minWidth:760,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                      <thead>
+                        <tr style={{ background:C.surfaceAlt }}>
+                          {["Select","Added","Brand","Category","Product","SKU"].map((label:string)=>(
+                            <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {livestreamMappedProducts.map((product:any,idx:number)=>{
+                          const key = livestreamProductKey(product,idx);
+                          const checked = selectedLivestreamProductKeys.includes(key);
+                          const placed = placedLivestreamProductKeys.includes(key);
+                          return (
+                            <tr key={key} style={{ background:placed?"#ECFDF5":checked?"#EEF2FF":idx%2?C.surface:C.bg }}>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}` }}>
+                                <input type="checkbox" checked={checked} onChange={()=>{
+                                  const next = checked ? selectedLivestreamProductKeys.filter((item:string)=>item!==key) : [...selectedLivestreamProductKeys,key];
+                                  updateLivestream({ selectedProductKeys:next });
+                                }} />
+                              </td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,fontWeight:850,color:placed?"#047857":C.faint }}>{placed ? "Added" : "Not added"}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220,fontWeight:850,color:C.text }}>{product.product || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>{product.sku || ""}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ padding:16,fontSize:12,color:C.muted,textAlign:"center" }}>No mapped products available yet.</div>
+                )}
+              </div>
+
+              {!!String(livestreamData.mainPromotion || "").trim()&&(
+                <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                  <p style={{ margin:"0 0 6px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Main Promotion</p>
+                  <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.5,whiteSpace:"pre-wrap" }}>{livestreamData.mainPromotion}</p>
+                </div>
+              )}
+
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
+                <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10 }}>
+                    <div>
+                      <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Promotions</p>
+                      <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Optional exclusive platform/live promo.</p>
+                    </div>
+                    <Btn xs onClick={addLivestreamPromotion}>Add</Btn>
+                  </div>
+                  <textarea value={livestreamData.promotionDraft || ""} onChange={(e:any)=>updateLivestream({ promotionDraft:e.target.value })} placeholder="Example: Live-only ₱100 OFF with free shipping tonight" rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none",marginBottom:10 }} />
+                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                    {livestreamPromotions.length ? livestreamPromotions.map((item:any)=>(
+                      <div key={item.id} style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}` }}>
+                        {livestreamData.editingPromotionId===item.id ? (
+                          <textarea value={item.text || ""} onChange={(e:any)=>updateLivestreamPromotion(item.id,{ text:e.target.value })} rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:8,padding:8,fontSize:12.5,outline:"none" }} />
+                        ) : (
+                          <p style={{ margin:0,fontSize:12.5,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{item.text}</p>
+                        )}
+                        <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:8 }}>
+                          <Btn xs variant="outline" onClick={()=>updateLivestream({ editingPromotionId:livestreamData.editingPromotionId===item.id?"":item.id })}>{livestreamData.editingPromotionId===item.id?"Save":"Edit"}</Btn>
+                          <Btn xs variant="danger" onClick={()=>deleteLivestreamPromotion(item.id)}>Delete</Btn>
+                        </div>
+                      </div>
+                    )) : <p style={{ margin:0,fontSize:12,color:C.muted }}>No promotions added yet.</p>}
+                  </div>
+                </div>
+
+                <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10 }}>
+                    <div>
+                      <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Voucher Card Text Input</p>
+                      <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Add short voucher card lines for the live.</p>
+                    </div>
+                    <Btn xs onClick={addLivestreamVoucher}>Add</Btn>
+                  </div>
+                  <textarea value={livestreamData.voucherDraft || ""} onChange={(e:any)=>updateLivestream({ voucherDraft:e.target.value })} placeholder="Example: CLAIM NOW: ₱50 OFF minimum ₱499" rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none",marginBottom:10 }} />
+                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                    {livestreamVoucherCards.length ? livestreamVoucherCards.map((item:any)=>(
+                      <div key={item.id} style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}` }}>
+                        {livestreamData.editingVoucherId===item.id ? (
+                          <textarea value={item.text || ""} onChange={(e:any)=>updateLivestreamVoucher(item.id,{ text:e.target.value })} rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:8,padding:8,fontSize:12.5,outline:"none" }} />
+                        ) : (
+                          <p style={{ margin:0,fontSize:12.5,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{item.text}</p>
+                        )}
+                        <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:8 }}>
+                          <Btn xs variant="outline" onClick={()=>updateLivestream({ editingVoucherId:livestreamData.editingVoucherId===item.id?"":item.id })}>{livestreamData.editingVoucherId===item.id?"Save":"Edit"}</Btn>
+                          <Btn xs variant="danger" onClick={()=>deleteLivestreamVoucher(item.id)}>Delete</Btn>
+                        </div>
+                      </div>
+                    )) : <p style={{ margin:0,fontSize:12,color:C.muted }}>No voucher card text added yet.</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                <Field label="AI Topic">
+                  <Select value={livestreamData.aiTopic || "BAU"} onChange={(v:string)=>updateLivestream({ aiTopic:v })} style={{ maxWidth:isMobile?"100%":320 }}>
+                    <option value="BAU">BAU</option>
+                    <option value="Launching">Launching</option>
+                    <option value="Campaign">Campaign</option>
+                  </Select>
+                </Field>
+              </div>
+            </>
           )}
-          <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
-            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>Livestream workspace is ready.</p>
-          </div>
         </div>
       );
     }
