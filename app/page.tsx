@@ -3341,6 +3341,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
   const [campaignDigitalSentIds,setCampaignDigitalSentIds] = useState<string[]>([]);
   const [campaignDcGeneratingImageId,setCampaignDcGeneratingImageId] = useState("");
+  const [dcProductRefEditKeys,setDcProductRefEditKeys] = useState<Record<string,boolean>>({});
+  const toggleDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: !prev?.[key] }));
+  const closeDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: false }));
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
 
@@ -5478,6 +5481,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const canEdit = typeof onChangeRefs === "function";
         const editingProducts = !!opts?.editingProducts && canEdit;
         const onToggleEdit = typeof opts?.onToggleEdit === "function" ? opts.onToggleEdit : null;
+        const onDoneEdit = typeof opts?.onDoneEdit === "function" ? opts.onDoneEdit : onToggleEdit;
         const updateRef = (idx:number, patch:any) => onChangeRefs(products.map((row:any,index:number)=>index===idx ? { ...row, ...patch } : row));
         const removeRef = (idx:number) => onChangeRefs(products.filter((_:any,index:number)=>index!==idx));
         const addRef = () => onChangeRefs([...products,{ id:uid(), brand:"", product:"", sku:"", links:[] }]);
@@ -5486,7 +5490,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <div style={{ display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",marginBottom:6 }}>
               <p style={{ margin:0,fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
               <div style={{ display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
-                {canEdit&&<button type="button" onClick={onToggleEdit || undefined} style={{ border:`1px solid ${C.border}`,background:editingProducts?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editingProducts?"#fff":C.textSub,cursor:"pointer" }}>{editingProducts?"Done":"Edit Products"}</button>}
+                {canEdit&&<button type="button" onClick={editingProducts ? (onDoneEdit || undefined) : (onToggleEdit || undefined)} style={{ border:`1px solid ${C.border}`,background:editingProducts?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editingProducts?"#fff":C.textSub,cursor:"pointer" }}>{editingProducts?"Done":"Edit Products"}</button>}
                 {editingProducts&&<button type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
               </div>
             </div>
@@ -5659,7 +5663,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 </div>
 
                                 <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
-                                  {renderCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ editingProducts:!!card?.editProducts, onToggleEdit:()=>updateCampaignDigitalCarouselCard(item.id,cardIndex,{ editProducts:!card?.editProducts }), onChangeRefs:(nextRefs:any)=>updateCampaignDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
+                                  {renderCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ editingProducts:!!dcProductRefEditKeys[`campaign-${item.id}-${cardIndex}`], onToggleEdit:()=>toggleDcProductRefEdit(`campaign-${item.id}-${cardIndex}`), onDoneEdit:()=>closeDcProductRefEdit(`campaign-${item.id}-${cardIndex}`), onChangeRefs:(nextRefs:any)=>updateCampaignDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
                                   <div>
                                     <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
                                     <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p>
@@ -6157,7 +6161,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const products = normalizeIntroCarouselProductRefRows(cardProducts,links);
         const safeLinks = Array.isArray(links) ? links.filter(Boolean) : [];
         const onChangeRefs = opts?.onChangeRefs;
-        const editable = typeof onChangeRefs === "function";
+        const canEdit = typeof onChangeRefs === "function";
+        const editable = !!opts?.editingProducts && canEdit;
+        const onToggleEdit = typeof opts?.onToggleEdit === "function" ? opts.onToggleEdit : null;
+        const onDoneEdit = typeof opts?.onDoneEdit === "function" ? opts.onDoneEdit : onToggleEdit;
         const updateRef = (idx:number, patch:any) => onChangeRefs(products.map((row:any,index:number)=>index===idx ? { ...row, ...patch } : row));
         const removeRef = (idx:number) => onChangeRefs(products.filter((_:any,index:number)=>index!==idx));
         const addRef = () => onChangeRefs([...products,{ id:uid(), brand:"", product:"", sku:"", links:[] }]);
@@ -6165,7 +6172,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           <div style={{ padding:8,borderRadius:8,background:"#F9FAFB",border:`1px solid ${C.border}` }}>
             <div style={{ display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",marginBottom:6 }}>
               <p style={{ margin:0,fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
-              {editable&&<button type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+              <div style={{ display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
+                {canEdit&&<button type="button" onClick={editable ? (onDoneEdit || undefined) : (onToggleEdit || undefined)} style={{ border:`1px solid ${C.border}`,background:editable?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editable?"#fff":C.textSub,cursor:"pointer" }}>{editable?"Done":"Edit Products"}</button>}
+                {editable&&<button type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+              </div>
             </div>
             {products.length ? products.slice(0,6).map((row:any,idx:number)=>{
               const rowLinks = Array.isArray(row?.links) ? row.links : [];
@@ -6326,7 +6336,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                   )}
                                 </div>
                                 <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
-                                  {renderIntroCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ onChangeRefs:(nextRefs:any)=>updateProductIntroDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
+                                  {renderIntroCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ editingProducts:!!dcProductRefEditKeys[`intro-${item.id}-${cardIndex}`], onToggleEdit:()=>toggleDcProductRefEdit(`intro-${item.id}-${cardIndex}`), onDoneEdit:()=>closeDcProductRefEdit(`intro-${item.id}-${cardIndex}`), onChangeRefs:(nextRefs:any)=>updateProductIntroDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p><p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p></div>
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p><p style={{ margin:0 }}>{card?.copy || ""}</p></div>
                                   <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{normalizedMediaType==="video"?"Video Direction":"Image Direction"}</p><p style={{ margin:0 }}>{card?.visual || ""}</p></div>
