@@ -5079,7 +5079,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <table style={{ width:"100%",minWidth:980,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                   <thead>
                     <tr style={{ background:C.surfaceAlt }}>
-                      {["Select","Ad Menu","Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                      {["Select","Ad Menu","Platform","Brand","Category","Product","SKU","Headline","Subheadline","CTA"].map((label:string)=>(
                         <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                       ))}
                     </tr>
@@ -5102,6 +5102,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>{product.sku || product.skuCode || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:170 }}>{product.headline || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:240 }}>{product.subheadline || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,minWidth:130,fontWeight:850,color:C.text }}>{product.cta || ""}</td>
@@ -5394,7 +5395,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                             <thead>
                               <tr style={{ background:C.surfaceAlt }}>
-                                {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                                {["Platform","Brand","Category","Product","SKU","Headline","Subheadline","CTA"].map((label:string)=>(
                                   <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                                 ))}
                               </tr>
@@ -5406,6 +5407,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.sku || ""}</td>
                                   {mergeCopyCells ? (
                                     idx===0&&<>
                                       <td rowSpan={productRows.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:190 }}>{row.headline || ""}</td>
@@ -5716,7 +5718,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                             <thead>
                               <tr style={{ background:C.surfaceAlt }}>
-                                {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                                {["Platform","Brand","Category","Product","SKU","Headline","Subheadline","CTA"].map((label:string)=>(
                                   <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                                 ))}
                               </tr>
@@ -5728,6 +5730,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                                  <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.sku || ""}</td>
                                   {mergeCopyCells ? (
                                     idx===0&&<>
                                       <td rowSpan={tableProducts.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:190 }}>{row.headline || ""}</td>
@@ -9883,7 +9886,19 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
         category:item.category || item.collection || "",
       }))
     : selectedAdSkus;
-  const selectedAdSkuIds = useMemo(()=>selectedAdSkus.map((sku:any)=>sku.id),[selectedAdSkus]);
+  const [selectedAdFormatKeys,setSelectedAdFormatKeys] = useState<any[]>([]);
+  const getAdFormatKey = (platformId:any,formatId:any) => `${platformId}__${formatId}`;
+  const selectedAdFormatEntries = () => platforms.flatMap((platform:any)=>
+    (platform.formats || []).filter((format:any)=>selectedAdFormatKeys.includes(getAdFormatKey(platform.id,format.id))).map((format:any)=>({
+      platform,
+      format,
+      template:format.templates?.[0],
+    }))
+  );
+  const toggleSelectedAdFormatKey = (key:string) => {
+    setSelectedAdFormatKeys((prev:any[])=>prev.includes(key) ? prev.filter((item:string)=>item!==key) : [...prev,key]);
+  };
+  const clearSelectedAdFormatKeys = () => setSelectedAdFormatKeys([]);
 
   const getAdSkuBrand = (sku:any) => brands.find((brand:any)=>brand.id===sku?.brandId)?.name || sku?.brand || "";
   const getAdSkuCategory = (sku:any) => getSkuCollectionCategory(sku) || sku?.collection || sku?.category || sku?.productCategory || "";
@@ -10082,9 +10097,9 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     const activeIsCollection = isCollectionFormatByName(activeFormat);
 
     if (!activePlatform || !activeFormat) return;
-    if (!adBrief.trim() && selectedAdSkus.length===0) {
-      setAdError("Please select products or enter a campaign brief first.");
-      return;
+    if (effectiveAdSkus.length===0 && !adBrief.trim()) {
+      setAdError(hideProductSelector ? "Select products above, then click Add Selected to Ad Menu before generating." : "Please select products first.");
+      return null;
     }
 
     setSelectedFormatId(activeFormat.id);
@@ -10157,18 +10172,33 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       const textOutput = data?.text || "";
       setGeneratedAdText(textOutput);
 
+      let finalCards:any[] = [];
       if (activeIsCarousel) {
         const parsedCards = parseCarouselCards(textOutput);
+        finalCards = parsedCards;
         setGeneratedAdCards(parsedCards);
 
         const hasMissing = parsedCards.some((card:any)=>!(card.headline || card.copy || card.visual || card.cta));
         if (hasMissing) {
-          const completedCards = await fillMissingCarouselCards(parsedCards);
-          setGeneratedAdCards(completedCards);
+          finalCards = await fillMissingCarouselCards(parsedCards);
+          setGeneratedAdCards(finalCards);
         }
       }
+
+      return {
+        text:activeIsCarousel ? formatCarouselCardsForCopy(finalCards) : textOutput,
+        cards:activeIsCarousel ? finalCards : [],
+        platformName:activePlatform?.name || "",
+        formatName:activeFormat?.name || "",
+        templateName:activeTemplate?.name || "",
+        products:effectiveAdSkus,
+        brief:adBrief,
+        isCarousel:activeIsCarousel,
+        isCollection:activeIsCollection,
+      };
     } catch (err:any) {
       setAdError(err?.message || "Ad generation failed.");
+      return null;
     } finally {
       setAdGenerating(false);
     }
@@ -10218,6 +10248,96 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       isCollection:!!item.isCollection,
     });
     setSavedAdPreview(null);
+  };
+
+  const formatSingleAdCardForCopy = (card:any,index:number) => [
+    `Card ${index+1}`,
+    `Media Type: ${card.mediaType || recommendedCarouselMediaType(index)}`,
+    `Headline: ${card.headline || ""}`,
+    `Copy: ${card.copy || ""}`,
+    `Visual Direction: ${card.visual || ""}`,
+    `CTA: ${card.cta || "Shop Now"}`,
+  ].join("\n");
+
+  const saveGeneratedAdCardTemplate = (card:any,index:number) => {
+    const item = {
+      id:uid(),
+      name:`${selectedPlatform?.name || "Platform"} ${selectedFormat?.name || "Ad"} Card ${index+1} - ${new Date().toLocaleDateString()}`,
+      platformId:selectedPlatform?.id || "",
+      platformName:selectedPlatform?.name || "",
+      formatId:selectedFormat?.id || "",
+      formatName:selectedFormat?.name || "",
+      templateId:selectedTemplate?.id || "",
+      templateName:`${selectedTemplate?.name || "Template"} · Card ${index+1}`,
+      brief:adBrief,
+      isCarousel:false,
+      isCollection:false,
+      carouselMediaMode,
+      collectionHeroMedia,
+      cards:[card],
+      products:effectiveAdSkus,
+      text:formatSingleAdCardForCopy(card,index),
+      createdAt:new Date().toISOString(),
+    };
+    setSavedAdTemplates((prev:any[])=>[item,...prev]);
+    setAdError("");
+  };
+
+  const sendGeneratedAdCardToDC = (card:any,index:number) => {
+    if(!onSendToDC) return;
+    onSendToDC({
+      text:formatSingleAdCardForCopy(card,index),
+      cards:[card],
+      platformName:selectedPlatform?.name || "",
+      formatName:`${selectedFormat?.name || "Ad"} · Card ${index+1}`,
+      templateName:selectedTemplate?.name || "",
+      products:effectiveAdSkus,
+      brief:adBrief,
+      isCarousel:false,
+      isCollection:false,
+    });
+  };
+
+  const generateSelectedAdFormats = async () => {
+    const entries = selectedAdFormatEntries();
+    if(!entries.length){
+      setAdError("Select one or more ad formats first.");
+      return;
+    }
+    if(hideProductSelector && !effectiveAdSkus.length){
+      setAdError("Select products above, then click Add Selected to Ad Menu before generating.");
+      return;
+    }
+    const savedItems:any[] = [];
+    for (const entry of entries) {
+      setSelectedPlatformId(entry.platform.id);
+      const result = await generateAdForFormat(entry.format,entry.template);
+      if(result?.text){
+        savedItems.push({
+          id:uid(),
+          name:`${entry.platform?.name || "Platform"} ${entry.format?.name || "Ad"} - ${new Date().toLocaleDateString()}`,
+          platformId:entry.platform?.id || "",
+          platformName:entry.platform?.name || "",
+          formatId:entry.format?.id || "",
+          formatName:entry.format?.name || "",
+          templateId:entry.template?.id || "",
+          templateName:entry.template?.name || "",
+          brief:adBrief,
+          isCarousel:!!result.isCarousel,
+          isCollection:!!result.isCollection,
+          carouselMediaMode,
+          collectionHeroMedia,
+          cards:Array.isArray(result.cards) ? result.cards : [],
+          products:effectiveAdSkus,
+          text:result.text,
+          createdAt:new Date().toISOString(),
+        });
+      }
+    }
+    if(savedItems.length) {
+      setSavedAdTemplates((prev:any[])=>[...savedItems,...prev]);
+      setAdError(`${savedItems.length} ad output${savedItems.length!==1?"s":""} generated and saved.`);
+    }
   };
 
   const saveGeneratedAdTemplate = () => {
@@ -10484,7 +10604,13 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
 
           <div style={{ display:"flex",flexDirection:"column",gap:12,minWidth:0 }}>
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg }}>
-              <h4 style={{ margin:"0 0 10px",fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "2. Choose Platform & Ad Format" : "4. Choose Your Ad Order"}</h4>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10 }}>
+                <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "2. Choose Platform & Ad Format" : "4. Choose Your Ad Order"}</h4>
+                <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
+                  <Btn xs variant="outline" onClick={clearSelectedAdFormatKeys} disabled={!selectedAdFormatKeys.length}>Clear Ad Selection</Btn>
+                  <Btn xs onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>Generate Selected Ads</Btn>
+                </div>
+              </div>
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10 }}>
                 {platforms.map((platform:any)=>(
                   <div key={platform.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
@@ -10495,8 +10621,15 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                       {(platform.formats||[]).map((format:any)=> {
                         const firstTemplate = format.templates?.[0];
                         const active = selectedPlatformId===platform.id && selectedFormatId===format.id;
+                        const formatKey = getAdFormatKey(platform.id,format.id);
+                        const selectedForBatch = selectedAdFormatKeys.includes(formatKey);
                         return (
-                          <button key={format.id} type="button" onClick={()=>{
+                          <div key={format.id} style={{ position:"relative" }}>
+                            <label onClick={(e:any)=>e.stopPropagation()} style={{ position:"absolute",top:8,right:8,zIndex:2,display:"inline-flex",alignItems:"center",gap:4,fontSize:10.5,fontWeight:900,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 7px",cursor:"pointer" }}>
+                              <input type="checkbox" checked={selectedForBatch} onChange={()=>toggleSelectedAdFormatKey(formatKey)} />
+                              Select
+                            </label>
+                          <button type="button" onClick={()=>{
                               setSelectedPlatformId(platform.id);
                               setSelectedFormatId(format.id);
                               if(firstTemplate?.id) setSelectedTemplateId(firstTemplate.id);
@@ -10508,6 +10641,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                             <span style={{ display:"block",marginTop:2,fontSize:11,color:C.muted }}>{firstTemplate?.name || "Custom ad format"}</span>
                             <span style={{ display:"inline-block",marginTop:8,fontSize:10.5,fontWeight:800,color:active?C.accent:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{adGenerating&&active?"Generating...":"Generate"}</span>
                           </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -10585,6 +10719,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                             </div>
 
                             <p style={{ margin:0,fontSize:11,color:C.text,fontWeight:900 }}>CTA: {card.cta || "Shop Now"}</p>
+                            <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:2 }}>
+                              <Btn xs variant="outline" onClick={()=>saveGeneratedAdCardTemplate(card,index)}>Save</Btn>
+                              {onSendToDC&&<Btn xs onClick={()=>sendGeneratedAdCardToDC(card,index)}>Send to DC</Btn>}
+                            </div>
                           </div>
                         </div>
                       );
