@@ -3535,8 +3535,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     { id:"ecommerce", label:"E-commerce", sub:"Listing copy and marketplace assets" },
     { id:"marketing", label:"Marketing", sub:"Campaign copy and ads direction" },
     { id:"digital", label:"Digital Creative", sub:"Creative briefs and image prompts" },
+    { id:"livestream", label:"Livestream", sub:"Live selling plan and scripts" },
     { id:"overview", label:"Overview", sub:"Collected final outputs" },
   ];
+
+  const checklistTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
+  const canShowLivestreamTab = checklistTypeLabel.includes("product introduction") || checklistTypeLabel.includes("product reactivation") || checklistTypeLabel.includes("campaign");
+  const visibleWorkspaceTabs = workspaceTabs.filter((tab:any)=>tab.id!=="livestream" || canShowLivestreamTab);
 
   const workspaceConfig:any = {
     ecommerce:{
@@ -3565,6 +3570,15 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       imageLabel:"AI Image Generation",
       imagePlaceholder:"Example: Create a polished product photography prompt with lighting, background, props, and composition.",
       outputHint:"Generated digital creative briefs and image prompts will appear here once AI generation is connected.",
+    },
+    livestream:{
+      title:"Livestream",
+      description:"Plan live selling flow, hooks, talking points, demo sequence, and product callouts.",
+      textLabel:"Livestream Script",
+      textPlaceholder:"Example: Create a TikTok/Shopee live selling script with opening hook, product demo, offer push, objection handling, and closing CTA.",
+      imageLabel:"Livestream Visual Direction",
+      imagePlaceholder:"Example: Create a live selling setup direction with table arrangement, product placement, props, lighting, and background.",
+      outputHint:"Livestream planning outputs will appear here once AI generation is connected.",
     },
     overview:{
       title:"Overview",
@@ -3837,8 +3851,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(editingEcommerceSection===section) cancelEditEcommerceSection();
   };
 
-  const buildEcommercePrompt = (sectionsOverride?:string[], selectedOverride?:string[], instructionsOverride?:any) => {
-    const mappedProducts = productRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||""} | Product: ${row.product||""} | SKU: ${row.skuCode||""}`).join("\n");
+  const buildEcommercePrompt = (sectionsOverride?:string[], selectedOverride?:string[], instructionsOverride?:any, productRowsOverride?:any[]) => {
+    const promptProductRows = Array.isArray(productRowsOverride) && productRowsOverride.length ? productRowsOverride : productRows;
+    const mappedProducts = promptProductRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||row.category||""} | Product: ${row.product||row.productName||""} | SKU: ${row.skuCode||row.sku||""}`).join("\n");
     const allSections = Array.isArray(sectionsOverride) && sectionsOverride.length ? sectionsOverride : getEcommerceOutputSections();
     const selectedSource = Array.isArray(selectedOverride) ? selectedOverride : getSelectedEcommerceSections();
     const selectedSections = selectedSource.filter((section:string)=>allSections.includes(section));
@@ -4964,16 +4979,31 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     const workspaceTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
     const isCampaignChecklist = workspaceTypeLabel.includes("campaign");
+    const isProductIntroductionChecklist = workspaceTypeLabel.includes("product introduction");
 
-    if(tab==="marketing" && isCampaignChecklist){
+    if(tab==="marketing" && (isCampaignChecklist || isProductIntroductionChecklist)){
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-            <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Campaign Marketing</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Blank campaign marketing workspace.</p>
+            <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>{isProductIntroductionChecklist ? "Product Introduction Marketing" : "Campaign Marketing"}</h3>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Blank marketing workspace.</p>
           </div>
           <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
-            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No campaign marketing content yet.</p>
+            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No marketing content yet.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if(tab==="livestream"){
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+          <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Livestream</h3>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Plan live selling scripts, talking points, demo flow, product callouts, offer pushes, and closing CTAs.</p>
+          </div>
+          <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
+            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>Livestream workspace is ready.</p>
           </div>
         </div>
       );
@@ -5819,7 +5849,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
                             <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                               <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
-                              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(6,auto)",gap:6,width:isMobile?"100%":"auto" }}>
+                              <div style={{ display:"flex",gap:6,width:isMobile?"100%":"auto",flexWrap:"wrap",justifyContent:isMobile?"stretch":"flex-end" }}>
                                 <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
                                 <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
                                 <Btn xs variant="outline" onClick={()=>{
@@ -5879,9 +5909,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           </div>
                           <div style={{ maxHeight:180,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                             {getProductIntroDigitalRows().length ? getProductIntroDigitalRows().map((row:any,idx:number)=>(
-                              <div key={row.id || idx} style={{ padding:"8px 10px",borderBottom:idx===getProductIntroDigitalRows().length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
-                                <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || "Product Row"}</p>
-                                <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.category || row.collection || "No collection/category"} · {Array.isArray(row.products)&&row.products.length>1 ? `${row.products.length} products in 1 row` : (row.sku || "")}</p>
+                              <div key={row.id || idx} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) auto",gap:8,alignItems:"center",padding:"8px 10px",borderBottom:idx===getProductIntroDigitalRows().length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
+                                <div style={{ minWidth:0 }}>
+                                  <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || "Product Row"}</p>
+                                  <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.category || row.collection || "No collection/category"} · {Array.isArray(row.products)&&row.products.length>1 ? `${row.products.length} products in 1 row` : (row.sku || "")}</p>
+                                </div>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const selectedProducts = Array.isArray(row.products) && row.products.length ? row.products : [{ product:row.product || "", sku:row.sku || "", brand:row.brand || "", collection:row.category || row.collection || "" }];
+                                  updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,selectedProducts) });
+                                }}>Add to E-commerce Listing</Btn>
                               </div>
                             )) : (
                               <div style={{ padding:12,fontSize:12,color:C.faint }}>No digital creative rows yet. Add selected products above.</div>
@@ -6018,7 +6054,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
                           <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                             <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
-                            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(6,auto)",gap:6,width:isMobile?"100%":"auto" }}>
+                            <div style={{ display:"flex",gap:6,width:isMobile?"100%":"auto",flexWrap:"wrap",justifyContent:isMobile?"stretch":"flex-end" }}>
                               <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
                               <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
                               <Btn xs variant="outline" onClick={addSelectedEcommerceCampaignProductRows} disabled={!selectedCampaignProductKeys.length}>Add Selected as Separate Rows</Btn>
@@ -6409,7 +6445,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       </div>
 
       <div style={{ display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:14,WebkitOverflowScrolling:"touch" }}>
-        {workspaceTabs.map((tab:any)=>(
+        {visibleWorkspaceTabs.map((tab:any)=>(
           <button key={tab.id} onClick={()=>setActiveGroupTab(tab.id)}
             style={{ flexShrink:0,padding:"8px 12px",borderRadius:10,border:`1.5px solid ${activeGroupTab===tab.id?groupColor:C.border}`,background:activeGroupTab===tab.id?groupColor:C.surface,color:activeGroupTab===tab.id?"#fff":C.textSub,cursor:"pointer",textAlign:"left",minWidth:isMobile?132:150 }}>
             <span style={{ display:"block",fontSize:12,fontWeight:900 }}>{tab.label}</span>
@@ -10965,7 +11001,7 @@ const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
 
 // ─── SHAREABLE PAGE LINKS ────────────────────────────────────────────────────
 const safeRouteTab = (value:any) => ["calendar","events","checklists","skus","ai"].includes(String(value||"")) ? String(value) : "calendar";
-const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","marketing","digital","overview"].includes(String(value||"")) ? String(value) : "tasks";
+const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","marketing","digital","livestream","overview"].includes(String(value||"")) ? String(value) : "tasks";
 
 const parseEmdcRoute = () => {
   if (typeof window === "undefined") return { tab:"calendar", groupId:null, groupTab:"tasks" };
