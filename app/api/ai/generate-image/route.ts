@@ -9,7 +9,7 @@ type ReferenceImage = {
 const clean = (value: unknown) => String(value || "").trim();
 
 const normalizeUrl = (value: unknown) => {
-  const raw = clean(value);
+  const raw = clean(value).replace(/[),.;]+$/g, "");
   if (!raw) return "";
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 };
@@ -19,7 +19,7 @@ const normalizeUrlList = (...lists: unknown[]) => Array.from(new Set(
     .flatMap((list: any) => Array.isArray(list) ? list : [])
     .map(normalizeUrl)
     .filter(Boolean)
-)).slice(0, 30);
+)).slice(0, 12);
 
 const normalizeReferenceImages = (images: unknown): ReferenceImage[] => {
   if (!Array.isArray(images)) return [];
@@ -38,6 +38,44 @@ const extractLinksFromPrompt = (prompt: string) => {
   return matches.map(normalizeUrl).filter(Boolean);
 };
 
+const fetchImageAsDataUrl = async (url: string) => {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 EMDC Product Reference Fetcher",
+      Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new Error(`Unable to read product image link: ${url}`);
+  const contentType = res.headers.get("content-type") || "image/png";
+  if (!contentType.startsWith("image/")) throw new Error(`Product link did not return an image: ${url}`);
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (!buffer.length) throw new Error(`Product image link returned an empty image: ${url}`);
+  return `data:${contentType.split(";")[0]};base64,${buffer.toString("base64")}`;
+};
+
+const imageSizeForResponses = (value: unknown) => {
+  const size = clean(value) || "1024x1024";
+  if (["1024x1024", "1024x1536", "1536x1024", "auto"].includes(size)) return size;
+  return "1024x1024";
+};
+
+const extractGeneratedImageFromResponses = (data: any) => {
+  const outputs = Array.isArray(data?.output) ? data.output : [];
+  for (const item of outputs) {
+    if (item?.type === "image_generation_call" && item?.result) return `data:image/png;base64,${item.result}`;
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const part of content) {
+      if (part?.type === "output_image" && part?.image_url) return part.image_url;
+      if (part?.type === "image" && part?.image_url) return part.image_url;
+      if (part?.b64_json) return `data:image/png;base64,${part.b64_json}`;
+    }
+  }
+  return "";
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -50,7 +88,7 @@ export async function POST(req: NextRequest) {
       extractLinksFromPrompt(prompt),
     );
 
-    const referenceImages = normalizeReferenceImages(body?.referenceImages);
+    const uploadedReferenceImages = normalizeReferenceImages(body?.referenceImages);
     const requireProductImageLinks = Boolean(body?.requireProductImageLinks);
 
     if (!prompt) {
@@ -66,34 +104,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "OPENAI_API_KEY is not configured." }, { status: 500 });
     }
 
-    const strictPrompt = [
+    const productReferenceDataUrls: string[] = [];
+    const unreadableLinks: string[] = [];
+
+    for (const link of productImageLinks.slice(0, 8)) {
+      try {
+        productReferenceDataUrls.push(await fetchImageAsDataUrl(link));
+      } catch {
+        unreadableLinks.push(link);
+      }
+    }
+
+    if (requireProductImageLinks && !productReferenceDataUrls.length) {
+      return NextResponse.json({
+        error: "The product image links could not be read as images. Please use direct image URLs from SKU Storage/product links.",
+        unreadableLinks,
+      }, { status: 400 });
+    }
+
+    const strictText = [
       "STRICT PRODUCT IMAGE REFERENCE MODE:",
-      "Before generating, use the product image links as the default and required visual reference source when supplied.",
-      "Product accuracy is higher priority than style, background, lighting, or composition instructions.",
-      "Preserve the exact product shape, silhouette, size relationship, color, material, texture, packaging, labels, logo placement, proportions, and visible design details.",
-      "Do not redesign, recolor, distort, replace, simplify, approximate, or invent a different product. If a product image link is supplied, treat it as the source of truth for the product look.",
-      productImageLinks.length
-        ? `Product image links to read and follow as references:\n${productImageLinks.join("\n")}`
-        : "No product image links supplied. Use uploaded reference images if available.",
-      referenceImages.length
-        ? `Uploaded reference images supplied: ${referenceImages.map(img => img.name || "reference image").join(", ")}`
-        : "No uploaded reference images supplied.",
+      "The attached product image references are mandatory source-of-truth references.",
+      "Read the attached product images first before generating.",
+      "Preserve the exact product shape, silhouette, color, material, texture, size ratio, logo/label placement, packaging, and visible details.",
+      "Do not invent a new product, change the product design, recolor it, add missing parts, remove parts, or approximate from memory.",
+      "Only change the scene/background/composition requested by the user. The product itself must match the supplied product image references.",
+      productImageLinks.length ? `Original product image links:\n${productImageLinks.join("\n")}` : "",
+      unreadableLinks.length ? `Unreadable links skipped:\n${unreadableLinks.join("\n")}` : "",
       "",
       "USER IMAGE GENERATION REQUEST:",
       prompt,
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
+    const inputContent: any[] = [
+      { type: "input_text", text: strictText },
+      ...productReferenceDataUrls.map((image_url) => ({ type: "input_image", image_url })),
+      ...uploadedReferenceImages.map((img) => ({ type: "input_image", image_url: img.dataUrl })),
+    ];
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
-        prompt: strictPrompt,
-        size: body?.size || "1024x1024",
-        n: Math.max(1, Math.min(Number(body?.outputCount || body?.n || 1), 4)),
+        model: process.env.OPENAI_IMAGE_MODEL || "gpt-4.1",
+        input: [{ role: "user", content: inputContent }],
+        tools: [{ type: "image_generation", size: imageSizeForResponses(body?.size) }],
       }),
     });
 
@@ -102,15 +160,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: data?.error?.message || "Image generation failed." }, { status: response.status });
     }
 
-    const first = data?.data?.[0] || {};
-    const b64 = first?.b64_json;
-    const url = first?.url || (b64 ? `data:image/png;base64,${b64}` : "");
-
+    const url = extractGeneratedImageFromResponses(data);
     if (!url) {
       return NextResponse.json({ error: "Image generation returned no image." }, { status: 502 });
     }
 
-    return NextResponse.json({ url, prompt: strictPrompt, productImageLinks });
+    return NextResponse.json({
+      url,
+      prompt: strictText,
+      productImageLinks,
+      productReferencesRead: productReferenceDataUrls.length,
+      unreadableLinks,
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Image generation failed." }, { status: 500 });
   }
