@@ -5013,13 +5013,81 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const isProductIntroductionChecklist = workspaceTypeLabel.includes("product introduction");
 
     if(tab==="marketing" && (isCampaignChecklist || isProductIntroductionChecklist)){
+      const productIntroMarketingRows = isProductIntroductionChecklist
+        ? (((group.aiWorkspace || {}).digital || {}).productIntroCreativeRows || [])
+        : [];
+      const productIntroMarketingProducts = productIntroMarketingRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((p:any)=>({
+          product:p.product || row.product || "",
+          sku:p.sku || row.sku || "",
+          brand:p.brand || row.brand || "",
+          collection:p.collection || row.category || row.collection || "",
+          category:p.collection || row.category || row.collection || "",
+        })) : [{
+          product:row.product || "",
+          sku:row.sku || "",
+          brand:row.brand || "",
+          collection:row.category || row.collection || "",
+          category:row.category || row.collection || "",
+        }]);
+      const campaignMarketingProducts = isCampaignChecklist ? productRows.map((row:any)=>({
+        product:row.product || row.productName || "",
+        sku:row.skuCode || row.sku || "",
+        brand:row.brand || "",
+        collection:row.collection || row.category || "",
+        category:row.collection || row.category || "",
+      })) : [];
+      const marketingAdProducts = isProductIntroductionChecklist ? productIntroMarketingProducts : campaignMarketingProducts;
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>{isProductIntroductionChecklist ? "Product Introduction Marketing" : "Campaign Marketing"}</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Ad Menu Builder duplicated from AI Engine for this checklist group.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>{isProductIntroductionChecklist ? "Uses the same product rows sent from E-commerce to Digital Creative. Product selection is removed from the Ad Menu Builder here." : "Ad Menu Builder duplicated from AI Engine."}</p>
           </div>
-          <AIAdTemplates skuStorage={skuStorage} brands={brands} />
+
+          {isProductIntroductionChecklist&&(
+            <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+              <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Product Rows Sent to Marketing</span>
+                <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{productIntroMarketingRows.length} row{productIntroMarketingRows.length!==1?"s":""}</span>
+              </div>
+              {productIntroMarketingRows.length ? (
+                <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:380 }}>
+                  <table style={{ width:"100%",minWidth:980,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                    <thead>
+                      <tr style={{ background:C.surfaceAlt }}>
+                        {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                          <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productIntroMarketingRows.flatMap((item:any)=>{
+                        const products = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
+                        return products.map((product:any,idx:number)=>(
+                          <tr key={`${item.id || item.product}-${idx}`} style={{ background:idx%2?C.surface:C.bg }}>
+                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>{item.platform || "All Platforms"}</td>
+                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || item.brand || ""}</td>
+                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || item.category || item.collection || ""}</td>
+                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || item.product || ""}</td>
+                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:170 }}>{item.headline || ""}</td>
+                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:240 }}>{item.subheadline || ""}</td>
+                            <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,minWidth:130,fontWeight:850,color:C.text }}>{item.cta || ""}</td>
+                          </tr>
+                        ));
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ minHeight:160,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18 }}>
+                  <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No product rows sent yet. Go to E-commerce and click Send DC Separate Rows or Send DC as 1 Row.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={marketingAdProducts} />
         </div>
       );
     }
@@ -9662,7 +9730,7 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
   },
 ];
 
-const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
+const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, presetProducts=[] }: any) => {
   const { isMobile } = useBreakpoint();
   const [platforms,setPlatforms] = useState<any[]>(() => {
     if (typeof window === "undefined") return DEFAULT_AD_TEMPLATE_PLATFORMS;
@@ -9739,6 +9807,16 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
   const isCollectionFormatByName = (format:any) => (format?.name || "").toLowerCase().includes("collection");
   const isCarouselFormat = isCarouselFormatByName(selectedFormat);
   const isCollectionFormat = isCollectionFormatByName(selectedFormat);
+  const effectiveAdSkus = hideProductSelector && Array.isArray(presetProducts) && presetProducts.length
+    ? presetProducts.map((item:any,idx:number)=>({
+        id:item.id || item.sourceRowId || item.sku || item.product || `preset-${idx}`,
+        productName:item.productName || item.product || "",
+        sku:item.sku || item.skuCode || "",
+        brand:item.brand || "",
+        collection:item.collection || item.category || "",
+        category:item.category || item.collection || "",
+      }))
+    : selectedAdSkus;
   const selectedAdSkuIds = useMemo(()=>selectedAdSkus.map((sku:any)=>sku.id),[selectedAdSkus]);
 
   const getAdSkuBrand = (sku:any) => brands.find((brand:any)=>brand.id===sku?.brandId)?.name || sku?.brand || "";
@@ -9753,13 +9831,13 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
 
   const clearAdSkus = () => setSelectedAdSkus([]);
 
-  const adProductSummary = useMemo(()=>selectedAdSkus.map((sku:any,idx:number)=>[
+  const adProductSummary = useMemo(()=>effectiveAdSkus.map((sku:any,idx:number)=>[
     `${idx+1}. Brand: ${getAdSkuBrand(sku) || "Unbranded"}`,
     `Collection/Category: ${getAdSkuCategory(sku) || "No collection/category"}`,
-    `Product: ${sku.productName || ""}`,
-    `SKU: ${sku.sku || ""}`,
+    `Product: ${sku.productName || sku.product || ""}`,
+    `SKU: ${sku.sku || sku.skuCode || ""}`,
     getSkuTags(sku).length ? `Tags: ${getSkuTags(sku).join(", ")}` : "",
-  ].filter(Boolean).join(" | ")).join("\n"),[selectedAdSkus,brands]);
+  ].filter(Boolean).join(" | ")).join("\n"),[effectiveAdSkus,brands]);
 
   const recommendedCarouselMediaType = (index:number) => {
     if(carouselMediaMode==="all-images") return "image";
@@ -9965,7 +10043,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
           ? `This is a Meta Collection Ad. Generate copy for one hero asset plus four product tiles below it. ${collectionHeroPlan} The output should include: Hero Asset Type, Hero Visual Direction, Primary Text, Headline, CTA, and Product Tile 1 to Product Tile 4. Each product tile should use one selected SKU/product when available.`
           : "Generate one complete ad output for this selected ad format. Include a clear image direction/placeholder section for the creative visual.";
 
-      const productInstruction = selectedAdSkus.length
+      const productInstruction = effectiveAdSkus.length
         ? `Selected products from SKU Storage:\n${adProductSummary}`
         : "No products selected from SKU Storage. Use the campaign brief only.";
 
@@ -9980,7 +10058,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
       ].filter(Boolean).join("\n\n");
 
       const composedInput = [
-        selectedAdSkus.length ? `Products selected:\n${adProductSummary}` : "",
+        effectiveAdSkus.length ? `Products selected:\n${adProductSummary}` : "",
         adBrief.trim() ? `Campaign / product brief:\n${adBrief.trim()}` : "",
       ].filter(Boolean).join("\n\n");
 
@@ -10217,8 +10295,9 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
       </div>
 
       {adMenuView==="generate"&&(
-        <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"360px minmax(0,1fr)",gap:14,alignItems:"start" }}>
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":(hideProductSelector?"minmax(0,1fr)":"360px minmax(0,1fr)"),gap:14,alignItems:"start" }}>
           <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+            {!hideProductSelector&&(
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
                 <div>
@@ -10259,9 +10338,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
                 )}
               </div>
             </div>
+            )}
 
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
-              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>2. Campaign Notes</h4>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "1. Campaign Notes" : "2. Campaign Notes"}</h4>
               <textarea
                 value={adBrief}
                 onChange={e=>setAdBrief(e.target.value)}
@@ -10272,7 +10352,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[] }: any) => {
             </div>
 
             <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
-              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>3. Media Plan</h4>
+              <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{hideProductSelector ? "2. Media Plan" : "3. Media Plan"}</h4>
               <Field label="Carousel Cards">
                 <Select value={carouselMediaMode} onChange={setCarouselMediaMode}>
                   <option value="recommended">Recommended mix</option>
