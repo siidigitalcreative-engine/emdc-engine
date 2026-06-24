@@ -11986,7 +11986,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                 <Btn sm onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>{adGenerating?"✓ Generating...":adGeneratedTick?"✓ Generate":"Generate Ads"}</Btn>
               </div>
               {generatedBatchOutputs.length>0&&(
-                <div style={{ marginTop:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(320px,1fr))",gap:10 }}>
+                <div style={{ marginTop:12,display:"flex",flexDirection:"column",gap:12,width:"100%" }}>
                   {generatedBatchOutputs.map((item:any)=>(
                     <div key={item.id} style={{ background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                       <div style={{ padding:"10px 12px",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt,display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start" }}>
