@@ -3339,6 +3339,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignSubheadlineInstructionDraft,setCampaignSubheadlineInstructionDraft] = useState("");
   const [campaignCtaInstructionDraft,setCampaignCtaInstructionDraft] = useState("");
   const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
+  const [actionDoneIds,setActionDoneIds] = useState<string[]>([]);
+  const markActionDone = (id:any) => {
+    const key = String(id || uid());
+    setActionDoneIds((prev:string[])=>Array.from(new Set([...prev,key])));
+    window.setTimeout(()=>setActionDoneIds((prev:string[])=>prev.filter((item:string)=>item!==key)),1600);
+  };
+  const actionDone = (id:any) => actionDoneIds.includes(String(id || ""));
   const [campaignDigitalSentIds,setCampaignDigitalSentIds] = useState<string[]>([]);
   const [campaignDcGeneratingImageId,setCampaignDcGeneratingImageId] = useState("");
   const [dcProductRefEditKeys,setDcProductRefEditKeys] = useState<Record<string,boolean>>({});
@@ -3620,6 +3627,19 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       createdAt:new Date().toISOString(),
     };
     updateAiWorkspace("overview",{ items:[newItem,...items] });
+    markActionDone(`overview-${sourceTab}-${title}-${Date.now()}`);
+  };
+
+  const formatMainPromotion = (promo:any) => {
+    if (promo && typeof promo === "object") {
+      const type = String(promo.type || "text");
+      const value = String(promo.value || "").trim();
+      const text = String(promo.text || "").trim();
+      if(type === "discount" && value) return `${value}% OFF${text ? ` · ${text}` : ""}`;
+      if(type === "php" && value) return `₱${value} OFF${text ? ` · ${text}` : ""}`;
+      return text || value;
+    }
+    return String(promo || "").trim();
   };
 
   const deleteOverviewItem = (id:string) => {
@@ -5133,7 +5153,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             )}
           </div>
 
-          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}`} onSendToDC={(ad:any)=>{
+          {!!String(((group.aiWorkspace || {}).marketing || {}).mainPromotion || "").trim()&&(
+            <div style={{ padding:14,background:"#FFF7ED",border:"1.5px solid #FED7AA",borderRadius:12 }}>
+              <p style={{ margin:"0 0 6px",fontSize:11,fontWeight:900,color:"#C2410C",textTransform:"uppercase",letterSpacing:".06em" }}>Main Promotion</p>
+              <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.5,whiteSpace:"pre-wrap" }}>{((group.aiWorkspace || {}).marketing || {}).mainPromotion}</p>
+            </div>
+          )}
+
+          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} mainPromotion={((group.aiWorkspace || {}).marketing || {}).mainPromotion || ""} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}`} onAddToOverview={(ad:any)=>addToOverview("Marketing",`${ad?.platformName || "Marketing"} · ${ad?.formatName || ad?.title || "Generated Output"}`,ad?.text || ad?.imagePrompt || "","Marketing Output")} onSendToDC={(ad:any)=>{
             const adText = String(ad?.text || "").trim();
             const adProducts = Array.isArray(ad?.products) && ad.products.length ? ad.products : selectedMarketingProducts;
             const selectedProductList = adProducts.map((product:any,idx:number)=>`${idx+1}. ${product?.productName || product?.product || "Product"}${product?.sku ? ` · SKU: ${product.sku}` : ""}`).join("\n");
@@ -5382,13 +5409,48 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </div>
 
               <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                <Field label="AI Topic">
-                  <Select value={livestreamData.aiTopic || "BAU"} onChange={(v:string)=>updateLivestream({ aiTopic:v })} style={{ maxWidth:isMobile?"100%":320 }}>
-                    <option value="BAU">BAU</option>
-                    <option value="Launching">Launching</option>
-                    <option value="Campaign">Campaign</option>
-                  </Select>
-                </Field>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10 }}>
+                  <Field label="AI Topic">
+                    <Select value={livestreamData.aiTopic || "BAU"} onChange={(v:string)=>updateLivestream({ aiTopic:v })} style={{ maxWidth:isMobile?"100%":320 }}>
+                      <option value="BAU">BAU</option>
+                      <option value="Launching">Launching</option>
+                      <option value="Campaign">Campaign</option>
+                    </Select>
+                  </Field>
+                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                    <Btn xs variant="outline" onClick={()=>updateLivestream({ manageTopicsOpen:!livestreamData.manageTopicsOpen })}>Manage Topics</Btn>
+                    <Btn xs onClick={()=>{
+                      const topic = livestreamData.aiTopic || "BAU";
+                      const instructions = (livestreamData.topicInstructions || {})[topic] || "Create a clear live selling topic flow with opening hook, product demo, offer push, engagement prompts, and closing CTA.";
+                      const products = placedLivestreamProducts.map((p:any,i:number)=>`${i+1}. ${p.product || "Product"}${p.sku ? ` · SKU: ${p.sku}` : ""}`).join("\n");
+                      const promos = [livestreamData.mainPromotion, ...livestreamPromotions.map((p:any)=>p.text)].filter(Boolean).join("\n");
+                      const vouchers = livestreamVoucherCards.map((v:any)=>v.text).filter(Boolean).join("\n");
+                      const text = [`AI Topic: ${topic}`,`Instructions: ${instructions}`,products ? `Products:\n${products}` : "",promos ? `Promotions:\n${promos}` : "",vouchers ? `Voucher Cards:\n${vouchers}` : "",`Generated Text:\nOpening Hook: Start with a high-energy greeting and introduce today's ${topic.toLowerCase()} offer.\nFlow: Present the selected products one by one, show the key benefit, mention the promotion, remind viewers to claim vouchers, then close with a clear shop-now prompt.`].filter(Boolean).join("\n\n");
+                      updateLivestream({ generatedTopicText:text });
+                      markActionDone("livestream-generate-topic");
+                    }}>{actionDone("livestream-generate-topic")?"✓ Generated":"Generate Text"}</Btn>
+                  </div>
+                </div>
+                {livestreamData.manageTopicsOpen&&(
+                  <div style={{ display:"grid",gap:10,marginBottom:12,padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                    {["BAU","Launching","Campaign"].map((topic:string)=>(
+                      <div key={topic} style={{ display:"grid",gap:6 }}>
+                        <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>{topic} Instructions</p>
+                        <textarea value={(livestreamData.topicInstructions || {})[topic] || ""} onChange={(e:any)=>updateLivestream({ topicInstructions:{ ...(livestreamData.topicInstructions || {}), [topic]:e.target.value } })} placeholder={`Instructions for ${topic} live topic`} rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:8,padding:8,fontSize:12.5,outline:"none" }} />
+                      </div>
+                    ))}
+                    <div style={{ display:"flex",justifyContent:"flex-end" }}><Btn xs onClick={()=>{ updateLivestream({ manageTopicsOpen:false }); markActionDone("livestream-topics-save"); }}>{actionDone("livestream-topics-save")?"✓ Saved":"Save Topics"}</Btn></div>
+                  </div>
+                )}
+                {!!String(livestreamData.generatedTopicText || "").trim()&&(
+                  <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                    <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Live Text</p>
+                    <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.5,color:C.text }}>{livestreamData.generatedTopicText}</pre>
+                    <div style={{ display:"flex",justifyContent:"flex-end",gap:8,marginTop:10 }}>
+                      <Btn xs variant="outline" onClick={()=>addToOverview("Livestream",`Livestream · ${livestreamData.aiTopic || "BAU"}`,livestreamData.generatedTopicText,"Livestream Output")}>Add to Overview</Btn>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -6973,24 +7035,39 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>Optional. Add the current offer, voucher, discount, bundle, or sale mechanics here.</p>
                         </div>
                         <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                          <Btn xs variant="outline" onClick={()=>{
-                            updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion || "" });
-                          }} disabled={!String(data.mainPromotion || "").trim()}>Send to Marketing</Btn>
-                          <Btn xs variant="outline" onClick={()=>{
-                            updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion || "" });
-                          }} disabled={!String(data.mainPromotion || "").trim()}>Send to Livestream</Btn>
+                          <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:true, mainPromotionDraft:data.mainPromotionDraft || (typeof data.mainPromotion === "object" ? data.mainPromotion : { type:"text", value:"", text:String(data.mainPromotion || "") }) })}>Edit</Btn>
+                          <Btn xs variant="outline" onClick={()=>{ const promo=formatMainPromotion(data.mainPromotion); updateAiWorkspace("marketing",{ mainPromotion:promo }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
+                          <Btn xs variant="outline" onClick={()=>{ const promo=formatMainPromotion(data.mainPromotion); updateAiWorkspace("livestream",{ mainPromotion:promo }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
                         </div>
                       </div>
-                      <textarea
-                        value={data.mainPromotion || ""}
-                        onChange={e=>updateAiWorkspace(tab,{ mainPromotion:e.target.value })}
-                        placeholder="Example: 20% off during 6.30 Payday Sale, free shipping voucher, limited-time bundle, or TikTok Shop exclusive offer."
-                        rows={3}
-                        style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
-                      />
+                      {data.mainPromotionEditing ? (
+                        <div style={{ display:"grid",gap:10 }}>
+                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"180px minmax(0,1fr)",gap:10 }}>
+                            <Select value={(data.mainPromotionDraft || {}).type || "text"} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), type:v } })}>
+                              <option value="text">Custom Text</option>
+                              <option value="discount">Discount %</option>
+                              <option value="php">PHP Value</option>
+                            </Select>
+                            <TI value={(data.mainPromotionDraft || {}).value || ""} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), value:v } })} placeholder="Value e.g. 20 or 100" />
+                          </div>
+                          <textarea
+                            value={(data.mainPromotionDraft || {}).text || ""}
+                            onChange={e=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), text:e.target.value } })}
+                            placeholder="Promotion details. Example: 6.30 Payday Sale, free shipping voucher, TikTok Shop exclusive offer."
+                            rows={3}
+                            style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                          />
+                          <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                            <Btn xs onClick={()=>{ const draft=data.mainPromotionDraft || {}; updateAiWorkspace(tab,{ mainPromotion:draft, mainPromotionEditing:false }); markActionDone("promo-save"); }}>{actionDone("promo-save")?"✓ Saved":"Save"}</Btn>
+                            <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:false })}>Done</Btn>
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.5,whiteSpace:"pre-wrap" }}>{formatMainPromotion(data.mainPromotion) || "No main promotion set yet. Click Edit to add one."}</p>
+                      )}
                     </div>
 
-                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                                        <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
                         <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Required Output Structure</h4>
                         <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
@@ -10971,7 +11048,7 @@ const mergeAdTemplatePlatforms = (savedPlatforms:any[] = []) => {
   return merged;
 };
 
-const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, presetProducts=[], onSendToDC=null, generatedOutputsStorageKey="global" }: any) => {
+const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, presetProducts=[], onSendToDC=null, onAddToOverview=null, mainPromotion="", generatedOutputsStorageKey="global" }: any) => {
   const { isMobile } = useBreakpoint();
   const [platforms,setPlatforms] = useState<any[]>(() => {
     if (typeof window === "undefined") return mergeAdTemplatePlatforms(DEFAULT_AD_TEMPLATE_PLATFORMS);
@@ -12066,8 +12143,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
           <p style={{ margin:0,fontSize:13,color:C.muted }}>{hideProductSelector ? (effectiveAdSkus.length ? "Using the products placed from the Marketing table. Pick a platform and ad format, then generate ready-to-use copy." : "Select products above and click Add Selected to Ad Menu before generating ads.") : "Choose products, pick an ad format, then generate ready-to-use copy. Image areas are placeholders for now."}</p>
         </div>
         <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-          <Btn sm variant={adMenuView==="generate"?"primary":"outline"} onClick={()=>setAdMenuView("generate")}>Generate Ads</Btn>
-          <Btn sm variant={adMenuView==="templates"?"primary":"outline"} onClick={()=>setAdMenuView("templates")}>Manage Templates</Btn>
+          <Btn sm variant={adMenuView==="templates"?"primary":"outline"} onClick={()=>setAdMenuView(adMenuView==="templates"?"generate":"templates")}>Manage Templates</Btn>
           <Btn sm variant="outline" onClick={resetAdTemplates}>Reset Default</Btn>
         </div>
       </div>
@@ -12275,6 +12351,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                                         <td style={{ padding:10,verticalAlign:"top",width:120 }}>
                                           <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
                                             <Btn xs variant="outline" onClick={()=>toggleGeneratedBatchGmvRowEdit(item.id,index)}>{rowEditing ? "Save" : "Edit"}</Btn>
+                                            {onAddToOverview&&<Btn xs variant="outline" onClick={()=>onAddToOverview({ ...item, text:[`Content Pillar: ${row.pillar || ""}`,`Featured Products: ${(row.products||[]).map((p:any)=>`${p.productName || p.product || "Product"} ${p.sku ? `(${p.sku})` : ""}`).join(", ")}`,`Creative Direction: ${row.creativeDirection || ""}`,`Caption Copy: ${row.caption || ""}`].join("\n") })}>Add to Overview</Btn>}
                                             {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchGmvRowToDC(item,row,index)}>Send to DC</Btn>}
                                             <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchGmvRow(item.id,index)}>Delete</Btn>
                                           </div>
@@ -12347,6 +12424,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                         <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
                           <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>{isEditingBatchOutput(item.id)?"Done Editing":"Edit"}</Btn>
                           <Btn xs variant="outline" onClick={()=>saveGeneratedBatchOutput(item)}>Save</Btn>
+                          {onAddToOverview&&<Btn xs variant="outline" onClick={()=>onAddToOverview(item)}>Add to Overview</Btn>}
                           {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</Btn>}
                           <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchOutput(item.id)}>Delete</Btn>
                         </div>
@@ -12383,6 +12461,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                       </div>
                       <div style={{ display:"flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
                         <button type="button" onClick={()=>copySavedAdTemplate(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Copy</button>
+                        {onAddToOverview&&<button type="button" onClick={()=>onAddToOverview(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Add to Overview</button>}
                         {onSendToDC&&<button type="button" onClick={()=>sendSavedAdToDC(item)} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Send to DC</button>}
                         <button type="button" onClick={()=>deleteSavedAdTemplate(item.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
                       </div>
@@ -12408,6 +12487,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
             <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
               <Btn sm variant="outline" onClick={()=>openSavedAdTemplate(savedAdPreview)}>Load to Builder</Btn>
               <Btn sm variant="outline" onClick={()=>copySavedAdTemplate(savedAdPreview)}>Copy</Btn>
+              {onAddToOverview&&<Btn sm variant="outline" onClick={()=>onAddToOverview(savedAdPreview)}>Add to Overview</Btn>}
               {onSendToDC&&<Btn sm onClick={()=>sendSavedAdToDC(savedAdPreview)}>Send to DC</Btn>}
             </div>
           </div>
@@ -12967,7 +13047,7 @@ const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
       )}
 
       {aiPage==="ads" && (
-        <AIAdTemplates skuStorage={skuStorage} brands={brands} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_default`} />
+        <AIAdTemplates skuStorage={skuStorage} brands={brands} generatedOutputsStorageKey="global_marketing_default" />
       )}
 
       <Modal open={!!previewOutput} onClose={()=>setPreviewOutput(null)} title="Output Preview" width={820}>
