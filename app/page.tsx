@@ -5359,6 +5359,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:imageLinks,
               productImageLinks:imageLinks,
+              requireProductImageLinks:true,
               outputCount:1,
             }),
           });
@@ -5474,7 +5475,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const products = normalizeCarouselProductRefRows(cardProducts,links);
         const safeLinks = Array.isArray(links) ? links.filter(Boolean) : [];
         const onChangeRefs = opts?.onChangeRefs;
-        const editable = typeof onChangeRefs === "function";
+        const canEdit = typeof onChangeRefs === "function";
+        const editingProducts = !!opts?.editingProducts && canEdit;
+        const onToggleEdit = typeof opts?.onToggleEdit === "function" ? opts.onToggleEdit : null;
         const updateRef = (idx:number, patch:any) => onChangeRefs(products.map((row:any,index:number)=>index===idx ? { ...row, ...patch } : row));
         const removeRef = (idx:number) => onChangeRefs(products.filter((_:any,index:number)=>index!==idx));
         const addRef = () => onChangeRefs([...products,{ id:uid(), brand:"", product:"", sku:"", links:[] }]);
@@ -5482,29 +5485,33 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           <div style={{ padding:8,borderRadius:8,background:"#F9FAFB",border:`1px solid ${C.border}` }}>
             <div style={{ display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",marginBottom:6 }}>
               <p style={{ margin:0,fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
-              {editable&&<button type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+              <div style={{ display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
+                {canEdit&&<button type="button" onClick={onToggleEdit || undefined} style={{ border:`1px solid ${C.border}`,background:editingProducts?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editingProducts?"#fff":C.textSub,cursor:"pointer" }}>{editingProducts?"Done":"Edit Products"}</button>}
+                {editingProducts&&<button type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+              </div>
             </div>
             {products.length ? products.slice(0,6).map((row:any,idx:number)=>{
               const rowLinks = Array.isArray(row?.links) ? row.links : [];
               return (
                 <div key={`${row?.id || row?.sku || row?.product || "product"}-${idx}`} style={{ marginTop:idx?7:0,paddingTop:idx?7:0,borderTop:idx?`1px solid ${C.border}`:"none",fontSize:10.5,color:C.textSub,lineHeight:1.35 }}>
-                  {editable ? (
+                  {editingProducts ? (
                     <div style={{ display:"grid",gap:5 }}>
                       <input value={row?.product || ""} placeholder="Product name" onChange={e=>updateRef(idx,{ product:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontWeight:800,color:C.text,background:C.surface }} />
                       <input value={row?.sku || ""} placeholder="SKU" onChange={e=>updateRef(idx,{ sku:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontFamily:"monospace",color:C.textSub,background:C.surface }} />
-                      <input value={rowLinks.join(", ")} placeholder="Product/image link/s" onChange={e=>updateRef(idx,{ links:String(e.target.value).split(/[\n,]+/).map((v:string)=>v.trim()).filter(Boolean) })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,color:C.textSub,background:C.surface }} />
+                      <input value={rowLinks.join(", ")} placeholder="Product image link/s" onChange={e=>updateRef(idx,{ links:String(e.target.value).split(/[\n,]+/).map((v:string)=>v.trim()).filter(Boolean) })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,color:C.textSub,background:C.surface }} />
                       <button type="button" onClick={()=>removeRef(idx)} style={{ justifySelf:"end",border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:900,cursor:"pointer" }}>Remove Product</button>
                     </div>
                   ) : (
                     <>
                       <strong style={{ color:C.text }}>{[row?.brand,row?.product || row?.productName || row?.name].filter(Boolean).join(" · ") || "Selected Product"}</strong>
                       {row?.sku&&<span style={{ display:"block",fontFamily:"monospace",color:C.muted }}>SKU: {row.sku}</span>}
+                      {rowLinks.length>0&&<span style={{ display:"block",marginTop:2,color:C.faint,wordBreak:"break-all" }}>{rowLinks.length} product image link{rowLinks.length!==1?"s":""} attached</span>}
                     </>
                   )}
                 </div>
               );
-            }) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet.</p>}
-            {safeLinks.length>0&&(
+            }) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet. Click Edit Products to add product image links before generating.</p>}
+            {!editingProducts&&safeLinks.length>0&&(
               <div style={{ marginTop:6,display:"flex",gap:5,flexWrap:"wrap" }}>
                 {safeLinks.slice(0,5).map((link:any,idx:number)=>(
                   <a key={`${link}-${idx}`} href={link} target="_blank" rel="noreferrer" style={{ fontSize:10,fontWeight:800,color:C.accent,textDecoration:"none",background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 6px" }}>Product Link {idx+1}</a>
@@ -5521,10 +5528,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const cardProductRows = getCarouselCardProductReferences(card,cardIndex,productRows);
         const imageLinks = getCarouselCardReferenceLinks(cardProductRows,item);
         const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
+        if(!imageLinks.length){
+          updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:"Add at least one product image link in Edit Products before generating. AI image generation is locked to product image links.", generatedImagePrompt:"", imageLinks:[], referenceImages:uploadedReferenceImages });
+          return;
+        }
         const mediaType = card?.mediaType || recommendedCarouselMediaType(cardIndex);
         const prompt = [
           `Create one ${mediaType} creative frame for Carousel Card ${cardIndex+1}.`,
-          "STRICT PRODUCT REFERENCE RULE: Use the FEATURED PRODUCT/S FOR THIS SPECIFIC CAROUSEL CARD first. Read and follow the matching SKU details, product links, and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
+          "STRICT PRODUCT IMAGE LINK RULE: The product image links for THIS carousel card are the default and required visual references. Read those links first and copy the product look from them. Do not invent, redesign, recolor, replace, or approximate the product. Preserve exact shape, silhouette, material, color, proportions, packaging, labels, logo placement, and visible details.",
           card?.headline ? `Card headline: ${card.headline}` : "",
           card?.copy ? `Card copy: ${card.copy}` : "",
           card?.visual ? `Card image/video direction:\n${card.visual}` : "",
@@ -5550,6 +5561,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:imageLinks,
               productImageLinks:imageLinks,
+              requireProductImageLinks:true,
               outputCount:1,
             }),
           });
@@ -5647,7 +5659,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 </div>
 
                                 <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
-                                  {renderCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ onChangeRefs:(nextRefs:any)=>updateCampaignDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
+                                  {renderCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ editingProducts:!!card?.editProducts, onToggleEdit:()=>updateCampaignDigitalCarouselCard(item.id,cardIndex,{ editProducts:!card?.editProducts }), onChangeRefs:(nextRefs:any)=>updateCampaignDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
                                   <div>
                                     <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
                                     <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p>
@@ -6195,7 +6207,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const mediaType = card?.mediaType || recommendedCarouselMediaType(cardIndex);
         const prompt = [
           `Create one ${mediaType} creative frame for Carousel Card ${cardIndex+1}.`,
-          "STRICT PRODUCT REFERENCE RULE: Use the FEATURED PRODUCT/S FOR THIS SPECIFIC CAROUSEL CARD first. Read and follow the matching SKU details, product links, and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
+          "STRICT PRODUCT IMAGE LINK RULE: The product image links for THIS carousel card are the default and required visual references. Read those links first and copy the product look from them. Do not invent, redesign, recolor, replace, or approximate the product. Preserve exact shape, silhouette, material, color, proportions, packaging, labels, logo placement, and visible details.",
           card?.headline ? `Card headline: ${card.headline}` : "",
           card?.copy ? `Card copy: ${card.copy}` : "",
           card?.visual ? `Card image/video direction:\n${card.visual}` : "",
@@ -10527,6 +10539,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   const [selectedTemplateId,setSelectedTemplateId] = useState("");
   const [adBrief,setAdBrief] = useState("");
   const [adGenerating,setAdGenerating] = useState(false);
+  const [adGeneratedTick,setAdGeneratedTick] = useState(false);
   const [adError,setAdError] = useState("");
   const [generatedAdText,setGeneratedAdText] = useState("");
   const [generatedAdCards,setGeneratedAdCards] = useState<any[]>([]);
@@ -11240,6 +11253,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
 
   const generateSelectedAdFormats = async () => {
     const entries = selectedAdFormatEntries();
+    setAdGeneratedTick(false);
     if(!entries.length){
       setAdError("Select one or more ad formats first.");
       return;
@@ -11290,6 +11304,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       setGeneratedAdText("");
       setGeneratedAdCards([]);
       setAdError(`${outputs.length} ad output${outputs.length!==1?"s":""} generated. Outputs will stay here unless deleted.`);
+      setAdGeneratedTick(true);
+      window.setTimeout(()=>setAdGeneratedTick(false), 2200);
     }
   };
 
@@ -11720,7 +11736,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>Selected ad outputs</p>
                   <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>{selectedAdFormatKeys.length} ad format{selectedAdFormatKeys.length!==1?"s":""} selected. Click Generate Ads to create all selected ad outputs using the products placed in the Ad Menu.</p>
                 </div>
-                <Btn sm onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>{adGenerating?"Generating...":"Generate Ads"}</Btn>
+                <Btn sm onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>{adGenerating?"✓ Generating...":adGeneratedTick?"✓ Generated":"Generate Ads"}</Btn>
               </div>
               {generatedBatchOutputs.length>0&&(
                 <div style={{ marginTop:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(320px,1fr))",gap:10 }}>
