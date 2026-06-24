@@ -3700,6 +3700,16 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     });
   };
 
+  const saveProductIntroMarketingRows = (rows:any[]) => {
+    const cleanRows = Array.isArray(rows) ? rows : [];
+    updateAiWorkspace("marketing",{
+      productIntroMarketingRows:cleanRows,
+      productIntroMarketingRowsCleared:cleanRows.length===0,
+      generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+      generatedAt:new Date().toISOString(),
+    });
+  };
+
   const defaultEcommerceOutputSections = [
     "Product Overview",
     "Key Features",
@@ -5014,7 +5024,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     if(tab==="marketing" && (isCampaignChecklist || isProductIntroductionChecklist)){
       const productIntroMarketingRows = isProductIntroductionChecklist
-        ? (((group.aiWorkspace || {}).digital || {}).productIntroCreativeRows || [])
+        ? (((group.aiWorkspace || {}).marketing || {}).productIntroMarketingRows || [])
         : [];
       const productIntroMarketingProducts = productIntroMarketingRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((p:any)=>({
           product:p.product || row.product || "",
@@ -5114,7 +5124,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </div>
             ) : (
               <div style={{ minHeight:160,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18 }}>
-                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>{isProductIntroductionChecklist ? "No product rows sent yet. Go to E-commerce and click Send DC Separate Rows or Send DC as 1 Row." : "No products found in this checklist group yet."}</p>
+                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>{isProductIntroductionChecklist ? "No product rows sent yet. Go to E-commerce Generated Output and click Send Marketing." : "No products found in this checklist group yet."}</p>
               </div>
             )}
           </div>
@@ -5124,23 +5134,33 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             const adProducts = Array.isArray(ad?.products) && ad.products.length ? ad.products : selectedMarketingProducts;
             const selectedProductList = adProducts.map((product:any,idx:number)=>`${idx+1}. ${product?.productName || product?.product || "Product"}${product?.sku ? ` · SKU: ${product.sku}` : ""}`).join("\n");
             const dcOutputText = [`Generated Ad Output:\n${adText}`, selectedProductList ? `Selected Products for this Ad:\n${selectedProductList}` : ""].filter(Boolean).join("\n\n");
-            const rows = adProducts.map((product:any,idx:number)=>({
-              id:uid(),
-              sourceRowId:String(product?.id || product?.sku || product?.product || `marketing-${idx}`),
-              platform:ad?.platformName || "All Platforms",
-              brand:product?.brand || "",
-              category:product?.collection || product?.category || "",
+            const dcProducts = adProducts.map((product:any)=>({
               product:product?.productName || product?.product || "",
               sku:product?.sku || product?.skuCode || "",
+              brand:product?.brand || "",
+              collection:product?.collection || product?.category || "",
+            }));
+            const joinUnique = (values:any[]) => Array.from(new Set(values.map((value:any)=>String(value || "").trim()).filter(Boolean))).join(", ");
+            const row = {
+              id:uid(),
+              sourceRowId:`marketing-${Date.now()}`,
+              platform:ad?.platformName || "All Platforms",
+              brand:joinUnique(dcProducts.map((product:any)=>product.brand)),
+              category:joinUnique(dcProducts.map((product:any)=>product.collection)),
+              product:dcProducts.map((product:any)=>product.product || product.sku).filter(Boolean).join(" + "),
+              sku:dcProducts.map((product:any)=>product.sku).filter(Boolean).join(", "),
               headline:ad?.formatName || "Generated Ad",
               subheadline:ad?.templateName || "",
               cta:"Shop Now",
               imagePrompt:dcOutputText,
-              products:[{ product:product?.productName || product?.product || "", sku:product?.sku || product?.skuCode || "", brand:product?.brand || "", collection:product?.collection || product?.category || "" }],
+              products:dcProducts,
               linkedEventContext:group.groupName || "Marketing",
               createdAt:new Date().toISOString(),
-            }));
+            };
+            const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
             if(isProductIntroductionChecklist){
+              const existingRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
+              const rows = [...existingRows,row];
               updateAiWorkspace("digital",{
                 productIntroCreativeRows:rows,
                 productIntroRowsCleared:rows.length===0,
@@ -5148,6 +5168,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 generatedAt:new Date().toISOString(),
               });
             } else {
+              const existingRows = Array.isArray(digitalData.campaignCreativeRows) ? digitalData.campaignCreativeRows : [];
+              const rows = [...existingRows,row];
               updateAiWorkspace("digital",{
                 campaignCreativeRows:rows,
                 generatedText:rows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
@@ -6126,9 +6148,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows")} disabled={!productRows.length}>Add to Overview</Btn>
                           <Btn sm variant="outline" onClick={()=>{
                             const rows = productRows.map(makeProductIntroDcItem);
-                            saveProductIntroDigitalRows(rows);
-                            setActiveGroupTab("digital");
-                          }} disabled={!productRows.length}>Send DC Separate Rows</Btn>
+                            saveProductIntroMarketingRows(rows);
+                            setActiveGroupTab("marketing");
+                          }} disabled={!productRows.length}>Send Marketing</Btn>
                           <Btn sm variant="outline" onClick={()=>{
                             const rows = productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : [];
                             saveProductIntroDigitalRows(rows);
