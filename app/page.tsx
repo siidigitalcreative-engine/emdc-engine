@@ -5152,8 +5152,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               headline:ad?.formatName || "Generated Ad",
               subheadline:ad?.templateName || "",
               cta:"Shop Now",
+              title:ad?.isCarousel ? `${ad?.platformName || "Platform"} · ${ad?.formatName || "Carousel Ad"}` : "Campaign Product Row",
               imagePrompt:dcOutputText,
               products:dcProducts,
+              carouselCards:Array.isArray(ad?.cards) ? ad.cards.map((card:any,index:number)=>({ ...card, id:card?.id || uid(), cardNumber:index+1 })) : [],
+              isCarousel:!!ad?.isCarousel,
               linkedEventContext:group.groupName || "Marketing",
               createdAt:new Date().toISOString(),
             };
@@ -5375,6 +5378,90 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         }
       };
 
+
+      const updateCampaignDigitalCarouselCard = (itemId:string, cardIndex:number, patch:any) => {
+        const nextRows = campaignCreativeRows.map((row:any)=>{
+          if(row.id!==itemId) return row;
+          const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((card:any,index:number)=>index===cardIndex ? { ...card, ...patch } : card);
+          return { ...row, carouselCards };
+        });
+        updateAiWorkspace("digital",{
+          campaignCreativeRows:nextRows,
+          generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
+      const deleteCampaignDcCarouselImageOutput = (item:any, cardIndex:number) => {
+        updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"" });
+      };
+
+      const saveCampaignDcCarouselImageOutput = (item:any, card:any, cardIndex:number) => {
+        if(!card?.generatedImageUrl) return;
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          savedImageOutputs:[{
+            id:uid(),
+            source:"Campaign Digital Creative",
+            cardId:`${item.id}-carousel-${cardIndex}`,
+            sourceRowId:item.id,
+            title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+            url:card.generatedImageUrl,
+            prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
+            createdAt:new Date().toISOString(),
+          },...saved].slice(0,60),
+        });
+      };
+
+      const generateCampaignDcCarouselImage = async (item:any, card:any, cardIndex:number) => {
+        const productRows = getCampaignDigitalProductRows(item);
+        const imageLinks = Array.from(new Set([...(productRows.flatMap((row:any)=>row.links || [])), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
+        const mediaType = card?.mediaType || recommendedCarouselMediaType(cardIndex);
+        const prompt = [
+          `Create one ${mediaType} creative frame for Carousel Card ${cardIndex+1}.`,
+          "STRICT PRODUCT REFERENCE RULE: Read and follow the provided product image links and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
+          card?.headline ? `Card headline: ${card.headline}` : "",
+          card?.copy ? `Card copy: ${card.copy}` : "",
+          card?.visual ? `Card image/video direction:\n${card.visual}` : "",
+          card?.cta ? `CTA: ${card.cta}` : "",
+          item.imagePrompt ? `Overall ad context:\n${item.imagePrompt}` : "",
+          `Platform: ${item.platform || "All Platforms"}`,
+          `Products: ${productRows.map((row:any)=>[row.brand,row.product,row.sku].filter(Boolean).join(" · ")).filter(Boolean).join(" | ")}`,
+          imageLinks.length ? `Use these product image/reference links as visual references:\n${imageLinks.join("\n")}` : "",
+          "Generate the creative only. Keep the product accurate. Clean premium ecommerce layout.",
+        ].filter(Boolean).join("\n");
+
+        const generatingKey = `${item.id}-carousel-${cardIndex}`;
+        setCampaignDcGeneratingImageId(generatingKey);
+        try {
+          const res = await fetch("/api/ai/generate-image", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              prompt,
+              size:"1920x1920",
+              aspectRatio:"1:1",
+              watermark:false,
+              referenceImages:uploadedReferenceImages,
+              referenceImageUrls:imageLinks,
+              outputCount:1,
+            }),
+          });
+          const raw = await res.text();
+          let result:any = {};
+          try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
+          if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
+          const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
+        } catch (err:any) {
+          updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks, referenceImages:uploadedReferenceImages });
+        } finally {
+          setCampaignDcGeneratingImageId("");
+        }
+      };
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -5398,6 +5485,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               {campaignCreativeRows.map((item:any)=>{
                 const productRows = getCampaignDigitalProductRows(item);
+                const carouselCards = Array.isArray(item.carouselCards) ? item.carouselCards : [];
+                const isCarouselDcOutput = !!item.isCarousel && carouselCards.length>0;
                 const allLinks = Array.from(new Set(productRows.flatMap((row:any)=>row.links || [])));
                 const mergeCopyCells = productRows.length>1 && productRows.every((row:any)=>String(row.headline||"")===String(productRows[0]?.headline||"") && String(row.subheadline||"")===String(productRows[0]?.subheadline||"") && String(row.cta||"")===String(productRows[0]?.cta||""));
                 return (
@@ -5511,35 +5600,85 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       </div>
                     </div>
 
-                    <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
-                      <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                        <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Image</span>
-                        <Btn xs onClick={()=>generateCampaignDcImage(item)} disabled={campaignDcGeneratingImageId===item.id}>{campaignDcGeneratingImageId===item.id?"Generating...":"Generate Image"}</Btn>
-                      </div>
-                      <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
-                        {item.generatedImageUrl ? (
-                          <div style={{ width:"100%",display:"flex",flexDirection:"column",gap:10,alignItems:"center" }}>
-                            <img
-                              src={item.generatedImageUrl}
-                              alt="Generated campaign creative"
-                              onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.title || item.product || "Campaign Digital Creative" })}
-                              style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
-                            />
-                            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
-                              <Btn xs variant="outline" onClick={()=>saveCampaignDcImageOutput(item)}>Save</Btn>
-                              <Btn xs variant="danger" onClick={()=>deleteCampaignDcImageOutput(item)}>Delete</Btn>
+                    {isCarouselDcOutput ? (
+                      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Carousel AI Images</span>
+                          <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{carouselCards.length} card{carouselCards.length!==1?"s":""}</span>
+                        </div>
+                        {carouselCards.map((card:any,cardIndex:number)=>{
+                          const generatingKey = `${item.id}-carousel-${cardIndex}`;
+                          const mediaType = card.mediaType || recommendedCarouselMediaType(cardIndex);
+                          return (
+                            <div key={card.id || cardIndex} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column" }}>
+                              <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                                <span style={{ fontSize:11,fontWeight:900,color:C.textSub }}>Card {cardIndex+1} · {mediaType==="video"?"Video":"Image"} Placeholder</span>
+                                <Btn xs onClick={()=>generateCampaignDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
+                              </div>
+                              <div style={{ padding:10,display:"grid",gap:8,background:C.surface }}>
+                                <div style={{ padding:9,border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,fontSize:11.5,lineHeight:1.45,color:C.textSub }}>
+                                  <p style={{ margin:"0 0 4px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
+                                  <p style={{ margin:"0 0 8px",fontWeight:900,color:C.text }}>{card.headline || ""}</p>
+                                  <p style={{ margin:"0 0 4px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p>
+                                  <p style={{ margin:"0 0 8px" }}>{card.copy || ""}</p>
+                                  <p style={{ margin:"0 0 4px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{mediaType==="video"?"Video Direction":"Image Direction"}</p>
+                                  <p style={{ margin:"0 0 8px" }}>{card.visual || ""}</p>
+                                  <p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card.cta || "Shop Now"}</p>
+                                </div>
+                                {card.generatedImageUrl ? (
+                                  <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"center" }}>
+                                    <img src={card.generatedImageUrl} alt={`Generated carousel card ${cardIndex+1}`} onClick={()=>setCampaignDcPreview({ id:`${item.id}-carousel-${cardIndex}`, url:card.generatedImageUrl, prompt:card.generatedImagePrompt || card.visual || "", title:`${item.title || "Carousel"} · Card ${cardIndex+1}` })} style={{ maxWidth:"100%",maxHeight:240,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }} />
+                                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%" }}>
+                                      <Btn xs variant="outline" onClick={()=>saveCampaignDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>
+                                      <Btn xs variant="danger" onClick={()=>deleteCampaignDcCarouselImageOutput(item,cardIndex)}>Delete</Btn>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div style={{ minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",border:`1.5px dashed ${C.borderStrong}`,borderRadius:10,background:C.surfaceAlt,color:C.muted,fontSize:12,lineHeight:1.5,padding:12 }}>
+                                    <div>
+                                      <div style={{ width:54,height:54,borderRadius:14,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px",fontSize:20,color:C.faint }}>＋</div>
+                                      <p style={{ margin:0,fontWeight:800,color:C.textSub }}>{mediaType==="video"?"AI video/image placeholder":"AI image placeholder"}</p>
+                                      <p style={{ margin:"4px 0 0" }}>Generate Image reads product links, uploaded refs, and this card direction.</p>
+                                      {card.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{card.generatedImageError}</p>}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
-                            <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
-                            <p style={{ margin:0,fontWeight:800,color:C.textSub }}>AI image placeholder</p>
-                            <p style={{ margin:"4px 0 0" }}>Uses the product links and image prompt as references when generating.</p>
-                            {item.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{item.generatedImageError}</p>}
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
-                    </div>
+                    ) : (
+                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Image</span>
+                          <Btn xs onClick={()=>generateCampaignDcImage(item)} disabled={campaignDcGeneratingImageId===item.id}>{campaignDcGeneratingImageId===item.id?"Generating...":"Generate Image"}</Btn>
+                        </div>
+                        <div style={{ flex:1,minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,background:C.surface }}>
+                          {item.generatedImageUrl ? (
+                            <div style={{ width:"100%",display:"flex",flexDirection:"column",gap:10,alignItems:"center" }}>
+                              <img
+                                src={item.generatedImageUrl}
+                                alt="Generated campaign creative"
+                                onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.title || item.product || "Campaign Digital Creative" })}
+                                style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
+                              />
+                              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
+                                <Btn xs variant="outline" onClick={()=>saveCampaignDcImageOutput(item)}>Save</Btn>
+                                <Btn xs variant="danger" onClick={()=>deleteCampaignDcImageOutput(item)}>Delete</Btn>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ color:C.muted,fontSize:12,lineHeight:1.5 }}>
+                              <div style={{ width:72,height:72,borderRadius:16,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",fontSize:22,color:C.faint }}>＋</div>
+                              <p style={{ margin:0,fontWeight:800,color:C.textSub }}>AI image placeholder</p>
+                              <p style={{ margin:"4px 0 0" }}>Uses the product links and image prompt as references when generating.</p>
+                              {item.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{item.generatedImageError}</p>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 );
@@ -9880,6 +10019,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   const [generatedAdText,setGeneratedAdText] = useState("");
   const [generatedAdCards,setGeneratedAdCards] = useState<any[]>([]);
   const [generatedBatchOutputs,setGeneratedBatchOutputs] = useState<any[]>([]);
+  const [editingBatchOutputIds,setEditingBatchOutputIds] = useState<string[]>([]);
+  const [editingCarouselCardKeys,setEditingCarouselCardKeys] = useState<string[]>([]);
   const [savedAdTemplates,setSavedAdTemplates] = useState<any[]>([]);
   const [savedAdTemplatesHydrated,setSavedAdTemplatesHydrated] = useState(false);
   const [savedAdPreview,setSavedAdPreview] = useState<any>(null);
@@ -10414,22 +10555,59 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     }
   };
 
+  const isCarouselBatchOutput = (item:any) => !!item?.isCarousel || String(item?.formatName || "").toLowerCase().includes("carousel");
+  const carouselCardKey = (outputId:string, card:any, index:number) => `${outputId}-${card?.id || index}`;
+  const isEditingBatchOutput = (id:string) => editingBatchOutputIds.includes(id);
+  const isEditingCarouselCard = (outputId:string, card:any, index:number) => editingCarouselCardKeys.includes(carouselCardKey(outputId,card,index));
+
+  const syncCarouselBatchText = (item:any, cards:any[]) => ({
+    ...item,
+    cards,
+    text:formatCarouselCardsForCopy(cards),
+  });
+
   const saveGeneratedBatchOutput = (item:any) => {
-    if(!item?.text) return;
-    setSavedAdTemplates((prev:any[])=>[{ ...item, id:uid(), createdAt:new Date().toISOString() },...prev]);
+    if(!item?.text && !(Array.isArray(item?.cards) && item.cards.length)) return;
+    const cleanItem = isCarouselBatchOutput(item) ? syncCarouselBatchText(item, Array.isArray(item.cards) ? item.cards : []) : item;
+    setSavedAdTemplates((prev:any[])=>[{ ...cleanItem, id:uid(), createdAt:new Date().toISOString() },...prev]);
+    setEditingBatchOutputIds((prev:string[])=>prev.filter((itemId:string)=>itemId!==item.id));
+    setEditingCarouselCardKeys((prev:string[])=>prev.filter((key:string)=>!key.startsWith(`${item.id}-`)));
     setAdError("Generated output saved.");
   };
 
   const editGeneratedBatchOutput = (id:string) => {
-    const current = generatedBatchOutputs.find((item:any)=>item.id===id);
-    if(!current) return;
-    const nextText = window.prompt("Edit generated ad output", current.text || "");
-    if(nextText===null) return;
-    setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>item.id===id ? { ...item, text:nextText, cards:item.isCarousel ? parseCarouselCards(nextText) : item.cards } : item));
+    setEditingBatchOutputIds((prev:string[])=>prev.includes(id) ? prev.filter((itemId:string)=>itemId!==id) : [...prev,id]);
+  };
+
+  const updateGeneratedBatchOutputText = (id:string, text:string) => {
+    setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>item.id===id ? { ...item, text } : item));
+  };
+
+  const updateGeneratedBatchCarouselCard = (outputId:string, cardIndex:number, patch:any) => {
+    setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>{
+      if(item.id!==outputId) return item;
+      const cards = (Array.isArray(item.cards) ? item.cards : []).map((card:any,index:number)=>index===cardIndex ? { ...card, ...patch } : card);
+      return syncCarouselBatchText(item,cards);
+    }));
+  };
+
+  const deleteGeneratedBatchCarouselCard = (outputId:string, cardIndex:number) => {
+    setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>{
+      if(item.id!==outputId) return item;
+      const cards = (Array.isArray(item.cards) ? item.cards : []).filter((_:any,index:number)=>index!==cardIndex);
+      return syncCarouselBatchText(item,cards);
+    }));
+  };
+
+  const toggleGeneratedBatchCarouselCardEdit = (outputId:string, card:any, index:number) => {
+    const key = carouselCardKey(outputId,card,index);
+    setEditingCarouselCardKeys((prev:string[])=>prev.includes(key) ? prev.filter((item:string)=>item!==key) : [...prev,key]);
   };
 
   const deleteGeneratedBatchOutput = (id:string) => {
     setGeneratedBatchOutputs((prev:any[])=>prev.filter((item:any)=>item.id!==id));
+    setEditingBatchOutputIds((prev:string[])=>prev.filter((itemId:string)=>itemId!==id));
+    setEditingCarouselCardKeys((prev:string[])=>prev.filter((key:string)=>!key.startsWith(`${id}-`)));
   };
 
   const sendGeneratedBatchOutputToDC = (item:any) => {
@@ -10787,6 +10965,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                             <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(240px,1fr))",gap:10 }}>
                               {item.cards.map((card:any,index:number)=>{
                                 const mediaType = card.mediaType || recommendedCarouselMediaType(index);
+                                const cardEditing = isEditingBatchOutput(item.id) || isEditingCarouselCard(item.id,card,index);
+                                const inputStyle:any = { width:"100%",boxSizing:"border-box",border:`1.5px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:12,lineHeight:1.4,padding:"7px 8px",outline:"none" };
                                 return (
                                   <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.bg,overflow:"hidden",boxShadow:"0 6px 18px rgba(15,23,42,.04)" }}>
                                     <div style={{ height:104,background:mediaType==="video"?"#FEF2F2":"#EFF6FF",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:10,position:"relative" }}>
@@ -10794,19 +10974,33 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                                       <span style={{ fontSize:11.5,color:mediaType==="video"?"#991B1B":C.accent,fontWeight:900,lineHeight:1.35 }}>{mediaType==="video" ? "Video Placeholder" : "Image Placeholder"}<br/><span style={{ fontSize:10,color:C.muted }}>Creative visual goes here</span></span>
                                     </div>
                                     <div style={{ padding:10,display:"grid",gap:7,fontSize:11.5,lineHeight:1.45,color:C.textSub }}>
+                                      {cardEditing&&(<div>
+                                        <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Image / Video Placeholder</p>
+                                        <Select value={mediaType} onChange={(v:string)=>updateGeneratedBatchCarouselCard(item.id,index,{ mediaType:v })} style={{ height:34,fontSize:12,borderRadius:8 }}>
+                                          <option value="image">Image Placeholder</option>
+                                          <option value="video">Video Placeholder</option>
+                                        </Select>
+                                      </div>)}
                                       <div>
                                         <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
-                                        <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card.headline || ""}</p>
+                                        {cardEditing ? <input value={card.headline || ""} onChange={(e:any)=>updateGeneratedBatchCarouselCard(item.id,index,{ headline:e.target.value })} style={{ ...inputStyle,fontWeight:900 }} /> : <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card.headline || ""}</p>}
                                       </div>
                                       <div>
                                         <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p>
-                                        <p style={{ margin:0 }}>{card.copy || ""}</p>
+                                        {cardEditing ? <textarea value={card.copy || ""} onChange={(e:any)=>updateGeneratedBatchCarouselCard(item.id,index,{ copy:e.target.value })} rows={3} style={{ ...inputStyle,resize:"vertical" }} /> : <p style={{ margin:0 }}>{card.copy || ""}</p>}
                                       </div>
                                       <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}>
                                         <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{mediaType==="video"?"Video Direction":"Image Direction"}</p>
-                                        <p style={{ margin:0 }}>{card.visual || ""}</p>
+                                        {cardEditing ? <textarea value={card.visual || ""} onChange={(e:any)=>updateGeneratedBatchCarouselCard(item.id,index,{ visual:e.target.value })} rows={3} style={{ ...inputStyle,resize:"vertical" }} /> : <p style={{ margin:0 }}>{card.visual || ""}</p>}
                                       </div>
-                                      <p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card.cta || "Shop Now"}</p>
+                                      <div>
+                                        <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p>
+                                        {cardEditing ? <input value={card.cta || "Shop Now"} onChange={(e:any)=>updateGeneratedBatchCarouselCard(item.id,index,{ cta:e.target.value })} style={{ ...inputStyle,fontWeight:900 }} /> : <p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card.cta || "Shop Now"}</p>}
+                                      </div>
+                                      <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2 }}>
+                                        <Btn xs variant="outline" onClick={()=>toggleGeneratedBatchCarouselCardEdit(item.id,card,index)}>{cardEditing ? "Done card" : "Edit card"}</Btn>
+                                        <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchCarouselCard(item.id,index)}>Delete card</Btn>
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -10816,14 +11010,14 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                         ) : (
                           <textarea
                             value={item.text || ""}
-                            onChange={(e:any)=>setGeneratedBatchOutputs((prev:any[])=>prev.map((row:any)=>row.id===item.id ? { ...row, text:e.target.value } : row))}
+                            onChange={(e:any)=>updateGeneratedBatchOutputText(item.id,e.target.value)}
                             rows={8}
                             style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none" }}
                           />
                         )}
 
                         <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
-                          <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>Edit</Btn>
+                          <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>{isEditingBatchOutput(item.id)?"Done Editing":"Edit"}</Btn>
                           <Btn xs variant="outline" onClick={()=>saveGeneratedBatchOutput(item)}>Save</Btn>
                           {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</Btn>}
                           <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchOutput(item.id)}>Delete</Btn>
