@@ -5416,23 +5416,82 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         });
       };
 
+
+      const normalizeCarouselMatchText = (value:any) => String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g," ")
+        .trim();
+
+      const getCarouselCardProductReferences = (card:any, cardIndex:number, productRows:any[]=[]) => {
+        const rows = Array.isArray(productRows) ? productRows.filter(Boolean) : [];
+        if(!rows.length) return [];
+
+        const cardText = normalizeCarouselMatchText([card?.headline,card?.copy,card?.visual,card?.cta].filter(Boolean).join(" "));
+        const matched = rows.filter((row:any)=>{
+          const product = normalizeCarouselMatchText(row?.product || row?.productName || row?.name || "");
+          const sku = normalizeCarouselMatchText(row?.sku || "");
+          const brand = normalizeCarouselMatchText(row?.brand || "");
+          const collection = normalizeCarouselMatchText(row?.collection || row?.category || "");
+          const productWords = product.split(" ").filter((word:string)=>word.length>=4);
+          const hasSku = !!sku && cardText.includes(sku);
+          const hasProductPhrase = !!product && cardText.includes(product);
+          const hasProductWords = productWords.length ? productWords.some((word:string)=>cardText.includes(word)) : false;
+          const hasBrandCollection = (!!brand && cardText.includes(brand)) || (!!collection && cardText.includes(collection));
+          return hasSku || hasProductPhrase || hasProductWords || hasBrandCollection;
+        });
+
+        if(matched.length) return matched;
+        if(rows.length===1) return rows;
+        return rows;
+      };
+
+      const getCarouselCardReferenceLinks = (cardProducts:any[]=[], item:any={}) => Array.from(new Set([
+        ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : getDcProductLinks(row))),
+        ...((Array.isArray(item?.imageLinks) ? item.imageLinks : [])),
+      ])).map(normalizeDcUrl).filter(Boolean);
+
+      const renderCarouselCardProductReferences = (cardProducts:any[]=[], links:any[]=[]) => {
+        const products = Array.isArray(cardProducts) ? cardProducts : [];
+        const safeLinks = Array.isArray(links) ? links.filter(Boolean) : [];
+        return (
+          <div style={{ padding:8,borderRadius:8,background:"#F9FAFB",border:`1px solid ${C.border}` }}>
+            <p style={{ margin:"0 0 5px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
+            {products.length ? products.slice(0,4).map((row:any,idx:number)=>(
+              <div key={`${row?.sku || row?.product || row?.productName || "product"}-${idx}`} style={{ marginTop:idx?5:0,fontSize:10.5,color:C.textSub,lineHeight:1.35 }}>
+                <strong style={{ color:C.text }}>{[row?.brand,row?.product || row?.productName || row?.name].filter(Boolean).join(" · ") || "Selected Product"}</strong>
+                {row?.sku&&<span style={{ display:"block",fontFamily:"monospace",color:C.muted }}>SKU: {row.sku}</span>}
+              </div>
+            )) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet.</p>}
+            {safeLinks.length>0&&(
+              <div style={{ marginTop:6,display:"flex",gap:5,flexWrap:"wrap" }}>
+                {safeLinks.slice(0,5).map((link:any,idx:number)=>(
+                  <a key={`${link}-${idx}`} href={link} target="_blank" rel="noreferrer" style={{ fontSize:10,fontWeight:800,color:C.accent,textDecoration:"none",background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 6px" }}>Product Link {idx+1}</a>
+                ))}
+                {safeLinks.length>5&&<span style={{ fontSize:10,color:C.muted,fontWeight:800 }}>+{safeLinks.length-5} more</span>}
+              </div>
+            )}
+          </div>
+        );
+      };
+
       const generateCampaignDcCarouselImage = async (item:any, card:any, cardIndex:number) => {
         const productRows = getCampaignDigitalProductRows(item);
-        const imageLinks = Array.from(new Set([...(productRows.flatMap((row:any)=>row.links || [])), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const cardProductRows = getCarouselCardProductReferences(card,cardIndex,productRows);
+        const imageLinks = getCarouselCardReferenceLinks(cardProductRows,item);
         const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
         const mediaType = card?.mediaType || recommendedCarouselMediaType(cardIndex);
         const prompt = [
           `Create one ${mediaType} creative frame for Carousel Card ${cardIndex+1}.`,
-          "STRICT PRODUCT REFERENCE RULE: Read and follow the provided product image links and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
+          "STRICT PRODUCT REFERENCE RULE: Use the FEATURED PRODUCT/S FOR THIS SPECIFIC CAROUSEL CARD first. Read and follow the matching SKU details, product links, and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
           card?.headline ? `Card headline: ${card.headline}` : "",
           card?.copy ? `Card copy: ${card.copy}` : "",
           card?.visual ? `Card image/video direction:\n${card.visual}` : "",
           card?.cta ? `CTA: ${card.cta}` : "",
           item.imagePrompt ? `Overall ad context:\n${item.imagePrompt}` : "",
           `Platform: ${item.platform || "All Platforms"}`,
-          `Products: ${productRows.map((row:any)=>[row.brand,row.product,row.sku].filter(Boolean).join(" · ")).filter(Boolean).join(" | ")}`,
-          imageLinks.length ? `Use these product image/reference links as visual references:\n${imageLinks.join("\n")}` : "",
-          "Generate the creative only. Keep the product accurate. Clean premium ecommerce layout.",
+          cardProductRows.length ? `Featured product/s for this carousel card:\n${cardProductRows.map((row:any)=>[row.brand,row.product || row.productName || row.name,row.sku].filter(Boolean).join(" · ")).filter(Boolean).join("\n")}` : "",
+          imageLinks.length ? `Use these product image/reference links for this carousel card:\n${imageLinks.join("\n")}` : "",
+          "Generate the creative only. Keep the featured product accurate. Clean premium ecommerce layout.",
         ].filter(Boolean).join("\n");
 
         const generatingKey = `${item.id}-carousel-${cardIndex}`;
@@ -5522,6 +5581,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                             const normalizedMediaType = String(mediaType || "image").toLowerCase().includes("video") ? "video" : "image";
                             const tint = normalizedMediaType === "video" ? "#FEF2F2" : "#EFF6FF";
                             const accentColor = normalizedMediaType === "video" ? "#EF4444" : "#111827";
+                            const cardProductRows = getCarouselCardProductReferences(card,cardIndex,productRows);
+                            const cardReferenceLinks = getCarouselCardReferenceLinks(cardProductRows,item);
                             return (
                               <div key={card?.id || `dc-carousel-card-${cardIndex}`} style={{ border:`1px solid ${C.borderStrong}`,borderRadius:12,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0 }}>
                                 <div style={{ minHeight:118,background:tint,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,position:"relative" }}>
@@ -5543,6 +5604,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 </div>
 
                                 <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
+                                  {renderCarouselCardProductReferences(cardProductRows,cardReferenceLinks)}
                                   <div>
                                     <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
                                     <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p>
@@ -5982,24 +6044,84 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         });
       };
 
+
+      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g," ")
+        .trim();
+
+      const getIntroCarouselCardProductReferences = (card:any, cardIndex:number, productRows:any[]=[]) => {
+        const rows = Array.isArray(productRows) ? productRows.filter(Boolean) : [];
+        if(!rows.length) return [];
+
+        const cardText = normalizeIntroCarouselMatchText([card?.headline,card?.copy,card?.visual,card?.cta].filter(Boolean).join(" "));
+        const matched = rows.filter((row:any)=>{
+          const product = normalizeIntroCarouselMatchText(row?.product || row?.productName || row?.name || "");
+          const sku = normalizeIntroCarouselMatchText(row?.sku || "");
+          const brand = normalizeIntroCarouselMatchText(row?.brand || "");
+          const collection = normalizeIntroCarouselMatchText(row?.collection || row?.category || "");
+          const productWords = product.split(" ").filter((word:string)=>word.length>=4);
+          const hasSku = !!sku && cardText.includes(sku);
+          const hasProductPhrase = !!product && cardText.includes(product);
+          const hasProductWords = productWords.length ? productWords.some((word:string)=>cardText.includes(word)) : false;
+          const hasBrandCollection = (!!brand && cardText.includes(brand)) || (!!collection && cardText.includes(collection));
+          return hasSku || hasProductPhrase || hasProductWords || hasBrandCollection;
+        });
+
+        if(matched.length) return matched;
+        if(rows.length===1) return rows;
+        return rows;
+      };
+
+      const getIntroCarouselCardReferenceLinks = (cardProducts:any[]=[], item:any={}) => Array.from(new Set([
+        ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : getDcProductLinks(row))),
+        ...((Array.isArray(item?.imageLinks) ? item.imageLinks : [])),
+      ])).map(normalizeDcUrl).filter(Boolean);
+
+      const renderIntroCarouselCardProductReferences = (cardProducts:any[]=[], links:any[]=[]) => {
+        const products = Array.isArray(cardProducts) ? cardProducts : [];
+        const safeLinks = Array.isArray(links) ? links.filter(Boolean) : [];
+        return (
+          <div style={{ padding:8,borderRadius:8,background:"#F9FAFB",border:`1px solid ${C.border}` }}>
+            <p style={{ margin:"0 0 5px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
+            {products.length ? products.slice(0,4).map((row:any,idx:number)=>(
+              <div key={`${row?.sku || row?.product || row?.productName || "product"}-${idx}`} style={{ marginTop:idx?5:0,fontSize:10.5,color:C.textSub,lineHeight:1.35 }}>
+                <strong style={{ color:C.text }}>{[row?.brand,row?.product || row?.productName || row?.name].filter(Boolean).join(" · ") || "Selected Product"}</strong>
+                {row?.sku&&<span style={{ display:"block",fontFamily:"monospace",color:C.muted }}>SKU: {row.sku}</span>}
+              </div>
+            )) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet.</p>}
+            {safeLinks.length>0&&(
+              <div style={{ marginTop:6,display:"flex",gap:5,flexWrap:"wrap" }}>
+                {safeLinks.slice(0,5).map((link:any,idx:number)=>(
+                  <a key={`${link}-${idx}`} href={link} target="_blank" rel="noreferrer" style={{ fontSize:10,fontWeight:800,color:C.accent,textDecoration:"none",background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 6px" }}>Product Link {idx+1}</a>
+                ))}
+                {safeLinks.length>5&&<span style={{ fontSize:10,color:C.muted,fontWeight:800 }}>+{safeLinks.length-5} more</span>}
+              </div>
+            )}
+          </div>
+        );
+      };
+
       const generateProductIntroDcCarouselImage = async (item:any, card:any, cardIndex:number) => {
-        const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
-        const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const allCardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }];
+        const cardProducts = getIntroCarouselCardProductReferences(card,cardIndex,allCardProducts);
+        const links = getIntroCarouselCardReferenceLinks(cardProducts,item);
         const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
         const mediaType = card?.mediaType || recommendedCarouselMediaType(cardIndex);
         const prompt = [
           `Create one ${mediaType} creative frame for Carousel Card ${cardIndex+1}.`,
-          "STRICT PRODUCT REFERENCE RULE: Read and follow the provided product image links and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
+          "STRICT PRODUCT REFERENCE RULE: Use the FEATURED PRODUCT/S FOR THIS SPECIFIC CAROUSEL CARD first. Read and follow the matching SKU details, product links, and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
           card?.headline ? `Card headline: ${card.headline}` : "",
           card?.copy ? `Card copy: ${card.copy}` : "",
           card?.visual ? `Card image/video direction:\n${card.visual}` : "",
           card?.cta ? `CTA: ${card.cta}` : "",
           item.imagePrompt ? `Overall ad context:\n${item.imagePrompt}` : "",
           `Platform: ${item.platform || "All Platforms"}`,
-          `Products: ${cardProducts.map((row:any)=>[row.brand,row.product,row.sku].filter(Boolean).join(" · ")).filter(Boolean).join(" | ")}`,
-          links.length ? `Use these product image/reference links as visual references:\n${links.join("\n")}` : "",
-          "Generate the creative only. Keep the product accurate. Clean premium ecommerce layout.",
+          cardProducts.length ? `Featured product/s for this carousel card:\n${cardProducts.map((row:any)=>[row.brand,row.product || row.productName || row.name,row.sku].filter(Boolean).join(" · ")).filter(Boolean).join("\n")}` : "",
+          links.length ? `Use these product image/reference links for this carousel card:\n${links.join("\n")}` : "",
+          "Generate the creative only. Keep the featured product accurate. Clean premium ecommerce layout.",
         ].filter(Boolean).join("\n");
+
         const generatingKey = `${item.id}-carousel-${cardIndex}`;
         setCampaignDcGeneratingImageId(generatingKey);
         try {
@@ -6089,6 +6211,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                             const normalizedMediaType = String(mediaType || "image").toLowerCase().includes("video") ? "video" : "image";
                             const tint = normalizedMediaType === "video" ? "#FEF2F2" : "#EFF6FF";
                             const accentColor = normalizedMediaType === "video" ? "#EF4444" : "#111827";
+                            const allCardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }];
+                            const cardProductRows = getIntroCarouselCardProductReferences(card,cardIndex,allCardProducts);
+                            const cardReferenceLinks = getIntroCarouselCardReferenceLinks(cardProductRows,item);
                             return (
                               <div key={card?.id || `dc-intro-carousel-card-${cardIndex}`} style={{ border:`1px solid ${C.borderStrong}`,borderRadius:12,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0 }}>
                                 <div style={{ minHeight:118,background:tint,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,position:"relative" }}>
@@ -6104,6 +6229,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                   )}
                                 </div>
                                 <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
+                                  {renderIntroCarouselCardProductReferences(cardProductRows,cardReferenceLinks)}
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p><p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p></div>
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p><p style={{ margin:0 }}>{card?.copy || ""}</p></div>
                                   <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{normalizedMediaType==="video"?"Video Direction":"Image Direction"}</p><p style={{ margin:0 }}>{card?.visual || ""}</p></div>
