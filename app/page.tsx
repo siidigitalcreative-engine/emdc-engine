@@ -5222,15 +5222,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       });
     };
     const getDcProductLinks = (product:any) => {
-      const skuRow:any = getSkuStorageRowByProduct(product) || {};
+      const safeProduct:any = product || {};
+      const skuRow:any = getSkuStorageRowByProduct(safeProduct) || {};
       const extraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
       const linkSources = [
-        product.product,
-        product.productName,
-        product.sku,
-        product.skuCode,
-        product.brand,
-        product.collection,
+        safeProduct.product,
+        safeProduct.productName,
+        safeProduct.sku,
+        safeProduct.skuCode,
+        safeProduct.brand,
+        safeProduct.collection,
         skuRow.productName,
         skuRow.sku,
         skuRow.collection,
@@ -5944,6 +5945,82 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           setCampaignDcGeneratingImageId("");
         }
       };
+      const updateProductIntroDigitalCarouselCard = (itemId:string, cardIndex:number, patch:any) => {
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>{
+          if(row.id!==itemId) return row;
+          const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((card:any,index:number)=>index===cardIndex ? { ...card, ...patch } : card);
+          return { ...row, carouselCards };
+        });
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
+      const deleteProductIntroDcCarouselImageOutput = (item:any, cardIndex:number) => {
+        updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"" });
+      };
+
+      const saveProductIntroDcCarouselImageOutput = (item:any, card:any, cardIndex:number) => {
+        if(!card?.generatedImageUrl) return;
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          savedImageOutputs:[{
+            id:uid(),
+            source:"Product Introduction Digital Creative",
+            cardId:`${item.id}-carousel-${cardIndex}`,
+            sourceRowId:item.id,
+            title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+            url:card.generatedImageUrl,
+            prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
+            createdAt:new Date().toISOString(),
+          },...saved].slice(0,60),
+        });
+      };
+
+      const generateProductIntroDcCarouselImage = async (item:any, card:any, cardIndex:number) => {
+        const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
+        const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
+        const mediaType = card?.mediaType || recommendedCarouselMediaType(cardIndex);
+        const prompt = [
+          `Create one ${mediaType} creative frame for Carousel Card ${cardIndex+1}.`,
+          "STRICT PRODUCT REFERENCE RULE: Read and follow the provided product image links and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
+          card?.headline ? `Card headline: ${card.headline}` : "",
+          card?.copy ? `Card copy: ${card.copy}` : "",
+          card?.visual ? `Card image/video direction:\n${card.visual}` : "",
+          card?.cta ? `CTA: ${card.cta}` : "",
+          item.imagePrompt ? `Overall ad context:\n${item.imagePrompt}` : "",
+          `Platform: ${item.platform || "All Platforms"}`,
+          `Products: ${cardProducts.map((row:any)=>[row.brand,row.product,row.sku].filter(Boolean).join(" · ")).filter(Boolean).join(" | ")}`,
+          links.length ? `Use these product image/reference links as visual references:\n${links.join("\n")}` : "",
+          "Generate the creative only. Keep the product accurate. Clean premium ecommerce layout.",
+        ].filter(Boolean).join("\n");
+        const generatingKey = `${item.id}-carousel-${cardIndex}`;
+        setCampaignDcGeneratingImageId(generatingKey);
+        try {
+          const res = await fetch("/api/ai/generate-image", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({ prompt, size:"1920x1920", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, outputCount:1 }),
+          });
+          const raw = await res.text();
+          let result:any = {};
+          try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
+          if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
+          const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
+        } catch(err:any) {
+          updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages });
+        } finally {
+          setCampaignDcGeneratingImageId("");
+        }
+      };
+
 
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
@@ -5981,6 +6058,70 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 }));
                 const links = Array.from(new Set(tableProducts.flatMap((row:any)=>row.links || [])));
                 const mergeCopyCells = tableProducts.length>1 && tableProducts.every((row:any)=>String(row.headline||"")===String(tableProducts[0]?.headline||"") && String(row.subheadline||"")===String(tableProducts[0]?.subheadline||"") && String(row.cta||"")===String(tableProducts[0]?.cta||""));
+                const carouselCards = Array.isArray(item.carouselCards) ? item.carouselCards : [];
+                const isCarouselDcOutput = !!item.isCarousel && carouselCards.length>0;
+                if (isCarouselDcOutput) {
+                  const safeTitle = item.title || item.product || "Carousel Ad";
+                  const safeContext = item.linkedEventContext || group.groupName || "Marketing";
+                  return (
+                    <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                      <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                        <div style={{ minWidth:0,flex:"1 1 360px" }}>
+                          <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{safeTitle}</p>
+                          <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>{safeContext}</p>
+                        </div>
+                        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto",gap:6,width:isMobile?"100%":"auto" }}>
+                          <Btn xs variant="danger" onClick={()=>deleteProductIntroDigitalItem(item.id)}>Delete</Btn>
+                        </div>
+                      </div>
+                      <div style={{ padding:isMobile?10:12,display:"flex",flexDirection:"column",gap:10 }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <div>
+                            <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Carousel Card Output</span>
+                            <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>Same carousel card layout from Marketing. Each placeholder has its own Generate Image button.</span>
+                          </div>
+                          <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{carouselCards.length} card{carouselCards.length!==1?"s":""}</span>
+                        </div>
+                        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(230px,1fr))",gap:10 }}>
+                          {carouselCards.map((card:any,cardIndex:number)=>{
+                            const generatingKey = `${item.id}-carousel-${cardIndex}`;
+                            const mediaType = card?.mediaType || recommendedCarouselMediaType(cardIndex);
+                            const normalizedMediaType = String(mediaType || "image").toLowerCase().includes("video") ? "video" : "image";
+                            const tint = normalizedMediaType === "video" ? "#FEF2F2" : "#EFF6FF";
+                            const accentColor = normalizedMediaType === "video" ? "#EF4444" : "#111827";
+                            return (
+                              <div key={card?.id || `dc-intro-carousel-card-${cardIndex}`} style={{ border:`1px solid ${C.borderStrong}`,borderRadius:12,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0 }}>
+                                <div style={{ minHeight:118,background:tint,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,position:"relative" }}>
+                                  <span style={{ position:"absolute",top:9,left:10,padding:"3px 8px",borderRadius:999,background:C.surface,border:`1px solid ${normalizedMediaType==="video"?"#FECACA":C.border}`,fontSize:10,fontWeight:900,color:accentColor }}>Card {cardIndex+1}</span>
+                                  {card?.generatedImageUrl ? (
+                                    <img src={card.generatedImageUrl} alt={`Generated carousel card ${cardIndex+1}`} onClick={()=>setCampaignDcPreview({ id:`${item.id}-carousel-${cardIndex}`, url:card.generatedImageUrl, prompt:card.generatedImagePrompt || card.visual || "", title:`${safeTitle} · Card ${cardIndex+1}` })} style={{ maxWidth:"100%",maxHeight:160,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in",background:C.surface }} />
+                                  ) : (
+                                    <div style={{ color:C.textSub,fontSize:11,fontWeight:800,lineHeight:1.35 }}>
+                                      <p style={{ margin:"0 0 3px",fontSize:12,fontWeight:900,color:accentColor }}>{normalizedMediaType==="video"?"Video Placeholder":"Image Placeholder"}</p>
+                                      <p style={{ margin:0,fontSize:10.5,color:C.muted }}>Creative visual goes here</p>
+                                      {card?.generatedImageError&&<p style={{ margin:"7px 0 0",color:"#DC2626",fontWeight:800 }}>{card.generatedImageError}</p>}
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
+                                  <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p><p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p></div>
+                                  <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p><p style={{ margin:0 }}>{card?.copy || ""}</p></div>
+                                  <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{normalizedMediaType==="video"?"Video Direction":"Image Direction"}</p><p style={{ margin:0 }}>{card?.visual || ""}</p></div>
+                                  <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p><p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card?.cta || "Shop Now"}</p></div>
+                                  <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
+                                    <Btn xs onClick={()=>generateProductIntroDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
+                                    {card?.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveProductIntroDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>}
+                                    {card?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                 <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                   <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
