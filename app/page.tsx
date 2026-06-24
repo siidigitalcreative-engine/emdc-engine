@@ -3626,8 +3626,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       content:textContent,
       createdAt:new Date().toISOString(),
     };
-    updateAiWorkspace("overview",{ items:[newItem,...items] });
-    markActionDone(`overview-${sourceTab}-${title}-${Date.now()}`);
+    // Keep Overview as a clean master page in natural workflow order.
+    // Items are appended, then displayed by source section: E-commerce, Marketing, Digital Creative, Livestream, Other.
+    updateAiWorkspace("overview",{ items:[...items,newItem] });
+    markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
   };
 
   const formatMainPromotion = (promo:any) => {
@@ -5018,24 +5020,52 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No overview items yet. Go to E-commerce, Marketing, or Digital Creative and click Add to Overview on any output.</p>
             </div>
           ) : (
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14 }}>
-              {overviewItems.map((item:any)=>(
-                <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                  <div style={{ padding:"12px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start" }}>
-                    <div style={{ minWidth:0 }}>
-                      <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Overview Item"}</p>
-                      <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.sourceTab || "output"} · {item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+            <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
+              {(() => {
+                const sectionOrder = ["E-commerce","Marketing","Digital Creative","Livestream"];
+                const normalizeSource = (value:any) => {
+                  const v = String(value || "").toLowerCase();
+                  if(v.includes("e-commerce") || v.includes("ecommerce")) return "E-commerce";
+                  if(v.includes("marketing")) return "Marketing";
+                  if(v.includes("digital")) return "Digital Creative";
+                  if(v.includes("livestream") || v.includes("live")) return "Livestream";
+                  return "Other";
+                };
+                const grouped:any = {};
+                overviewItems.forEach((item:any)=>{
+                  const key = normalizeSource(item.sourceTab);
+                  if(!grouped[key]) grouped[key] = [];
+                  grouped[key].push(item);
+                });
+                const sections = [...sectionOrder,"Other"].filter((key:string)=>grouped[key]?.length);
+                return sections.map((section:string)=>(
+                  <section key={section} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:14,overflow:"hidden" }}>
+                    <div style={{ padding:"13px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",background:C.surfaceAlt }}>
+                      <div>
+                        <h4 style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{section}</h4>
+                        <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted }}>{grouped[section].length} overview item{grouped[section].length!==1?"s":""}</p>
+                      </div>
                     </div>
-                    <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-                      <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
-                      <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                    <div style={{ display:"flex",flexDirection:"column" }}>
+                      {grouped[section].map((item:any,index:number)=>(
+                        <article key={item.id} style={{ padding:16,borderTop:index?`1px solid ${C.border}`:"none",background:C.surface }}>
+                          <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:10 }}>
+                            <div style={{ minWidth:0,flex:1 }}>
+                              <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
+                              <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+                            </div>
+                            <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                              <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
+                              <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                            </div>
+                          </div>
+                          <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.6,color:C.text,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:14 }}>{item.content || ""}</pre>
+                        </article>
+                      ))}
                     </div>
-                  </div>
-                  <div style={{ maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:14,background:C.bg }}>
-                    <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.55,color:C.text }}>{item.content || ""}</pre>
-                  </div>
-                </div>
-              ))}
+                  </section>
+                ));
+              })()}
             </div>
           )}
         </div>
@@ -5447,7 +5477,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Live Text</p>
                     <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.5,color:C.text }}>{livestreamData.generatedTopicText}</pre>
                     <div style={{ display:"flex",justifyContent:"flex-end",gap:8,marginTop:10 }}>
-                      <Btn xs variant="outline" onClick={()=>addToOverview("Livestream",`Livestream · ${livestreamData.aiTopic || "BAU"}`,livestreamData.generatedTopicText,"Livestream Output")}>Add to Overview</Btn>
+                      <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream · ${livestreamData.aiTopic || "BAU"}`,livestreamData.generatedTopicText,"Livestream Output"); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
                     </div>
                   </div>
                 )}
@@ -5964,7 +5994,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         </div>
                         <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"auto auto auto",gap:6,width:isMobile?"100%":"auto" }}>
                           <Btn xs variant="outline" onClick={()=>copyCampaignDigitalItem(item)}>Copy</Btn>
-                          <Btn xs variant="outline" onClick={()=>addCampaignDigitalItemToOverview(item)}>Add to Overview</Btn>
+                          <Btn xs variant={actionDone(`overview-digital-campaign-${item.id}`)?"primary":"outline"} onClick={()=>{ addCampaignDigitalItemToOverview(item); markActionDone(`overview-digital-campaign-${item.id}`); }}>{actionDone(`overview-digital-campaign-${item.id}`)?"✓ Added":"Add to Overview"}</Btn>
                           <Btn xs variant="danger" onClick={()=>deleteCampaignDigitalItem(item.id)}>Delete</Btn>
                         </div>
                       </div>
@@ -6050,7 +6080,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
                     <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"auto auto auto",gap:6,width:isMobile?"100%":"auto" }}>
                       <Btn xs variant="outline" onClick={()=>copyCampaignDigitalItem(item)}>Copy</Btn>
-                      <Btn xs variant="outline" onClick={()=>addCampaignDigitalItemToOverview(item)}>Add to Overview</Btn>
+                      <Btn xs variant={actionDone(`overview-digital-campaign-${item.id}`)?"primary":"outline"} onClick={()=>{ addCampaignDigitalItemToOverview(item); markActionDone(`overview-digital-campaign-${item.id}`); }}>{actionDone(`overview-digital-campaign-${item.id}`)?"✓ Added":"Add to Overview"}</Btn>
                       <Btn xs variant="danger" onClick={()=>deleteCampaignDigitalItem(item.id)}>Delete</Btn>
                     </div>
                   </div>
@@ -7254,7 +7284,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
-                          <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows")} disabled={!productRows.length}>Add to Overview</Btn>
+                          <Btn sm variant={actionDone("overview-ecommerce-product-rows")?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows"); markActionDone("overview-ecommerce-product-rows"); }} disabled={!productRows.length}>{actionDone("overview-ecommerce-product-rows")?"✓ Added":"Add to Overview"}</Btn>
                           <Btn sm variant="outline" onClick={()=>{
                             const rows = productRows.map(makeProductIntroDcItem);
                             saveProductIntroMarketingRows(rows);
@@ -7295,7 +7325,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Saved Output"}</p>
                                 <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"} · Click to view</p>
                               </button>
-                              <button onClick={(e:any)=>{ e.stopPropagation(); addToOverview("E-commerce",item.title || "Saved E-commerce Output",item.text,"Saved Output"); }} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Add to Overview</button>
+                              <button onClick={(e:any)=>{ e.stopPropagation(); addToOverview("E-commerce",item.title || "Saved E-commerce Output",item.text,"Saved Output"); markActionDone(`overview-ecomm-saved-${item.id}`); }} style={{ border:"none",background:actionDone(`overview-ecomm-saved-${item.id}`)?C.accent:C.surfaceAlt,color:actionDone(`overview-ecomm-saved-${item.id}`)?"#fff":C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>{actionDone(`overview-ecomm-saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>
                               <button onClick={(e:any)=>{ e.stopPropagation(); deleteSavedEcommerceOutput(item.id); if(savedEcommercePreview?.id===item.id) setSavedEcommercePreview(null); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                             </div>
                           ))}
@@ -7317,7 +7347,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           </div>
                           <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                             <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
-                            <Btn variant="outline" onClick={()=>addToOverview("E-commerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output")}>Add to Overview</Btn>
+                            <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output"); markActionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`); }}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
                           </div>
                         </div>
@@ -7633,7 +7663,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             />
             <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",marginTop:10 }}>
               <Btn sm variant="outline" disabled>Save Prompt</Btn>
-              <Btn sm variant="outline" onClick={()=>addToOverview(tab,`${cfg.title} Text`,data.generatedText || data.textPrompt,"Text Output")} disabled={!(data.generatedText || data.textPrompt)}>Add to Overview</Btn>
+              <Btn sm variant={actionDone(`overview-${tab}-text`)?"primary":"outline"} onClick={()=>{ addToOverview(tab,`${cfg.title} Text`,data.generatedText || data.textPrompt,"Text Output"); markActionDone(`overview-${tab}-text`); }} disabled={!(data.generatedText || data.textPrompt)}>{actionDone(`overview-${tab}-text`)?"✓ Added":"Add to Overview"}</Btn>
               <Btn sm disabled>Generate Text</Btn>
             </div>
           </div>
@@ -7663,7 +7693,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <option value="lifestyle">Lifestyle</option>
                 <option value="ugc">UGC / TikTok Style</option>
               </Select>
-              <Btn sm variant="outline" onClick={()=>addToOverview(tab,`${cfg.title} Image Prompt`,data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt),"Image Prompt")} disabled={!(data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt))}>Add to Overview</Btn>
+              <Btn sm variant={actionDone(`overview-${tab}-image`)?"primary":"outline"} onClick={()=>{ addToOverview(tab,`${cfg.title} Image Prompt`,data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt),"Image Prompt"); markActionDone(`overview-${tab}-image`); }} disabled={!(data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt))}>{actionDone(`overview-${tab}-image`)?"✓ Added":"Add to Overview"}</Btn>
               <Btn sm disabled>Generate Image</Btn>
             </div>
           </div>
@@ -11089,6 +11119,18 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   const [adMenuView,setAdMenuView] = useState("generate");
   const [carouselMediaMode,setCarouselMediaMode] = useState("recommended");
   const [collectionHeroMedia,setCollectionHeroMedia] = useState("recommended");
+  const [overviewAddedKeys,setOverviewAddedKeys] = useState<string[]>([]);
+  const markOverviewAdded = (key:any) => {
+    const clean = String(key || uid());
+    setOverviewAddedKeys((prev:string[])=>Array.from(new Set([...prev,clean])));
+    window.setTimeout(()=>setOverviewAddedKeys((prev:string[])=>prev.filter((item:string)=>item!==clean)),1800);
+  };
+  const overviewAdded = (key:any) => overviewAddedKeys.includes(String(key || ""));
+  const addMarketingOutputToOverview = (ad:any, key:any, overrideText?:string) => {
+    if(!onAddToOverview) return;
+    onAddToOverview({ ...ad, text: overrideText ?? ad?.text ?? ad?.imagePrompt ?? "" });
+    markOverviewAdded(key);
+  };
 
   useEffect(()=>{
     if (typeof window === "undefined") return;
@@ -12424,7 +12466,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                         <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
                           <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>{isEditingBatchOutput(item.id)?"Done Editing":"Edit"}</Btn>
                           <Btn xs variant="outline" onClick={()=>saveGeneratedBatchOutput(item)}>Save</Btn>
-                          {onAddToOverview&&<Btn xs variant="outline" onClick={()=>onAddToOverview(item)}>Add to Overview</Btn>}
+                          {onAddToOverview&&<Btn xs variant={overviewAdded(`batch-${item.id}`)?"primary":"outline"} onClick={()=>addMarketingOutputToOverview(item,`batch-${item.id}`)}>{overviewAdded(`batch-${item.id}`)?"✓ Added":"Add to Overview"}</Btn>}
                           {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</Btn>}
                           <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchOutput(item.id)}>Delete</Btn>
                         </div>
@@ -12461,7 +12503,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                       </div>
                       <div style={{ display:"flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
                         <button type="button" onClick={()=>copySavedAdTemplate(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Copy</button>
-                        {onAddToOverview&&<button type="button" onClick={()=>onAddToOverview(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Add to Overview</button>}
+                        {onAddToOverview&&<button type="button" onClick={()=>addMarketingOutputToOverview(item,`saved-${item.id}`)} style={{ border:`1px solid ${overviewAdded(`saved-${item.id}`)?C.accent:C.border}`,background:overviewAdded(`saved-${item.id}`)?C.accent:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:overviewAdded(`saved-${item.id}`)?"#fff":C.textSub,cursor:"pointer" }}>{overviewAdded(`saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>}
                         {onSendToDC&&<button type="button" onClick={()=>sendSavedAdToDC(item)} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Send to DC</button>}
                         <button type="button" onClick={()=>deleteSavedAdTemplate(item.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
                       </div>
@@ -12487,7 +12529,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
             <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
               <Btn sm variant="outline" onClick={()=>openSavedAdTemplate(savedAdPreview)}>Load to Builder</Btn>
               <Btn sm variant="outline" onClick={()=>copySavedAdTemplate(savedAdPreview)}>Copy</Btn>
-              {onAddToOverview&&<Btn sm variant="outline" onClick={()=>onAddToOverview(savedAdPreview)}>Add to Overview</Btn>}
+              {onAddToOverview&&<Btn sm variant={overviewAdded(`preview-${savedAdPreview.id}`)?"primary":"outline"} onClick={()=>addMarketingOutputToOverview(savedAdPreview,`preview-${savedAdPreview.id}`)}>{overviewAdded(`preview-${savedAdPreview.id}`)?"✓ Added":"Add to Overview"}</Btn>}
               {onSendToDC&&<Btn sm onClick={()=>sendSavedAdToDC(savedAdPreview)}>Send to DC</Btn>}
             </div>
           </div>
