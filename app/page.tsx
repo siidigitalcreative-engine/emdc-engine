@@ -5122,6 +5122,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} onSendToDC={(ad:any)=>{
             const adText = String(ad?.text || "").trim();
             const adProducts = Array.isArray(ad?.products) && ad.products.length ? ad.products : selectedMarketingProducts;
+            const selectedProductList = adProducts.map((product:any,idx:number)=>`${idx+1}. ${product?.productName || product?.product || "Product"}${product?.sku ? ` · SKU: ${product.sku}` : ""}`).join("\n");
+            const dcOutputText = [`Generated Ad Output:\n${adText}`, selectedProductList ? `Selected Products for this Ad:\n${selectedProductList}` : ""].filter(Boolean).join("\n\n");
             const rows = adProducts.map((product:any,idx:number)=>({
               id:uid(),
               sourceRowId:String(product?.id || product?.sku || product?.product || `marketing-${idx}`),
@@ -5133,7 +5135,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               headline:ad?.formatName || "Generated Ad",
               subheadline:ad?.templateName || "",
               cta:"Shop Now",
-              imagePrompt:adText,
+              imagePrompt:dcOutputText,
               products:[{ product:product?.productName || product?.product || "", sku:product?.sku || product?.skuCode || "", brand:product?.brand || "", collection:product?.collection || product?.category || "" }],
               linkedEventContext:group.groupName || "Marketing",
               createdAt:new Date().toISOString(),
@@ -9817,6 +9819,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   const [adError,setAdError] = useState("");
   const [generatedAdText,setGeneratedAdText] = useState("");
   const [generatedAdCards,setGeneratedAdCards] = useState<any[]>([]);
+  const [generatedBatchOutputs,setGeneratedBatchOutputs] = useState<any[]>([]);
   const [savedAdTemplates,setSavedAdTemplates] = useState<any[]>([]);
   const [savedAdTemplatesHydrated,setSavedAdTemplatesHydrated] = useState(false);
   const [savedAdPreview,setSavedAdPreview] = useState<any>(null);
@@ -10308,12 +10311,12 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       setAdError("Select products above, then click Add Selected to Ad Menu before generating.");
       return;
     }
-    const savedItems:any[] = [];
+    const outputs:any[] = [];
     for (const entry of entries) {
       setSelectedPlatformId(entry.platform.id);
       const result = await generateAdForFormat(entry.format,entry.template);
       if(result?.text){
-        savedItems.push({
+        outputs.push({
           id:uid(),
           name:`${entry.platform?.name || "Platform"} ${entry.format?.name || "Ad"} - ${new Date().toLocaleDateString()}`,
           platformId:entry.platform?.id || "",
@@ -10328,16 +10331,45 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
           carouselMediaMode,
           collectionHeroMedia,
           cards:Array.isArray(result.cards) ? result.cards : [],
-          products:effectiveAdSkus,
+          products:[...effectiveAdSkus],
           text:result.text,
           createdAt:new Date().toISOString(),
         });
       }
     }
-    if(savedItems.length) {
-      setSavedAdTemplates((prev:any[])=>[...savedItems,...prev]);
-      setAdError(`${savedItems.length} ad output${savedItems.length!==1?"s":""} generated and saved.`);
+    if(outputs.length) {
+      setGeneratedBatchOutputs((prev:any[])=>[...outputs,...prev]);
+      setAdError(`${outputs.length} ad output${outputs.length!==1?"s":""} generated. Click Save only for outputs you want to keep.`);
     }
+  };
+
+  const saveGeneratedBatchOutput = (item:any) => {
+    if(!item?.text) return;
+    setSavedAdTemplates((prev:any[])=>[{ ...item, id:uid(), createdAt:new Date().toISOString() },...prev]);
+    setAdError("Generated output saved.");
+  };
+
+  const editGeneratedBatchOutput = (id:string) => {
+    const current = generatedBatchOutputs.find((item:any)=>item.id===id);
+    if(!current) return;
+    const nextText = window.prompt("Edit generated ad output", current.text || "");
+    if(nextText===null) return;
+    setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>item.id===id ? { ...item, text:nextText } : item));
+  };
+
+  const sendGeneratedBatchOutputToDC = (item:any) => {
+    if(!item || !onSendToDC) return;
+    onSendToDC({
+      text:item.text || "",
+      cards:Array.isArray(item.cards) ? item.cards : [],
+      platformName:item.platformName || "",
+      formatName:item.formatName || "",
+      templateName:item.templateName || "",
+      products:Array.isArray(item.products) ? item.products : effectiveAdSkus,
+      brief:item.brief || adBrief,
+      isCarousel:!!item.isCarousel,
+      isCollection:!!item.isCollection,
+    });
   };
 
   const saveGeneratedAdTemplate = () => {
@@ -10655,6 +10687,39 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                 </div>
                 <Btn sm onClick={generateSelectedAdFormats} disabled={adGenerating || !selectedAdFormatKeys.length || (hideProductSelector && !effectiveAdSkus.length)}>{adGenerating?"Generating...":"Generate Ads"}</Btn>
               </div>
+              {generatedBatchOutputs.length>0&&(
+                <div style={{ marginTop:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:10 }}>
+                  {generatedBatchOutputs.map((item:any)=>(
+                    <div key={item.id} style={{ background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                      <div style={{ padding:"10px 12px",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt,display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start" }}>
+                        <div style={{ minWidth:0 }}>
+                          <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.platformName || "Platform"} · {item.formatName || "Ad Format"}</p>
+                          <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted }}>{Array.isArray(item.products)?item.products.length:0} product{Array.isArray(item.products)&&item.products.length!==1?"s":""} selected for this ad</p>
+                        </div>
+                      </div>
+                      <div style={{ padding:12,display:"flex",flexDirection:"column",gap:10 }}>
+                        <div style={{ padding:"8px 10px",border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,maxHeight:90,overflowY:"auto" }}>
+                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Products</p>
+                          {(Array.isArray(item.products)?item.products:[]).map((product:any,idx:number)=>(
+                            <p key={idx} style={{ margin:"2px 0",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{product.productName || product.product || "Product"} {product.sku ? `· ${product.sku}` : ""}</p>
+                          ))}
+                        </div>
+                        <textarea
+                          value={item.text || ""}
+                          onChange={(e:any)=>setGeneratedBatchOutputs((prev:any[])=>prev.map((row:any)=>row.id===item.id ? { ...row, text:e.target.value } : row))}
+                          rows={8}
+                          style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none" }}
+                        />
+                        <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                          <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>Edit</Btn>
+                          <Btn xs variant="outline" onClick={()=>saveGeneratedBatchOutput(item)}>Save</Btn>
+                          {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</Btn>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {hideProductSelector&&!effectiveAdSkus.length&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:800 }}>Select products above, then click Add Selected to Ad Menu. The Generate Ads button will read only the products placed there.</p>}
               {adError&&<p style={{ margin:"10px 0 0",fontSize:12,color:"#DC2626",fontWeight:700 }}>{adError}</p>}
             </div>
@@ -10667,6 +10732,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                 </div>
                 {generatedAdText&&(
                   <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                    <Btn xs variant="outline" onClick={()=>{ const nextText = window.prompt("Edit generated ad output", getCurrentGeneratedAdOutput() || ""); if(nextText!==null){ setGeneratedAdText(nextText); setGeneratedAdCards([]); } }}>Edit</Btn>
                     <Btn xs variant="outline" onClick={saveGeneratedAdTemplate}>Save Output</Btn>
                     <Btn xs variant="outline" onClick={copyGeneratedAd}>Copy</Btn>
                     {onSendToDC&&<Btn xs onClick={sendGeneratedAdToDC}>Send to DC</Btn>}
