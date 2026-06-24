@@ -5323,9 +5323,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
       const generateCampaignDcImage = async (item:any) => {
         const productRows = getCampaignDigitalProductRows(item);
-        const imageLinks = Array.from(new Set(productRows.flatMap((row:any)=>row.links || []))).map(normalizeDcUrl);
+        const imageLinks = Array.from(new Set([...(productRows.flatMap((row:any)=>row.links || [])), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
         const prompt = [
           "Create a premium ecommerce campaign image based on this campaign row.",
+          "STRICT PRODUCT REFERENCE RULE: Read and follow the provided product image links and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
           item.imagePrompt ? `User image prompt instruction:\n${item.imagePrompt}` : "",
           `Platform: ${item.platform || "All Platforms"}`,
           `Brand: ${item.brand || ""}`,
@@ -5349,7 +5351,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               size:"1920x1920",
               aspectRatio:"1:1",
               watermark:false,
-              referenceImages:[],
+              referenceImages:uploadedReferenceImages,
               referenceImageUrls:imageLinks,
               outputCount:1,
             }),
@@ -5359,14 +5361,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
-          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageUrl:url, generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks, generatedImageAt:new Date().toISOString(), generatedImageError:"" } : row);
+          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageUrl:url, generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" } : row);
           updateAiWorkspace("digital",{
             campaignCreativeRows:nextRows,
             generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
             generatedAt:new Date().toISOString(),
           });
         } catch (err:any) {
-          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks } : row);
+          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks, referenceImages:uploadedReferenceImages } : row);
           updateAiWorkspace("digital",{ campaignCreativeRows:nextRows });
         } finally {
           setCampaignDcGeneratingImageId("");
@@ -5488,6 +5490,23 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                             style={{ width:"100%",boxSizing:"border-box",minHeight:100,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
                           />
                           <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>This prompt is combined with the table details and product image links when you click Generate Image.</p>
+                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8 }}>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={async (e:any)=>{
+                                const files = Array.from(e.target.files || []);
+                                const toDataUrl = (file:any) => new Promise((resolve)=>{ const reader = new FileReader(); reader.onload=()=>resolve(String(reader.result || "")); reader.readAsDataURL(file); });
+                                const uploaded = (await Promise.all(files.map(toDataUrl))).filter(Boolean);
+                                updateCampaignDigitalItem(item.id,{ referenceImages:[...(Array.isArray(item.referenceImages)?item.referenceImages:[]),...uploaded].slice(0,8) });
+                                e.target.value = "";
+                              }}
+                              style={{ fontSize:11,color:C.muted,maxWidth:"100%" }}
+                            />
+                            {Array.isArray(item.referenceImages)&&item.referenceImages.length>0&&<button type="button" onClick={()=>updateCampaignDigitalItem(item.id,{ referenceImages:[] })} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear refs ({item.referenceImages.length})</button>}
+                            <span style={{ fontSize:10.5,color:C.faint }}>Optional uploaded references. Product image links are still read automatically.</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -5644,9 +5663,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       const generateProductIntroDcImage = async (item:any) => {
         const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
-        const links = Array.from(new Set(cardProducts.flatMap((product:any)=>getDcProductLinks(product)))).map(normalizeDcUrl);
+        const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
         const prompt = [
           "Create a premium ecommerce product introduction image based on this product row.",
+          "STRICT PRODUCT REFERENCE RULE: Read and follow the provided product image links and uploaded reference images. Preserve product shape, color, material, proportions, packaging, and visible design details. Do not redesign, recolor, replace, or invent a different product.",
           item.imagePrompt ? `User image prompt instruction:\n${item.imagePrompt}` : "",
           `Platform: ${item.platform || "All Platforms"}`,
           `Brand: ${item.brand || ""}`,
@@ -5668,7 +5689,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               size:"1920x1920",
               aspectRatio:"1:1",
               watermark:false,
-              referenceImages:[],
+              referenceImages:uploadedReferenceImages,
               referenceImageUrls:links,
               outputCount:1,
             }),
@@ -5678,9 +5699,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
-          updateProductIntroDigitalItem(item.id,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
+          updateProductIntroDigitalItem(item.id,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
         } catch(err:any) {
-          updateProductIntroDigitalItem(item.id,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links });
+          updateProductIntroDigitalItem(item.id,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages });
         } finally {
           setCampaignDcGeneratingImageId("");
         }
@@ -5811,6 +5832,23 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                             style={{ width:"100%",boxSizing:"border-box",minHeight:100,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
                           />
                           <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>This prompt is separate from the E-commerce listing prompt.</p>
+                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8 }}>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={async (e:any)=>{
+                                const files = Array.from(e.target.files || []);
+                                const toDataUrl = (file:any) => new Promise((resolve)=>{ const reader = new FileReader(); reader.onload=()=>resolve(String(reader.result || "")); reader.readAsDataURL(file); });
+                                const uploaded = (await Promise.all(files.map(toDataUrl))).filter(Boolean);
+                                updateProductIntroDigitalItem(item.id,{ referenceImages:[...(Array.isArray(item.referenceImages)?item.referenceImages:[]),...uploaded].slice(0,8) });
+                                e.target.value = "";
+                              }}
+                              style={{ fontSize:11,color:C.muted,maxWidth:"100%" }}
+                            />
+                            {Array.isArray(item.referenceImages)&&item.referenceImages.length>0&&<button type="button" onClick={()=>updateProductIntroDigitalItem(item.id,{ referenceImages:[] })} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear refs ({item.referenceImages.length})</button>}
+                            <span style={{ fontSize:10.5,color:C.faint }}>Optional uploaded references. Product image links are still read automatically.</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -10664,7 +10702,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   <Btn xs variant="outline" onClick={clearSelectedAdFormatKeys} disabled={!selectedAdFormatKeys.length}>Clear Ad Selection</Btn>
                 </div>
               </div>
-              <p style={{ margin:"0 0 10px",fontSize:11.5,color:C.muted,lineHeight:1.45 }}>Tick one or more ad formats using the small checkbox, then use the Generate Ads button at the bottom to generate all selected outputs.</p>
+              <p style={{ margin:"0 0 10px",fontSize:11.5,color:C.muted,lineHeight:1.45 }}>Tick one or more ad formats, then use the single Generate Ads button at the bottom to generate all selected outputs.</p>
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10 }}>
                 {platforms.map((platform:any)=>(
                   <div key={platform.id} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
@@ -10687,13 +10725,13 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                               setSelectedPlatformId(platform.id);
                               setSelectedFormatId(format.id);
                               if(firstTemplate?.id) setSelectedTemplateId(firstTemplate.id);
-                              generateAdForFormat(format,firstTemplate);
+                              toggleSelectedAdFormatKey(formatKey);
                             }}
                             disabled={adGenerating || (hideProductSelector && !effectiveAdSkus.length)}
-                            style={{ width:"100%",textAlign:"left",border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.bg,borderRadius:10,padding:10,cursor:adGenerating?"not-allowed":"pointer",opacity:adGenerating?.8:1 }}>
+                            style={{ width:"100%",textAlign:"left",border:`1.5px solid ${selectedForBatch?C.accent:C.border}`,background:selectedForBatch?"#EEF2FF":C.bg,borderRadius:10,padding:"10px 72px 10px 10px",cursor:adGenerating?"not-allowed":"pointer",opacity:adGenerating?.8:1 }}>
                             <span style={{ display:"block",fontSize:12.5,fontWeight:900,color:C.text }}>{format.name}</span>
                             <span style={{ display:"block",marginTop:2,fontSize:11,color:C.muted }}>{firstTemplate?.name || "Custom ad format"}</span>
-                            <span style={{ display:"inline-block",marginTop:8,fontSize:10.5,fontWeight:800,color:active?C.accent:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{adGenerating&&active?"Generating...":"Generate"}</span>
+                            <span style={{ display:"inline-block",marginTop:8,fontSize:10.5,fontWeight:800,color:selectedForBatch?C.accent:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{selectedForBatch?"Selected":"Click to select"}</span>
                           </button>
                           </div>
                         );
@@ -10837,7 +10875,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                     </div>
                     <div style={{ display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8 }}>
                       {Array.from({length:4},(_,i)=>{
-                        const sku = selectedAdSkus[i];
+                        const sku = effectiveAdSkus[i];
                         return (
                           <div key={i} style={{ border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,padding:8,minHeight:78 }}>
                             <div style={{ height:34,borderRadius:7,border:`1px dashed ${C.border}`,background:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,color:C.muted,fontWeight:800 }}>Product {i+1}</div>
