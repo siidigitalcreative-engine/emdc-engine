@@ -5128,7 +5128,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </div>
             ) : (
               <div style={{ minHeight:160,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18 }}>
-                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>{isProductIntroductionChecklist ? "No product rows sent yet. Go to E-commerce Generated Output and click Send Marketing." : "No products found in this checklist group yet."}</p>
+                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>{isProductIntroductionChecklist ? "No product rows sent yet. Go to E-commerce Generated Output and click Send to Marketing." : "No products found in this checklist group yet."}</p>
               </div>
             )}
           </div>
@@ -5196,12 +5196,19 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     }
 
     if(tab==="livestream"){
+      const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Livestream</h3>
             <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Plan live selling scripts, talking points, demo flow, product callouts, offer pushes, and closing CTAs.</p>
           </div>
+          {!!String(livestreamData.mainPromotion || "").trim()&&(
+            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+              <p style={{ margin:"0 0 6px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Main Promotion</p>
+              <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.5,whiteSpace:"pre-wrap" }}>{livestreamData.mainPromotion}</p>
+            </div>
+          )}
           <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
             <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>Livestream workspace is ready.</p>
           </div>
@@ -6780,6 +6787,30 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
 
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
+                        <div>
+                          <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Main Promotion</h4>
+                          <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>Optional. Add the current offer, voucher, discount, bundle, or sale mechanics here.</p>
+                        </div>
+                        <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <Btn xs variant="outline" onClick={()=>{
+                            updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion || "" });
+                          }} disabled={!String(data.mainPromotion || "").trim()}>Send to Marketing</Btn>
+                          <Btn xs variant="outline" onClick={()=>{
+                            updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion || "" });
+                          }} disabled={!String(data.mainPromotion || "").trim()}>Send to Livestream</Btn>
+                        </div>
+                      </div>
+                      <textarea
+                        value={data.mainPromotion || ""}
+                        onChange={e=>updateAiWorkspace(tab,{ mainPromotion:e.target.value })}
+                        placeholder="Example: 20% off during 6.30 Payday Sale, free shipping voucher, limited-time bundle, or TikTok Shop exclusive offer."
+                        rows={3}
+                        style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                      />
+                    </div>
+
+                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
                         <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Required Output Structure</h4>
                         <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
@@ -6971,12 +7002,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                             const rows = productRows.map(makeProductIntroDcItem);
                             saveProductIntroMarketingRows(rows);
                             setActiveGroupTab("marketing");
-                          }} disabled={!productRows.length}>Send Marketing</Btn>
+                          }} disabled={!productRows.length}>Send to Marketing</Btn>
                           <Btn sm variant="outline" onClick={()=>{
                             const rows = productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : [];
                             saveProductIntroDigitalRows(rows);
                             setActiveGroupTab("digital");
-                          }} disabled={!productRows.length}>Send DC as 1 Row</Btn>
+                          }} disabled={!productRows.length}>Send to DC</Btn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                         </div>
                       </div>
