@@ -5358,6 +5358,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               watermark:false,
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:imageLinks,
+              productImageLinks:imageLinks,
               outputCount:1,
             }),
           });
@@ -5548,6 +5549,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               watermark:false,
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:imageLinks,
+              productImageLinks:imageLinks,
               outputCount:1,
             }),
           });
@@ -6033,6 +6035,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               watermark:false,
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:links,
+              productImageLinks:links,
               outputCount:1,
             }),
           });
@@ -6210,7 +6213,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"1920x1920", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, outputCount:1 }),
+            body:JSON.stringify({ prompt, size:"1920x1920", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -11971,15 +11974,25 @@ const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
 
     try {
       const references = referenceImages.map(img=>img.dataUrl).filter(Boolean);
+      const productImageLinks = Array.from(new Set((prompt.match(/(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi) || []).map((link:string)=>/^https?:\/\//i.test(link) ? link : `https://${link}`)));
+      const strictPrompt = productImageLinks.length
+        ? [
+            "STRICT PRODUCT REFERENCE RULE: Use the product image links as the default visual reference before following any styling instruction. Preserve the exact product look, shape, color, material, packaging, logo placement, and proportions. Do not redesign, recolor, replace, or invent a different product.",
+            `Product image links to read and follow:\n${productImageLinks.join("\n")}`,
+            prompt.trim(),
+          ].join("\n\n")
+        : prompt.trim();
       const res = await fetch("/api/ai/generate-image", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({
-          prompt:prompt.trim(),
+          prompt:strictPrompt,
           size,
           watermark,
           aspectRatio,
           referenceImages:references,
+          referenceImageUrls:productImageLinks,
+          productImageLinks,
           outputCount,
         }),
       });
