@@ -94,6 +94,22 @@ const extractGeneratedImage = (data: any) => {
   return "";
 };
 
+const getSeedreamApiKey = () => clean(
+  process.env.SEEDREAM_API_KEY ||
+  process.env.SEEDREAM_KEY ||
+  process.env.SEEDREAM_TOKEN ||
+  process.env.FAL_KEY ||
+  process.env.FAL_API_KEY ||
+  process.env.FAL_API_TOKEN ||
+  process.env.FAL_TOKEN ||
+  process.env.FALAI_API_KEY ||
+  process.env.BYTEDANCE_API_KEY ||
+  process.env.DOUBAO_API_KEY ||
+  process.env.ARK_API_KEY ||
+  process.env.VOLCENGINE_API_KEY ||
+  process.env.NEXT_PUBLIC_SEEDREAM_API_KEY
+);
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -155,14 +171,16 @@ export async function POST(req: NextRequest) {
     const model = clean(process.env.SEEDREAM_MODEL || "seedream-4.5");
     const endpoint = clean(
       process.env.SEEDREAM_API_URL ||
+      process.env.SEEDREAM_ENDPOINT ||
       process.env.FAL_SEEDREAM_API_URL ||
+      process.env.FAL_SEEDREAM_ENDPOINT ||
       "https://fal.run/fal-ai/bytedance/seedream/v4.5/edit"
     );
-    const apiKey = clean(process.env.SEEDREAM_API_KEY || process.env.FAL_KEY || process.env.FAL_API_KEY);
+    const apiKey = getSeedreamApiKey();
 
     if (!apiKey) {
       return NextResponse.json({
-        error: "SEEDREAM_API_KEY is not configured. Add SEEDREAM_API_KEY or FAL_KEY in Vercel Environment Variables.",
+        error: "Seedream API key is missing. This route now supports your old/custom Seedream env names too: SEEDREAM_API_KEY, SEEDREAM_KEY, SEEDREAM_TOKEN, FAL_KEY, FAL_API_KEY, FAL_API_TOKEN, FAL_TOKEN, FALAI_API_KEY, BYTEDANCE_API_KEY, DOUBAO_API_KEY, ARK_API_KEY, VOLCENGINE_API_KEY, or NEXT_PUBLIC_SEEDREAM_API_KEY.",
       }, { status: 500 });
     }
 
