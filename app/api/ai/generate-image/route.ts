@@ -1,108 +1,117 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs";
+type ReferenceImage = {
+  name?: string;
+  type?: string;
+  dataUrl?: string;
+};
 
-const ratioPromptMap: Record<string, string> = {
-  "16:9": "Generate the image in a wide 16:9 landscape aspect ratio.",
-  "4:3": "Generate the image in a 4:3 landscape aspect ratio.",
-  "1:1": "Generate the image in a square 1:1 aspect ratio.",
-  "3:4": "Generate the image in a 3:4 portrait aspect ratio.",
-  "9:16": "Generate the image in a tall 9:16 portrait aspect ratio.",
+const clean = (value: unknown) => String(value || "").trim();
+
+const normalizeUrl = (value: unknown) => {
+  const raw = clean(value);
+  if (!raw) return "";
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+};
+
+const normalizeUrlList = (...lists: unknown[]) => Array.from(new Set(
+  lists
+    .flatMap((list: any) => Array.isArray(list) ? list : [])
+    .map(normalizeUrl)
+    .filter(Boolean)
+)).slice(0, 30);
+
+const normalizeReferenceImages = (images: unknown): ReferenceImage[] => {
+  if (!Array.isArray(images)) return [];
+  return images
+    .map((img: any) => ({
+      name: clean(img?.name),
+      type: clean(img?.type) || "image/png",
+      dataUrl: clean(img?.dataUrl || img),
+    }))
+    .filter(img => img.dataUrl.startsWith("data:image/"))
+    .slice(0, 8);
+};
+
+const extractLinksFromPrompt = (prompt: string) => {
+  const matches = prompt.match(/(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi) || [];
+  return matches.map(normalizeUrl).filter(Boolean);
 };
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const prompt = clean(body?.prompt);
 
-    const rawPrompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
-    const size = body?.size || "2K";
-    const aspectRatio = typeof body?.aspectRatio === "string" ? body.aspectRatio : "3:4";
-    const watermark = typeof body?.watermark === "boolean" ? body.watermark : false;
-    const referenceImages = Array.isArray(body?.referenceImages)
-      ? body.referenceImages.filter((v: unknown) => typeof v === "string" && v)
-      : [];
-    const outputCountRaw = Number(body?.outputCount || 1);
-    const outputCount = Math.max(1, Math.min(4, Number.isFinite(outputCountRaw) ? outputCountRaw : 1));
+    const productImageLinks = normalizeUrlList(
+      body?.productImageLinks,
+      body?.referenceImageUrls,
+      body?.imageLinks,
+      extractLinksFromPrompt(prompt),
+    );
 
-    if (!rawPrompt) {
-      return NextResponse.json(
-        { error: "Prompt is required." },
-        { status: 400 }
-      );
+    const referenceImages = normalizeReferenceImages(body?.referenceImages);
+    const requireProductImageLinks = Boolean(body?.requireProductImageLinks);
+
+    if (!prompt) {
+      return NextResponse.json({ error: "Missing image prompt." }, { status: 400 });
     }
 
-    const ratioInstruction = ratioPromptMap[aspectRatio] || ratioPromptMap["3:4"];
-    const prompt = `${rawPrompt}
+    if (requireProductImageLinks && !productImageLinks.length) {
+      return NextResponse.json({ error: "Product image link is required. Add product image links and try again." }, { status: 400 });
+    }
 
-${ratioInstruction} Compose the frame naturally for this chosen ratio.`;
-
-    const apiKey = process.env.BYTEPLUS_API_KEY;
-    const baseUrl = process.env.BYTEPLUS_BASE_URL || "https://ark.ap-southeast.bytepluses.com";
-    const model = process.env.BYTEPLUS_IMAGE_MODEL || "seedream-4-5-251128";
-
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: "Missing BYTEPLUS_API_KEY environment variable." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "OPENAI_API_KEY is not configured." }, { status: 500 });
     }
 
-    const payload: Record<string, unknown> = {
-      model,
+    const strictPrompt = [
+      "STRICT PRODUCT IMAGE REFERENCE MODE:",
+      "Before generating, use the product image links as the default and required visual reference source when supplied.",
+      "Product accuracy is higher priority than style, background, lighting, or composition instructions.",
+      "Preserve the exact product shape, silhouette, size relationship, color, material, texture, packaging, labels, logo placement, proportions, and visible design details.",
+      "Do not redesign, recolor, distort, replace, simplify, approximate, or invent a different product. If a product image link is supplied, treat it as the source of truth for the product look.",
+      productImageLinks.length
+        ? `Product image links to read and follow as references:\n${productImageLinks.join("\n")}`
+        : "No product image links supplied. Use uploaded reference images if available.",
+      referenceImages.length
+        ? `Uploaded reference images supplied: ${referenceImages.map(img => img.name || "reference image").join(", ")}`
+        : "No uploaded reference images supplied.",
+      "",
+      "USER IMAGE GENERATION REQUEST:",
       prompt,
-      sequential_image_generation: outputCount > 1 ? "auto" : "disabled",
-      response_format: "url",
-      size,
-      stream: false,
-      watermark,
-    };
+    ].join("\n");
 
-    if (outputCount > 1) {
-      payload.sequential_image_generation_options = {
-        max_images: outputCount,
-      };
-    }
-
-    if (referenceImages.length > 0) {
-      payload.image = referenceImages;
-      payload.sequential_image_generation = outputCount > 1 ? "auto" : "disabled";
-      if (outputCount > 1) {
-        payload.sequential_image_generation_options = {
-          max_images: outputCount,
-        };
-      }
-    }
-
-    const response = await fetch(`${baseUrl}/api/v3/images/generations`, {
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+        prompt: strictPrompt,
+        size: body?.size || "1024x1024",
+        n: Math.max(1, Math.min(Number(body?.outputCount || body?.n || 1), 4)),
+      }),
     });
 
-    const data = await response.json().catch(() => ({}));
-
+    const data = await response.json();
     if (!response.ok) {
-      return NextResponse.json(
-        {
-          error:
-            data?.error?.message ||
-            data?.error ||
-            data?.message ||
-            "BytePlus image generation failed.",
-          details: data,
-        },
-        { status: response.status }
-      );
+      return NextResponse.json({ error: data?.error?.message || "Image generation failed." }, { status: response.status });
     }
 
-    return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message || "Unexpected server error." },
-      { status: 500 }
-    );
+    const first = data?.data?.[0] || {};
+    const b64 = first?.b64_json;
+    const url = first?.url || (b64 ? `data:image/png;base64,${b64}` : "");
+
+    if (!url) {
+      return NextResponse.json({ error: "Image generation returned no image." }, { status: 502 });
+    }
+
+    return NextResponse.json({ url, prompt: strictPrompt, productImageLinks });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Image generation failed." }, { status: 500 });
   }
 }
