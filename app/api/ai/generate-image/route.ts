@@ -53,7 +53,7 @@ const validateImageUrl = async (url: string) => {
     const res = await fetch(url, {
       method: "GET",
       headers: {
-        "User-Agent": "Mozilla/5.0 EMDC Seedream Product Reference Fetcher",
+        "User-Agent": "Mozilla/5.0 EMDC BytePlus Seedream Product Reference Fetcher",
         Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
       },
       cache: "no-store",
@@ -68,16 +68,25 @@ const validateImageUrl = async (url: string) => {
   }
 };
 
-const seedreamSize = (value: unknown) => {
+const toBytePlusSize = (value: unknown) => {
   const size = clean(value) || "1024x1024";
   const map: Record<string, string> = {
-    "1024x1024": "square_hd",
-    "1024x1536": "portrait_4_3",
-    "1536x1024": "landscape_4_3",
-    "1080x1920": "portrait_16_9",
-    "1920x1080": "landscape_16_9",
+    "1024x1024": "1K",
+    "1024x1536": "1K",
+    "1536x1024": "1K",
+    "1080x1920": "2K",
+    "1920x1080": "2K",
+    "2048x2048": "2K",
+    "4096x4096": "4K",
   };
-  return map[size] || size || "square_hd";
+  return map[size] || size;
+};
+
+const getBytePlusEndpoint = () => {
+  const base = clean(process.env.BYTEPLUS_BASE_URL).replace(/\/+$/g, "");
+  if (!base) return "";
+  if (/\/images\/generations$/i.test(base)) return base;
+  return `${base}/images/generations`;
 };
 
 const extractGeneratedImage = (data: any) => {
@@ -93,22 +102,6 @@ const extractGeneratedImage = (data: any) => {
   if (Array.isArray(data?.data) && data.data[0]?.b64_json) return `data:image/png;base64,${data.data[0].b64_json}`;
   return "";
 };
-
-const getSeedreamApiKey = () => clean(
-  process.env.SEEDREAM_API_KEY ||
-  process.env.SEEDREAM_KEY ||
-  process.env.SEEDREAM_TOKEN ||
-  process.env.FAL_KEY ||
-  process.env.FAL_API_KEY ||
-  process.env.FAL_API_TOKEN ||
-  process.env.FAL_TOKEN ||
-  process.env.FALAI_API_KEY ||
-  process.env.BYTEDANCE_API_KEY ||
-  process.env.DOUBAO_API_KEY ||
-  process.env.ARK_API_KEY ||
-  process.env.VOLCENGINE_API_KEY ||
-  process.env.NEXT_PUBLIC_SEEDREAM_API_KEY
-);
 
 export async function POST(req: NextRequest) {
   try {
@@ -137,7 +130,7 @@ export async function POST(req: NextRequest) {
     const validProductImageLinks: string[] = [];
     const unreadableLinks: string[] = [];
 
-    for (const link of productImageLinks.slice(0, 6)) {
+    for (const link of productImageLinks.slice(0, 8)) {
       const ok = await validateImageUrl(link);
       if (ok) validProductImageLinks.push(link);
       else unreadableLinks.push(link);
@@ -148,6 +141,22 @@ export async function POST(req: NextRequest) {
         error: "Seedream needs real readable product image URLs. The links on this card could not be read as direct images.",
         unreadableLinks,
       }, { status: 400 });
+    }
+
+    const apiKey = clean(process.env.BYTEPLUS_API_KEY);
+    const model = clean(process.env.BYTEPLUS_IMAGE_MODEL);
+    const endpoint = getBytePlusEndpoint();
+
+    if (!apiKey) {
+      return NextResponse.json({ error: "BYTEPLUS_API_KEY is not configured in Vercel Environment Variables." }, { status: 500 });
+    }
+
+    if (!model) {
+      return NextResponse.json({ error: "BYTEPLUS_IMAGE_MODEL is not configured in Vercel Environment Variables." }, { status: 500 });
+    }
+
+    if (!endpoint) {
+      return NextResponse.json({ error: "BYTEPLUS_BASE_URL is not configured in Vercel Environment Variables." }, { status: 500 });
     }
 
     const strictPrompt = [
@@ -167,47 +176,24 @@ export async function POST(req: NextRequest) {
       prompt,
     ].filter(Boolean).join("\n");
 
-    const provider = clean(process.env.SEEDREAM_PROVIDER || "fal").toLowerCase();
-    const model = clean(process.env.SEEDREAM_MODEL || "seedream-4.5");
-    const endpoint = clean(
-      process.env.SEEDREAM_API_URL ||
-      process.env.SEEDREAM_ENDPOINT ||
-      process.env.FAL_SEEDREAM_API_URL ||
-      process.env.FAL_SEEDREAM_ENDPOINT ||
-      "https://fal.run/fal-ai/bytedance/seedream/v4.5/edit"
-    );
-    const apiKey = getSeedreamApiKey();
-
-    if (!apiKey) {
-      return NextResponse.json({
-        error: "Seedream API key is missing. This route now supports your old/custom Seedream env names too: SEEDREAM_API_KEY, SEEDREAM_KEY, SEEDREAM_TOKEN, FAL_KEY, FAL_API_KEY, FAL_API_TOKEN, FAL_TOKEN, FALAI_API_KEY, BYTEDANCE_API_KEY, DOUBAO_API_KEY, ARK_API_KEY, VOLCENGINE_API_KEY, or NEXT_PUBLIC_SEEDREAM_API_KEY.",
-      }, { status: 500 });
-    }
-
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (provider === "fal") headers.Authorization = `Key ${apiKey}`;
-    else headers.Authorization = `Bearer ${apiKey}`;
-
-    const payload = provider === "fal"
-      ? {
-          prompt: strictPrompt,
-          image_urls: validProductImageLinks,
-          image_size: seedreamSize(body?.size),
-          num_images: 1,
-          enable_safety_checker: true,
-        }
-      : {
-          model,
-          prompt: strictPrompt,
-          image_urls: validProductImageLinks,
-          reference_images: validProductImageLinks,
-          size: clean(body?.size) || "1024x1024",
-          n: 1,
-        };
+    const payload: Record<string, any> = {
+      model,
+      prompt: strictPrompt,
+      image: validProductImageLinks,
+      image_urls: validProductImageLinks,
+      reference_images: validProductImageLinks,
+      size: toBytePlusSize(body?.size),
+      response_format: "url",
+      watermark: false,
+      n: 1,
+    };
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(payload),
     });
 
@@ -215,20 +201,21 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       return NextResponse.json({
-        error: data?.detail || data?.error?.message || data?.error || "Seedream 4.5 image generation failed.",
-        provider,
+        error: data?.error?.message || data?.message || data?.error || "BytePlus Seedream image generation failed.",
         endpoint,
+        model,
         productImageLinks: validProductImageLinks,
         unreadableLinks,
+        raw: data,
       }, { status: response.status });
     }
 
     const url = extractGeneratedImage(data);
     if (!url) {
       return NextResponse.json({
-        error: "Seedream 4.5 returned no image URL.",
-        provider,
+        error: "BytePlus Seedream returned no image URL.",
         endpoint,
+        model,
         raw: data,
       }, { status: 502 });
     }
@@ -236,13 +223,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       url,
       prompt: strictPrompt,
-      provider,
+      provider: "byteplus-seedream",
       model,
       productImageLinks: validProductImageLinks,
       productReferencesRead: validProductImageLinks.length,
       unreadableLinks,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Seedream 4.5 image generation failed." }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "BytePlus Seedream image generation failed." }, { status: 500 });
   }
 }
