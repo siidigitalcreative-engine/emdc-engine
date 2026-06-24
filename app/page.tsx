@@ -5503,7 +5503,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
                   </div>
 
-                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.35fr) minmax(260px,.65fr)",gap:12 }}>
+                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isCarouselDcOutput ? "1fr" : (isMobile?"1fr":"minmax(0,1.35fr) minmax(260px,.65fr)"),gap:12 }}>
                     <div style={{ display:"flex",flexDirection:"column",gap:10,minWidth:0 }}>
                       <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                         <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?260:340 }}>
@@ -5601,52 +5601,66 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
 
                     {isCarouselDcOutput ? (
-                      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                      <div style={{ display:"flex",flexDirection:"column",gap:10,width:"100%" }}>
                         <div style={{ padding:"8px 10px",background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Carousel AI Images</span>
+                          <div>
+                            <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Carousel Card Output</span>
+                            <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>Same carousel card layout from Marketing. Each image/video placeholder has its own Generate Image button.</span>
+                          </div>
                           <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{carouselCards.length} card{carouselCards.length!==1?"s":""}</span>
                         </div>
-                        {carouselCards.map((card:any,cardIndex:number)=>{
-                          const generatingKey = `${item.id}-carousel-${cardIndex}`;
-                          const mediaType = card.mediaType || recommendedCarouselMediaType(cardIndex);
-                          return (
-                            <div key={card.id || cardIndex} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column" }}>
-                              <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                                <span style={{ fontSize:11,fontWeight:900,color:C.textSub }}>Card {cardIndex+1} · {mediaType==="video"?"Video":"Image"} Placeholder</span>
-                                <Btn xs onClick={()=>generateCampaignDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                              </div>
-                              <div style={{ padding:10,display:"grid",gap:8,background:C.surface }}>
-                                <div style={{ padding:9,border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,fontSize:11.5,lineHeight:1.45,color:C.textSub }}>
-                                  <p style={{ margin:"0 0 4px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
-                                  <p style={{ margin:"0 0 8px",fontWeight:900,color:C.text }}>{card.headline || ""}</p>
-                                  <p style={{ margin:"0 0 4px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p>
-                                  <p style={{ margin:"0 0 8px" }}>{card.copy || ""}</p>
-                                  <p style={{ margin:"0 0 4px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{mediaType==="video"?"Video Direction":"Image Direction"}</p>
-                                  <p style={{ margin:"0 0 8px" }}>{card.visual || ""}</p>
-                                  <p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card.cta || "Shop Now"}</p>
+                        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(230px,1fr))",gap:10 }}>
+                          {carouselCards.map((card:any,cardIndex:number)=>{
+                            const generatingKey = `${item.id}-carousel-${cardIndex}`;
+                            const mediaType = card.mediaType || recommendedCarouselMediaType(cardIndex);
+                            const tint = mediaType === "video" ? "#FEF2F2" : "#EFF6FF";
+                            const accentColor = mediaType === "video" ? "#EF4444" : "#111827";
+                            return (
+                              <div key={card.id || cardIndex} style={{ border:`1px solid ${C.borderStrong}`,borderRadius:12,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0 }}>
+                                <div style={{ minHeight:118,background:tint,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:12,position:"relative" }}>
+                                  <span style={{ position:"absolute",top:9,left:10,padding:"3px 8px",borderRadius:999,background:C.surface,border:`1px solid ${mediaType==="video"?"#FECACA":C.border}`,fontSize:10,fontWeight:900,color:accentColor }}>Card {cardIndex+1}</span>
+                                  {card.generatedImageUrl ? (
+                                    <img
+                                      src={card.generatedImageUrl}
+                                      alt={`Generated carousel card ${cardIndex+1}`}
+                                      onClick={()=>setCampaignDcPreview({ id:`${item.id}-carousel-${cardIndex}`, url:card.generatedImageUrl, prompt:card.generatedImagePrompt || card.visual || "", title:`${item.title || "Carousel"} · Card ${cardIndex+1}` })}
+                                      style={{ maxWidth:"100%",maxHeight:160,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in",background:C.surface }}
+                                    />
+                                  ) : (
+                                    <div style={{ color:C.textSub,fontSize:11,fontWeight:800,lineHeight:1.35 }}>
+                                      <p style={{ margin:"0 0 3px",fontSize:12,fontWeight:900,color:accentColor }}>{mediaType==="video"?"Video Placeholder":"Image Placeholder"}</p>
+                                      <p style={{ margin:0,fontSize:10.5,color:C.muted }}>Creative visual goes here</p>
+                                      {card.generatedImageError&&<p style={{ margin:"7px 0 0",color:"#DC2626",fontWeight:800 }}>{card.generatedImageError}</p>}
+                                    </div>
+                                  )}
                                 </div>
-                                {card.generatedImageUrl ? (
-                                  <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"center" }}>
-                                    <img src={card.generatedImageUrl} alt={`Generated carousel card ${cardIndex+1}`} onClick={()=>setCampaignDcPreview({ id:`${item.id}-carousel-${cardIndex}`, url:card.generatedImageUrl, prompt:card.generatedImagePrompt || card.visual || "", title:`${item.title || "Carousel"} · Card ${cardIndex+1}` })} style={{ maxWidth:"100%",maxHeight:240,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }} />
-                                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%" }}>
-                                      <Btn xs variant="outline" onClick={()=>saveCampaignDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>
-                                      <Btn xs variant="danger" onClick={()=>deleteCampaignDcCarouselImageOutput(item,cardIndex)}>Delete</Btn>
-                                    </div>
+                                <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
+                                  <div>
+                                    <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
+                                    <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card.headline || ""}</p>
                                   </div>
-                                ) : (
-                                  <div style={{ minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",border:`1.5px dashed ${C.borderStrong}`,borderRadius:10,background:C.surfaceAlt,color:C.muted,fontSize:12,lineHeight:1.5,padding:12 }}>
-                                    <div>
-                                      <div style={{ width:54,height:54,borderRadius:14,border:`1.5px dashed ${C.borderStrong}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px",fontSize:20,color:C.faint }}>＋</div>
-                                      <p style={{ margin:0,fontWeight:800,color:C.textSub }}>{mediaType==="video"?"AI video/image placeholder":"AI image placeholder"}</p>
-                                      <p style={{ margin:"4px 0 0" }}>Generate Image reads product links, uploaded refs, and this card direction.</p>
-                                      {card.generatedImageError&&<p style={{ margin:"8px 0 0",color:"#DC2626",fontWeight:750 }}>{card.generatedImageError}</p>}
-                                    </div>
+                                  <div>
+                                    <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p>
+                                    <p style={{ margin:0 }}>{card.copy || ""}</p>
                                   </div>
-                                )}
+                                  <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}>
+                                    <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{mediaType==="video"?"Video Direction":"Image Direction"}</p>
+                                    <p style={{ margin:0 }}>{card.visual || ""}</p>
+                                  </div>
+                                  <div>
+                                    <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p>
+                                    <p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card.cta || "Shop Now"}</p>
+                                  </div>
+                                  <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
+                                    <Btn xs onClick={()=>generateCampaignDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
+                                    {card.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveCampaignDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>}
+                                    {card.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteCampaignDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
                     ) : (
                       <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",minHeight:260,display:"flex",flexDirection:"column" }}>
@@ -5895,7 +5909,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     </div>
                   </div>
 
-                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1.35fr) minmax(260px,.65fr)",gap:12 }}>
+                  <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isCarouselDcOutput ? "1fr" : (isMobile?"1fr":"minmax(0,1.35fr) minmax(260px,.65fr)"),gap:12 }}>
                     <div style={{ display:"flex",flexDirection:"column",gap:10,minWidth:0 }}>
                       <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                         <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?220:300 }}>
