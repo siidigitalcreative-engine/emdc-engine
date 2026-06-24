@@ -5422,7 +5422,23 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         .replace(/[^a-z0-9]+/g," ")
         .trim();
 
+      const normalizeCarouselProductRefRows = (products:any[]=[], fallbackLinks:any[]=[]) => {
+        const rows = Array.isArray(products) ? products.filter(Boolean) : [];
+        return rows.map((row:any,index:number)=>{
+          const rowLinks = Array.isArray(row?.links) ? row.links : (row?.link ? [row.link] : getDcProductLinks(row));
+          return {
+            id:row?.id || `ref-${index}-${uid()}`,
+            brand:row?.brand || "",
+            product:row?.product || row?.productName || row?.name || "",
+            sku:row?.sku || row?.skuCode || "",
+            links:(rowLinks && rowLinks.length ? rowLinks : (index===0 ? fallbackLinks : [])).filter(Boolean),
+          };
+        });
+      };
+
       const getCarouselCardProductReferences = (card:any, cardIndex:number, productRows:any[]=[]) => {
+        const savedRefs = Array.isArray(card?.productRefs) ? card.productRefs.filter((ref:any)=>!ref?._removed) : [];
+        if(savedRefs.length) return normalizeCarouselProductRefRows(savedRefs);
         const rows = Array.isArray(productRows) ? productRows.filter(Boolean) : [];
         if(!rows.length) return [];
 
@@ -5440,28 +5456,53 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           return hasSku || hasProductPhrase || hasProductWords || hasBrandCollection;
         });
 
-        if(matched.length) return matched;
-        if(rows.length===1) return rows;
-        return rows;
+        const chosen = matched.length ? matched : (rows.length===1 ? rows : rows);
+        return normalizeCarouselProductRefRows(chosen);
       };
 
       const getCarouselCardReferenceLinks = (cardProducts:any[]=[], item:any={}) => Array.from(new Set([
-        ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : getDcProductLinks(row))),
+        ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : (row?.link ? [row.link] : getDcProductLinks(row)))),
         ...((Array.isArray(item?.imageLinks) ? item.imageLinks : [])),
       ])).map(normalizeDcUrl).filter(Boolean);
 
-      const renderCarouselCardProductReferences = (cardProducts:any[]=[], links:any[]=[]) => {
-        const products = Array.isArray(cardProducts) ? cardProducts : [];
+      const updateCampaignDigitalCarouselProductRefs = (itemId:string, cardIndex:number, nextRefs:any[]) => {
+        updateCampaignDigitalCarouselCard(itemId,cardIndex,{ productRefs:normalizeCarouselProductRefRows(nextRefs) });
+      };
+
+      const renderCarouselCardProductReferences = (cardProducts:any[]=[], links:any[]=[], opts:any={}) => {
+        const products = normalizeCarouselProductRefRows(cardProducts,links);
         const safeLinks = Array.isArray(links) ? links.filter(Boolean) : [];
+        const onChangeRefs = opts?.onChangeRefs;
+        const editable = typeof onChangeRefs === "function";
+        const updateRef = (idx:number, patch:any) => onChangeRefs(products.map((row:any,index:number)=>index===idx ? { ...row, ...patch } : row));
+        const removeRef = (idx:number) => onChangeRefs(products.filter((_:any,index:number)=>index!==idx));
+        const addRef = () => onChangeRefs([...products,{ id:uid(), brand:"", product:"", sku:"", links:[] }]);
         return (
           <div style={{ padding:8,borderRadius:8,background:"#F9FAFB",border:`1px solid ${C.border}` }}>
-            <p style={{ margin:"0 0 5px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
-            {products.length ? products.slice(0,4).map((row:any,idx:number)=>(
-              <div key={`${row?.sku || row?.product || row?.productName || "product"}-${idx}`} style={{ marginTop:idx?5:0,fontSize:10.5,color:C.textSub,lineHeight:1.35 }}>
-                <strong style={{ color:C.text }}>{[row?.brand,row?.product || row?.productName || row?.name].filter(Boolean).join(" · ") || "Selected Product"}</strong>
-                {row?.sku&&<span style={{ display:"block",fontFamily:"monospace",color:C.muted }}>SKU: {row.sku}</span>}
-              </div>
-            )) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet.</p>}
+            <div style={{ display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",marginBottom:6 }}>
+              <p style={{ margin:0,fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
+              {editable&&<button type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+            </div>
+            {products.length ? products.slice(0,6).map((row:any,idx:number)=>{
+              const rowLinks = Array.isArray(row?.links) ? row.links : [];
+              return (
+                <div key={`${row?.id || row?.sku || row?.product || "product"}-${idx}`} style={{ marginTop:idx?7:0,paddingTop:idx?7:0,borderTop:idx?`1px solid ${C.border}`:"none",fontSize:10.5,color:C.textSub,lineHeight:1.35 }}>
+                  {editable ? (
+                    <div style={{ display:"grid",gap:5 }}>
+                      <input value={row?.product || ""} placeholder="Product name" onChange={e=>updateRef(idx,{ product:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontWeight:800,color:C.text,background:C.surface }} />
+                      <input value={row?.sku || ""} placeholder="SKU" onChange={e=>updateRef(idx,{ sku:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontFamily:"monospace",color:C.textSub,background:C.surface }} />
+                      <input value={rowLinks.join(", ")} placeholder="Product/image link/s" onChange={e=>updateRef(idx,{ links:String(e.target.value).split(/[\n,]+/).map((v:string)=>v.trim()).filter(Boolean) })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,color:C.textSub,background:C.surface }} />
+                      <button type="button" onClick={()=>removeRef(idx)} style={{ justifySelf:"end",border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:900,cursor:"pointer" }}>Remove Product</button>
+                    </div>
+                  ) : (
+                    <>
+                      <strong style={{ color:C.text }}>{[row?.brand,row?.product || row?.productName || row?.name].filter(Boolean).join(" · ") || "Selected Product"}</strong>
+                      {row?.sku&&<span style={{ display:"block",fontFamily:"monospace",color:C.muted }}>SKU: {row.sku}</span>}
+                    </>
+                  )}
+                </div>
+              );
+            }) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet.</p>}
             {safeLinks.length>0&&(
               <div style={{ marginTop:6,display:"flex",gap:5,flexWrap:"wrap" }}>
                 {safeLinks.slice(0,5).map((link:any,idx:number)=>(
@@ -5604,7 +5645,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 </div>
 
                                 <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
-                                  {renderCarouselCardProductReferences(cardProductRows,cardReferenceLinks)}
+                                  {renderCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ onChangeRefs:(nextRefs:any)=>updateCampaignDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
                                   <div>
                                     <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
                                     <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p>
@@ -6050,7 +6091,23 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         .replace(/[^a-z0-9]+/g," ")
         .trim();
 
+      const normalizeIntroCarouselProductRefRows = (products:any[]=[], fallbackLinks:any[]=[]) => {
+        const rows = Array.isArray(products) ? products.filter(Boolean) : [];
+        return rows.map((row:any,index:number)=>{
+          const rowLinks = Array.isArray(row?.links) ? row.links : (row?.link ? [row.link] : getDcProductLinks(row));
+          return {
+            id:row?.id || `ref-${index}-${uid()}`,
+            brand:row?.brand || "",
+            product:row?.product || row?.productName || row?.name || "",
+            sku:row?.sku || row?.skuCode || "",
+            links:(rowLinks && rowLinks.length ? rowLinks : (index===0 ? fallbackLinks : [])).filter(Boolean),
+          };
+        });
+      };
+
       const getIntroCarouselCardProductReferences = (card:any, cardIndex:number, productRows:any[]=[]) => {
+        const savedRefs = Array.isArray(card?.productRefs) ? card.productRefs.filter((ref:any)=>!ref?._removed) : [];
+        if(savedRefs.length) return normalizeIntroCarouselProductRefRows(savedRefs);
         const rows = Array.isArray(productRows) ? productRows.filter(Boolean) : [];
         if(!rows.length) return [];
 
@@ -6068,28 +6125,53 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           return hasSku || hasProductPhrase || hasProductWords || hasBrandCollection;
         });
 
-        if(matched.length) return matched;
-        if(rows.length===1) return rows;
-        return rows;
+        const chosen = matched.length ? matched : (rows.length===1 ? rows : rows);
+        return normalizeIntroCarouselProductRefRows(chosen);
       };
 
       const getIntroCarouselCardReferenceLinks = (cardProducts:any[]=[], item:any={}) => Array.from(new Set([
-        ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : getDcProductLinks(row))),
+        ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : (row?.link ? [row.link] : getDcProductLinks(row)))),
         ...((Array.isArray(item?.imageLinks) ? item.imageLinks : [])),
       ])).map(normalizeDcUrl).filter(Boolean);
 
-      const renderIntroCarouselCardProductReferences = (cardProducts:any[]=[], links:any[]=[]) => {
-        const products = Array.isArray(cardProducts) ? cardProducts : [];
+      const updateProductIntroDigitalCarouselProductRefs = (itemId:string, cardIndex:number, nextRefs:any[]) => {
+        updateProductIntroDigitalCarouselCard(itemId,cardIndex,{ productRefs:normalizeIntroCarouselProductRefRows(nextRefs) });
+      };
+
+      const renderIntroCarouselCardProductReferences = (cardProducts:any[]=[], links:any[]=[], opts:any={}) => {
+        const products = normalizeIntroCarouselProductRefRows(cardProducts,links);
         const safeLinks = Array.isArray(links) ? links.filter(Boolean) : [];
+        const onChangeRefs = opts?.onChangeRefs;
+        const editable = typeof onChangeRefs === "function";
+        const updateRef = (idx:number, patch:any) => onChangeRefs(products.map((row:any,index:number)=>index===idx ? { ...row, ...patch } : row));
+        const removeRef = (idx:number) => onChangeRefs(products.filter((_:any,index:number)=>index!==idx));
+        const addRef = () => onChangeRefs([...products,{ id:uid(), brand:"", product:"", sku:"", links:[] }]);
         return (
           <div style={{ padding:8,borderRadius:8,background:"#F9FAFB",border:`1px solid ${C.border}` }}>
-            <p style={{ margin:"0 0 5px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
-            {products.length ? products.slice(0,4).map((row:any,idx:number)=>(
-              <div key={`${row?.sku || row?.product || row?.productName || "product"}-${idx}`} style={{ marginTop:idx?5:0,fontSize:10.5,color:C.textSub,lineHeight:1.35 }}>
-                <strong style={{ color:C.text }}>{[row?.brand,row?.product || row?.productName || row?.name].filter(Boolean).join(" · ") || "Selected Product"}</strong>
-                {row?.sku&&<span style={{ display:"block",fontFamily:"monospace",color:C.muted }}>SKU: {row.sku}</span>}
-              </div>
-            )) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet.</p>}
+            <div style={{ display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",marginBottom:6 }}>
+              <p style={{ margin:0,fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
+              {editable&&<button type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+            </div>
+            {products.length ? products.slice(0,6).map((row:any,idx:number)=>{
+              const rowLinks = Array.isArray(row?.links) ? row.links : [];
+              return (
+                <div key={`${row?.id || row?.sku || row?.product || "product"}-${idx}`} style={{ marginTop:idx?7:0,paddingTop:idx?7:0,borderTop:idx?`1px solid ${C.border}`:"none",fontSize:10.5,color:C.textSub,lineHeight:1.35 }}>
+                  {editable ? (
+                    <div style={{ display:"grid",gap:5 }}>
+                      <input value={row?.product || ""} placeholder="Product name" onChange={e=>updateRef(idx,{ product:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontWeight:800,color:C.text,background:C.surface }} />
+                      <input value={row?.sku || ""} placeholder="SKU" onChange={e=>updateRef(idx,{ sku:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontFamily:"monospace",color:C.textSub,background:C.surface }} />
+                      <input value={rowLinks.join(", ")} placeholder="Product/image link/s" onChange={e=>updateRef(idx,{ links:String(e.target.value).split(/[\n,]+/).map((v:string)=>v.trim()).filter(Boolean) })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,color:C.textSub,background:C.surface }} />
+                      <button type="button" onClick={()=>removeRef(idx)} style={{ justifySelf:"end",border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:900,cursor:"pointer" }}>Remove Product</button>
+                    </div>
+                  ) : (
+                    <>
+                      <strong style={{ color:C.text }}>{[row?.brand,row?.product || row?.productName || row?.name].filter(Boolean).join(" · ") || "Selected Product"}</strong>
+                      {row?.sku&&<span style={{ display:"block",fontFamily:"monospace",color:C.muted }}>SKU: {row.sku}</span>}
+                    </>
+                  )}
+                </div>
+              );
+            }) : <p style={{ margin:0,fontSize:10.5,color:C.faint }}>No matched product details yet.</p>}
             {safeLinks.length>0&&(
               <div style={{ marginTop:6,display:"flex",gap:5,flexWrap:"wrap" }}>
                 {safeLinks.slice(0,5).map((link:any,idx:number)=>(
@@ -6229,7 +6311,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                   )}
                                 </div>
                                 <div style={{ padding:10,display:"grid",gap:8,fontSize:11.5,lineHeight:1.45,color:C.textSub,flex:1 }}>
-                                  {renderIntroCarouselCardProductReferences(cardProductRows,cardReferenceLinks)}
+                                  {renderIntroCarouselCardProductReferences(cardProductRows,cardReferenceLinks,{ onChangeRefs:(nextRefs:any)=>updateProductIntroDigitalCarouselProductRefs(item.id,cardIndex,nextRefs) })}
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p><p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card?.headline || ""}</p></div>
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p><p style={{ margin:0 }}>{card?.copy || ""}</p></div>
                                   <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{normalizedMediaType==="video"?"Video Direction":"Image Direction"}</p><p style={{ margin:0 }}>{card?.visual || ""}</p></div>
