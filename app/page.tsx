@@ -5143,6 +5143,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               sku:product?.sku || product?.skuCode || "",
               brand:product?.brand || "",
               collection:product?.collection || product?.category || "",
+              category:product?.category || product?.collection || "",
+              links:getDcProductLinks(product),
+              productLink:product?.productLink || product?.link || product?.url || "",
             }));
             const joinUnique = (values:any[]) => Array.from(new Set(values.map((value:any)=>String(value || "").trim()).filter(Boolean))).join(", ");
             const row = {
@@ -5161,6 +5164,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               products:dcProducts,
               carouselCards:Array.isArray(ad?.cards) ? ad.cards.map((card:any,index:number)=>({ ...card, id:card?.id || uid(), cardNumber:index+1 })) : [],
               isCarousel:!!ad?.isCarousel,
+              isProductGmvMax:!!ad?.isProductGmvMax,
+              isProductGmvMaxTable:!!ad?.isProductGmvMaxTable,
+              gmvRows:Array.isArray(ad?.gmvRows) ? ad.gmvRows.map((gmvRow:any,index:number)=>({ ...gmvRow, id:gmvRow?.id || uid(), rowNumber:index+1, products:Array.isArray(gmvRow?.products) && gmvRow.products.length ? gmvRow.products : dcProducts })) : [],
               linkedEventContext:group.groupName || "Marketing",
               createdAt:new Date().toISOString(),
             };
@@ -5606,7 +5612,97 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               {campaignCreativeRows.map((item:any)=>{
                 const productRows = getCampaignDigitalProductRows(item);
                 const carouselCards = Array.isArray(item.carouselCards) ? item.carouselCards : [];
+                const gmvRows = Array.isArray(item.gmvRows) ? item.gmvRows : [];
+                const isProductGmvDcOutput = !!item.isProductGmvMaxTable && gmvRows.length>0;
                 const isCarouselDcOutput = !!item.isCarousel && carouselCards.length>0;
+                if (isProductGmvDcOutput) {
+                  const safeTitle = item.title || item.product || "Product GMV Max Ads";
+                  const safeContext = item.linkedEventContext || group.groupName || "Marketing";
+                  return (
+                    <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+                      <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
+                        <div style={{ minWidth:0,flex:"1 1 360px" }}>
+                          <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35 }}>{safeTitle}</p>
+                          <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.35 }}>{safeContext}</p>
+                        </div>
+                        <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto",gap:6,width:isMobile?"100%":"auto" }}>
+                          <Btn xs variant="danger" onClick={()=>deleteProductIntroDigitalItem(item.id)}>Delete</Btn>
+                        </div>
+                      </div>
+                      <div style={{ padding:isMobile?10:12,display:"flex",flexDirection:"column",gap:10 }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <div>
+                            <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Product GMV Max Ads Table</span>
+                            <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>Same table format from Marketing. Each content pillar has its own AI image placeholder and Generate Image button.</span>
+                          </div>
+                          <span style={{ fontSize:10.5,fontWeight:800,color:C.muted }}>{gmvRows.length} pillar{gmvRows.length!==1?"s":""}</span>
+                        </div>
+                        <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                          <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+                            <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12,color:C.textSub }}>
+                              <thead>
+                                <tr style={{ background:C.surfaceAlt }}>
+                                  {["Content Pillar","AI Image Placeholder","Featured Product/s","Creative Direction","Caption Copy","Actions"].map((label:string)=>(
+                                    <th key={label} style={{ padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {gmvRows.map((row:any,rowIndex:number)=>{
+                                  const generatingKey = `${item.id}-gmv-${rowIndex}`;
+                                  const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : cardProducts;
+                                  return (
+                                    <tr key={row?.id || `${item.id}-gmv-row-${rowIndex}`} style={{ background:rowIndex%2?C.surface:C.bg }}>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150 }}>
+                                        <p style={{ margin:"0 0 5px",fontSize:12,fontWeight:950,color:C.text }}>{row?.pillar || `Pillar ${rowIndex+1}`}</p>
+                                        {row?.contentTheme&&<p style={{ margin:0,fontSize:11,color:C.muted,lineHeight:1.35 }}>{row.contentTheme}</p>}
+                                      </td>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>
+                                        <div style={{ minHeight:112,background:"#EFF6FF",border:`1px solid ${C.border}`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:10 }}>
+                                          {row?.generatedImageUrl ? (
+                                            <img src={row.generatedImageUrl} alt={`Generated GMV pillar ${rowIndex+1}`} onClick={()=>setCampaignDcPreview({ id:`${item.id}-gmv-${rowIndex}`, url:row.generatedImageUrl, prompt:row.generatedImagePrompt || row.creativeDirection || "", title:`${safeTitle} · ${row?.pillar || `Pillar ${rowIndex+1}`}` })} style={{ maxWidth:"100%",maxHeight:140,borderRadius:8,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in",background:C.surface }} />
+                                          ) : (
+                                            <div style={{ color:C.textSub,fontSize:11,fontWeight:800,lineHeight:1.35 }}>
+                                              <p style={{ margin:"0 0 3px",fontSize:12,fontWeight:900,color:C.text }}>Image Placeholder</p>
+                                              <p style={{ margin:0,fontSize:10.5,color:C.muted }}>Creative visual goes here</p>
+                                              {row?.generatedImageError&&<p style={{ margin:"7px 0 0",color:"#DC2626",fontWeight:800 }}>{row.generatedImageError}</p>}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:230 }}>
+                                        <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                                          {rowProducts.map((product:any,productIndex:number)=>(
+                                            <div key={`${product?.sku || product?.product || "gmv-product"}-${productIndex}`} style={{ padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface }}>
+                                              <p style={{ margin:"0 0 2px",fontSize:11,fontWeight:900,color:C.text }}>{product?.product || product?.productName || "Product"}</p>
+                                              <p style={{ margin:0,fontSize:10.5,color:C.muted }}>SKU: {product?.sku || product?.skuCode || ""}</p>
+                                              {getDcProductLinks(product).slice(0,3).map((link:string,linkIdx:number)=>(
+                                                <a key={`${link}-${linkIdx}`} href={normalizeDcUrl(link)} target="_blank" rel="noreferrer" style={{ display:"inline-block",marginTop:4,marginRight:4,padding:"2px 6px",borderRadius:999,border:`1px solid ${C.border}`,background:C.bg,color:C.text,fontSize:10,fontWeight:850,textDecoration:"none" }}>Product Link {linkIdx+1}</a>
+                                              ))}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:320,lineHeight:1.45 }}>{row?.creativeDirection || ""}</td>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260,lineHeight:1.45 }}>{row?.captionCopy || ""}</td>
+                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150 }}>
+                                        <div style={{ display:"grid",gap:6 }}>
+                                          <Btn xs onClick={()=>generateProductIntroDcGmvImage(item,row,rowIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
+                                          {row?.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveProductIntroDcGmvImageOutput(item,row,rowIndex)}>Save</Btn>}
+                                          {row?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcGmvImageOutput(item,rowIndex)}>Delete Image</Btn>}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
                 if (isCarouselDcOutput) {
                   const safeTitle = item.title || "Carousel Ad";
                   const safeContext = item.linkedEventContext || "Marketing";
@@ -6245,6 +6341,81 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
         } catch(err:any) {
           updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages });
+        } finally {
+          setCampaignDcGeneratingImageId("");
+        }
+      };
+
+      const updateProductIntroDigitalGmvRow = (itemId:string, rowIndex:number, patch:any) => {
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>{
+          if(row.id!==itemId) return row;
+          const gmvRows = (Array.isArray(row.gmvRows) ? row.gmvRows : []).map((gmvRow:any,index:number)=>index===rowIndex ? { ...gmvRow, ...patch } : gmvRow);
+          return { ...row, gmvRows };
+        });
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
+      const deleteProductIntroDcGmvImageOutput = (item:any, rowIndex:number) => {
+        updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"" });
+      };
+
+      const saveProductIntroDcGmvImageOutput = (item:any, row:any, rowIndex:number) => {
+        if(!row?.generatedImageUrl) return;
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          savedImageOutputs:[{
+            id:uid(),
+            source:"Product Introduction Digital Creative",
+            cardId:`${item.id}-gmv-${rowIndex}`,
+            sourceRowId:item.id,
+            title:`${item.title || item.product || "Product GMV Max"} · ${row?.pillar || `Pillar ${rowIndex+1}`}`,
+            url:row.generatedImageUrl,
+            prompt:row.generatedImagePrompt || row.creativeDirection || item.imagePrompt || "",
+            createdAt:new Date().toISOString(),
+          },...saved].slice(0,60),
+        });
+      };
+
+      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
+        const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : (Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }]);
+        const links = Array.from(new Set([...(rowProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const uploadedReferenceImages = Array.isArray(row?.referenceImages) ? row.referenceImages : (Array.isArray(item.referenceImages) ? item.referenceImages : []);
+        const prompt = [
+          "Create one Digital Creative image for this TikTok Product GMV Max content pillar.",
+          "STRICT PRODUCT IMAGE LINK RULE: Product image links are the default and required visual references. Read those links first and copy the product look from them. Do not invent, redesign, recolor, replace, or approximate the product. Preserve exact shape, silhouette, material, color, proportions, packaging, labels, logo placement, and visible details.",
+          `Content Pillar: ${row?.pillar || `Pillar ${rowIndex+1}`}`,
+          row?.contentTheme ? `Content Theme: ${row.contentTheme}` : "",
+          row?.creativeDirection ? `Creative Direction:\n${row.creativeDirection}` : "",
+          row?.captionCopy ? `Caption Copy: ${row.captionCopy}` : "",
+          item.imagePrompt ? `Overall ad context:\n${item.imagePrompt}` : "",
+          `Platform: ${item.platform || "TikTok"}`,
+          rowProducts.length ? `Featured product/s for this GMV Max row:\n${rowProducts.map((product:any)=>[product?.brand,product?.product || product?.productName || product?.name,product?.sku].filter(Boolean).join(" · ")).filter(Boolean).join("\n")}` : "",
+          links.length ? `Use these product image/reference links for this GMV Max row:\n${links.join("\n")}` : "",
+          "Generate the visual only. Keep the featured product accurate. Clean premium TikTok ecommerce layout.",
+        ].filter(Boolean).join("\n");
+        const generatingKey = `${item.id}-gmv-${rowIndex}`;
+        setCampaignDcGeneratingImageId(generatingKey);
+        try {
+          const res = await fetch("/api/ai/generate-image", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({ prompt, size:"1920x1920", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1 }),
+          });
+          const raw = await res.text();
+          let result:any = {};
+          try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
+          if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
+          const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
+        } catch(err:any) {
+          updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages });
         } finally {
           setCampaignDcGeneratingImageId("");
         }
@@ -11447,6 +11618,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       isCarousel:false,
       isCollection:false,
       isProductGmvMax:true,
+      isProductGmvMaxTable:true,
+      gmvRows:[{ ...row, products:rowProducts }],
     });
   };
 
@@ -11489,6 +11662,9 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       brief:item.brief || adBrief,
       isCarousel:!!item.isCarousel,
       isCollection:!!item.isCollection,
+      isProductGmvMax:!!item.isProductGmvMax,
+      isProductGmvMaxTable:!!item.isProductGmvMaxTable,
+      gmvRows:Array.isArray(item.gmvRows) ? item.gmvRows : [],
     });
   };
 
