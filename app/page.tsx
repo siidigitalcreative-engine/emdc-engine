@@ -5017,11 +5017,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>{isProductIntroductionChecklist ? "Product Introduction Marketing" : "Campaign Marketing"}</h3>
-            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Blank marketing workspace.</p>
+            <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>Ad Menu Builder duplicated from AI Engine for this checklist group.</p>
           </div>
-          <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
-            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No marketing content yet.</p>
-          </div>
+          <AIAdTemplates skuStorage={skuStorage} brands={brands} />
         </div>
       );
     }
