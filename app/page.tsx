@@ -9935,7 +9935,12 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   const selectedPlatform = platforms.find((p:any)=>p.id===selectedPlatformId) || platforms[0];
   const selectedFormat = selectedPlatform?.formats?.find((f:any)=>f.id===selectedFormatId) || selectedPlatform?.formats?.[0];
   const selectedTemplate = selectedFormat?.templates?.find((t:any)=>t.id===selectedTemplateId) || selectedFormat?.templates?.[0];
-  const isCarouselFormatByName = (format:any) => (format?.name || "").toLowerCase().includes("carousel");
+  const isCarouselFormatByName = (format:any) => {
+    const name = String(format?.name || "").toLowerCase();
+    const id = String(format?.id || "").toLowerCase();
+    const templateText = String((format?.templates || []).map((template:any)=>`${template?.name || ""} ${template?.body || ""}`).join(" ")).toLowerCase();
+    return name.includes("carousel") || id.includes("carousel") || templateText.includes("carousel") || templateText.includes("card 1");
+  };
   const isCollectionFormatByName = (format:any) => (format?.name || "").toLowerCase().includes("collection");
   const isCarouselFormat = isCarouselFormatByName(selectedFormat);
   const isCollectionFormat = isCollectionFormatByName(selectedFormat);
@@ -10097,7 +10102,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       .filter(({ card }:any)=>!(card?.headline || card?.copy || card?.visual || card?.cta))
       .map(({ index }:any)=>index);
 
-    if (!isCarouselFormat || !missingIndexes.length || !adBrief.trim()) return currentCards;
+    if (!isCarouselFormat || !missingIndexes.length) return currentCards;
 
     const instruction = [
       `Generate only the missing carousel cards for ${selectedPlatform?.name || "Meta"} ${selectedFormat?.name || "Carousel Ad"}.`,
@@ -10376,6 +10381,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       setSelectedPlatformId(entry.platform.id);
       const result = await generateAdForFormat(entry.format,entry.template);
       if(result?.text){
+        const outputIsCarousel = !!result.isCarousel || isCarouselFormatByName(entry.format);
+        const outputCards = outputIsCarousel
+          ? (Array.isArray(result.cards) && result.cards.length ? result.cards : parseCarouselCards(result.text || ""))
+          : (Array.isArray(result.cards) ? result.cards : []);
         outputs.push({
           id:uid(),
           name:`${entry.platform?.name || "Platform"} ${entry.format?.name || "Ad"} - ${new Date().toLocaleDateString()}`,
@@ -10386,13 +10395,13 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
           templateId:entry.template?.id || "",
           templateName:entry.template?.name || "",
           brief:adBrief,
-          isCarousel:!!result.isCarousel,
+          isCarousel:outputIsCarousel,
           isCollection:!!result.isCollection,
           carouselMediaMode,
           collectionHeroMedia,
-          cards:Array.isArray(result.cards) ? result.cards : [],
+          cards:outputCards,
           products:[...effectiveAdSkus],
-          text:result.text,
+          text:outputIsCarousel ? formatCarouselCardsForCopy(outputCards) : result.text,
           createdAt:new Date().toISOString(),
         });
       }
@@ -10417,6 +10426,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     const nextText = window.prompt("Edit generated ad output", current.text || "");
     if(nextText===null) return;
     setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>item.id===id ? { ...item, text:nextText, cards:item.isCarousel ? parseCarouselCards(nextText) : item.cards } : item));
+  };
+
+  const deleteGeneratedBatchOutput = (id:string) => {
+    setGeneratedBatchOutputs((prev:any[])=>prev.filter((item:any)=>item.id!==id));
   };
 
   const sendGeneratedBatchOutputToDC = (item:any) => {
@@ -10767,24 +10780,38 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                           ))}
                         </div>
 
-                        {item.isCarousel && Array.isArray(item.cards) && item.cards.length>0 ? (
-                          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                        {(item.isCarousel || String(item.formatName || "").toLowerCase().includes("carousel")) && Array.isArray(item.cards) && item.cards.length>0 ? (
+                          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                             <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Carousel Card Output</p>
-                            <p style={{ margin:"-4px 0 2px",fontSize:10.5,color:C.faint }}>Showing formatted content per card only.</p>
-                            {item.cards.map((card:any,index:number)=>(
-                              <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                                <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center" }}>
-                                  <span style={{ fontSize:11,fontWeight:900,color:C.text }}>Card {index+1}</span>
-                                  <span style={{ fontSize:10.5,fontWeight:900,color:(card.mediaType || recommendedCarouselMediaType(index))==="video"?"#DC2626":C.accent }}>{(card.mediaType || recommendedCarouselMediaType(index))==="video"?"Video":"Image"}</span>
-                                </div>
-                                <div style={{ padding:9,display:"grid",gap:5,fontSize:11.5,lineHeight:1.45,color:C.textSub }}>
-                                  <p style={{ margin:0 }}><b>Headline:</b> {card.headline || ""}</p>
-                                  <p style={{ margin:0 }}><b>Copy:</b> {card.copy || ""}</p>
-                                  <p style={{ margin:0 }}><b>Visual:</b> {card.visual || ""}</p>
-                                  <p style={{ margin:0 }}><b>CTA:</b> {card.cta || "Shop Now"}</p>
-                                </div>
-                              </div>
-                            ))}
+                            <p style={{ margin:"-5px 0 0",fontSize:10.5,color:C.faint }}>Showing the image/video placeholder and content per carousel card only.</p>
+                            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(240px,1fr))",gap:10 }}>
+                              {item.cards.map((card:any,index:number)=>{
+                                const mediaType = card.mediaType || recommendedCarouselMediaType(index);
+                                return (
+                                  <div key={card.id || index} style={{ border:`1px solid ${C.border}`,borderRadius:12,background:C.bg,overflow:"hidden",boxShadow:"0 6px 18px rgba(15,23,42,.04)" }}>
+                                    <div style={{ height:104,background:mediaType==="video"?"#FEF2F2":"#EFF6FF",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:10,position:"relative" }}>
+                                      <span style={{ position:"absolute",top:7,left:7,fontSize:10,fontWeight:900,color:mediaType==="video"?"#DC2626":C.accent,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>Card {index+1}</span>
+                                      <span style={{ fontSize:11.5,color:mediaType==="video"?"#991B1B":C.accent,fontWeight:900,lineHeight:1.35 }}>{mediaType==="video" ? "Video Placeholder" : "Image Placeholder"}<br/><span style={{ fontSize:10,color:C.muted }}>Creative visual goes here</span></span>
+                                    </div>
+                                    <div style={{ padding:10,display:"grid",gap:7,fontSize:11.5,lineHeight:1.45,color:C.textSub }}>
+                                      <div>
+                                        <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Headline</p>
+                                        <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>{card.headline || ""}</p>
+                                      </div>
+                                      <div>
+                                        <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p>
+                                        <p style={{ margin:0 }}>{card.copy || ""}</p>
+                                      </div>
+                                      <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}>
+                                        <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{mediaType==="video"?"Video Direction":"Image Direction"}</p>
+                                        <p style={{ margin:0 }}>{card.visual || ""}</p>
+                                      </div>
+                                      <p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card.cta || "Shop Now"}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         ) : (
                           <textarea
@@ -10799,6 +10826,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                           <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>Edit</Btn>
                           <Btn xs variant="outline" onClick={()=>saveGeneratedBatchOutput(item)}>Save</Btn>
                           {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</Btn>}
+                          <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchOutput(item.id)}>Delete</Btn>
                         </div>
                       </div>
                     </div>
