@@ -5039,16 +5039,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 });
                 const sections = [...sectionOrder,"Other"].filter((key:string)=>grouped[key]?.length);
                 return sections.map((section:string)=>(
-                  <section key={section} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:14,overflow:"hidden" }}>
+                  <section key={section} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)" }}>
                     <div style={{ padding:"13px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",background:C.surfaceAlt }}>
                       <div>
                         <h4 style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{section}</h4>
                         <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted }}>{grouped[section].length} overview item{grouped[section].length!==1?"s":""}</p>
                       </div>
                     </div>
-                    <div style={{ display:"flex",flexDirection:"column" }}>
+                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:12,padding:12,alignItems:"start" }}>
                       {grouped[section].map((item:any,index:number)=>(
-                        <article key={item.id} style={{ padding:16,borderTop:index?`1px solid ${C.border}`:"none",background:C.surface }}>
+                        <article key={item.id} style={{ padding:16,border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,minWidth:0,boxShadow:"0 1px 2px rgba(15,23,42,.03)" }}>
                           <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:10 }}>
                             <div style={{ minWidth:0,flex:1 }}>
                               <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
