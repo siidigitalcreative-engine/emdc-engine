@@ -3879,6 +3879,19 @@ ${structureBlock || "No sections selected. Ask the user to select at least one o
 Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.`;
   };
 
+  const getEcommercePromptProductRows = (data:any) => {
+    const rows = Array.isArray(data?.promptProductRows) ? data.promptProductRows.filter(Boolean) : [];
+    return rows.length ? rows : productRows;
+  };
+
+  const setEcommercePromptForProducts = (rows:any[]) => {
+    const promptRows = Array.isArray(rows) && rows.length ? rows : productRows;
+    updateAiWorkspace("ecommerce",{
+      promptProductRows:promptRows,
+      textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,promptRows),
+    });
+  };
+
   const handleCatalogUpload = async (tab:string, e:any) => {
     const files = Array.from(e?.target?.files || []) as any[];
     if(!files.length) return;
@@ -4074,13 +4087,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       setAiError((p:any)=>({...p,[tab]:"Please select at least one required output section."}));
       return;
     }
-    const prompt = String(data.textPrompt || buildEcommercePrompt()).trim();
+    const promptProductRows = getEcommercePromptProductRows(data);
+    const prompt = String(data.textPrompt || buildEcommercePrompt(undefined,undefined,undefined,promptProductRows)).trim();
     if(!prompt) return;
 
     setAiBusy((p:any)=>({...p,[tab]:true}));
     setAiError((p:any)=>({...p,[tab]:""}));
 
-    const mappedProducts = productRows.map((row:any,idx:number)=>({
+    const mappedProducts = promptProductRows.map((row:any,idx:number)=>({
       no:idx+1,
       brand:row.brand || "",
       collection:row.collection || "",
@@ -5706,7 +5720,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
                         <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
-                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Use Listing Template</Btn>
+                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Use Listing Template</Btn>
                       </div>
                       <div
                         tabIndex={0}
@@ -5747,9 +5761,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         rows={9}
                         style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:isMobile?230:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
                       />
+                      {Array.isArray(data.promptProductRows)&&data.promptProductRows.length>0&&(
+                        <div style={{ marginTop:8,padding:"7px 10px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:8,fontSize:11.5,color:"#047857",fontWeight:800 }}>
+                          Prompt product scope: {data.promptProductRows.length} product{data.promptProductRows.length!==1?"s":""}. Save Changes will keep this same product scope.
+                        </div>
+                      )}
                       {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
                       <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",gap:8,justifyContent:isMobile?"stretch":"flex-end",marginTop:10 }}>
-                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Save Prompt</Btn>
+                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Save Prompt</Btn>
                         <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
                       </div>
                     </div>
@@ -5760,7 +5779,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
                           <Btn xs variant="outline" onClick={setAllEcommerceSections}>Select All</Btn>
                           <Btn xs variant="outline" onClick={clearAllEcommerceSections}>Clear All</Btn>
-                          <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions) })}>Save Changes</Btn>
+                          <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Save Changes</Btn>
                         </div>
                       </div>
         
@@ -5916,7 +5935,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 </div>
                                 <Btn xs variant="outline" onClick={()=>{
                                   const selectedProducts = Array.isArray(row.products) && row.products.length ? row.products : [{ product:row.product || "", sku:row.sku || "", brand:row.brand || "", collection:row.category || row.collection || "" }];
-                                  updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,selectedProducts) });
+                                  setEcommercePromptForProducts(selectedProducts);
                                 }}>Add to E-commerce Listing</Btn>
                               </div>
                             )) : (
