@@ -11111,6 +11111,32 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     output.captionCopy || "",
   ].join("\n");
 
+
+  const productGmvProductLine = (product:any) => [
+    product?.productName || product?.product || "Product",
+    product?.sku ? `SKU: ${product.sku}` : "",
+    product?.productLink || product?.link || product?.url ? `Link: ${product.productLink || product.link || product.url}` : "",
+  ].filter(Boolean).join("\n");
+
+  const formatProductGmvMaxTableText = (rows:any[] = [], products:any[] = []) => {
+    const productText = (products || []).map(productGmvProductLine).filter(Boolean).join("\n\n");
+    return (rows || []).map((row:any,index:number)=>[
+      `CONTENT PILLAR ${index+1}: ${row.pillar || ""}`,
+      "",
+      "FEATURED PRODUCTS",
+      (Array.isArray(row.products) && row.products.length ? row.products : products).map(productGmvProductLine).filter(Boolean).join("\n\n") || productText || "No product selected",
+      "",
+      "CONTENT THEME",
+      row.contentTheme || "",
+      "",
+      "CREATIVE DIRECTION",
+      row.creativeDirection || "",
+      "",
+      "CAPTION COPY",
+      row.captionCopy || "",
+    ].join("\n")).join("\n\n---\n\n");
+  };
+
   const buildFallbackProductGmvMaxOutputs = () => PRODUCT_GMV_MAX_PILLARS.map((pillar:any)=>({
     pillar:pillar.name,
     contentTheme:`${pillar.name} concept for ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "the selected product"}`,
@@ -11160,45 +11186,55 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       try { data = raw ? JSON.parse(raw) : {}; } catch { data = { text: raw }; }
       if(!res.ok) throw new Error(data?.error || data?.message || "Product GMV Max generation failed.");
 
-      const pillarOutputs = parseProductGmvMaxPillarOutputs(data?.text || raw);
-      return pillarOutputs.map((output:any)=>({
+      const pillarOutputs = parseProductGmvMaxPillarOutputs(data?.text || raw).map((output:any)=>({
+        ...output,
+        products:[...effectiveAdSkus],
+      }));
+      return [{
         id:uid(),
-        name:`${output.pillar} - Product GMV Max Ad - ${new Date().toLocaleDateString()}`,
+        name:`TikTok Product GMV Max Ads - ${new Date().toLocaleDateString()}`,
         platformId:activePlatform?.id || "tiktok",
         platformName:activePlatform?.name || "TikTok",
         formatId:activeFormat?.id || "tiktok-product-gmv-max",
-        formatName:"Product GMV Max Ad",
+        formatName:"Product GMV Max Ads",
         templateId:activeTemplate?.id || "",
-        templateName:output.pillar,
+        templateName:"5 Content Pillars",
         brief:adBrief,
         isCarousel:false,
         isCollection:false,
         isProductGmvMax:true,
+        isProductGmvMaxTable:true,
         cards:[],
+        gmvRows:pillarOutputs,
         products:[...effectiveAdSkus],
-        text:formatProductGmvMaxPillarText(output),
+        text:formatProductGmvMaxTableText(pillarOutputs,[...effectiveAdSkus]),
         createdAt:new Date().toISOString(),
-      }));
+      }];
     } catch (err:any) {
-      const fallback = buildFallbackProductGmvMaxOutputs();
-      return fallback.map((output:any)=>({
+      const fallback = buildFallbackProductGmvMaxOutputs().map((output:any)=>({
+        ...output,
+        products:[...effectiveAdSkus],
+      }));
+      return [{
         id:uid(),
-        name:`${output.pillar} - Product GMV Max Ad - ${new Date().toLocaleDateString()}`,
+        name:`TikTok Product GMV Max Ads - ${new Date().toLocaleDateString()}`,
         platformId:activePlatform?.id || "tiktok",
         platformName:activePlatform?.name || "TikTok",
         formatId:activeFormat?.id || "tiktok-product-gmv-max",
-        formatName:"Product GMV Max Ad",
+        formatName:"Product GMV Max Ads",
         templateId:activeTemplate?.id || "",
-        templateName:output.pillar,
+        templateName:"5 Content Pillars",
         brief:adBrief,
         isCarousel:false,
         isCollection:false,
         isProductGmvMax:true,
+        isProductGmvMaxTable:true,
         cards:[],
+        gmvRows:fallback,
         products:[...effectiveAdSkus],
-        text:formatProductGmvMaxPillarText(output),
+        text:formatProductGmvMaxTableText(fallback,[...effectiveAdSkus]),
         createdAt:new Date().toISOString(),
-      }));
+      }];
     }
   };
 
@@ -11283,6 +11319,48 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
 
   const updateGeneratedBatchOutputText = (id:string, text:string) => {
     setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>item.id===id ? { ...item, text } : item));
+  };
+
+
+  const gmvRowEditKey = (outputId:string, index:number) => `${outputId}-gmv-${index}`;
+
+  const updateGeneratedBatchGmvRow = (outputId:string, rowIndex:number, patch:any) => {
+    setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>{
+      if(item.id!==outputId) return item;
+      const gmvRows = (Array.isArray(item.gmvRows) ? item.gmvRows : []).map((row:any,index:number)=>index===rowIndex ? { ...row, ...patch } : row);
+      return { ...item, gmvRows, text:formatProductGmvMaxTableText(gmvRows, Array.isArray(item.products) ? item.products : []) };
+    }));
+  };
+
+  const deleteGeneratedBatchGmvRow = (outputId:string, rowIndex:number) => {
+    setGeneratedBatchOutputs((prev:any[])=>prev.map((item:any)=>{
+      if(item.id!==outputId) return item;
+      const gmvRows = (Array.isArray(item.gmvRows) ? item.gmvRows : []).filter((_:any,index:number)=>index!==rowIndex);
+      return { ...item, gmvRows, text:formatProductGmvMaxTableText(gmvRows, Array.isArray(item.products) ? item.products : []) };
+    }));
+    setEditingCarouselCardKeys((prev:string[])=>prev.filter((key:string)=>key!==gmvRowEditKey(outputId,rowIndex)));
+  };
+
+  const toggleGeneratedBatchGmvRowEdit = (outputId:string, rowIndex:number) => {
+    const key = gmvRowEditKey(outputId,rowIndex);
+    setEditingCarouselCardKeys((prev:string[])=>prev.includes(key) ? prev.filter((item:string)=>item!==key) : [...prev,key]);
+  };
+
+  const sendGeneratedBatchGmvRowToDC = (item:any, row:any, rowIndex:number) => {
+    if(!onSendToDC) return;
+    const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : (Array.isArray(item.products) ? item.products : []);
+    onSendToDC({
+      text:formatProductGmvMaxTableText([row], rowProducts),
+      cards:[],
+      platformName:item.platformName || "TikTok",
+      formatName:`${item.formatName || "Product GMV Max Ads"} · ${row?.pillar || `Pillar ${rowIndex+1}`}`,
+      templateName:row?.pillar || item.templateName || "Content Pillar",
+      products:rowProducts,
+      brief:item.brief || adBrief,
+      isCarousel:false,
+      isCollection:false,
+      isProductGmvMax:true,
+    });
   };
 
   const updateGeneratedBatchCarouselCard = (outputId:string, cardIndex:number, patch:any) => {
@@ -11662,7 +11740,69 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                           ))}
                         </div>
 
-                        {(item.isCarousel || String(item.formatName || "").toLowerCase().includes("carousel")) && Array.isArray(item.cards) && item.cards.length>0 ? (
+                        {item.isProductGmvMaxTable && Array.isArray(item.gmvRows) ? (
+                          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                              <div>
+                                <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Product GMV Max Ads Table</p>
+                                <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>TikTok content pillars with featured products, creative direction, and captions.</p>
+                              </div>
+                              <Tag sm>{item.gmvRows.length} pillars</Tag>
+                            </div>
+                            <div style={{ overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:10,background:C.surface }}>
+                              <table style={{ width:"100%",borderCollapse:"collapse",minWidth:920,fontSize:11.5,color:C.textSub }}>
+                                <thead>
+                                  <tr style={{ background:C.surfaceAlt }}>
+                                    {['Content Pillar','Featured Product/s','Creative Direction','Caption Copy','Actions'].map((head:string)=>(
+                                      <th key={head} style={{ textAlign:"left",padding:"9px 10px",borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",verticalAlign:"top" }}>{head}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {item.gmvRows.map((row:any,index:number)=>{
+                                    const rowEditing = isEditingBatchOutput(item.id) || editingCarouselCardKeys.includes(gmvRowEditKey(item.id,index));
+                                    const rowProducts = Array.isArray(row.products) && row.products.length ? row.products : (Array.isArray(item.products) ? item.products : []);
+                                    const inputStyle:any = { width:"100%",boxSizing:"border-box",border:`1.5px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11.5,lineHeight:1.4,padding:"7px 8px",outline:"none" };
+                                    return (
+                                      <tr key={row.id || row.pillar || index} style={{ borderBottom:`1px solid ${C.border}` }}>
+                                        <td style={{ padding:10,verticalAlign:"top",width:150 }}>
+                                          {rowEditing ? (
+                                            <Select value={row.pillar || "Storytelling"} onChange={(v:string)=>updateGeneratedBatchGmvRow(item.id,index,{ pillar:v })} style={{ height:34,fontSize:12,borderRadius:8 }}>
+                                              {PRODUCT_GMV_MAX_PILLARS.map((pillar:any)=><option key={pillar.id} value={pillar.name}>{pillar.name}</option>)}
+                                            </Select>
+                                          ) : <strong style={{ color:C.text }}>{row.pillar || ""}</strong>}
+                                          <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint }}>{row.contentTheme || ""}</p>
+                                        </td>
+                                        <td style={{ padding:10,verticalAlign:"top",width:230 }}>
+                                          {rowProducts.length ? rowProducts.map((product:any,idx:number)=>(
+                                            <div key={idx} style={{ marginBottom:8,padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.bg }}>
+                                              <p style={{ margin:"0 0 2px",fontSize:11,fontWeight:900,color:C.text }}>{product.productName || product.product || "Product"}</p>
+                                              <p style={{ margin:"0 0 2px",fontSize:10.5,color:C.muted }}>SKU: {product.sku || product.skuCode || ""}</p>
+                                              {(product.productLink || product.link || product.url)&&<p style={{ margin:0,fontSize:10.5,color:C.accent,wordBreak:"break-all" }}>{product.productLink || product.link || product.url}</p>}
+                                            </div>
+                                          )) : <span style={{ color:C.faint }}>No product selected</span>}
+                                        </td>
+                                        <td style={{ padding:10,verticalAlign:"top",minWidth:260 }}>
+                                          {rowEditing ? <textarea value={row.creativeDirection || ""} onChange={(e:any)=>updateGeneratedBatchGmvRow(item.id,index,{ creativeDirection:e.target.value })} rows={7} style={{ ...inputStyle,resize:"vertical" }} /> : <p style={{ margin:0,whiteSpace:"pre-wrap",lineHeight:1.45 }}>{row.creativeDirection || ""}</p>}
+                                        </td>
+                                        <td style={{ padding:10,verticalAlign:"top",minWidth:240 }}>
+                                          {rowEditing ? <textarea value={row.captionCopy || ""} onChange={(e:any)=>updateGeneratedBatchGmvRow(item.id,index,{ captionCopy:e.target.value })} rows={7} style={{ ...inputStyle,resize:"vertical" }} /> : <p style={{ margin:0,whiteSpace:"pre-wrap",lineHeight:1.45 }}>{row.captionCopy || ""}</p>}
+                                        </td>
+                                        <td style={{ padding:10,verticalAlign:"top",width:120 }}>
+                                          <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                                            <Btn xs variant="outline" onClick={()=>toggleGeneratedBatchGmvRowEdit(item.id,index)}>{rowEditing ? "Save" : "Edit"}</Btn>
+                                            {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchGmvRowToDC(item,row,index)}>Send to DC</Btn>}
+                                            <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchGmvRow(item.id,index)}>Delete</Btn>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : (item.isCarousel || String(item.formatName || "").toLowerCase().includes("carousel")) && Array.isArray(item.cards) && item.cards.length>0 ? (
                           <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                             <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Carousel Card Output</p>
                             <p style={{ margin:"-5px 0 0",fontSize:10.5,color:C.faint }}>Showing the image/video placeholder and content per carousel card only.</p>
