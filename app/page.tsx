@@ -3503,8 +3503,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     setProductDetail(row);
     setProductEdit({
       productName:row.product || "",
-      sku:row.skuCode || "",
-      collection:row.collection || "",
+      sku:row.skuCode || row.sku || "",
+      collection:row.collection || row.category || "",
       brandId:row.brandId || "",
     });
   };
@@ -3888,7 +3888,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const promptRows = Array.isArray(rows) && rows.length ? rows : productRows;
     updateAiWorkspace("ecommerce",{
       promptProductRows:promptRows,
-      textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,promptRows),
+      textPrompt:buildEcommercePrompt(
+        getEcommerceOutputSections(),
+        getSelectedEcommerceSections(),
+        getEcommerceSectionInstructions(),
+        promptRows
+      ),
     });
   };
 
@@ -4023,9 +4028,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const mappedProducts = productRows.map((row:any,idx:number)=>({
       no:idx+1,
       brand:row.brand || "",
-      collection:row.collection || "",
-      product:row.product || "",
-      sku:row.skuCode || "",
+      collection:row.collection || row.category || "",
+      product:row.product || row.productName || "",
+      sku:row.skuCode || row.sku || "",
     }));
 
     const instruction = [
@@ -4098,7 +4103,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       no:idx+1,
       brand:row.brand || "",
       collection:row.collection || "",
-      product:row.product || "",
+      product:row.product || row.productName || "",
       sku:row.skuCode || "",
       material:row.material || row.extraFields?.Material || row.extraFields?.material || "",
       size:row.size || row.extraFields?.Size || row.extraFields?.size || "",
@@ -5763,7 +5768,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       />
                       {Array.isArray(data.promptProductRows)&&data.promptProductRows.length>0&&(
                         <div style={{ marginTop:8,padding:"7px 10px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:8,fontSize:11.5,color:"#047857",fontWeight:800 }}>
-                          Prompt product scope: {data.promptProductRows.length} product{data.promptProductRows.length!==1?"s":""}. Save Changes will keep this same product scope.
+                          <span>Prompt product scope: {data.promptProductRows.length} product{data.promptProductRows.length!==1?"s":""}. Save Changes will keep this same product scope.</span>
+                          <button type="button" onClick={()=>updateAiWorkspace("ecommerce",{ promptProductRows:[], textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,productRows) })} style={{ marginLeft:8,border:"none",background:"transparent",color:"#047857",fontSize:11.5,fontWeight:900,textDecoration:"underline",cursor:"pointer" }}>Use all products</button>
                         </div>
                       )}
                       {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
