@@ -10861,8 +10861,17 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
   };
   const isCollectionFormatByName = (format:any) => (format?.name || "").toLowerCase().includes("collection");
   const isProductGmvMaxFormatByName = (format:any) => {
-    const source = `${format?.id || ""} ${format?.name || ""} ${(format?.templates || []).map((template:any)=>`${template?.name || ""} ${template?.body || ""}`).join(" ")}`.toLowerCase();
-    return source.includes("product gmv max") || source.includes("gmv max") || source.includes("product-gmv-max");
+    const id = String(format?.id || "").toLowerCase().trim();
+    const name = String(format?.name || "").toLowerCase().trim();
+
+    // Important: Live GMV Max is a different ad format.
+    // Do not route every format containing "GMV Max" into the Product GMV pillar table generator.
+    if (id.includes("live") || name.includes("live")) return false;
+
+    return id.includes("product-gmv-max") ||
+      name === "product gmv max ad" ||
+      name === "product gmv max ads" ||
+      name.includes("product gmv max");
   };
   const isCarouselFormat = isCarouselFormatByName(selectedFormat);
   const isCollectionFormat = isCollectionFormatByName(selectedFormat);
@@ -11079,8 +11088,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     return next;
   };
 
-  const generateAdForFormat = async (formatOverride?:any, templateOverride?:any) => {
-    const activePlatform = selectedPlatform;
+  const generateAdForFormat = async (formatOverride?:any, templateOverride?:any, platformOverride?:any) => {
+    const activePlatform = platformOverride || selectedPlatform;
     const activeFormat = formatOverride || selectedFormat;
     const activeTemplate = templateOverride || selectedTemplate;
     const activeIsCarousel = isCarouselFormatByName(activeFormat);
@@ -11122,7 +11131,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
         `Generate a ${activePlatform.name} ad for the selected format: ${activeFormat.name}.`,
         carouselInstruction,
         productInstruction,
-        activeTemplate?.body ? `Strictly follow these custom instructions:\n${activeTemplate.body}` : "",
+        activeTemplate?.body ? `STRICT AD FORMAT INSTRUCTIONS - follow this exact template for ${activeFormat.name} only. Do not use instructions from other ad formats:\n${activeTemplate.body}` : "",
+        `Generate only for ${activePlatform.name} - ${activeFormat.name}. Do not switch to Product GMV Max, Live GMV Max, carousel, or another format unless this exact selected format requires it.`,
         "Keep it clear, ecommerce-ready, and easy to copy.",
         "Avoid em dashes.",
         "Do not invent technical specs that are not provided.",
@@ -11514,7 +11524,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
         continue;
       }
 
-      const result = await generateAdForFormat(entry.format,entry.template);
+      const result = await generateAdForFormat(entry.format,entry.template,entry.platform);
       if(result?.text){
         const outputIsCarousel = !!result.isCarousel || isCarouselFormatByName(entry.format);
         const outputCards = outputIsCarousel
