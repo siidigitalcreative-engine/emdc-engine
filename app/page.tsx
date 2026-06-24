@@ -3691,9 +3691,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const saveProductIntroDigitalRows = (rows:any[]) => {
+    const cleanRows = Array.isArray(rows) ? rows : [];
     updateAiWorkspace("digital",{
-      productIntroCreativeRows:rows,
-      generatedText:rows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+      productIntroCreativeRows:cleanRows,
+      productIntroRowsCleared:cleanRows.length===0,
+      generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
   };
@@ -3762,11 +3764,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     nextSections.forEach((section:string)=>{
       if(currentInstructions?.[section]) nextInstructions[section] = currentInstructions[section];
     });
+    const ecommerceData = ((group.aiWorkspace || {}).ecommerce || {}) as any;
+    const promptRows = Array.isArray(ecommerceData.promptProductRows) && ecommerceData.promptProductRows.length ? ecommerceData.promptProductRows : productRows;
     updateAiWorkspace("ecommerce",{
       outputSections:nextSections,
       selectedSections:nextSelected,
       sectionInstructions:nextInstructions,
-      textPrompt:buildEcommercePrompt(nextSections,nextSelected,nextInstructions),
+      textPrompt:buildEcommercePrompt(nextSections,nextSelected,nextInstructions,promptRows),
     });
   };
 
@@ -3793,12 +3797,19 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     saveEcommerceSections(nextSections,selected);
   };
 
-  const setAllEcommerceSections = () => updateAiWorkspace("ecommerce",{ selectedSections:[...getEcommerceOutputSections()] });
+  const setAllEcommerceSections = () => {
+    const sections = getEcommerceOutputSections();
+    const ecommerceData = ((group.aiWorkspace || {}).ecommerce || {}) as any;
+    const promptRows = Array.isArray(ecommerceData.promptProductRows) && ecommerceData.promptProductRows.length ? ecommerceData.promptProductRows : productRows;
+    updateAiWorkspace("ecommerce",{ selectedSections:[...sections], textPrompt:buildEcommercePrompt(sections,[...sections],getEcommerceSectionInstructions(),promptRows) });
+  };
   const clearAllEcommerceSections = () => {
     const sections = getEcommerceOutputSections();
+    const ecommerceData = ((group.aiWorkspace || {}).ecommerce || {}) as any;
+    const promptRows = Array.isArray(ecommerceData.promptProductRows) && ecommerceData.promptProductRows.length ? ecommerceData.promptProductRows : productRows;
     updateAiWorkspace("ecommerce",{
       selectedSections:[],
-      textPrompt:buildEcommercePrompt(sections,[],getEcommerceSectionInstructions()),
+      textPrompt:buildEcommercePrompt(sections,[],getEcommerceSectionInstructions(),promptRows),
     });
   };
 
@@ -3856,7 +3867,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const mappedProducts = promptProductRows.map((row:any,idx:number)=>`${idx+1}. Brand: ${row.brand||""} | Collection/Category: ${row.collection||row.category||""} | Product: ${row.product||row.productName||""} | SKU: ${row.skuCode||row.sku||""}`).join("\n");
     const allSections = Array.isArray(sectionsOverride) && sectionsOverride.length ? sectionsOverride : getEcommerceOutputSections();
     const selectedSource = Array.isArray(selectedOverride) ? selectedOverride : getSelectedEcommerceSections();
-    const selectedSections = selectedSource.filter((section:string)=>allSections.includes(section));
+    const selectedSet = new Set(selectedSource);
+    const selectedSections = allSections.filter((section:string)=>selectedSet.has(section));
     const sectionInstructions = instructionsOverride || getEcommerceSectionInstructions();
     const structureBlock = selectedSections.map((section:string)=>{
       const instruction = String(sectionInstructions?.[section] || "").trim();
@@ -5105,13 +5117,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
       const deleteCampaignDigitalItem = (id:string) => {
         const nextRows = campaignCreativeRows.filter((item:any)=>item.id!==id);
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs.filter((img:any)=>img.sourceRowId!==id && img.cardId!==id) : [];
         updateAiWorkspace("digital",{
           campaignCreativeRows:nextRows,
+          savedImageOutputs:saved,
           generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
           generatedAt:new Date().toISOString(),
         });
       };
-      const clearCampaignDigitalItems = () => updateAiWorkspace("digital",{ campaignCreativeRows:[], generatedText:"", generatedAt:"" });
+      const clearCampaignDigitalItems = () => updateAiWorkspace("digital",{ campaignCreativeRows:[], generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
 
       const updateCampaignDigitalItem = (id:string, patch:any) => {
         const nextRows = campaignCreativeRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
@@ -5130,6 +5145,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           savedImageOutputs:[{
             id:uid(),
             source:"Campaign Digital Creative",
+            cardId:item.id,
+            sourceRowId:item.id,
             title:item.title || item.product || "Campaign Digital Creative",
             url:item.generatedImageUrl,
             prompt:item.generatedImagePrompt || item.imagePrompt || "",
@@ -5378,6 +5395,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if(tab==="digital" && !isCampaignChecklist){
       const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
       const productIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
+      const productIntroRowsCleared = !!digitalData.productIntroRowsCleared;
       const makeProductIntroDcItem = (row:any) => ({
         id:uid(),
         sourceRowId:String(row.id || row.skuCode || row.sku || ""),
@@ -5413,7 +5431,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           createdAt:new Date().toISOString(),
         };
       };
-      const sourceRows = productIntroRows.length ? productIntroRows : productRows.map(makeProductIntroDcItem);
+      const sourceRows = productIntroRows.length ? productIntroRows : (productIntroRowsCleared ? [] : productRows.map(makeProductIntroDcItem));
       const copyProductIntroDigitalItem = async (item:any) => {
         const output = [
           "Platform", item.platform || "All Platforms", "",
@@ -5431,6 +5449,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const nextRows = baseRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
           generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           generatedAt:new Date().toISOString(),
         });
@@ -5443,6 +5462,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           savedImageOutputs:[{
             id:uid(),
             source:"Product Introduction Digital Creative",
+            cardId:item.id,
+            sourceRowId:item.id,
             title:item.product || "Product Introduction Digital Creative",
             url:item.generatedImageUrl,
             prompt:item.generatedImagePrompt || item.imagePrompt || "",
@@ -5461,9 +5482,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
       const deleteProductIntroDigitalItem = (id:string) => {
         const nextRows = (productIntroRows.length ? productIntroRows : sourceRows).filter((row:any)=>row.id!==id);
-        updateAiWorkspace("digital",{ productIntroCreativeRows:nextRows, generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"), generatedAt:new Date().toISOString() });
+        saveProductIntroDigitalRows(nextRows);
       };
-      const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], generatedText:"", generatedAt:"" });
+      const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       const generateProductIntroDcImage = async (item:any) => {
         const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
         const links = Array.from(new Set(cardProducts.flatMap((product:any)=>getDcProductLinks(product)))).map(normalizeDcUrl);
@@ -5785,7 +5806,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
                           <Btn xs variant="outline" onClick={setAllEcommerceSections}>Select All</Btn>
                           <Btn xs variant="outline" onClick={clearAllEcommerceSections}>Clear All</Btn>
-                          <Btn xs onClick={()=>updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Save Changes</Btn>
+                          <Btn xs onClick={()=>{
+                            const sectionsNow = getEcommerceOutputSections();
+                            const selectedNow = getSelectedEcommerceSections();
+                            const instructionsNow = getEcommerceSectionInstructions();
+                            updateAiWorkspace("ecommerce",{ textPrompt:buildEcommercePrompt(sectionsNow,selectedNow,instructionsNow,getEcommercePromptProductRows(data)) });
+                          }}>Save Changes</Btn>
                         </div>
                       </div>
         
