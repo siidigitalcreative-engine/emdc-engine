@@ -5455,7 +5455,55 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       const products = placedLivestreamProducts.map((p:any,i:number)=>`${i+1}. ${p.product || "Product"}${p.sku ? ` · SKU: ${p.sku}` : ""}`).join("\n");
                       const promos = [livestreamData.mainPromotion, ...livestreamPromotions.map((p:any)=>p.text)].filter(Boolean).join("\n");
                       const vouchers = livestreamVoucherCards.map((v:any)=>v.text).filter(Boolean).join("\n");
-                      const text = [`AI Topic: ${topic}`,`Instructions: ${instructions}`,products ? `Products:\n${products}` : "",promos ? `Promotions:\n${promos}` : "",vouchers ? `Voucher Cards:\n${vouchers}` : "",`Generated Text:\nOpening Hook: Start with a high-energy greeting and introduce today's ${topic.toLowerCase()} offer.\nFlow: Present the selected products one by one, show the key benefit, mention the promotion, remind viewers to claim vouchers, then close with a clear shop-now prompt.`].filter(Boolean).join("\n\n");
+                      const productNames = placedLivestreamProducts.map((p:any)=>String(p.product || p.productName || "Product").trim()).filter(Boolean);
+                      const firstProduct = productNames[0] || "the featured product";
+                      const promoLine = promos || "No active promo added yet.";
+                      const voucherLine = vouchers || "No voucher card text added yet.";
+                      const topicGuide:any = {
+                        BAU:{
+                          title:`Daily Use Demo: Why ${firstProduct} Belongs in Your Routine`,
+                          hook:`Looking for something practical for everyday use? Let me show you ${firstProduct}.`,
+                          flow:`Start with a quick lifestyle problem, show the selected products one by one, explain the most useful everyday benefit, mention the promo, flash the voucher card, then invite viewers to add to cart.`,
+                          cta:`Tap the product basket and claim the voucher while live.`
+                        },
+                        Launching:{
+                          title:`New Arrival Spotlight: Meet ${firstProduct}`,
+                          hook:`New drop alert! This is your first look at ${firstProduct}.`,
+                          flow:`Open with the newness of the launch, introduce the selected products, highlight what makes each one different, show the launch promo, remind viewers about the voucher card, then close with urgency.`,
+                          cta:`Check out the new release and shop it during the live.`
+                        },
+                        Campaign:{
+                          title:`Campaign Deal Focus: Best Picks To Shop During This Promo`,
+                          hook:`This is your sign to shop the campaign deal before it ends.`,
+                          flow:`Connect the live to the campaign or sale period, present the products as best picks, explain the promo mechanics clearly, show voucher card text, then repeat the strongest savings message before closing.`,
+                          cta:`Claim the promo, use the voucher, and checkout while the campaign is active.`
+                        }
+                      };
+                      const guide = topicGuide[topic] || topicGuide.BAU;
+                      const text = [
+                        `AI TOPIC: ${topic}`,
+                        `TOPIC TITLE:
+${guide.title}`,
+                        `INSTRUCTIONS FOLLOWED:
+${instructions}`,
+                        products ? `FEATURED PRODUCTS:
+${products}` : "FEATURED PRODUCTS:
+No products selected yet.",
+                        `PROMOTIONS:
+${promoLine}`,
+                        `VOUCHER CARD TEXT:
+${voucherLine}`,
+                        `OPENING HOOK:
+${guide.hook}`,
+                        `LIVE FLOW:
+${guide.flow}`,
+                        `PRODUCT TALKING POINTS:
+${productNames.length ? productNames.map((name:string,i:number)=>`${i+1}. Show ${name}, mention the key customer benefit, then connect it to the promo or voucher.`).join("\n") : `1. Show the featured product clearly and explain the customer benefit.`}`,
+                        `ENGAGEMENT PROMPTS:
+Ask viewers what product they want to see next. Remind them to comment if they want the voucher or live-only deal repeated.`,
+                        `CLOSING CTA:
+${guide.cta}`
+                      ].filter(Boolean).join("\n\n");
                       updateLivestream({ generatedTopicText:text });
                       markActionDone("livestream-generate-topic");
                     }}>{actionDone("livestream-generate-topic")?"✓ Generated":"Generate Text"}</Btn>
@@ -5474,10 +5522,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 )}
                 {!!String(livestreamData.generatedTopicText || "").trim()&&(
                   <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
-                    <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Live Text</p>
+                    <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated AI Topic</p>
                     <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.5,color:C.text }}>{livestreamData.generatedTopicText}</pre>
                     <div style={{ display:"flex",justifyContent:"flex-end",gap:8,marginTop:10 }}>
-                      <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream · ${livestreamData.aiTopic || "BAU"}`,livestreamData.generatedTopicText,"Livestream Output"); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
+                      <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream AI Topic · ${livestreamData.aiTopic || "BAU"}`,livestreamData.generatedTopicText,"Livestream Output"); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
                     </div>
                   </div>
                 )}
