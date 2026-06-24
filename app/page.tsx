@@ -3634,6 +3634,56 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return extra ? `${table}\n\nGenerated E-commerce Output\n${extra}` : table;
   };
 
+  const makeProductIntroDcItem = (row:any) => ({
+    id:uid(),
+    sourceRowId:String(row.id || row.skuCode || row.sku || ""),
+    platform:"All Platforms",
+    brand:row.brand || "",
+    category:row.collection || row.category || "",
+    product:row.product || row.productName || "",
+    sku:row.skuCode || row.sku || "",
+    headline:"",
+    subheadline:"",
+    cta:"",
+    imagePrompt:"",
+    products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" }],
+    linkedEventContext:group.groupName || "Product Introduction",
+    createdAt:new Date().toISOString(),
+  });
+
+  const makeProductIntroDcGroupedItem = (rows:any[]) => {
+    const cleanRows = (rows || []).filter(Boolean);
+    return {
+      id:uid(),
+      sourceRowId:`group-${Date.now()}`,
+      platform:"All Platforms",
+      brand:joinUniqueCampaignValues(cleanRows.map((row:any)=>row.brand || "")),
+      category:joinUniqueCampaignValues(cleanRows.map((row:any)=>row.collection || row.category || "")),
+      product:cleanRows.map((row:any)=>row.product || row.productName || row.skuCode || row.sku).filter(Boolean).join(" + "),
+      sku:cleanRows.map((row:any)=>row.skuCode || row.sku).filter(Boolean).join(", "),
+      headline:"",
+      subheadline:"",
+      cta:"",
+      imagePrompt:"",
+      products:cleanRows.map((row:any)=>({ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" })),
+      linkedEventContext:group.groupName || "Product Introduction",
+      createdAt:new Date().toISOString(),
+    };
+  };
+
+  const getProductIntroDigitalRows = () => {
+    const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+    return Array.isArray(digital.productIntroCreativeRows) ? digital.productIntroCreativeRows : [];
+  };
+
+  const saveProductIntroDigitalRows = (rows:any[]) => {
+    updateAiWorkspace("digital",{
+      productIntroCreativeRows:rows,
+      generatedText:rows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+      generatedAt:new Date().toISOString(),
+    });
+  };
+
   const defaultEcommerceOutputSections = [
     "Product Overview",
     "Key Features",
@@ -5763,16 +5813,83 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         
                   <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                      <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Mapped Products</h4>
-                      <div style={{ maxHeight:260,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:9,WebkitOverflowScrolling:"touch" }}>
-                        {mappedProducts.map((row:any,idx:number)=>(
-                          <div key={`${row.skuCode}-${idx}`} style={{ padding:"8px 10px",borderBottom:idx===mappedProducts.length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
-                            <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}</p>
-                            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || "No collection/category"} · {row.skuCode}</p>
+                      <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Products / SKU</h4>
+                      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                        {productRows.length>0&&(
+                          <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
+                            <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                              <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
+                              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(6,auto)",gap:6,width:isMobile?"100%":"auto" }}>
+                                <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
+                                <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const rows = getProductIntroDigitalRows();
+                                  const existing = new Set(rows.flatMap((row:any)=>Array.isArray(row.products) ? row.products.map((p:any)=>String(p.sku || p.product || "")) : [String(row.sku || row.product || "")]));
+                                  const rowsToAdd = selectedCampaignProductKeys
+                                    .map((key:string)=>getCampaignProductByOptionKey(key))
+                                    .filter(Boolean)
+                                    .filter((item:any)=>!existing.has(String(item.skuCode || item.sku || item.product || item.productName || "")))
+                                    .map((item:any)=>makeProductIntroDcItem(item));
+                                  if(rowsToAdd.length) saveProductIntroDigitalRows([...rows,...rowsToAdd]);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!selectedCampaignProductKeys.length}>Add Selected as Separate Rows</Btn>
+                                <Btn xs onClick={()=>{
+                                  const rows = getProductIntroDigitalRows();
+                                  const items = getCampaignItemsByKeys(selectedCampaignProductKeys);
+                                  if(items.length) saveProductIntroDigitalRows([...rows,makeProductIntroDcGroupedItem(items)]);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!selectedCampaignProductKeys.length}>Add Selected as 1 Row</Btn>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const rows = productRows.map(makeProductIntroDcItem);
+                                  saveProductIntroDigitalRows(rows);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!productRows.length}>Add All as Separate Rows</Btn>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const rows = productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : [];
+                                  saveProductIntroDigitalRows(rows);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!productRows.length}>Add All as 1 Row</Btn>
+                              </div>
+                            </div>
+                            <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                              {productRows.map((row:any,idx:number)=>{
+                                const key = getCampaignProductOptionKey(row,idx);
+                                const checked = selectedCampaignProductKeys.includes(key);
+                                return (
+                                  <label key={key} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:9,alignItems:"center",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:checked?"#EEF2FF":idx%2?C.surface:C.surfaceAlt,cursor:"pointer" }}>
+                                    <input type="checkbox" checked={checked} onChange={()=>toggleSelectedCampaignProductKey(key)} />
+                                    <span style={{ minWidth:0 }}>
+                                      <span style={{ display:"block",fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || row.skuCode || "Unnamed Product"}</span>
+                                      <span style={{ display:"block",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || row.category || "No collection/category"} · {row.skuCode || row.sku || ""}</span>
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
                           </div>
-                        ))}
-                        {productRows.length===0&&<div style={{ padding:12,fontSize:12,color:C.faint }}>No selected products yet.</div>}
-                        {productRows.length>mappedProducts.length&&<div style={{ padding:8,fontSize:11,color:C.faint,fontWeight:700 }}>+{productRows.length-mappedProducts.length} more products</div>}
+                        )}
+
+                        <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                          <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                            <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{getProductIntroDigitalRows().length} digital creative product row{getProductIntroDigitalRows().length!==1?"s":""}</span>
+                            <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                              <Btn xs variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save Generated Outputs</Btn>
+                              <Btn xs variant="danger" onClick={()=>saveProductIntroDigitalRows([])} disabled={!getProductIntroDigitalRows().length}>Clear Rows</Btn>
+                            </div>
+                          </div>
+                          <div style={{ maxHeight:180,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                            {getProductIntroDigitalRows().length ? getProductIntroDigitalRows().map((row:any,idx:number)=>(
+                              <div key={row.id || idx} style={{ padding:"8px 10px",borderBottom:idx===getProductIntroDigitalRows().length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
+                                <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || "Product Row"}</p>
+                                <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.category || row.collection || "No collection/category"} · {Array.isArray(row.products)&&row.products.length>1 ? `${row.products.length} products in 1 row` : (row.sku || "")}</p>
+                              </div>
+                            )) : (
+                              <div style={{ padding:12,fontSize:12,color:C.faint }}>No digital creative rows yet. Add selected products above.</div>
+                            )}
+                          </div>
+                        </div>
+
+                        {productRows.length===0&&<div style={{ padding:12,fontSize:12,color:C.faint,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>No selected products yet.</div>}
                       </div>
                     </div>
         
@@ -5786,12 +5903,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <Btn sm variant="outline" onClick={()=>addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows")} disabled={!productRows.length}>Add to Overview</Btn>
                           <Btn sm variant="outline" onClick={()=>{
                             const rows = productRows.map(makeProductIntroDcItem);
-                            updateAiWorkspace("digital",{ productIntroCreativeRows:rows, generatedText:"", generatedAt:new Date().toISOString() });
+                            saveProductIntroDigitalRows(rows);
                             setActiveGroupTab("digital");
                           }} disabled={!productRows.length}>Send DC Separate Rows</Btn>
                           <Btn sm variant="outline" onClick={()=>{
                             const rows = productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : [];
-                            updateAiWorkspace("digital",{ productIntroCreativeRows:rows, generatedText:"", generatedAt:new Date().toISOString() });
+                            saveProductIntroDigitalRows(rows);
                             setActiveGroupTab("digital");
                           }} disabled={!productRows.length}>Send DC as 1 Row</Btn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
