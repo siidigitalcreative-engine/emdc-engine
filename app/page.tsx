@@ -10185,6 +10185,17 @@ const DEFAULT_AD_TEMPLATE_PLATFORMS = [
           },
         ],
       },
+      {
+        id: "tiktok-product-gmv-max",
+        name: "Product GMV Max Ad",
+        templates: [
+          {
+            id: "tiktok-product-gmv-max-template-1",
+            name: "5 Content Pillar Framework",
+            body: "Generate 5 separate marketing content outputs based on the selected product and these content pillars: Storytelling, 7-Second Rule, Showcase, Consumables, and Journey. For each pillar, include Content Theme, Creative Direction, and Caption Copy.",
+          },
+        ],
+      },
     ],
   },
   {
@@ -10301,23 +10312,48 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
 
   useEffect(()=>{
     setPlatforms((prev:any[])=>{
-      const hasMetaCollection = (prev||[]).some((platform:any)=>platform.id==="meta" && (platform.formats||[]).some((format:any)=>format.id==="meta-collection"));
-      if(hasMetaCollection) return prev;
-      return (prev||[]).map((platform:any)=>platform.id==="meta" ? {
-        ...platform,
-        formats:[
-          ...(platform.formats || []),
-          {
-            id:"meta-collection",
-            name:"Collection Ad",
-            templates:[{
-              id:"meta-collection-template-1",
-              name:"Instant Experience Collection",
-              body:"Hero Asset: Single image or single video showing the main product story\nPrimary Text: [Short collection intro]\nHeadline: [Benefit-led headline]\nProduct Tiles: 4 product placeholders below the hero asset\nCTA: Shop Now",
-            }],
-          },
-        ],
-      } : platform);
+      let changed = false;
+      let next = [...(prev || [])];
+
+      const hasMetaCollection = next.some((platform:any)=>platform.id==="meta" && (platform.formats||[]).some((format:any)=>format.id==="meta-collection"));
+      if(!hasMetaCollection){
+        changed = true;
+        next = next.map((platform:any)=>platform.id==="meta" ? {
+          ...platform,
+          formats:[
+            ...(platform.formats || []),
+            {
+              id:"meta-collection",
+              name:"Collection Ad",
+              templates:[{
+                id:"meta-collection-template-1",
+                name:"Instant Experience Collection",
+                body:"Hero Asset: Single image or single video showing the main product story\nPrimary Text: [Short collection intro]\nHeadline: [Benefit-led headline]\nProduct Tiles: 4 product placeholders below the hero asset\nCTA: Shop Now",
+              }],
+            },
+          ],
+        } : platform);
+      }
+
+      const hasProductGmvMax = next.some((platform:any)=>(platform.formats||[]).some((format:any)=>String(format.id || "").includes("product-gmv-max") || String(format.name || "").toLowerCase().includes("product gmv max")));
+      if(!hasProductGmvMax){
+        changed = true;
+        const gmvFormat = {
+          id:"tiktok-product-gmv-max",
+          name:"Product GMV Max Ad",
+          templates:[{
+            id:"tiktok-product-gmv-max-template-1",
+            name:"5 Content Pillar Framework",
+            body:"Generate 5 separate marketing content outputs based on the selected product and these content pillars: Storytelling, 7-Second Rule, Showcase, Consumables, and Journey. For each pillar, include Content Theme, Creative Direction, and Caption Copy.",
+          }],
+        };
+        const hasTiktok = next.some((platform:any)=>platform.id==="tiktok");
+        next = hasTiktok
+          ? next.map((platform:any)=>platform.id==="tiktok" ? { ...platform, formats:[...(platform.formats || []), gmvFormat] } : platform)
+          : [...next,{ id:"tiktok", name:"TikTok", formats:[gmvFormat] }];
+      }
+
+      return changed ? next : prev;
     });
   },[]);
 
@@ -10353,6 +10389,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     return name.includes("carousel") || id.includes("carousel") || templateText.includes("carousel") || templateText.includes("card 1");
   };
   const isCollectionFormatByName = (format:any) => (format?.name || "").toLowerCase().includes("collection");
+  const isProductGmvMaxFormatByName = (format:any) => {
+    const source = `${format?.id || ""} ${format?.name || ""} ${(format?.templates || []).map((template:any)=>`${template?.name || ""} ${template?.body || ""}`).join(" ")}`.toLowerCase();
+    return source.includes("product gmv max") || source.includes("gmv max") || source.includes("product-gmv-max");
+  };
   const isCarouselFormat = isCarouselFormatByName(selectedFormat);
   const isCollectionFormat = isCollectionFormatByName(selectedFormat);
   const effectiveAdSkus = hideProductSelector && Array.isArray(presetProducts) && presetProducts.length
@@ -10777,6 +10817,170 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     });
   };
 
+  const PRODUCT_GMV_MAX_PILLARS = [
+    {
+      id:"storytelling",
+      name:"Storytelling",
+      guide:"Character (Relatable Persona), Situation / Context, Problem (Pain Point), Discovery / Solution, Experience (Usage), Emotional Payoff, Soft CTA",
+    },
+    {
+      id:"seven-second-rule",
+      name:"7-Second Rule",
+      guide:"Strong Hook (0-1 sec), Visual Shock / Pattern Interrupt, Curiosity Gap, Product Reveal (Quick), Key Visual Benefit, Micro CTA",
+    },
+    {
+      id:"showcase",
+      name:"Showcase",
+      guide:"Product Introduction, Key Feature Highlights, Close-Up Details, Function Demo, Benefit Reinforcement, Soft CTA",
+    },
+    {
+      id:"consumables",
+      name:"Consumables",
+      guide:"Hook, Quick Value / Idea #1-3, Relatable or Fun Moment, Extra Tip / Insight, Wrap-Up",
+    },
+    {
+      id:"journey",
+      name:"Journey",
+      guide:"Beginning, Discovery, Experience, Progress, Result / Outcome, Ending",
+    },
+  ];
+
+  const cleanAiJsonText = (raw:any) => {
+    const text = String(raw || "").trim();
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    return fenced ? fenced[1].trim() : text;
+  };
+
+  const parseProductGmvMaxPillarOutputs = (raw:any) => {
+    const cleaned = cleanAiJsonText(raw);
+    try {
+      const parsed = JSON.parse(cleaned);
+      const outputs = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.outputs) ? parsed.outputs : []);
+      if(outputs.length){
+        return PRODUCT_GMV_MAX_PILLARS.map((pillar:any,index:number)=>{
+          const found = outputs.find((item:any)=>String(item?.contentPillar || item?.pillar || "").toLowerCase().includes(pillar.name.toLowerCase().replace("7-second rule","7-second"))) || outputs[index] || {};
+          return {
+            pillar:pillar.name,
+            contentTheme:String(found.contentTheme || found.theme || "").trim(),
+            creativeDirection:String(found.creativeDirection || found.direction || "").trim(),
+            captionCopy:String(found.captionCopy || found.caption || found.copy || "").trim(),
+          };
+        });
+      }
+    } catch {}
+    return PRODUCT_GMV_MAX_PILLARS.map((pillar:any)=>({
+      pillar:pillar.name,
+      contentTheme:"",
+      creativeDirection:"",
+      captionCopy:"",
+    }));
+  };
+
+  const formatProductGmvMaxPillarText = (output:any) => [
+    "CONTENT PILLAR",
+    output.pillar || "",
+    "",
+    "CONTENT THEME",
+    output.contentTheme || "",
+    "",
+    "CREATIVE DIRECTION",
+    output.creativeDirection || "",
+    "",
+    "CAPTION COPY",
+    output.captionCopy || "",
+  ].join("\n");
+
+  const buildFallbackProductGmvMaxOutputs = () => PRODUCT_GMV_MAX_PILLARS.map((pillar:any)=>({
+    pillar:pillar.name,
+    contentTheme:`${pillar.name} concept for ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "the selected product"}`,
+    creativeDirection:`Use the ${pillar.name} framework: ${pillar.guide}. Base the visuals on the selected product information, features, benefits, and target audience.`,
+    captionCopy:`Discover ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "this product"} in a fresh way. Shop now and see how it fits your everyday routine.`,
+  }));
+
+  const generateProductGmvMaxOutputs = async (entry:any) => {
+    const activePlatform = entry?.platform || selectedPlatform;
+    const activeFormat = entry?.format || selectedFormat;
+    const activeTemplate = entry?.template || selectedTemplate;
+
+    const productInstruction = effectiveAdSkus.length
+      ? `Selected products from SKU Storage:\n${adProductSummary}`
+      : "No products selected from SKU Storage. Use the campaign brief only.";
+
+    const instruction = [
+      "For the Product GMV Max Ad, generate exactly 5 separate marketing content outputs based on the selected product and the provided Content Pillar Templates.",
+      productInstruction,
+      adBrief.trim() ? `Campaign / product notes:\n${adBrief.trim()}` : "",
+      "Use the product information, features, benefits, and target audience of the selected product. Do not invent unsupported technical specs.",
+      "Follow these 5 Content Pillar Templates exactly as the framework:",
+      PRODUCT_GMV_MAX_PILLARS.map((pillar:any,index:number)=>`${index+1}. ${pillar.name}: ${pillar.guide}`).join("\n"),
+      "For each pillar, generate Content Theme, Creative Direction, and Caption Copy. Creative Direction must include visual concept, shot suggestions, mood, and key messaging. Caption Copy must be engaging, platform-ready, with a strong hook and call-to-action.",
+      `Return compact valid JSON only, no markdown, no explanation, using this exact structure: { "outputs": [ { "contentPillar": "Storytelling", "contentTheme": "...", "creativeDirection": "...", "captionCopy": "..." } ] }.`,
+      "The outputs array must contain exactly these 5 pillars in order: Storytelling, 7-Second Rule, Showcase, Consumables, Journey.",
+      activeTemplate?.body ? `Template note:\n${activeTemplate.body}` : "",
+      "Avoid em dashes.",
+    ].filter(Boolean).join("\n\n");
+
+    try {
+      const res = await fetch("/api/ai/generate-text", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          task:"product_gmv_max_content_pillars",
+          taskLabel:"Product GMV Max Ad - 5 Content Pillars",
+          instruction,
+          tone:"professional",
+          input:[productInstruction, adBrief.trim()].filter(Boolean).join("\n\n"),
+          referenceImages:[],
+        }),
+      });
+
+      const raw = await res.text();
+      let data:any = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch { data = { text: raw }; }
+      if(!res.ok) throw new Error(data?.error || data?.message || "Product GMV Max generation failed.");
+
+      const pillarOutputs = parseProductGmvMaxPillarOutputs(data?.text || raw);
+      return pillarOutputs.map((output:any)=>({
+        id:uid(),
+        name:`${output.pillar} - Product GMV Max Ad - ${new Date().toLocaleDateString()}`,
+        platformId:activePlatform?.id || "tiktok",
+        platformName:activePlatform?.name || "TikTok",
+        formatId:activeFormat?.id || "tiktok-product-gmv-max",
+        formatName:"Product GMV Max Ad",
+        templateId:activeTemplate?.id || "",
+        templateName:output.pillar,
+        brief:adBrief,
+        isCarousel:false,
+        isCollection:false,
+        isProductGmvMax:true,
+        cards:[],
+        products:[...effectiveAdSkus],
+        text:formatProductGmvMaxPillarText(output),
+        createdAt:new Date().toISOString(),
+      }));
+    } catch (err:any) {
+      const fallback = buildFallbackProductGmvMaxOutputs();
+      return fallback.map((output:any)=>({
+        id:uid(),
+        name:`${output.pillar} - Product GMV Max Ad - ${new Date().toLocaleDateString()}`,
+        platformId:activePlatform?.id || "tiktok",
+        platformName:activePlatform?.name || "TikTok",
+        formatId:activeFormat?.id || "tiktok-product-gmv-max",
+        formatName:"Product GMV Max Ad",
+        templateId:activeTemplate?.id || "",
+        templateName:output.pillar,
+        brief:adBrief,
+        isCarousel:false,
+        isCollection:false,
+        isProductGmvMax:true,
+        cards:[],
+        products:[...effectiveAdSkus],
+        text:formatProductGmvMaxPillarText(output),
+        createdAt:new Date().toISOString(),
+      }));
+    }
+  };
+
   const generateSelectedAdFormats = async () => {
     const entries = selectedAdFormatEntries();
     if(!entries.length){
@@ -10790,6 +10994,13 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     const outputs:any[] = [];
     for (const entry of entries) {
       setSelectedPlatformId(entry.platform.id);
+
+      if(isProductGmvMaxFormatByName(entry.format)){
+        const pillarOutputs = await generateProductGmvMaxOutputs(entry);
+        outputs.push(...pillarOutputs);
+        continue;
+      }
+
       const result = await generateAdForFormat(entry.format,entry.template);
       if(result?.text){
         const outputIsCarousel = !!result.isCarousel || isCarouselFormatByName(entry.format);
@@ -10821,7 +11032,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       setGeneratedBatchOutputs((prev:any[])=>[...outputs,...prev]);
       setGeneratedAdText("");
       setGeneratedAdCards([]);
-      setAdError(`${outputs.length} ad output${outputs.length!==1?"s":""} generated. Click Save only for outputs you want to keep.`);
+      setAdError(`${outputs.length} ad output${outputs.length!==1?"s":""} generated. Outputs will stay here unless deleted.`);
     }
   };
 
