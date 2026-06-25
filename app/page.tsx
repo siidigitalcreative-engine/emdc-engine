@@ -5276,6 +5276,127 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const livestreamPromotions = Array.isArray(livestreamData.promotions) ? livestreamData.promotions : [];
       const livestreamVoucherCards = Array.isArray(livestreamData.voucherCards) ? livestreamData.voucherCards : [];
       const updateLivestream = (patch:any) => updateAiWorkspace("livestream",{ ...livestreamData,...patch });
+      const getLivestreamTopicContext = () => {
+        const products = placedLivestreamProducts.map((p:any,i:number)=>({
+          index:i+1,
+          product:String(p.product || p.productName || p.name || "Product").trim(),
+          sku:String(p.sku || p.skuCode || "").trim(),
+          brand:String(p.brand || "").trim(),
+          category:String(p.collection || p.category || "").trim(),
+        }));
+        const productNames = products.map((p:any)=>p.product).filter(Boolean);
+        const firstProduct = productNames[0] || "the featured product";
+        const allProductsText = products.length ? products.map((p:any)=>`${p.index}. ${p.product}${p.sku ? ` · SKU: ${p.sku}` : ""}${p.brand ? ` · ${p.brand}` : ""}${p.category ? ` · ${p.category}` : ""}`).join("\n") : "No products selected yet.";
+        const promos = [livestreamData.mainPromotion, ...livestreamPromotions.map((p:any)=>p.text)].map((v:any)=>String(v||"").trim()).filter(Boolean);
+        const vouchers = livestreamVoucherCards.map((v:any)=>String(v?.text||"").trim()).filter(Boolean);
+        const promoLine = promos.length ? promos.join("\n") : "No active promo added yet.";
+        const voucherLine = vouchers.length ? vouchers.join("\n") : "No voucher card text added yet.";
+        const instructions = livestreamData.topicInstructions || {};
+        return { products, productNames, firstProduct, allProductsText, promos, vouchers, promoLine, voucherLine, instructions };
+      };
+      const makeLivestreamTopicBank = () => {
+        const ctx = getLivestreamTopicContext();
+        const productNames = ctx.productNames.length ? ctx.productNames : ["Featured Product"];
+        const first = ctx.firstProduct;
+        const promoFocus = ctx.promos[0] || "live offer";
+        const voucherFocus = ctx.vouchers[0] || "voucher card";
+        const productPair = productNames.slice(0,2).join(" vs ") || first;
+        const topicSets:any = {
+          BAU:[
+            [`Everyday Demo: Why ${first} Is Useful At Home`, "Show practical daily use, key benefit, and easy add-to-cart reminder."],
+            [`Size Guide: Which ${productPair} Should Viewers Choose?`, "Compare selected products by use case, family size, and buyer need."],
+            [`Customer FAQ Live: Common Questions About ${first}`, "Answer care, usage, value, size, and checkout questions in a helpful flow."],
+            [`3 Easy Ways To Use ${first}`, "Give fast everyday ideas, demo moments, and simple product benefits."],
+            [`Problem-Solution Demo For Busy Buyers`, "Start with a relatable pain point, then show how the selected products solve it."],
+            [`Product Pairing Tips From The Collection`, "Recommend combinations from the selected products and explain when to buy each."],
+            [`Care And Maintenance Mini Guide`, "Teach simple care tips while reinforcing long-term value and quality."],
+            [`Best Pick For First-Time Buyers`, "Guide new buyers to the easiest product to start with, then upsell the rest."],
+          ],
+          Launching:[
+            [`First Look: Meet ${first}`, "Introduce the product as a new release with first impressions and feature reveals."],
+            [`New Collection Walkthrough`, "Present every selected product as part of the launch lineup."],
+            [`What Makes This Launch Different?`, "Highlight unique features, design, and why viewers should pay attention."],
+            [`Live Unboxing And First Impressions`, "Show packaging or first-look style moments, then move into demo and benefits."],
+            [`Launch Day Product Test`, "Test the product live and explain what viewers should notice."],
+            [`New Arrival Buyer Guide`, "Help viewers decide which selected product fits their lifestyle best."],
+            [`Behind The Launch Story`, "Frame the products around why they were introduced and who they are for."],
+            [`Launch Offer Push: ${promoFocus}`, "Connect the new release to the promotion and create urgency."],
+          ],
+          Campaign:[
+            [`Campaign Deal Focus: ${promoFocus}`, "Lead with the promo, then show the products as the best picks for the campaign."],
+            [`Voucher Reminder: ${voucherFocus}`, "Teach viewers how to claim/use the voucher while presenting selected products."],
+            [`Live-Only Savings Walkthrough`, "Explain deal mechanics clearly and repeatedly while showing product benefits."],
+            [`Bundle And Add-To-Cart Strategy`, "Encourage viewers to combine selected products to maximize savings."],
+            [`Limited-Time Checkout Push`, "Create urgency around promo period, voucher card, and low-friction checkout."],
+            [`Best Products To Buy During This Campaign`, "Rank or group the selected products by buyer need and promo value."],
+            [`Flash Deal Talking Points`, "Use short, energetic reminders about price, promo, voucher, and CTA."],
+            [`Campaign Closing Script`, "Strong final push using selected products, promo, voucher, and last-call CTA."],
+          ],
+        };
+        return ["BAU","Launching","Campaign"].flatMap((type:string)=>topicSets[type].map((row:any,index:number)=>({
+          id:`${type.toLowerCase()}-${index+1}-${uid()}`,
+          type,
+          title:row[0],
+          angle:row[1],
+          products:ctx.products,
+          instruction:(ctx.instructions || {})[type] || "",
+        })));
+      };
+      const generateLivestreamTopicBank = () => {
+        updateLivestream({ generatedTopics:makeLivestreamTopicBank(), selectedGeneratedTopicId:"", generatedTopicText:"" });
+        markActionDone("livestream-generate-topics");
+      };
+      const generateLivestreamScriptFromTopic = (topicItem:any) => {
+        if(!topicItem) return;
+        const ctx = getLivestreamTopicContext();
+        const topicType = topicItem.type || livestreamData.aiTopic || "BAU";
+        const instructions = topicItem.instruction || (ctx.instructions || {})[topicType] || "Create a clear live selling flow with opening hook, product demo, offer push, engagement prompts, and closing CTA.";
+        const topicSpecific:any = {
+          BAU:"Keep the tone helpful, practical, and everyday. Focus on customer needs, product benefits, demos, and soft selling.",
+          Launching:"Keep the tone exciting and new. Emphasize newness, first look, product reveal, launch benefit, and launch urgency.",
+          Campaign:"Keep the tone promotional and urgent. Prioritize campaign message, main promo, vouchers, savings, and checkout reminders.",
+        };
+        const productTalkingPoints = ctx.products.length ? ctx.products.map((p:any)=>`${p.index}. ${p.product}${p.sku ? ` (${p.sku})` : ""}: Show the product clearly, explain who it is for, mention one key benefit, then connect it to the promo or voucher.`).join("\n") : "1. Show the featured product clearly and explain the main customer benefit.";
+        const script = [
+          `AI TOPIC TYPE: ${topicType}`,
+          `TOPIC TITLE:
+${topicItem.title}`,
+          `TOPIC ANGLE:
+${topicItem.angle}`,
+          `INSTRUCTIONS FOLLOWED:
+${instructions}`,
+          `TOPIC STYLE:
+${topicSpecific[topicType] || topicSpecific.BAU}`,
+          `FEATURED PRODUCTS:
+${ctx.allProductsText}`,
+          `PROMOTIONS:
+${ctx.promoLine}`,
+          `VOUCHER CARD TEXT:
+${ctx.voucherLine}`,
+          `OPENING HOOK:
+Start with: "Quick live check! If you're looking for ${ctx.firstProduct}, this part is for you." Then introduce the topic: ${topicItem.title}.`,
+          `LIVE FLOW:
+1. Open with the buyer problem or shopping reason.
+2. Present the selected products one by one.
+3. Demonstrate the strongest benefit or use case.
+4. Mention the promotion clearly.
+5. Flash or repeat the voucher card text.
+6. Ask viewers to comment which product they want to see again.
+7. Close with a clear add-to-cart or checkout CTA.`,
+          `PRODUCT TALKING POINTS:
+${productTalkingPoints}`,
+          `ENGAGEMENT QUESTIONS:
+- Which size or product do you want me to show closer?
+- Are you buying for personal use, gift, or restock?
+- Do you want me to repeat the promo and voucher mechanics?`,
+          `OBJECTION HANDLING:
+If viewers hesitate, remind them of the product benefit, selected SKU options, current promotion, voucher card text, and limited live timing.`,
+          `CLOSING CTA:
+Tap the product basket, claim the voucher if available, and checkout while the live offer is active.`
+        ].join("\n\n");
+        updateLivestream({ selectedGeneratedTopicId:topicItem.id, generatedTopicText:script });
+        markActionDone("livestream-generate-script");
+      };
       const addLivestreamPromotion = () => {
         const text = String(livestreamData.promotionDraft || "").trim();
         if(!text) return;
@@ -5449,66 +5570,46 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   </Field>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                     <Btn xs variant="outline" onClick={()=>updateLivestream({ manageTopicsOpen:!livestreamData.manageTopicsOpen })}>Manage Topics</Btn>
-                    <Btn xs onClick={()=>{
-                      const topic = livestreamData.aiTopic || "BAU";
-                      const instructions = (livestreamData.topicInstructions || {})[topic] || "Create a clear live selling topic flow with opening hook, product demo, offer push, engagement prompts, and closing CTA.";
-                      const products = placedLivestreamProducts.map((p:any,i:number)=>`${i+1}. ${p.product || "Product"}${p.sku ? ` · SKU: ${p.sku}` : ""}`).join("\n");
-                      const promos = [livestreamData.mainPromotion, ...livestreamPromotions.map((p:any)=>p.text)].filter(Boolean).join("\n");
-                      const vouchers = livestreamVoucherCards.map((v:any)=>v.text).filter(Boolean).join("\n");
-                      const productNames = placedLivestreamProducts.map((p:any)=>String(p.product || p.productName || "Product").trim()).filter(Boolean);
-                      const firstProduct = productNames[0] || "the featured product";
-                      const promoLine = promos || "No active promo added yet.";
-                      const voucherLine = vouchers || "No voucher card text added yet.";
-                      const topicGuide:any = {
-                        BAU:{
-                          title:`Daily Use Demo: Why ${firstProduct} Belongs in Your Routine`,
-                          hook:`Looking for something practical for everyday use? Let me show you ${firstProduct}.`,
-                          flow:`Start with a quick lifestyle problem, show the selected products one by one, explain the most useful everyday benefit, mention the promo, flash the voucher card, then invite viewers to add to cart.`,
-                          cta:`Tap the product basket and claim the voucher while live.`
-                        },
-                        Launching:{
-                          title:`New Arrival Spotlight: Meet ${firstProduct}`,
-                          hook:`New drop alert! This is your first look at ${firstProduct}.`,
-                          flow:`Open with the newness of the launch, introduce the selected products, highlight what makes each one different, show the launch promo, remind viewers about the voucher card, then close with urgency.`,
-                          cta:`Check out the new release and shop it during the live.`
-                        },
-                        Campaign:{
-                          title:`Campaign Deal Focus: Best Picks To Shop During This Promo`,
-                          hook:`This is your sign to shop the campaign deal before it ends.`,
-                          flow:`Connect the live to the campaign or sale period, present the products as best picks, explain the promo mechanics clearly, show voucher card text, then repeat the strongest savings message before closing.`,
-                          cta:`Claim the promo, use the voucher, and checkout while the campaign is active.`
-                        }
-                      };
-                      const guide = topicGuide[topic] || topicGuide.BAU;
-                      const text = [
-                        `AI TOPIC: ${topic}`,
-                        `TOPIC TITLE:
-${guide.title}`,
-                        `INSTRUCTIONS FOLLOWED:
-${instructions}`,
-                        products ? `FEATURED PRODUCTS:
-${products}` : "FEATURED PRODUCTS:
-No products selected yet.",
-                        `PROMOTIONS:
-${promoLine}`,
-                        `VOUCHER CARD TEXT:
-${voucherLine}`,
-                        `OPENING HOOK:
-${guide.hook}`,
-                        `LIVE FLOW:
-${guide.flow}`,
-                        `PRODUCT TALKING POINTS:
-${productNames.length ? productNames.map((name:string,i:number)=>`${i+1}. Show ${name}, mention the key customer benefit, then connect it to the promo or voucher.`).join("\n") : `1. Show the featured product clearly and explain the customer benefit.`}`,
-                        `ENGAGEMENT PROMPTS:
-Ask viewers what product they want to see next. Remind them to comment if they want the voucher or live-only deal repeated.`,
-                        `CLOSING CTA:
-${guide.cta}`
-                      ].filter(Boolean).join("\n\n");
-                      updateLivestream({ generatedTopicText:text });
-                      markActionDone("livestream-generate-topic");
-                    }}>{actionDone("livestream-generate-topic")?"✓ Generated":"Generate Text"}</Btn>
+                    <Btn xs onClick={generateLivestreamTopicBank}>{actionDone("livestream-generate-topics")?"✓ Topics Generated":"Generate Topics"}</Btn>
+                    <Btn xs variant="outline" disabled={!livestreamData.selectedGeneratedTopicId} onClick={()=>{
+                      const topics = Array.isArray(livestreamData.generatedTopics) ? livestreamData.generatedTopics : [];
+                      const selectedTopic = topics.find((item:any)=>item.id===livestreamData.selectedGeneratedTopicId);
+                      generateLivestreamScriptFromTopic(selectedTopic);
+                    }}>{actionDone("livestream-generate-script")?"✓ Script Generated":"Generate Script"}</Btn>
                   </div>
                 </div>
+                {Array.isArray(livestreamData.generatedTopics)&&livestreamData.generatedTopics.length>0&&(
+                  <div style={{ display:"grid",gap:10,marginBottom:12,padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                      <p style={{ margin:0,fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>AI Topic Bank</p>
+                      <Tag sm>{livestreamData.generatedTopics.length} topics</Tag>
+                    </div>
+                    {["BAU","Launching","Campaign"].map((type:string)=>{
+                      const items = livestreamData.generatedTopics.filter((item:any)=>item.type===type);
+                      if(!items.length) return null;
+                      return (
+                        <div key={type} style={{ display:"grid",gap:8 }}>
+                          <p style={{ margin:"4px 0 0",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>{type} Topics</p>
+                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
+                            {items.map((item:any)=>{
+                              const active = livestreamData.selectedGeneratedTopicId===item.id;
+                              return (
+                                <button key={item.id} type="button" onClick={()=>updateLivestream({ selectedGeneratedTopicId:item.id })}
+                                  style={{ textAlign:"left",padding:10,borderRadius:10,border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.surface,cursor:"pointer" }}>
+                                  <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start" }}>
+                                    <strong style={{ fontSize:12.5,color:C.text,lineHeight:1.35 }}>{item.title}</strong>
+                                    {active&&<span style={{ fontSize:11,fontWeight:900,color:C.accent }}>✓</span>}
+                                  </div>
+                                  <p style={{ margin:"5px 0 0",fontSize:11.5,color:C.muted,lineHeight:1.4 }}>{item.angle}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 {livestreamData.manageTopicsOpen&&(
                   <div style={{ display:"grid",gap:10,marginBottom:12,padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
                     {["BAU","Launching","Campaign"].map((topic:string)=>(
@@ -5522,7 +5623,7 @@ ${guide.cta}`
                 )}
                 {!!String(livestreamData.generatedTopicText || "").trim()&&(
                   <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
-                    <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated AI Topic</p>
+                    <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Live Script</p>
                     <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.5,color:C.text }}>{livestreamData.generatedTopicText}</pre>
                     <div style={{ display:"flex",justifyContent:"flex-end",gap:8,marginTop:10 }}>
                       <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream AI Topic · ${livestreamData.aiTopic || "BAU"}`,livestreamData.generatedTopicText,"Livestream Output"); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
