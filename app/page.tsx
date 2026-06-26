@@ -3351,6 +3351,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [dcProductRefEditKeys,setDcProductRefEditKeys] = useState<Record<string,boolean>>({});
   const toggleDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: !prev?.[key] }));
   const closeDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: false }));
+  const [dcPromptInstructionEditKeys,setDcPromptInstructionEditKeys] = useState<Record<string,boolean>>({});
+  const openDcPromptInstructionEdit = (key:string) => setDcPromptInstructionEditKeys(prev=>({ ...prev, [key]: true }));
+  const closeDcPromptInstructionEdit = (key:string) => setDcPromptInstructionEditKeys(prev=>({ ...prev, [key]: false }));
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
 
@@ -6963,6 +6966,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 }));
                 const links = Array.from(new Set(tableProducts.flatMap((row:any)=>row.links || [])));
                 const detailedPromptInstructions = String(item.detailedPromptInstructions || "").trim();
+                const detailedPromptInstructionKey = `detailed-prompt-instructions-${item.id}`;
+                const editingDetailedPromptInstructions = !!dcPromptInstructionEditKeys[detailedPromptInstructionKey];
                 const generateDetailedProductIntroImagePrompt = () => {
                   const productList = tableProducts.map((row:any,idx:number)=>{
                     const rowLinks = (row.links || []).map((link:string)=>normalizeDcUrl(link)).filter(Boolean);
@@ -7162,15 +7167,31 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface }}>
                             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6 }}>
                               <label style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Detailed Prompt Creator Instructions</label>
-                              <Btn xs variant={actionDone(`prompt-instructions-${item.id}`)?"primary":"outline"} onClick={()=>markActionDone(`prompt-instructions-${item.id}`)}>{actionDone(`prompt-instructions-${item.id}`)?"✓ Saved":"Save Instructions"}</Btn>
+                              <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+                                {!editingDetailedPromptInstructions&&(
+                                  <Btn xs variant="outline" onClick={()=>openDcPromptInstructionEdit(detailedPromptInstructionKey)}>Edit Instructions</Btn>
+                                )}
+                                {editingDetailedPromptInstructions&&(
+                                  <>
+                                    <Btn xs variant={actionDone(`prompt-instructions-${item.id}`)?"primary":"outline"} onClick={()=>{ markActionDone(`prompt-instructions-${item.id}`); closeDcPromptInstructionEdit(detailedPromptInstructionKey); }}>{actionDone(`prompt-instructions-${item.id}`)?"✓ Saved":"Save Instructions"}</Btn>
+                                    <Btn xs variant="ghost" onClick={()=>closeDcPromptInstructionEdit(detailedPromptInstructionKey)}>Done</Btn>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <textarea
-                              value={item.detailedPromptInstructions || ""}
-                              onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ detailedPromptInstructions:e.target.value })}
-                              placeholder="Optional. Add rules for the detailed prompt creator. Example: use a modern Filipino condo kitchen, keep the bake dishes premium and minimalist, include warm lifestyle props, leave clean space for future text, no hands, no text overlay."
-                              rows={isMobile?3:4}
-                              style={{ width:"100%",boxSizing:"border-box",minHeight:82,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.bg }}
-                            />
+                            {editingDetailedPromptInstructions ? (
+                              <textarea
+                                value={item.detailedPromptInstructions || ""}
+                                onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ detailedPromptInstructions:e.target.value })}
+                                placeholder="Optional. Add rules for the detailed prompt creator. Example: use a modern Filipino condo kitchen, keep the bake dishes premium and minimalist, include warm lifestyle props, leave clean space for future text, no hands, no text overlay."
+                                rows={isMobile?3:4}
+                                style={{ width:"100%",boxSizing:"border-box",minHeight:82,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.bg }}
+                              />
+                            ) : (
+                              <div style={{ width:"100%",boxSizing:"border-box",minHeight:46,padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,fontSize:12.5,lineHeight:1.5,color:item.detailedPromptInstructions?C.text:C.faint,background:C.bg,whiteSpace:"pre-wrap" }}>
+                                {item.detailedPromptInstructions || "No extra instructions added yet. Click Edit Instructions to add rules for the detailed prompt creator."}
+                              </div>
+                            )}
                             <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>These instructions are added to the generated detailed prompt and strictly followed together with product image links.</p>
                           </div>
                           <textarea
