@@ -5681,6 +5681,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                     <span style={{ fontSize:11,fontWeight:900,color:active?C.accent:C.faint }}>{active?"✓":""}</span>
                                   </div>
                                   <p style={{ margin:"5px 0 8px",fontSize:11.5,color:C.muted,lineHeight:1.4 }}>{item.angle}</p>
+                                  {active&&(<div style={{ margin:"8px 0 10px",padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,display:"grid",gap:8 }}>
+                                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
+                                      <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Topic Details</span>
+                                    </div>
+                                    <div style={{ display:"grid",gap:7 }}>
+                                      {getLivestreamTopicDetails(item).map((detail:any)=>(
+                                        <div key={detail.label} style={{ display:"grid",gap:2,padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface }}>
+                                          <span style={{ fontSize:10,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>{detail.label}</span>
+                                          <span style={{ fontSize:11.3,color:C.text,lineHeight:1.4,whiteSpace:"pre-wrap" }}>{detail.value}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>)}
                                   <div style={{ display:"flex",justifyContent:"flex-end",gap:6 }}>
                                     <span onClick={(e:any)=>{ e.stopPropagation(); try { navigator.clipboard?.writeText([item.title,item.angle,...getLivestreamTopicDetails(item).map((detail:any)=>`${detail.label}: ${detail.value}`)].filter(Boolean).join("\n\n")); } catch {} markActionDone(`copy-topic-${item.id}`); }} style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",border:`1px solid ${C.border}`,borderRadius:7,background:actionDone(`copy-topic-${item.id}`)?"#ECFDF5":C.surfaceAlt,color:actionDone(`copy-topic-${item.id}`)?"#047857":C.textSub,fontSize:11,fontWeight:800,padding:"5px 9px",cursor:"pointer" }}>{actionDone(`copy-topic-${item.id}`)?"✓ Copied":"Copy"}</span>
                                   </div>
@@ -5691,30 +5704,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         </div>
                       );
                     })}
-                    {(() => {
-                      const selectedTopic = (Array.isArray(livestreamData.generatedTopics) ? livestreamData.generatedTopics : []).find((item:any)=>item.id===livestreamData.selectedGeneratedTopicId);
-                      if(!selectedTopic) return null;
-                      return (
-                        <div style={{ padding:12,border:`1.5px solid ${C.accent}`,borderRadius:10,background:C.surface,display:"grid",gap:8 }}>
-                          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexWrap:"wrap" }}>
-                            <div>
-                              <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Selected Topic Details</p>
-                              <h4 style={{ margin:"4px 0 0",fontSize:14,color:C.text,lineHeight:1.3 }}>{selectedTopic.title}</h4>
-                            </div>
-                            <Btn xs variant="outline" onClick={()=>{ try { navigator.clipboard?.writeText([selectedTopic.title,selectedTopic.angle,...getLivestreamTopicDetails(selectedTopic).map((detail:any)=>`${detail.label}: ${detail.value}`)].filter(Boolean).join("\n\n")); } catch {} markActionDone(`copy-selected-topic-${selectedTopic.id}`); }}>{actionDone(`copy-selected-topic-${selectedTopic.id}`)?"✓ Copied":"Copy Details"}</Btn>
-                          </div>
-                          <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>{selectedTopic.angle}</p>
-                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
-                            {getLivestreamTopicDetails(selectedTopic).map((detail:any)=>(
-                              <div key={detail.label} style={{ display:"grid",gap:3,padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.bg }}>
-                                <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>{detail.label}</span>
-                                <span style={{ fontSize:11.5,color:C.text,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{detail.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
                   </div>
                 )}
                 {livestreamData.manageTopicsOpen&&(
