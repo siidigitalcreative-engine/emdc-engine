@@ -5333,7 +5333,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             [`Campaign Closing Script`, "Strong final push using selected products, promo, voucher, and last-call CTA."],
           ],
         };
-        return ["BAU","Launching","Campaign"].flatMap((type:string)=>topicSets[type].map((row:any,index:number)=>({
+        const selectedTypes = Array.isArray(livestreamData.selectedAiTopics)
+          ? livestreamData.selectedAiTopics
+          : (livestreamData.aiTopic ? [livestreamData.aiTopic] : ["BAU"]);
+        const cleanTypes = selectedTypes.filter((type:string)=>topicSets[type]);
+        return cleanTypes.flatMap((type:string)=>topicSets[type].map((row:any,index:number)=>({
           id:`${type.toLowerCase()}-${index+1}-${uid()}`,
           type,
           title:row[0],
@@ -5343,8 +5347,54 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         })));
       };
       const generateLivestreamTopicBank = () => {
-        updateLivestream({ generatedTopics:makeLivestreamTopicBank(), selectedGeneratedTopicId:"", generatedTopicText:"" });
+        const topics = makeLivestreamTopicBank();
+        updateLivestream({ generatedTopics:topics, selectedGeneratedTopicId:"", generatedTopicText:topics.length ? "" : "Please select at least one AI Topic type: BAU, Launching, or Campaign." });
         markActionDone("livestream-generate-topics");
+      };
+      const getLivestreamTopicDetails = (topicItem:any) => {
+        const ctx = getLivestreamTopicContext();
+        if(!topicItem) return [];
+        const topicType = topicItem.type || "BAU";
+        const instructions = topicItem.instruction || (ctx.instructions || {})[topicType] || "";
+        const productFocus = ctx.products.length
+          ? ctx.products.map((p:any)=>`${p.product}${p.sku ? ` (${p.sku})` : ""}`).join(", ")
+          : "No products selected yet.";
+        const typeDetails:any = {
+          BAU:{
+            objective:"Use this as an everyday live selling angle. Focus on helpful demos, buyer questions, daily use cases, and soft add-to-cart reminders.",
+            hook:`Quick live check! If you want a practical kitchen upgrade, this topic is for you: ${topicItem.title}.`,
+            flow:["Start with a relatable everyday problem.","Show the selected products one by one.","Explain the key use case and buyer benefit.","Answer likely questions while showing the product clearly.","Mention the promo or voucher naturally before the CTA."],
+            engagement:["Ask viewers what size or variant they need.","Invite comments like ‘Oval’ or ‘Round’ for recommendations.","Ask if they want a demo, care tip, or comparison next."],
+            cta:"Add to cart while the live offer is active, then claim the voucher before checkout.",
+          },
+          Launching:{
+            objective:"Use this as a new-product or new-collection launch angle. Focus on first look, product reveal, feature discovery, and launch urgency.",
+            hook:`First look live! We are introducing ${ctx.firstProduct} and why it deserves attention today.`,
+            flow:["Open with a launch-style product reveal.","Introduce what is new or special about the selected products.","Show close-up details and first impressions.","Explain who each product is best for.","Connect the launch offer to the main CTA."],
+            engagement:["Ask viewers which product they want to see first.","Ask them to comment ‘NEW’ for launch picks.","Use quick polls like ‘family size or solo use?’"],
+            cta:"Shop the new release while the launch promo is available.",
+          },
+          Campaign:{
+            objective:"Use this as a campaign or promo-driven live selling angle. Focus on deals, vouchers, urgency, campaign mechanics, and fast conversion.",
+            hook:`Campaign deal alert! Here are the best picks to match today’s offer: ${ctx.promos[0] || topicItem.title}.`,
+            flow:["Lead with the campaign deal or voucher.","Explain how viewers can use the promo.","Show the selected products as best-buy options.","Repeat savings reminders between product demos.","End with urgency and checkout instructions."],
+            engagement:["Ask viewers to comment if they want the voucher repeated.","Ask what product they want added to cart first.","Remind viewers to screenshot or pin the voucher card text."],
+            cta:"Claim the voucher, add the product to cart, and check out before the live deal ends.",
+          },
+        };
+        const detail = typeDetails[topicType] || typeDetails.BAU;
+        return [
+          { label:"Topic Type", value:topicType },
+          { label:"Main Objective", value:detail.objective },
+          { label:"Featured Product Focus", value:productFocus },
+          { label:"Promotion Angle", value:ctx.promoLine },
+          { label:"Voucher Card Angle", value:ctx.voucherLine },
+          { label:"Suggested Opening Hook", value:detail.hook },
+          { label:"Recommended Live Flow", value:detail.flow.map((line:string,idx:number)=>`${idx+1}. ${line}`).join("\n") },
+          { label:"Audience Engagement Prompts", value:detail.engagement.map((line:string)=>`• ${line}`).join("\n") },
+          { label:"Instruction To Follow", value:instructions || "Use the default topic type instruction." },
+          { label:"Closing CTA", value:detail.cta },
+        ];
       };
       const generateLivestreamScriptFromTopic = (topicItem:any) => {
         if(!topicItem) return;
@@ -5562,11 +5612,29 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10 }}>
                   <Field label="AI Topic">
-                    <Select value={livestreamData.aiTopic || "BAU"} onChange={(v:string)=>updateLivestream({ aiTopic:v })} style={{ maxWidth:isMobile?"100%":320 }}>
-                      <option value="BAU">BAU</option>
-                      <option value="Launching">Launching</option>
-                      <option value="Campaign">Campaign</option>
-                    </Select>
+                    <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
+                      {["BAU","Launching","Campaign"].map((topic:string)=>{
+                        const selectedTopics = (Array.isArray(livestreamData.selectedAiTopics) && livestreamData.selectedAiTopics.length)
+                          ? livestreamData.selectedAiTopics
+                          : [livestreamData.aiTopic || "BAU"];
+                        const checked = selectedTopics.includes(topic);
+                        return (
+                          <label key={topic} style={{ display:"inline-flex",alignItems:"center",gap:7,padding:"8px 12px",borderRadius:9,border:`1.5px solid ${checked?C.accent:C.border}`,background:checked?"#EEF2FF":C.surface,cursor:"pointer",fontSize:13,fontWeight:800,color:C.textSub }}>
+                            <input type="checkbox" checked={checked} onChange={(e:any)=>{
+                              const current = (Array.isArray(livestreamData.selectedAiTopics) && livestreamData.selectedAiTopics.length)
+                                ? livestreamData.selectedAiTopics
+                                : [livestreamData.aiTopic || "BAU"];
+                              const next = e.target.checked
+                                ? Array.from(new Set([...current,topic]))
+                                : current.filter((item:string)=>item!==topic);
+                              updateLivestream({ selectedAiTopics:next, aiTopic:next[0] || "" });
+                            }} />
+                            {topic}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p style={{ margin:"6px 0 0",fontSize:11,color:C.muted }}>Only checked topic types will generate AI topics.</p>
                   </Field>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                     <Btn xs variant="outline" onClick={()=>updateLivestream({ manageTopicsOpen:!livestreamData.manageTopicsOpen })}>Manage Topics</Btn>
@@ -5601,6 +5669,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                     {active&&<span style={{ fontSize:11,fontWeight:900,color:C.accent }}>✓</span>}
                                   </div>
                                   <p style={{ margin:"5px 0 0",fontSize:11.5,color:C.muted,lineHeight:1.4 }}>{item.angle}</p>
+                                  {active&&(<div style={{ marginTop:10,padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,display:"grid",gap:8 }}>
+                                    <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Comprehensive Topic Details</p>
+                                    {getLivestreamTopicDetails(item).map((detail:any)=>(
+                                      <div key={detail.label} style={{ display:"grid",gap:2 }}>
+                                        <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>{detail.label}</span>
+                                        <span style={{ fontSize:11.5,color:C.text,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{detail.value}</span>
+                                      </div>
+                                    ))}
+                                  </div>)}
                                 </button>
                               );
                             })}
@@ -5626,7 +5703,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Live Script</p>
                     <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.5,color:C.text }}>{livestreamData.generatedTopicText}</pre>
                     <div style={{ display:"flex",justifyContent:"flex-end",gap:8,marginTop:10 }}>
-                      <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream AI Topic · ${livestreamData.aiTopic || "BAU"}`,livestreamData.generatedTopicText,"Livestream Output"); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
+                      <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream AI Topic · ${((Array.isArray(livestreamData.selectedAiTopics) && livestreamData.selectedAiTopics.length) ? livestreamData.selectedAiTopics.join(" / ") : (livestreamData.aiTopic || "BAU"))}`,livestreamData.generatedTopicText,"Livestream Output"); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
                     </div>
                   </div>
                 )}
