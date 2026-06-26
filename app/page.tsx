@@ -5562,29 +5562,23 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Promotions</p>
                       <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Optional exclusive platform/live promo.</p>
                     </div>
-                  </div>
-                  <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"start",marginBottom:10 }}>
-                    <textarea value={livestreamData.promotionDraft || ""} onChange={(e:any)=>updateLivestream({ promotionDraft:e.target.value })} placeholder="Example: Live-only ₱100 OFF with free shipping tonight" rows={2} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none" }} />
                     <Btn xs onClick={addLivestreamPromotion}>Add</Btn>
                   </div>
-                  <div style={{ border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
-                    <div style={{ display:"grid",gridTemplateColumns:"44px minmax(0,1fr) 116px",gap:8,alignItems:"center",padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>
-                      <span>#</span><span>Promotion</span><span style={{ textAlign:"right" }}>Actions</span>
-                    </div>
-                    {livestreamPromotions.length ? livestreamPromotions.map((item:any,idx:number)=>(
-                      <div key={item.id} style={{ display:"grid",gridTemplateColumns:"44px minmax(0,1fr) 116px",gap:8,alignItems:"center",padding:"8px 10px",borderBottom:idx===livestreamPromotions.length-1?"none":`1px solid ${C.border}`,background:C.surface }}>
-                        <span style={{ fontSize:11,fontWeight:800,color:C.faint }}>#{idx+1}</span>
+                  <textarea value={livestreamData.promotionDraft || ""} onChange={(e:any)=>updateLivestream({ promotionDraft:e.target.value })} placeholder="Example: Live-only ₱100 OFF with free shipping tonight" rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none",marginBottom:10 }} />
+                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                    {livestreamPromotions.length ? livestreamPromotions.map((item:any)=>(
+                      <div key={item.id} style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}` }}>
                         {livestreamData.editingPromotionId===item.id ? (
-                          <input value={item.text || ""} onChange={(e:any)=>updateLivestreamPromotion(item.id,{ text:e.target.value })} style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${C.border}`,borderRadius:7,padding:"7px 8px",fontSize:12.5,outline:"none" }} />
+                          <textarea value={item.text || ""} onChange={(e:any)=>updateLivestreamPromotion(item.id,{ text:e.target.value })} rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:8,padding:8,fontSize:12.5,outline:"none" }} />
                         ) : (
-                          <span style={{ fontSize:12.5,color:C.textSub,lineHeight:1.35,whiteSpace:"normal",wordBreak:"break-word" }}>{item.text}</span>
+                          <p style={{ margin:0,fontSize:12.5,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{item.text}</p>
                         )}
-                        <div style={{ display:"flex",justifyContent:"flex-end",gap:5 }}>
+                        <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:8 }}>
                           <Btn xs variant="outline" onClick={()=>updateLivestream({ editingPromotionId:livestreamData.editingPromotionId===item.id?"":item.id })}>{livestreamData.editingPromotionId===item.id?"Save":"Edit"}</Btn>
                           <Btn xs variant="danger" onClick={()=>deleteLivestreamPromotion(item.id)}>Delete</Btn>
                         </div>
                       </div>
-                    )) : <div style={{ padding:10,fontSize:12,color:C.muted }}>No promotions added yet.</div>}
+                    )) : <p style={{ margin:0,fontSize:12,color:C.muted }}>No promotions added yet.</p>}
                   </div>
                 </div>
 
@@ -5594,29 +5588,23 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Voucher Card Text Input</p>
                       <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Add short voucher card lines for the live.</p>
                     </div>
-                  </div>
-                  <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:8,alignItems:"start",marginBottom:10 }}>
-                    <textarea value={livestreamData.voucherDraft || ""} onChange={(e:any)=>updateLivestream({ voucherDraft:e.target.value })} placeholder="Example: CLAIM NOW: ₱50 OFF minimum ₱499" rows={2} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none" }} />
                     <Btn xs onClick={addLivestreamVoucher}>Add</Btn>
                   </div>
-                  <div style={{ border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
-                    <div style={{ display:"grid",gridTemplateColumns:"44px minmax(0,1fr) 116px",gap:8,alignItems:"center",padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>
-                      <span>#</span><span>Voucher Card Text</span><span style={{ textAlign:"right" }}>Actions</span>
-                    </div>
-                    {livestreamVoucherCards.length ? livestreamVoucherCards.map((item:any,idx:number)=>(
-                      <div key={item.id} style={{ display:"grid",gridTemplateColumns:"44px minmax(0,1fr) 116px",gap:8,alignItems:"center",padding:"8px 10px",borderBottom:idx===livestreamVoucherCards.length-1?"none":`1px solid ${C.border}`,background:C.surface }}>
-                        <span style={{ fontSize:11,fontWeight:800,color:C.faint }}>#{idx+1}</span>
+                  <textarea value={livestreamData.voucherDraft || ""} onChange={(e:any)=>updateLivestream({ voucherDraft:e.target.value })} placeholder="Example: CLAIM NOW: ₱50 OFF minimum ₱499" rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none",marginBottom:10 }} />
+                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                    {livestreamVoucherCards.length ? livestreamVoucherCards.map((item:any)=>(
+                      <div key={item.id} style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}` }}>
                         {livestreamData.editingVoucherId===item.id ? (
-                          <input value={item.text || ""} onChange={(e:any)=>updateLivestreamVoucher(item.id,{ text:e.target.value })} style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${C.border}`,borderRadius:7,padding:"7px 8px",fontSize:12.5,outline:"none" }} />
+                          <textarea value={item.text || ""} onChange={(e:any)=>updateLivestreamVoucher(item.id,{ text:e.target.value })} rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:8,padding:8,fontSize:12.5,outline:"none" }} />
                         ) : (
-                          <span style={{ fontSize:12.5,color:C.textSub,lineHeight:1.35,whiteSpace:"normal",wordBreak:"break-word" }}>{item.text}</span>
+                          <p style={{ margin:0,fontSize:12.5,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{item.text}</p>
                         )}
-                        <div style={{ display:"flex",justifyContent:"flex-end",gap:5 }}>
+                        <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:8 }}>
                           <Btn xs variant="outline" onClick={()=>updateLivestream({ editingVoucherId:livestreamData.editingVoucherId===item.id?"":item.id })}>{livestreamData.editingVoucherId===item.id?"Save":"Edit"}</Btn>
                           <Btn xs variant="danger" onClick={()=>deleteLivestreamVoucher(item.id)}>Delete</Btn>
                         </div>
                       </div>
-                    )) : <div style={{ padding:10,fontSize:12,color:C.muted }}>No voucher card text added yet.</div>}
+                    )) : <p style={{ margin:0,fontSize:12,color:C.muted }}>No voucher card text added yet.</p>}
                   </div>
                 </div>
               </div>
@@ -5670,33 +5658,26 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       return (
                         <div key={type} style={{ display:"grid",gap:8 }}>
                           <p style={{ margin:"4px 0 0",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>{type} Topics</p>
-                          <div style={{ columnCount:isMobile?1:2,columnGap:8 }}>
+                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
                             {items.map((item:any)=>{
                               const active = livestreamData.selectedGeneratedTopicId===item.id;
                               return (
                                 <button key={item.id} type="button" onClick={()=>updateLivestream({ selectedGeneratedTopicId:item.id })}
-                                  style={{ width:"100%",display:"block",breakInside:"avoid",WebkitColumnBreakInside:"avoid",pageBreakInside:"avoid",margin:"0 0 8px",textAlign:"left",padding:10,borderRadius:10,border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.surface,cursor:"pointer" }}>
+                                  style={{ textAlign:"left",padding:10,borderRadius:10,border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.surface,cursor:"pointer" }}>
                                   <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start" }}>
                                     <strong style={{ fontSize:12.5,color:C.text,lineHeight:1.35 }}>{item.title}</strong>
-                                    <span style={{ fontSize:11,fontWeight:900,color:active?C.accent:C.faint }}>{active?"✓":""}</span>
+                                    {active&&<span style={{ fontSize:11,fontWeight:900,color:C.accent }}>✓</span>}
                                   </div>
-                                  <p style={{ margin:"5px 0 8px",fontSize:11.5,color:C.muted,lineHeight:1.4 }}>{item.angle}</p>
-                                  {active&&(<div style={{ margin:"8px 0 10px",padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,display:"grid",gap:8 }}>
-                                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8 }}>
-                                      <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Topic Details</span>
-                                    </div>
-                                    <div style={{ display:"grid",gap:7 }}>
-                                      {getLivestreamTopicDetails(item).map((detail:any)=>(
-                                        <div key={detail.label} style={{ display:"grid",gap:2,padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface }}>
-                                          <span style={{ fontSize:10,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>{detail.label}</span>
-                                          <span style={{ fontSize:11.3,color:C.text,lineHeight:1.4,whiteSpace:"pre-wrap" }}>{detail.value}</span>
-                                        </div>
-                                      ))}
-                                    </div>
+                                  <p style={{ margin:"5px 0 0",fontSize:11.5,color:C.muted,lineHeight:1.4 }}>{item.angle}</p>
+                                  {active&&(<div style={{ marginTop:10,padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,display:"grid",gap:8 }}>
+                                    <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Comprehensive Topic Details</p>
+                                    {getLivestreamTopicDetails(item).map((detail:any)=>(
+                                      <div key={detail.label} style={{ display:"grid",gap:2 }}>
+                                        <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".04em" }}>{detail.label}</span>
+                                        <span style={{ fontSize:11.5,color:C.text,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{detail.value}</span>
+                                      </div>
+                                    ))}
                                   </div>)}
-                                  <div style={{ display:"flex",justifyContent:"flex-end",gap:6 }}>
-                                    <span onClick={(e:any)=>{ e.stopPropagation(); try { navigator.clipboard?.writeText([item.title,item.angle,...getLivestreamTopicDetails(item).map((detail:any)=>`${detail.label}: ${detail.value}`)].filter(Boolean).join("\n\n")); } catch {} markActionDone(`copy-topic-${item.id}`); }} style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",border:`1px solid ${C.border}`,borderRadius:7,background:actionDone(`copy-topic-${item.id}`)?"#ECFDF5":C.surfaceAlt,color:actionDone(`copy-topic-${item.id}`)?"#047857":C.textSub,fontSize:11,fontWeight:800,padding:"5px 9px",cursor:"pointer" }}>{actionDone(`copy-topic-${item.id}`)?"✓ Copied":"Copy"}</span>
-                                  </div>
                                 </button>
                               );
                             })}
