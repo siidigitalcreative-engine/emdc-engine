@@ -6962,6 +6962,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   links:getDcProductLinks(product),
                 }));
                 const links = Array.from(new Set(tableProducts.flatMap((row:any)=>row.links || [])));
+                const detailedPromptInstructions = String(item.detailedPromptInstructions || "").trim();
                 const generateDetailedProductIntroImagePrompt = () => {
                   const productList = tableProducts.map((row:any,idx:number)=>{
                     const rowLinks = (row.links || []).map((link:string)=>normalizeDcUrl(link)).filter(Boolean);
@@ -6989,6 +6990,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     "IMAGE OBJECTIVE:",
                     visualGoal,
                     "",
+                    detailedPromptInstructions ? "DETAILED PROMPT CREATOR INSTRUCTIONS TO FOLLOW:" : "",
+                    detailedPromptInstructions || "",
+                    detailedPromptInstructions ? "" : "",
                     "RECOMMENDED VISUAL EXECUTION:",
                     "Use a clean premium studio or semi-lifestyle ecommerce setup suitable for the product category. Keep the background uncluttered and modern. Use soft daylight or studio lighting, realistic shadows, crisp edges, and accurate reflections if applicable. Make the product the hero. Avoid text overlays, logos not present on the product, extra labels, watermarks, hands, people, or distracting props unless specifically needed for scale or usage context.",
                     "",
@@ -7154,7 +7158,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Image Prompt</span>
                           <Btn xs variant={actionDone(`detailed-prompt-${item.id}`)?"primary":"outline"} onClick={generateDetailedProductIntroImagePrompt}>{actionDone(`detailed-prompt-${item.id}`)?"✓ Prompt Generated":"Generate Detailed Prompt"}</Btn>
                         </div>
-                        <div style={{ padding:10 }}>
+                        <div style={{ padding:10,display:"flex",flexDirection:"column",gap:10 }}>
+                          <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface }}>
+                            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6 }}>
+                              <label style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Detailed Prompt Creator Instructions</label>
+                              <Btn xs variant={actionDone(`prompt-instructions-${item.id}`)?"primary":"outline"} onClick={()=>markActionDone(`prompt-instructions-${item.id}`)}>{actionDone(`prompt-instructions-${item.id}`)?"✓ Saved":"Save Instructions"}</Btn>
+                            </div>
+                            <textarea
+                              value={item.detailedPromptInstructions || ""}
+                              onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ detailedPromptInstructions:e.target.value })}
+                              placeholder="Optional. Add rules for the detailed prompt creator. Example: use a modern Filipino condo kitchen, keep the bake dishes premium and minimalist, include warm lifestyle props, leave clean space for future text, no hands, no text overlay."
+                              rows={isMobile?3:4}
+                              style={{ width:"100%",boxSizing:"border-box",minHeight:82,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.bg }}
+                            />
+                            <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>These instructions are added to the generated detailed prompt and strictly followed together with product image links.</p>
+                          </div>
                           <textarea
                             value={item.imagePrompt || ""}
                             onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ imagePrompt:e.target.value })}
