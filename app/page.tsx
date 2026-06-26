@@ -6196,7 +6196,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                       <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150 }}>
                                         <div style={{ display:"grid",gap:6 }}>
                                           <Btn xs onClick={()=>generateProductIntroDcGmvImage(item,row,rowIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                          {row?.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveProductIntroDcGmvImageOutput(item,row,rowIndex)}>Save</Btn>}
+                                          {row?.generatedImageUrl&&<Btn xs variant={row?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcGmvImageOutput(item,row,rowIndex)}>{row?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
                                           {row?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcGmvImageOutput(item,rowIndex)}>Delete Image</Btn>}
                                         </div>
                                       </td>
@@ -6596,19 +6596,27 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
       const saveProductIntroDcImageOutput = (item:any) => {
         if(!item.generatedImageUrl) return;
+        const savedAt = new Date().toISOString();
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        const savedEntry = {
+          id:uid(),
+          source:"Product Introduction Digital Creative",
+          cardId:item.id,
+          sourceRowId:item.id,
+          title:item.product || "Product Introduction Digital Creative",
+          url:item.generatedImageUrl,
+          prompt:item.generatedImagePrompt || item.imagePrompt || "",
+          createdAt:savedAt,
+        };
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>row.id===item.id ? { ...row, savedImageAt:savedAt, savedImageUrl:item.generatedImageUrl } : row);
         updateAiWorkspace("digital",{
-          savedImageOutputs:[{
-            id:uid(),
-            source:"Product Introduction Digital Creative",
-            cardId:item.id,
-            sourceRowId:item.id,
-            title:item.product || "Product Introduction Digital Creative",
-            url:item.generatedImageUrl,
-            prompt:item.generatedImagePrompt || item.imagePrompt || "",
-            createdAt:new Date().toISOString(),
-          },...saved].slice(0,60),
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==item.id)].slice(0,60),
+          generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:savedAt,
         });
       };
       const deleteProductIntroDcImageOutput = (item:any) => {
@@ -6617,6 +6625,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           generatedImagePrompt:"",
           generatedImageAt:"",
           generatedImageError:"",
+          savedImageAt:"",
+          savedImageUrl:"",
           imageLinks:item.imageLinks || [],
         });
       };
@@ -6687,24 +6697,37 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const deleteProductIntroDcCarouselImageOutput = (item:any, cardIndex:number) => {
-        updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"" });
+        updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"", savedImageAt:"", savedImageUrl:"" });
       };
 
       const saveProductIntroDcCarouselImageOutput = (item:any, card:any, cardIndex:number) => {
         if(!card?.generatedImageUrl) return;
+        const savedAt = new Date().toISOString();
+        const cardId = `${item.id}-carousel-${cardIndex}`;
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        const savedEntry = {
+          id:uid(),
+          source:"Product Introduction Digital Creative",
+          cardId,
+          sourceRowId:item.id,
+          title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+          url:card.generatedImageUrl,
+          prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
+          createdAt:savedAt,
+        };
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>{
+          if(row.id!==item.id) return row;
+          const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((carouselCard:any,index:number)=>index===cardIndex ? { ...carouselCard, savedImageAt:savedAt, savedImageUrl:card.generatedImageUrl } : carouselCard);
+          return { ...row, carouselCards };
+        });
         updateAiWorkspace("digital",{
-          savedImageOutputs:[{
-            id:uid(),
-            source:"Product Introduction Digital Creative",
-            cardId:`${item.id}-carousel-${cardIndex}`,
-            sourceRowId:item.id,
-            title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
-            url:card.generatedImageUrl,
-            prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
-            createdAt:new Date().toISOString(),
-          },...saved].slice(0,60),
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
+          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:savedAt,
         });
       };
 
@@ -6870,24 +6893,37 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const deleteProductIntroDcGmvImageOutput = (item:any, rowIndex:number) => {
-        updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"" });
+        updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"", savedImageAt:"", savedImageUrl:"" });
       };
 
       const saveProductIntroDcGmvImageOutput = (item:any, row:any, rowIndex:number) => {
         if(!row?.generatedImageUrl) return;
+        const savedAt = new Date().toISOString();
+        const cardId = `${item.id}-gmv-${rowIndex}`;
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        const savedEntry = {
+          id:uid(),
+          source:"Product Introduction Digital Creative",
+          cardId,
+          sourceRowId:item.id,
+          title:`${item.title || item.product || "Product GMV Max"} · ${row?.pillar || `Pillar ${rowIndex+1}`}`,
+          url:row.generatedImageUrl,
+          prompt:row.generatedImagePrompt || row.creativeDirection || item.imagePrompt || "",
+          createdAt:savedAt,
+        };
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((dcRow:any)=>{
+          if(dcRow.id!==item.id) return dcRow;
+          const gmvRows = (Array.isArray(dcRow.gmvRows) ? dcRow.gmvRows : []).map((gmvRow:any,index:number)=>index===rowIndex ? { ...gmvRow, savedImageAt:savedAt, savedImageUrl:row.generatedImageUrl } : gmvRow);
+          return { ...dcRow, gmvRows };
+        });
         updateAiWorkspace("digital",{
-          savedImageOutputs:[{
-            id:uid(),
-            source:"Product Introduction Digital Creative",
-            cardId:`${item.id}-gmv-${rowIndex}`,
-            sourceRowId:item.id,
-            title:`${item.title || item.product || "Product GMV Max"} · ${row?.pillar || `Pillar ${rowIndex+1}`}`,
-            url:row.generatedImageUrl,
-            prompt:row.generatedImagePrompt || row.creativeDirection || item.imagePrompt || "",
-            createdAt:new Date().toISOString(),
-          },...saved].slice(0,60),
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
+          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:savedAt,
         });
       };
 
@@ -7071,7 +7107,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p><p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card?.cta || "Shop Now"}</p></div>
                                   <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
                                     <Btn xs onClick={()=>generateProductIntroDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                    {card?.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveProductIntroDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>}
+                                    {card?.generatedImageUrl&&<Btn xs variant={card?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcCarouselImageOutput(item,card,cardIndex)}>{card?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
                                     {card?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
                                   </div>
                                 </div>
@@ -7233,7 +7269,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
                             />
                             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
-                              <Btn xs variant="outline" onClick={()=>saveProductIntroDcImageOutput(item)}>Save</Btn>
+                              <Btn xs variant={item.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcImageOutput(item)}>{item.savedImageAt ? "Saved ✓" : "Save"}</Btn>
                               <Btn xs variant="danger" onClick={()=>deleteProductIntroDcImageOutput(item)}>Delete</Btn>
                             </div>
                           </div>
