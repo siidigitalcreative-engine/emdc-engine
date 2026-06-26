@@ -5670,12 +5670,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       return (
                         <div key={type} style={{ display:"grid",gap:8 }}>
                           <p style={{ margin:"4px 0 0",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>{type} Topics</p>
-                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8 }}>
+                          <div style={{ columnCount:isMobile?1:2,columnGap:8 }}>
                             {items.map((item:any)=>{
                               const active = livestreamData.selectedGeneratedTopicId===item.id;
                               return (
                                 <button key={item.id} type="button" onClick={()=>updateLivestream({ selectedGeneratedTopicId:item.id })}
-                                  style={{ textAlign:"left",padding:10,borderRadius:10,border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.surface,cursor:"pointer" }}>
+                                  style={{ width:"100%",display:"block",breakInside:"avoid",WebkitColumnBreakInside:"avoid",pageBreakInside:"avoid",margin:"0 0 8px",textAlign:"left",padding:10,borderRadius:10,border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.surface,cursor:"pointer" }}>
                                   <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start" }}>
                                     <strong style={{ fontSize:12.5,color:C.text,lineHeight:1.35 }}>{item.title}</strong>
                                     <span style={{ fontSize:11,fontWeight:900,color:active?C.accent:C.faint }}>{active?"✓":""}</span>
