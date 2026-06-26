@@ -6986,6 +6986,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   const generatedPrompt = [
                     "Create a high-quality premium ecommerce product image using the provided product image links as the primary visual references.",
                     "",
+                    detailedPromptInstructions ? "SAVED DETAILED PROMPT CREATOR INSTRUCTIONS — FOLLOW STRICTLY:" : "",
+                    detailedPromptInstructions || "",
+                    detailedPromptInstructions ? "These saved instructions are mandatory. Apply them to the image concept, styling, setting, camera angle, lighting, composition, props, background, restrictions, and final output. If any default recommendation below conflicts with the saved instructions, follow the saved instructions first while still preserving exact product accuracy from the product image links." : "",
+                    detailedPromptInstructions ? "" : "",
                     "STRICT PRODUCT ACCURACY RULES:",
                     "Use the product image links below as the default and required references. Match the exact product shape, color, material, proportions, visible design details, size relationship, and product type. Do not invent a new product. Do not recolor, redesign, replace, distort, or add features that are not visible in the references. If multiple products are included, keep each SKU visually distinct and accurate.",
                     "",
@@ -6995,11 +6999,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     "IMAGE OBJECTIVE:",
                     visualGoal,
                     "",
-                    detailedPromptInstructions ? "DETAILED PROMPT CREATOR INSTRUCTIONS TO FOLLOW:" : "",
-                    detailedPromptInstructions || "",
-                    detailedPromptInstructions ? "" : "",
                     "RECOMMENDED VISUAL EXECUTION:",
-                    "Use a clean premium studio or semi-lifestyle ecommerce setup suitable for the product category. Keep the background uncluttered and modern. Use soft daylight or studio lighting, realistic shadows, crisp edges, and accurate reflections if applicable. Make the product the hero. Avoid text overlays, logos not present on the product, extra labels, watermarks, hands, people, or distracting props unless specifically needed for scale or usage context.",
+                    "Use a clean premium studio or semi-lifestyle ecommerce setup suitable for the product category. Keep the background uncluttered and modern. Use soft daylight or studio lighting, realistic shadows, crisp edges, and accurate reflections if applicable. Make the product the hero. Avoid text overlays, logos not present on the product, extra labels, watermarks, hands, people, or distracting props unless specifically allowed by the saved instructions.",
                     "",
                     "COMPOSITION:",
                     tableProducts.length > 1
