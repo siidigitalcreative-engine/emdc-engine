@@ -7215,7 +7215,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       if(!isCampaignChecklist){
         return (
-                <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.1fr) minmax(0,.9fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+                <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,.9fr) minmax(0,1.1fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
                   <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
@@ -7228,59 +7228,89 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     </div>
         
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
-                        <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
-                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Use Listing Template</Btn>
-                      </div>
-                      <div
-                        tabIndex={0}
-                        contentEditable={false}
-                        onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
-                        onClick={(e:any)=>{ try { e.currentTarget.focus(); } catch {} }}
-                        style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${catalogFiles.length?"#86EFAC":C.border}`,borderRadius:10,background:catalogFiles.length?"#ECFDF5":C.bg,outline:"none",cursor:"text" }}
-                      >
-                        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-                          <div style={{ minWidth:0,flex:"1 1 260px" }}>
-                            <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Reference images</p>
-                            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
-                              Paste or upload one or more catalog/product images. Use this for per-color collection pages or extra product references.
-                            </p>
-                            {!!catalogFiles.length&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.faint,fontWeight:700 }}>{catalogFiles.length} reference image{catalogFiles.length>1?"s":""} added</p>}
-                          </div>
-                          <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:32,padding:"0 12px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",width:isMobile?"100%":"auto" }}>
-                            Upload Reference Images
-                            <input type="file" accept="image/*" multiple onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
-                          </label>
-                        </div>
-                        {catalogFiles.length>0&&(
-                          <div style={{ marginTop:10,display:"flex",flexWrap:"wrap",gap:10 }}>
-                            {catalogFiles.map((file:any,idx:number)=>String(file?.type||"").startsWith("image/")&&(
-                              <div key={`${file.name || 'catalog-file'}-${idx}`} style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:6 }}>
-                                <img src={file.dataUrl} alt={file.name || "Catalog reference"} style={{ width:64,height:64,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}` }} />
-                                <button onClick={(e:any)=>{ e.stopPropagation(); removeCatalogFile(tab,idx); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                      <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Products / SKU</h4>
+                      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                        {productRows.length>0&&(
+                          <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
+                            <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                              <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
+                              <div style={{ display:"flex",gap:6,width:isMobile?"100%":"auto",flexWrap:"wrap",justifyContent:isMobile?"stretch":"flex-end" }}>
+                                <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
+                                <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const rows = getProductIntroDigitalRows();
+                                  const existing = new Set(rows.flatMap((row:any)=>Array.isArray(row.products) ? row.products.map((p:any)=>String(p.sku || p.product || "")) : [String(row.sku || row.product || "")]));
+                                  const rowsToAdd = selectedCampaignProductKeys
+                                    .map((key:string)=>getCampaignProductByOptionKey(key))
+                                    .filter(Boolean)
+                                    .filter((item:any)=>!existing.has(String(item.skuCode || item.sku || item.product || item.productName || "")))
+                                    .map((item:any)=>makeProductIntroDcItem(item));
+                                  if(rowsToAdd.length) saveProductIntroDigitalRows([...rows,...rowsToAdd]);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!selectedCampaignProductKeys.length}>Add Selected as Separate Rows</Btn>
+                                <Btn xs onClick={()=>{
+                                  const rows = getProductIntroDigitalRows();
+                                  const items = getCampaignItemsByKeys(selectedCampaignProductKeys);
+                                  if(items.length) saveProductIntroDigitalRows([...rows,makeProductIntroDcGroupedItem(items)]);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!selectedCampaignProductKeys.length}>Add Selected as 1 Row</Btn>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const rows = productRows.map(makeProductIntroDcItem);
+                                  saveProductIntroDigitalRows(rows);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!productRows.length}>Add All as Separate Rows</Btn>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const rows = productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : [];
+                                  saveProductIntroDigitalRows(rows);
+                                  setSelectedCampaignProductKeys([]);
+                                }} disabled={!productRows.length}>Add All as 1 Row</Btn>
                               </div>
-                            ))}
+                            </div>
+                            <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                              {productRows.map((row:any,idx:number)=>{
+                                const key = getCampaignProductOptionKey(row,idx);
+                                const checked = selectedCampaignProductKeys.includes(key);
+                                return (
+                                  <label key={key} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:9,alignItems:"center",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:checked?"#EEF2FF":idx%2?C.surface:C.surfaceAlt,cursor:"pointer" }}>
+                                    <input type="checkbox" checked={checked} onChange={()=>toggleSelectedCampaignProductKey(key)} />
+                                    <span style={{ minWidth:0 }}>
+                                      <span style={{ display:"block",fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || row.skuCode || "Unnamed Product"}</span>
+                                      <span style={{ display:"block",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || row.category || "No collection/category"} · {row.skuCode || row.sku || ""}</span>
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
-                      </div>
-                      <textarea
-                        value={data.textPrompt || ""}
-                        onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
-                        onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
-                        placeholder="Click Use Listing Template, upload reference images if needed, or write your own instruction for the e-commerce listing output."
-                        rows={9}
-                        style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:isMobile?230:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
-                      />
-                      {Array.isArray(data.promptProductRows)&&data.promptProductRows.length>0&&(
-                        <div style={{ marginTop:8,padding:"7px 10px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:8,fontSize:11.5,color:"#047857",fontWeight:800 }}>
-                          <span>Prompt product scope: {data.promptProductRows.length} product{data.promptProductRows.length!==1?"s":""}. Save Changes will keep this same product scope.</span>
-                          <button type="button" onClick={()=>updateAiWorkspace("ecommerce",{ promptProductRows:[], textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,productRows) })} style={{ marginLeft:8,border:"none",background:"transparent",color:"#047857",fontSize:11.5,fontWeight:900,textDecoration:"underline",cursor:"pointer" }}>Use all products</button>
+
+                        <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
+                          <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                            <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{getProductIntroDigitalRows().length} digital creative product row{getProductIntroDigitalRows().length!==1?"s":""}</span>
+                            <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                              <Btn xs variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save Generated Outputs</Btn>
+                              <Btn xs variant="danger" onClick={()=>saveProductIntroDigitalRows([])} disabled={!getProductIntroDigitalRows().length}>Clear Rows</Btn>
+                            </div>
+                          </div>
+                          <div style={{ maxHeight:180,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+                            {getProductIntroDigitalRows().length ? getProductIntroDigitalRows().map((row:any,idx:number)=>(
+                              <div key={row.id || idx} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) auto",gap:8,alignItems:"center",padding:"8px 10px",borderBottom:idx===getProductIntroDigitalRows().length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
+                                <div style={{ minWidth:0 }}>
+                                  <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || "Product Row"}</p>
+                                  <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.category || row.collection || "No collection/category"} · {Array.isArray(row.products)&&row.products.length>1 ? `${row.products.length} products in 1 row` : (row.sku || "")}</p>
+                                </div>
+                                <Btn xs variant="outline" onClick={()=>{
+                                  const selectedProducts = Array.isArray(row.products) && row.products.length ? row.products : [{ product:row.product || "", sku:row.sku || "", brand:row.brand || "", collection:row.category || row.collection || "" }];
+                                  setEcommercePromptForProducts(selectedProducts);
+                                }}>Add to E-commerce Listing</Btn>
+                              </div>
+                            )) : (
+                              <div style={{ padding:12,fontSize:12,color:C.faint }}>No digital creative rows yet. Add selected products above.</div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
-                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",gap:8,justifyContent:isMobile?"stretch":"flex-end",marginTop:10 }}>
-                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Save Prompt</Btn>
-                        <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
+
+                        {productRows.length===0&&<div style={{ padding:12,fontSize:12,color:C.faint,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>No selected products yet.</div>}
                       </div>
                     </div>
 
@@ -7417,89 +7447,59 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         
                   <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                      <h4 style={{ margin:"0 0 10px",fontSize:13,fontWeight:900,color:C.text }}>Products / SKU</h4>
-                      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                        {productRows.length>0&&(
-                          <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
-                            <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                              <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
-                              <div style={{ display:"flex",gap:6,width:isMobile?"100%":"auto",flexWrap:"wrap",justifyContent:isMobile?"stretch":"flex-end" }}>
-                                <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
-                                <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
-                                <Btn xs variant="outline" onClick={()=>{
-                                  const rows = getProductIntroDigitalRows();
-                                  const existing = new Set(rows.flatMap((row:any)=>Array.isArray(row.products) ? row.products.map((p:any)=>String(p.sku || p.product || "")) : [String(row.sku || row.product || "")]));
-                                  const rowsToAdd = selectedCampaignProductKeys
-                                    .map((key:string)=>getCampaignProductByOptionKey(key))
-                                    .filter(Boolean)
-                                    .filter((item:any)=>!existing.has(String(item.skuCode || item.sku || item.product || item.productName || "")))
-                                    .map((item:any)=>makeProductIntroDcItem(item));
-                                  if(rowsToAdd.length) saveProductIntroDigitalRows([...rows,...rowsToAdd]);
-                                  setSelectedCampaignProductKeys([]);
-                                }} disabled={!selectedCampaignProductKeys.length}>Add Selected as Separate Rows</Btn>
-                                <Btn xs onClick={()=>{
-                                  const rows = getProductIntroDigitalRows();
-                                  const items = getCampaignItemsByKeys(selectedCampaignProductKeys);
-                                  if(items.length) saveProductIntroDigitalRows([...rows,makeProductIntroDcGroupedItem(items)]);
-                                  setSelectedCampaignProductKeys([]);
-                                }} disabled={!selectedCampaignProductKeys.length}>Add Selected as 1 Row</Btn>
-                                <Btn xs variant="outline" onClick={()=>{
-                                  const rows = productRows.map(makeProductIntroDcItem);
-                                  saveProductIntroDigitalRows(rows);
-                                  setSelectedCampaignProductKeys([]);
-                                }} disabled={!productRows.length}>Add All as Separate Rows</Btn>
-                                <Btn xs variant="outline" onClick={()=>{
-                                  const rows = productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : [];
-                                  saveProductIntroDigitalRows(rows);
-                                  setSelectedCampaignProductKeys([]);
-                                }} disabled={!productRows.length}>Add All as 1 Row</Btn>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
+                        <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
+                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Use Listing Template</Btn>
+                      </div>
+                      <div
+                        tabIndex={0}
+                        contentEditable={false}
+                        onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
+                        onClick={(e:any)=>{ try { e.currentTarget.focus(); } catch {} }}
+                        style={{ marginBottom:10,padding:"10px 12px",border:`1.5px dashed ${catalogFiles.length?"#86EFAC":C.border}`,borderRadius:10,background:catalogFiles.length?"#ECFDF5":C.bg,outline:"none",cursor:"text" }}
+                      >
+                        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                          <div style={{ minWidth:0,flex:"1 1 260px" }}>
+                            <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Reference images</p>
+                            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
+                              Paste or upload one or more catalog/product images. Use this for per-color collection pages or extra product references.
+                            </p>
+                            {!!catalogFiles.length&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.faint,fontWeight:700 }}>{catalogFiles.length} reference image{catalogFiles.length>1?"s":""} added</p>}
+                          </div>
+                          <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:32,padding:"0 12px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",width:isMobile?"100%":"auto" }}>
+                            Upload Reference Images
+                            <input type="file" accept="image/*" multiple onChange={(e:any)=>handlePromptImageUpload(tab,e)} style={{ display:"none" }} />
+                          </label>
+                        </div>
+                        {catalogFiles.length>0&&(
+                          <div style={{ marginTop:10,display:"flex",flexWrap:"wrap",gap:10 }}>
+                            {catalogFiles.map((file:any,idx:number)=>String(file?.type||"").startsWith("image/")&&(
+                              <div key={`${file.name || 'catalog-file'}-${idx}`} style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:6 }}>
+                                <img src={file.dataUrl} alt={file.name || "Catalog reference"} style={{ width:64,height:64,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}` }} />
+                                <button onClick={(e:any)=>{ e.stopPropagation(); removeCatalogFile(tab,idx); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Remove</button>
                               </div>
-                            </div>
-                            <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
-                              {productRows.map((row:any,idx:number)=>{
-                                const key = getCampaignProductOptionKey(row,idx);
-                                const checked = selectedCampaignProductKeys.includes(key);
-                                return (
-                                  <label key={key} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:9,alignItems:"center",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:checked?"#EEF2FF":idx%2?C.surface:C.surfaceAlt,cursor:"pointer" }}>
-                                    <input type="checkbox" checked={checked} onChange={()=>toggleSelectedCampaignProductKey(key)} />
-                                    <span style={{ minWidth:0 }}>
-                                      <span style={{ display:"block",fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || row.skuCode || "Unnamed Product"}</span>
-                                      <span style={{ display:"block",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.collection || row.category || "No collection/category"} · {row.skuCode || row.sku || ""}</span>
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
+                            ))}
                           </div>
                         )}
-
-                        <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                          <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                            <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{getProductIntroDigitalRows().length} digital creative product row{getProductIntroDigitalRows().length!==1?"s":""}</span>
-                            <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                              <Btn xs variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save Generated Outputs</Btn>
-                              <Btn xs variant="danger" onClick={()=>saveProductIntroDigitalRows([])} disabled={!getProductIntroDigitalRows().length}>Clear Rows</Btn>
-                            </div>
-                          </div>
-                          <div style={{ maxHeight:180,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
-                            {getProductIntroDigitalRows().length ? getProductIntroDigitalRows().map((row:any,idx:number)=>(
-                              <div key={row.id || idx} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) auto",gap:8,alignItems:"center",padding:"8px 10px",borderBottom:idx===getProductIntroDigitalRows().length-1?"none":`1px solid ${C.border}`,background:idx%2?C.surface:C.surfaceAlt }}>
-                                <div style={{ minWidth:0 }}>
-                                  <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || "Product Row"}</p>
-                                  <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"} · {row.category || row.collection || "No collection/category"} · {Array.isArray(row.products)&&row.products.length>1 ? `${row.products.length} products in 1 row` : (row.sku || "")}</p>
-                                </div>
-                                <Btn xs variant="outline" onClick={()=>{
-                                  const selectedProducts = Array.isArray(row.products) && row.products.length ? row.products : [{ product:row.product || "", sku:row.sku || "", brand:row.brand || "", collection:row.category || row.collection || "" }];
-                                  setEcommercePromptForProducts(selectedProducts);
-                                }}>Add to E-commerce Listing</Btn>
-                              </div>
-                            )) : (
-                              <div style={{ padding:12,fontSize:12,color:C.faint }}>No digital creative rows yet. Add selected products above.</div>
-                            )}
-                          </div>
+                      </div>
+                      <textarea
+                        value={data.textPrompt || ""}
+                        onPaste={(e:any)=>handlePromptImagePaste(tab,e)}
+                        onChange={e=>updateAiWorkspace(tab,{ textPrompt:e.target.value })}
+                        placeholder="Click Use Listing Template, upload reference images if needed, or write your own instruction for the e-commerce listing output."
+                        rows={9}
+                        style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:isMobile?230:190,resize:"vertical",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                      />
+                      {Array.isArray(data.promptProductRows)&&data.promptProductRows.length>0&&(
+                        <div style={{ marginTop:8,padding:"7px 10px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:8,fontSize:11.5,color:"#047857",fontWeight:800 }}>
+                          <span>Prompt product scope: {data.promptProductRows.length} product{data.promptProductRows.length!==1?"s":""}. Save Changes will keep this same product scope.</span>
+                          <button type="button" onClick={()=>updateAiWorkspace("ecommerce",{ promptProductRows:[], textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,productRows) })} style={{ marginLeft:8,border:"none",background:"transparent",color:"#047857",fontSize:11.5,fontWeight:900,textDecoration:"underline",cursor:"pointer" }}>Use all products</button>
                         </div>
-
-                        {productRows.length===0&&<div style={{ padding:12,fontSize:12,color:C.faint,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>No selected products yet.</div>}
+                      )}
+                      {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
+                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",gap:8,justifyContent:isMobile?"stretch":"flex-end",marginTop:10 }}>
+                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Save Prompt</Btn>
+                        <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
                       </div>
                     </div>
         
