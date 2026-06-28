@@ -5113,10 +5113,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const selectedMarketingProducts = marketingAdProducts.filter((item:any,idx:number)=>selectedMarketingProductKeys.includes(marketingProductKey(item,idx)));
       const placedMarketingProducts = marketingAdProducts.filter((item:any,idx:number)=>placedMarketingProductKeys.includes(marketingProductKey(item,idx)));
 
-      const productIntroSavedImageOutputs = Array.isArray((((group.aiWorkspace || {}).digital || {}) as any).savedImageOutputs)
-        ? (((group.aiWorkspace || {}).digital || {}) as any).savedImageOutputs.filter((img:any)=>String(img.source || "").includes("Product Introduction Digital Creative"))
-        : [];
-
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -6513,37 +6509,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               })}
             </div>
           )}
-          {productIntroSavedImageOutputs.length>0&&(<div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-            <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
-              <div>
-                <h3 style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>Digital Creative Saved Outputs</h3>
-                <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted }}>Saved generated images from this Digital Creative tab. Add them to Overview when ready.</p>
-              </div>
-              <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{productIntroSavedImageOutputs.length} saved</span>
-            </div>
-            <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(240px,1fr))",gap:10 }}>
-              {productIntroSavedImageOutputs.map((img:any)=>(
-                <div key={img.id} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column" }}>
-                  <div style={{ padding:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start" }}>
-                    <div style={{ minWidth:0 }}>
-                      <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{img.title || "Saved Digital Creative Image"}</p>
-                      <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted }}>{img.createdAt ? new Date(img.createdAt).toLocaleString() : "Saved output"}</p>
-                    </div>
-                  </div>
-                  {img.url&&<img src={img.url} alt="Saved digital creative" onClick={()=>setCampaignDcPreview({ id:img.id, url:img.url, prompt:img.prompt || "", title:img.title || "Saved Digital Creative Image" })} style={{ width:"100%",height:180,objectFit:"contain",background:C.surface,borderBottom:`1px solid ${C.border}`,cursor:"zoom-in" }} />}
-                  <div style={{ padding:10,display:"grid",gap:8 }}>
-                    <p style={{ margin:0,fontSize:11,color:C.textSub,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden" }}>{img.prompt || "No prompt saved."}</p>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6 }}>
-                      <Btn xs variant={actionDone(`overview-dc-saved-${img.id}`)?"primary":"outline"} onClick={()=>{ addToOverview("Digital Creative",img.title || "Saved Digital Creative Image",formatSavedDigitalImageOverview(img),"Saved AI Image"); markActionDone(`overview-dc-saved-${img.id}`); }}>{actionDone(`overview-dc-saved-${img.id}`)?"✓ Added":"Add to Overview"}</Btn>
-                      <Btn xs variant="outline" onClick={()=>setCampaignDcPreview({ id:img.id, url:img.url, prompt:img.prompt || "", title:img.title || "Saved Digital Creative Image" })}>Preview</Btn>
-                      <Btn xs variant="danger" style={{ gridColumn:"1 / -1" }} onClick={()=>deleteSavedDigitalImageOutput(img.id)}>Delete</Btn>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>)}
-
           <Modal open={!!campaignDcPreview} onClose={()=>setCampaignDcPreview(null)} title="AI Image Preview" width={820}>
             {campaignDcPreview&&(
               <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
@@ -6641,6 +6606,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           title:item.product || "Product Introduction Digital Creative",
           url:item.generatedImageUrl,
           prompt:item.generatedImagePrompt || item.imagePrompt || "",
+          ownPrompt:item.ownPrompt || "",
+          kind:"Generated Image",
           createdAt:savedAt,
         };
         const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
@@ -6653,43 +6620,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           generatedAt:savedAt,
         });
       };
-      const buildProductIntroDetailedPrompt = (item:any, tableProducts:any[]=[], links:any[]=[]) => {
-        const savedInstructions = String(item.detailedPromptInstructions || "").trim() || [
-          "Create a detailed, production-ready AI image prompt for ecommerce product photography.",
-          "Strictly preserve the product appearance from the provided product image links.",
-          "Use the user's own prompt as the main creative direction when provided.",
-          "Do not add text overlays, labels, logos, watermarks, hands, people, or unrelated props unless specifically requested.",
-        ].join(" ");
-        const ownPrompt = String(item.ownImagePrompt || "").trim();
-        const productSummary = tableProducts.length ? tableProducts.map((row:any)=>`- ${row.product || "Product"}${row.sku ? ` (${row.sku})` : ""}${row.category ? ` · ${row.category}` : ""}`).join("\n") : `- ${item.product || "Product"}${item.sku ? ` (${item.sku})` : ""}`;
-        const linkSummary = links.length ? links.map((link:any,idx:number)=>`${idx+1}. ${link}`).join("\n") : "No product image links found. If links are available, use them as the highest-priority visual reference.";
-        const baseDirection = ownPrompt || item.imagePrompt || "Create a premium product image using the selected products as the hero.";
-        return [
-          "DETAILED AI IMAGE PROMPT",
-          "",
-          "USER DIRECTION TO FOLLOW:",
-          baseDirection,
-          "",
-          "SAVED INSTRUCTIONS TO FOLLOW:",
-          savedInstructions,
-          "",
-          "FEATURED PRODUCTS / SKU:",
-          productSummary,
-          "",
-          "PRODUCT IMAGE LINKS TO USE AS STRICT VISUAL REFERENCES:",
-          linkSummary,
-          "",
-          "FINAL PROMPT:",
-          `${baseDirection}. Use the product image links as the default and highest-priority references for product shape, color, material, proportions, rim/handle details, transparency, finish, and size relationship. Arrange the selected products in a clean premium ecommerce composition. Keep every product accurate and recognizable. Use realistic lighting, natural shadows, sharp focus, clean background, and commercial product photography quality.`,
-          "",
-          "COMPOSITION:",
-          "Show the full product form clearly. If multiple SKUs are selected, arrange them as a cohesive collection with correct relative scale, enough spacing, and no cropping of important product details.",
-          "",
-          "NEGATIVE / DO NOT:",
-          "Do not redesign the product. Do not change color, material, shape, lids, handles, texture, packaging, or visible details. Do not invent a different product. No text overlay, watermark, extra logos, messy clutter, distorted perspective, duplicate random objects, or unrealistic reflections.",
-        ].join("\n");
-      };
-
       const deleteProductIntroDcImageOutput = (item:any) => {
         updateProductIntroDigitalItem(item.id,{
           generatedImageUrl:"",
@@ -6706,16 +6636,94 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         saveProductIntroDigitalRows(nextRows);
       };
       const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
-      const deleteSavedDigitalImageOutput = (id:string) => {
+      const savedProductIntroDigitalOutputs = Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : [];
+      const defaultProductIntroDetailedPromptInstructions = "Create a highly executable product image prompt for AI image generation. Strictly preserve the product look from the provided product image links. Improve the user's own prompt without changing its core request. Include clear scene, composition, lighting, camera angle, product placement, styling, quality, and negative restrictions. Avoid text overlays unless the user specifically asks for text.";
+      const getProductIntroDetailedPromptInstructions = () => String(digitalData.detailedPromptInstructions || defaultProductIntroDetailedPromptInstructions);
+      const buildProductIntroDetailedPrompt = (item:any) => {
+        const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
+        const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const ownPrompt = String(item.ownPrompt || "").trim();
+        const productLines = cardProducts.map((product:any,index:number)=>{
+          const name = product?.product || product?.productName || product?.name || item.product || `Product ${index+1}`;
+          const sku = product?.sku || item.sku || "";
+          const brand = product?.brand || item.brand || "";
+          const collection = product?.collection || product?.category || item.category || item.collection || "";
+          return `${index+1}. ${[brand,collection,name,sku].filter(Boolean).join(" · ")}`;
+        }).join("\n");
+        return [
+          "AI IMAGE GENERATION PROMPT",
+          "",
+          "PRIMARY USER DIRECTION TO FOLLOW:",
+          ownPrompt || "Create a premium ecommerce product introduction image using the selected products.",
+          "",
+          "SAVED DETAILED PROMPT INSTRUCTIONS TO FOLLOW:",
+          getProductIntroDetailedPromptInstructions(),
+          "",
+          "FEATURED PRODUCT/S:",
+          productLines || [item.brand,item.category || item.collection,item.product,item.sku].filter(Boolean).join(" · "),
+          "",
+          "PRODUCT IMAGE LINKS - REQUIRED VISUAL REFERENCES:",
+          links.length ? links.map((link:string,index:number)=>`${index+1}. ${link}`).join("\n") : "No product image links were found. Use only the provided product details and any uploaded references.",
+          "",
+          "FINAL EXECUTION:",
+          ownPrompt
+            ? `Improve and expand the user direction above while still following it exactly. The final scene must clearly match this request: ${ownPrompt}`
+            : "Create a clean, premium product-focused visual based on the selected products.",
+          "Use the product image links as the default reference for product accuracy. Preserve exact product color, shape, scale, material, proportions, handles, rims, packaging, logo placement, and visible details. Do not invent a different product.",
+          "",
+          "SCENE AND COMPOSITION:",
+          ownPrompt ? `Build the scene around the user's requested setting/concept: ${ownPrompt}` : "Use a premium studio or semi-lifestyle ecommerce setup suitable for the product category.",
+          "Arrange the selected products in a visually balanced composition. Keep product scale relationships accurate and give enough breathing room for marketplace or ad layout use.",
+          "",
+          "LIGHTING AND CAMERA:",
+          "Use soft natural commercial lighting, crisp focus, realistic shadows, clean highlights, accurate product reflections, and a premium product photography look. Use a realistic camera angle that clearly shows the product form and important details.",
+          "",
+          "QUALITY STYLE:",
+          "Hyper-realistic premium ecommerce product photography, sharp, clean, high-resolution, natural colors, accurate materials, modern layout, polished but not overly artificial.",
+          "",
+          "NEGATIVE RESTRICTIONS:",
+          "No wrong product shape, no color changes, no invented accessories, no extra labels, no text overlay, no watermark, no distorted handles, no incorrect size relationship, no messy clutter, no unrealistic reflections, no people unless the user's own prompt asks for people."
+        ].filter(Boolean).join("\n");
+      };
+      const generateProductIntroDetailedPrompt = (item:any) => {
+        const prompt = buildProductIntroDetailedPrompt(item);
+        updateProductIntroDigitalItem(item.id,{ imagePrompt:prompt, generatedDetailedPromptAt:new Date().toISOString() });
+        markActionDone(`digital-detailed-prompt-${item.id}`);
+      };
+      const saveProductIntroDigitalPromptOutput = (item:any) => {
+        const text = String(item.imagePrompt || "").trim();
+        if(!text) return;
+        const savedAt = new Date().toISOString();
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-        updateAiWorkspace("digital",{ savedImageOutputs:saved.filter((img:any)=>img.id!==id) });
+        const savedEntry = {
+          id:uid(),
+          source:"Product Introduction Digital Creative",
+          cardId:`prompt-${item.id}`,
+          sourceRowId:item.id,
+          title:`${item.product || "Product Introduction"} · Detailed Prompt`,
+          url:item.generatedImageUrl || "",
+          prompt:text,
+          ownPrompt:item.ownPrompt || "",
+          kind:"Detailed Prompt",
+          createdAt:savedAt,
+        };
+        updateAiWorkspace("digital",{
+          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==`prompt-${item.id}`)].slice(0,60),
+          generatedText:text,
+          generatedAt:savedAt,
+        });
+        markActionDone(`digital-save-prompt-${item.id}`);
       };
-      const formatSavedDigitalImageOverview = (img:any) => [
-        `Title: ${img.title || "Saved Digital Creative Image"}`,
-        img.url ? `Image URL: ${img.url}` : "",
-        img.prompt ? `Prompt:\n${img.prompt}` : "",
-      ].filter(Boolean).join("\n\n");
+      const addSavedProductIntroDigitalOutputToOverview = (saved:any) => {
+        const content = [
+          saved?.url ? `Generated Image: ${saved.url}` : "",
+          saved?.ownPrompt ? `Own Prompt: ${saved.ownPrompt}` : "",
+          saved?.prompt ? `Prompt:\n${saved.prompt}` : "",
+        ].filter(Boolean).join("\n\n");
+        addToOverview("Digital Creative", saved?.title || "Saved Digital Creative Output", content, saved?.kind || "Saved Output");
+        markActionDone(`overview-digital-saved-${saved?.id}`);
+      };
       const generateProductIntroDcImage = async (item:any) => {
         const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
         const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
@@ -7231,46 +7239,47 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                           <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Detailed Prompt</span>
                           <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-                            <Btn xs variant="outline" onClick={()=>updateProductIntroDigitalItem(item.id,{ editingDetailedPromptInstructions:!item.editingDetailedPromptInstructions })}>{item.editingDetailedPromptInstructions ? "Hide Instructions" : "Edit Instructions"}</Btn>
-                            <Btn xs variant="outline" onClick={()=>{ const detailedPrompt = buildProductIntroDetailedPrompt(item,tableProducts,links); updateProductIntroDigitalItem(item.id,{ imagePrompt:detailedPrompt, generatedDetailedPromptAt:new Date().toISOString() }); }}>Generate Detailed Prompt</Btn>
+                            <Btn xs variant="outline" onClick={()=>updateAiWorkspace("digital",{ detailedPromptInstructionsEditing:!digitalData.detailedPromptInstructionsEditing })}>{digitalData.detailedPromptInstructionsEditing ? "Hide Instructions" : "Edit Instructions"}</Btn>
+                            <Btn xs variant={actionDone(`digital-detailed-prompt-${item.id}`)?"primary":"outline"} onClick={()=>generateProductIntroDetailedPrompt(item)}>{actionDone(`digital-detailed-prompt-${item.id}`)?"✓ Prompt Generated":"Generate Detailed Prompt"}</Btn>
+                            <Btn xs variant={actionDone(`digital-save-prompt-${item.id}`)?"primary":"outline"} onClick={()=>saveProductIntroDigitalPromptOutput(item)} disabled={!String(item.imagePrompt || "").trim()}>{actionDone(`digital-save-prompt-${item.id}`)?"✓ Saved":"Save Prompt"}</Btn>
                           </div>
                         </div>
-                        <div style={{ padding:10,display:"grid",gap:10 }}>
-                          {item.editingDetailedPromptInstructions&&(<div style={{ display:"grid",gap:6 }}>
-                            <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Detailed Prompt Creator Instructions</span>
+                        <div style={{ padding:10,display:"flex",flexDirection:"column",gap:10 }}>
+                          {digitalData.detailedPromptInstructionsEditing&&(
+                            <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface }}>
+                              <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:6 }}>
+                                <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Detailed Prompt Creator Instructions</span>
+                                <Btn xs onClick={()=>{ updateAiWorkspace("digital",{ detailedPromptInstructionsEditing:false }); markActionDone("digital-detailed-instructions-save"); }}>{actionDone("digital-detailed-instructions-save")?"✓ Saved":"Save"}</Btn>
+                              </div>
+                              <textarea
+                                value={digitalData.detailedPromptInstructions || defaultProductIntroDetailedPromptInstructions}
+                                onChange={(e:any)=>updateAiWorkspace("digital",{ detailedPromptInstructions:e.target.value })}
+                                rows={4}
+                                style={{ width:"100%",boxSizing:"border-box",minHeight:92,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.bg }}
+                              />
+                            </div>
+                          )}
+                          <div style={{ border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,overflow:"hidden" }}>
+                            <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                              <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Your Own Prompt (Optional)</span>
+                            </div>
                             <textarea
-                              value={item.detailedPromptInstructions || ""}
-                              onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ detailedPromptInstructions:e.target.value })}
-                              placeholder="Add rules for how the detailed prompt should be created. These instructions are hidden until Edit Instructions is clicked."
-                              rows={4}
-                              style={{ width:"100%",boxSizing:"border-box",minHeight:84,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
+                              value={item.ownPrompt || ""}
+                              onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ ownPrompt:e.target.value })}
+                              placeholder="Type your own direction. Example: put these products in a modern kitchen counter"
+                              rows={isMobile?3:3}
+                              style={{ width:"100%",boxSizing:"border-box",minHeight:74,resize:"vertical",padding:"10px 12px",border:"none",outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
                             />
-                            <div style={{ display:"flex",justifyContent:"flex-end",gap:6 }}><Btn xs onClick={()=>updateProductIntroDigitalItem(item.id,{ editingDetailedPromptInstructions:false })}>Save Instructions</Btn></div>
-                          </div>)}
-                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10 }}>
-                            <div style={{ display:"grid",gap:6 }}>
-                              <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Generated Detailed Prompt</span>
-                              <textarea
-                                value={item.imagePrompt || ""}
-                                onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ imagePrompt:e.target.value })}
-                                placeholder="Click Generate Detailed Prompt, or write your final image prompt here."
-                                rows={isMobile?4:6}
-                                style={{ width:"100%",boxSizing:"border-box",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
-                              />
-                            </div>
-                            <div style={{ display:"grid",gap:6 }}>
-                              <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Your Own Prompt <span style={{ color:C.faint,fontWeight:700 }}>(Optional)</span></span>
-                              <textarea
-                                value={item.ownImagePrompt || ""}
-                                onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ ownImagePrompt:e.target.value })}
-                                placeholder="Example: put these products in a modern kitchen counter. Generate Detailed Prompt will improve this while still following it."
-                                rows={isMobile?3:6}
-                                style={{ width:"100%",boxSizing:"border-box",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
-                              />
-                            </div>
                           </div>
-                          <p style={{ margin:0,fontSize:10.5,color:C.faint,lineHeight:1.35 }}>Your own prompt is used as the main direction. The detailed prompt still follows saved instructions, selected products, SKU details, and product image links.</p>
-                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8 }}>
+                          <textarea
+                            value={item.imagePrompt || ""}
+                            onChange={(e:any)=>updateProductIntroDigitalItem(item.id,{ imagePrompt:e.target.value })}
+                            placeholder="Generated detailed prompt will appear here. You can also edit it before generating the image."
+                            rows={isMobile?5:6}
+                            style={{ width:"100%",boxSizing:"border-box",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
+                          />
+                          <p style={{ margin:"-4px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>Generate Detailed Prompt improves your own prompt while still following it. Product image links remain the main visual reference.</p>
+                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:0 }}>
                             <input
                               type="file"
                               accept="image/*"
@@ -7305,10 +7314,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               onClick={()=>setCampaignDcPreview({ id:item.id, url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "", title:item.product || "Product Introduction Digital Creative" })}
                               style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
                             />
-                            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:300 }}>
+                            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
                               <Btn xs variant={item.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcImageOutput(item)}>{item.savedImageAt ? "Saved ✓" : "Save"}</Btn>
-                              <Btn xs variant={actionDone(`overview-dc-image-${item.id}`)?"primary":"outline"} onClick={()=>{ addToOverview("Digital Creative",item.product || "Product Introduction Digital Creative",formatSavedDigitalImageOverview({ title:item.product || "Product Introduction Digital Creative", url:item.generatedImageUrl, prompt:item.generatedImagePrompt || item.imagePrompt || "" }),"AI Image"); markActionDone(`overview-dc-image-${item.id}`); }}>{actionDone(`overview-dc-image-${item.id}`)?"✓ Added":"Add to Overview"}</Btn>
-                              <Btn xs variant="danger" style={{ gridColumn:"1 / -1" }} onClick={()=>deleteProductIntroDcImageOutput(item)}>Delete</Btn>
+                              <Btn xs variant="danger" onClick={()=>deleteProductIntroDcImageOutput(item)}>Delete</Btn>
                             </div>
                           </div>
                         ) : (
@@ -7325,6 +7333,36 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 </div>
                 );
               })}
+            </div>
+          )}
+
+          {savedProductIntroDigitalOutputs.length>0&&(
+            <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+              <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+                <div>
+                  <h3 style={{ margin:"0 0 4px",fontSize:15,fontWeight:900,color:C.text }}>Digital Creative Saved Outputs</h3>
+                  <p style={{ margin:0,fontSize:12,color:C.muted }}>Saved prompts and generated images from Digital Creative.</p>
+                </div>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{savedProductIntroDigitalOutputs.length} saved</span>
+              </div>
+              <div style={{ padding:isMobile?10:12,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:10 }}>
+                {savedProductIntroDigitalOutputs.map((saved:any)=>(
+                  <div key={saved.id} style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden",display:"flex",flexDirection:"column",minWidth:0 }}>
+                    <div style={{ padding:"9px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start",flexWrap:"wrap" }}>
+                      <div style={{ minWidth:0,flex:1 }}>
+                        <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text,lineHeight:1.35,wordBreak:"break-word" }}>{saved.title || "Saved Digital Creative Output"}</p>
+                        <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted }}>{saved.kind || (saved.url ? "Generated Image" : "Detailed Prompt")}</p>
+                      </div>
+                      <Btn xs variant={actionDone(`overview-digital-saved-${saved.id}`)?"primary":"outline"} onClick={()=>addSavedProductIntroDigitalOutputToOverview(saved)}>{actionDone(`overview-digital-saved-${saved.id}`)?"✓ Added":"Add to Overview"}</Btn>
+                    </div>
+                    <div style={{ padding:10,display:"flex",flexDirection:"column",gap:8 }}>
+                      {saved.url&&<img src={saved.url} alt={saved.title || "Saved digital output"} style={{ width:"100%",maxHeight:240,objectFit:"contain",borderRadius:9,border:`1px solid ${C.border}`,background:C.surface }} />}
+                      {saved.ownPrompt&&<div style={{ padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface }}><p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Own Prompt</p><p style={{ margin:0,fontSize:12,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{saved.ownPrompt}</p></div>}
+                      {saved.prompt&&<div style={{ padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,maxHeight:220,overflowY:"auto" }}><p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Saved Prompt</p><p style={{ margin:0,fontSize:12,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{saved.prompt}</p></div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
