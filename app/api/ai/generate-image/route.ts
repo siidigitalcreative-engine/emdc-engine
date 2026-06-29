@@ -1,10 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
-import sharp from "sharp";
-import { Readable } from "stream";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 type ReferenceImage = {
   name?: string;
@@ -78,7 +72,7 @@ const toBytePlusSize = (value: unknown) => {
   const rawSize = clean(value).toUpperCase();
 
   // Seedream 4.5 does not support 1K.
-  // Keep 2K as the safest supported web output, then EMDC compresses before saving to Drive.
+  // Use 2K as the safest small web-optimized output size supported by BytePlus Ark Seedream 4.5.
   const map: Record<string, string> = {
     "1024X1024": "2K",
     "1024X1536": "2K",
@@ -111,6 +105,22 @@ const getBytePlusEndpoint = () => {
   return `${base}/api/v3/images/generations`;
 };
 
+const extractGeneratedImage = (data: any): string => {
+  if (!data) return "";
+  if (typeof data === "string") return extractGeneratedImageFromText(data);
+  if (typeof data?.url === "string") return data.url;
+  if (typeof data?.image === "string") return data.image;
+  if (typeof data?.image_url === "string") return data.image_url;
+  if (typeof data?.output === "string") return data.output;
+  if (Array.isArray(data?.output) && typeof data.output[0] === "string") return data.output[0];
+  if (Array.isArray(data?.images) && data.images[0]?.url) return data.images[0].url;
+  if (Array.isArray(data?.images) && typeof data.images[0] === "string") return data.images[0];
+  if (Array.isArray(data?.data) && data.data[0]?.url) return data.data[0].url;
+  if (Array.isArray(data?.data) && data.data[0]?.b64_json) return `data:image/png;base64,${data.data[0].b64_json}`;
+  if (Array.isArray(data?.data) && data.data[0]?.content?.[0]?.url) return data.data[0].content[0].url;
+  return "";
+};
+
 const extractGeneratedImageFromText = (text: string): string => {
   const raw = clean(text);
   if (!raw) return "";
@@ -138,122 +148,6 @@ const extractGeneratedImageFromText = (text: string): string => {
   const urls = raw.match(/https?:\/\/[^\s"'<>]+/gi) || [];
   const imageUrl = urls.find(url => /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) || urls[urls.length - 1] || "";
   return imageUrl.replace(/[),.;]+$/g, "");
-};
-
-const extractGeneratedImage = (data: any): string => {
-  if (!data) return "";
-  if (typeof data === "string") return extractGeneratedImageFromText(data);
-  if (typeof data?.url === "string") return data.url;
-  if (typeof data?.image === "string") return data.image;
-  if (typeof data?.image_url === "string") return data.image_url;
-  if (typeof data?.output === "string") return data.output;
-  if (Array.isArray(data?.output) && typeof data.output[0] === "string") return data.output[0];
-  if (Array.isArray(data?.images) && data.images[0]?.url) return data.images[0].url;
-  if (Array.isArray(data?.images) && typeof data.images[0] === "string") return data.images[0];
-  if (Array.isArray(data?.data) && data.data[0]?.url) return data.data[0].url;
-  if (Array.isArray(data?.data) && data.data[0]?.b64_json) return `data:image/png;base64,${data.data[0].b64_json}`;
-  if (Array.isArray(data?.data) && data.data[0]?.content?.[0]?.url) return data.data[0].content[0].url;
-  return "";
-};
-
-const getGooglePrivateKey = () => {
-  const raw = process.env.GOOGLE_PRIVATE_KEY || "";
-  return raw.replace(/\\n/g, "\n");
-};
-
-const getDriveClient = async () => {
-  const clientEmail = clean(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
-  const privateKey = getGooglePrivateKey();
-
-  if (!clientEmail || !privateKey) {
-    throw new Error("Google Drive is not configured. Add GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in Vercel.");
-  }
-
-  const auth = new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/drive.file"],
-  });
-
-  await auth.authorize();
-  return google.drive({ version: "v3", auth });
-};
-
-const sanitizeFilename = (value: unknown) => clean(value)
-  .replace(/[^a-z0-9-_]+/gi, "-")
-  .replace(/-+/g, "-")
-  .replace(/^-|-$/g, "")
-  .slice(0, 80) || "emdc-ai-image";
-
-const downloadImageBuffer = async (url: string) => {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "User-Agent": "Mozilla/5.0 EMDC Image Compressor",
-      Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-    },
-    cache: "no-store",
-  });
-
-  if (!res.ok) throw new Error(`Unable to download generated image. Status ${res.status}`);
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.startsWith("image/")) throw new Error("Generated image URL did not return an image file.");
-  return Buffer.from(await res.arrayBuffer());
-};
-
-const compressToWebp = async (inputBuffer: Buffer) => {
-  const output = await sharp(inputBuffer)
-    .rotate()
-    .resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true })
-    .webp({ quality: 82, effort: 5 })
-    .toBuffer();
-
-  return output;
-};
-
-const uploadWebpToDrive = async (webpBuffer: Buffer, filenameBase: string) => {
-  const folderId = clean(process.env.GOOGLE_DRIVE_FOLDER_ID);
-  if (!folderId) throw new Error("GOOGLE_DRIVE_FOLDER_ID is not configured in Vercel.");
-
-  const drive = await getDriveClient();
-  const fileName = `${sanitizeFilename(filenameBase)}-${Date.now()}.webp`;
-
-  const created = await drive.files.create({
-    requestBody: {
-      name: fileName,
-      parents: [folderId],
-      mimeType: "image/webp",
-    },
-    media: {
-      mimeType: "image/webp",
-      body: Readable.from(webpBuffer),
-    },
-    fields: "id,name,size,webViewLink,webContentLink",
-  });
-
-  const fileId = created.data.id;
-  if (!fileId) throw new Error("Google Drive upload failed. No file ID returned.");
-
-  await drive.permissions.create({
-    fileId,
-    requestBody: {
-      role: "reader",
-      type: "anyone",
-    },
-  });
-
-  const driveViewUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
-  const driveDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-
-  return {
-    fileId,
-    fileName,
-    imageUrl: driveViewUrl,
-    driveViewUrl,
-    driveDownloadUrl,
-    webViewLink: created.data.webViewLink || "",
-    sizeBytes: Number(created.data.size || webpBuffer.length),
-  };
 };
 
 export async function POST(req: NextRequest) {
@@ -364,8 +258,8 @@ export async function POST(req: NextRequest) {
       }, { status: response.status });
     }
 
-    const generatedUrl = extractGeneratedImage(parsed) || extractGeneratedImageFromText(responseText);
-    if (/^data:image\//i.test(generatedUrl)) {
+    const url = extractGeneratedImage(parsed) || extractGeneratedImageFromText(responseText);
+    if (/^data:image\//i.test(url)) {
       return NextResponse.json({
         error: "Image provider returned base64. EMDC blocks base64 images to protect site transfer and storage. Please retry with URL output.",
         endpoint,
@@ -373,7 +267,7 @@ export async function POST(req: NextRequest) {
       }, { status: 502 });
     }
 
-    if (!generatedUrl) {
+    if (!url) {
       return NextResponse.json({
         error: "BytePlus Seedream returned no image URL.",
         endpoint,
@@ -382,27 +276,13 @@ export async function POST(req: NextRequest) {
       }, { status: 502 });
     }
 
-    const originalBuffer = await downloadImageBuffer(generatedUrl);
-    const compressedWebp = await compressToWebp(originalBuffer);
-    const titleForFilename = body?.title || body?.name || body?.productName || "emdc-ai-image";
-    const driveUpload = await uploadWebpToDrive(compressedWebp, titleForFilename);
-
     return NextResponse.json({
-      url: driveUpload.imageUrl,
-      imageUrl: driveUpload.imageUrl,
-      originalProviderUrl: generatedUrl,
-      driveFileId: driveUpload.fileId,
-      driveFileName: driveUpload.fileName,
-      driveViewUrl: driveUpload.driveViewUrl,
-      driveDownloadUrl: driveUpload.driveDownloadUrl,
-      webViewLink: driveUpload.webViewLink,
-      optimizedForSite: true,
-      compressionMode: "Seedream URL output downloaded, compressed to WebP quality 82, uploaded to Google Drive, app stores Drive URL only",
-      originalSizeBytes: originalBuffer.length,
-      compressedSizeBytes: compressedWebp.length,
-      compressionSavingsPercent: originalBuffer.length ? Math.round((1 - compressedWebp.length / originalBuffer.length) * 100) : 0,
+      url,
+      imageUrl:url,
+      optimizedForSite:true,
+      compressionMode:"BytePlus URL output + 2K supported web output + base64 blocked",
       prompt: strictPrompt,
-      provider: "byteplus-seedream-google-drive",
+      provider: "byteplus-seedream",
       model,
       productImageLinks: validProductImageLinks,
       productReferencesRead: validProductImageLinks.length,
