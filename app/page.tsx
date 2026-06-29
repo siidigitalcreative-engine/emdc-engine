@@ -5428,6 +5428,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         });
         updateAiWorkspace("marketing",{ selectedMarketingProductKeys:Array.from(current) });
       };
+      const setMarketingProductSelected = (product:any, selected:boolean) => {
+        const productKey = getMarketingProductKeysForTransfer([product])[0];
+        if (!productKey) return;
+        const current = new Set(selectedMarketingProductKeys);
+        if (selected) current.add(productKey);
+        else current.delete(productKey);
+        updateAiWorkspace("marketing",{ selectedMarketingProductKeys:Array.from(current) });
+      };
 
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
@@ -5491,21 +5499,34 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                         <thead>
                           <tr style={{ background:C.surfaceAlt }}>
-                            {["Platform","Brand","Category","Product","SKU"].map((label:string)=>(
+                            {["Select","Platform","Brand","Category","Product","SKU"].map((label:string)=>(
                               <th key={label} style={{ padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {transferProducts.map((product:any,idx:number)=>(
-                            <tr key={`${product.sku || product.skuCode || product.product || idx}`} style={{ background:idx%2?C.surface:C.bg }}>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>All Platforms</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
-                            </tr>
-                          ))}
+                          {transferProducts.map((product:any,idx:number)=>{
+                            const productKey = getMarketingProductKeysForTransfer([product])[0] || "";
+                            const productSelected = !!productKey && selectedMarketingProductKeys.includes(productKey);
+                            const productPlaced = !!productKey && placedMarketingProductKeys.includes(productKey);
+                            return (
+                              <tr key={`${product.sku || product.skuCode || product.product || idx}`} style={{ background:productPlaced?"#ECFDF5":productSelected?"#EEF2FF":idx%2?C.surface:C.bg }}>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={productSelected}
+                                    onClick={(e:any)=>e.stopPropagation()}
+                                    onChange={(e:any)=>setMarketingProductSelected(product,e.target.checked)}
+                                  />
+                                </td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>All Platforms</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -5698,6 +5719,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           if (selected) current.add(key);
           else current.delete(key);
         });
+        updateLivestream({ selectedProductKeys:Array.from(current) });
+      };
+      const setLivestreamProductSelected = (product:any, selected:boolean) => {
+        const productKey = getLivestreamProductKeysForTransfer([product])[0];
+        if (!productKey) return;
+        const current = new Set(selectedLivestreamProductKeys);
+        if (selected) current.add(productKey);
+        else current.delete(productKey);
         updateLivestream({ selectedProductKeys:Array.from(current) });
       };
       const livestreamPromotions = Array.isArray(livestreamData.promotions) ? livestreamData.promotions : [];
@@ -5953,21 +5982,34 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                         <thead>
                           <tr style={{ background:C.surfaceAlt }}>
-                            {["Platform","Brand","Category","Product","SKU"].map((label:string)=>(
+                            {["Select","Platform","Brand","Category","Product","SKU"].map((label:string)=>(
                               <th key={label} style={{ padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {transferProducts.map((product:any,idx:number)=>(
-                            <tr key={`${product.sku || product.skuCode || product.product || idx}`} style={{ background:idx%2?C.surface:C.bg }}>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>All Platforms</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
-                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
-                            </tr>
-                          ))}
+                          {transferProducts.map((product:any,idx:number)=>{
+                            const productKey = getLivestreamProductKeysForTransfer([product])[0] || "";
+                            const productSelected = !!productKey && selectedLivestreamProductKeys.includes(productKey);
+                            const productPlaced = !!productKey && placedLivestreamProductKeys.includes(productKey);
+                            return (
+                              <tr key={`${product.sku || product.skuCode || product.product || idx}`} style={{ background:productPlaced?"#ECFDF5":productSelected?"#EEF2FF":idx%2?C.surface:C.bg }}>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={productSelected}
+                                    onClick={(e:any)=>e.stopPropagation()}
+                                    onChange={(e:any)=>setLivestreamProductSelected(product,e.target.checked)}
+                                  />
+                                </td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>All Platforms</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
