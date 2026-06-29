@@ -6362,6 +6362,23 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       if(!raw) return "";
       return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     };
+    const uploadGeneratedImageToDrive = async ({ url, prompt, title, source, cardId, sourceRowId }: any) => {
+      const imageUrl = String(url || "").trim();
+      if(!imageUrl) throw new Error("No generated image URL to save.");
+      if(/^data:image\//i.test(imageUrl)) throw new Error("Base64 images are blocked. Please regenerate using URL output.");
+
+      const res = await fetch("/api/ai/save-image", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ imageUrl, prompt, title, source, cardId, sourceRowId }),
+      });
+      const raw = await res.text();
+      let result:any = {};
+      try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
+      if(!res.ok) throw new Error(result?.error || result?.message || "Failed to save image to Google Drive.");
+      return result;
+    };
+
     const extractDcLinks = (value:any) => {
       const raw = String(value || "");
       const found = raw.match(dcUrlRegex) || [];
@@ -6453,22 +6470,40 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
 
-      const saveCampaignDcImageOutput = (item:any) => {
+      const saveCampaignDcImageOutput = async (item:any) => {
         if(!item.generatedImageUrl) return;
-        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
-        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-        updateAiWorkspace("digital",{
-          savedImageOutputs:[{
-            id:uid(),
+        const savedAt = new Date().toISOString();
+        try {
+          const uploaded = await uploadGeneratedImageToDrive({
+            url:item.generatedImageUrl,
+            prompt:item.generatedImagePrompt || item.imagePrompt || "",
+            title:item.title || item.product || "Campaign Digital Creative",
             source:"Campaign Digital Creative",
             cardId:item.id,
             sourceRowId:item.id,
-            title:item.title || item.product || "Campaign Digital Creative",
-            url:item.generatedImageUrl,
-            prompt:item.generatedImagePrompt || item.imagePrompt || "",
-            createdAt:new Date().toISOString(),
-          },...saved].slice(0,60),
-        });
+          });
+          const driveUrl = uploaded?.url || uploaded?.imageUrl || item.generatedImageUrl;
+          const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+          const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+          const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, savedImageAt:savedAt, savedImageUrl:driveUrl, driveFileId:uploaded?.driveFileId || "" } : row);
+          updateAiWorkspace("digital",{
+            campaignCreativeRows:nextRows,
+            savedImageOutputs:[{
+              id:uid(),
+              source:"Campaign Digital Creative",
+              cardId:item.id,
+              sourceRowId:item.id,
+              title:item.title || item.product || "Campaign Digital Creative",
+              url:driveUrl,
+              driveFileId:uploaded?.driveFileId || "",
+              prompt:item.generatedImagePrompt || item.imagePrompt || "",
+              createdAt:savedAt,
+            },...saved.filter((img:any)=>img.cardId!==item.id)].slice(0,60),
+          });
+          markActionDone(`save-drive-${item.id}`);
+        } catch(err:any) {
+          updateCampaignDigitalItem(item.id,{ generatedImageError:err?.message || "Failed to save image to Google Drive." });
+        }
       };
 
       const deleteCampaignDcImageOutput = (item:any) => {
@@ -6639,22 +6674,40 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"" });
       };
 
-      const saveCampaignDcCarouselImageOutput = (item:any, card:any, cardIndex:number) => {
+      const saveCampaignDcCarouselImageOutput = async (item:any, card:any, cardIndex:number) => {
         if(!card?.generatedImageUrl) return;
-        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
-        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-        updateAiWorkspace("digital",{
-          savedImageOutputs:[{
-            id:uid(),
-            source:"Campaign Digital Creative",
-            cardId:`${item.id}-carousel-${cardIndex}`,
-            sourceRowId:item.id,
-            title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+        const savedAt = new Date().toISOString();
+        const cardId = `${item.id}-carousel-${cardIndex}`;
+        try {
+          const uploaded = await uploadGeneratedImageToDrive({
             url:card.generatedImageUrl,
             prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
-            createdAt:new Date().toISOString(),
-          },...saved].slice(0,60),
-        });
+            title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+            source:"Campaign Digital Creative",
+            cardId,
+            sourceRowId:item.id,
+          });
+          const driveUrl = uploaded?.url || uploaded?.imageUrl || card.generatedImageUrl;
+          const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+          const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+          updateCampaignDigitalCarouselCard(item.id,cardIndex,{ savedImageAt:savedAt, savedImageUrl:driveUrl, driveFileId:uploaded?.driveFileId || "" });
+          updateAiWorkspace("digital",{
+            savedImageOutputs:[{
+              id:uid(),
+              source:"Campaign Digital Creative",
+              cardId,
+              sourceRowId:item.id,
+              title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+              url:driveUrl,
+              driveFileId:uploaded?.driveFileId || "",
+              prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
+              createdAt:savedAt,
+            },...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
+          });
+          markActionDone(`save-drive-${cardId}`);
+        } catch(err:any) {
+          updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:err?.message || "Failed to save image to Google Drive." });
+        }
       };
 
 
@@ -7373,32 +7426,52 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           generatedAt:new Date().toISOString(),
         });
       };
-      const saveProductIntroDcImageOutput = (item:any) => {
+      const saveProductIntroDcImageOutput = async (item:any) => {
         if(!item.generatedImageUrl) return;
         const savedAt = new Date().toISOString();
-        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
-        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-        const savedEntry = {
-          id:uid(),
-          source:"Product Introduction Digital Creative",
-          cardId:item.id,
-          sourceRowId:item.id,
-          title:item.product || "Product Introduction Digital Creative",
-          url:item.generatedImageUrl,
-          prompt:item.generatedImagePrompt || item.imagePrompt || "",
-          ownPrompt:item.ownPrompt || "",
-          kind:"Generated Image",
-          createdAt:savedAt,
-        };
-        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
-        const nextRows = baseRows.map((row:any)=>row.id===item.id ? { ...row, savedImageAt:savedAt, savedImageUrl:item.generatedImageUrl } : row);
-        updateAiWorkspace("digital",{
-          productIntroCreativeRows:nextRows,
-          productIntroRowsCleared:nextRows.length===0,
-          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==item.id)].slice(0,60),
-          generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-          generatedAt:savedAt,
-        });
+        try {
+          const uploaded = await uploadGeneratedImageToDrive({
+            url:item.generatedImageUrl,
+            prompt:item.generatedImagePrompt || item.imagePrompt || "",
+            title:item.product || "Product Introduction Digital Creative",
+            source:"Product Introduction Digital Creative",
+            cardId:item.id,
+            sourceRowId:item.id,
+          });
+          const driveUrl = uploaded?.url || uploaded?.imageUrl || item.generatedImageUrl;
+          const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+          const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+          const savedEntry = {
+            id:uid(),
+            source:"Product Introduction Digital Creative",
+            cardId:item.id,
+            sourceRowId:item.id,
+            title:item.product || "Product Introduction Digital Creative",
+            url:driveUrl,
+            driveFileId:uploaded?.driveFileId || "",
+            prompt:item.generatedImagePrompt || item.imagePrompt || "",
+            ownPrompt:item.ownPrompt || "",
+            kind:"Generated Image",
+            createdAt:savedAt,
+          };
+          const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+          const nextRows = baseRows.map((row:any)=>row.id===item.id ? { ...row, savedImageAt:savedAt, savedImageUrl:driveUrl, driveFileId:uploaded?.driveFileId || "" } : row);
+          updateAiWorkspace("digital",{
+            productIntroCreativeRows:nextRows,
+            productIntroRowsCleared:nextRows.length===0,
+            savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==item.id)].slice(0,60),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}
+${entry.imagePrompt || ""}`).join("
+
+---
+
+"),
+            generatedAt:savedAt,
+          });
+          markActionDone(`save-drive-${item.id}`);
+        } catch(err:any) {
+          updateProductIntroDigitalItem(item.id,{ generatedImageError:err?.message || "Failed to save image to Google Drive." });
+        }
       };
       const deleteProductIntroDcImageOutput = (item:any) => {
         updateProductIntroDigitalItem(item.id,{
@@ -7579,39 +7652,59 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"", savedImageAt:"", savedImageUrl:"" });
       };
 
-      const saveProductIntroDcCarouselImageOutput = (item:any, card:any, cardIndex:number) => {
+      const saveProductIntroDcCarouselImageOutput = async (item:any, card:any, cardIndex:number) => {
         if(!card?.generatedImageUrl) return;
         const savedAt = new Date().toISOString();
         const cardId = `${item.id}-carousel-${cardIndex}`;
-        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
-        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-        const savedEntry = {
-          id:uid(),
-          source:"Product Introduction Digital Creative",
-          cardId,
-          sourceRowId:item.id,
-          title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
-          url:card.generatedImageUrl,
-          prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
-          createdAt:savedAt,
-        };
-        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
-        const nextRows = baseRows.map((row:any)=>{
-          if(row.id!==item.id) return row;
-          const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((carouselCard:any,index:number)=>index===cardIndex ? { ...carouselCard, savedImageAt:savedAt, savedImageUrl:card.generatedImageUrl } : carouselCard);
-          return { ...row, carouselCards };
-        });
-        updateAiWorkspace("digital",{
-          productIntroCreativeRows:nextRows,
-          productIntroRowsCleared:nextRows.length===0,
-          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-          generatedAt:savedAt,
-        });
+        try {
+          const uploaded = await uploadGeneratedImageToDrive({
+            url:card.generatedImageUrl,
+            prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
+            title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+            source:"Product Introduction Digital Creative",
+            cardId,
+            sourceRowId:item.id,
+          });
+          const driveUrl = uploaded?.url || uploaded?.imageUrl || card.generatedImageUrl;
+          const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+          const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+          const savedEntry = {
+            id:uid(),
+            source:"Product Introduction Digital Creative",
+            cardId,
+            sourceRowId:item.id,
+            title:`${item.title || item.product || "Carousel"} · Card ${cardIndex+1}`,
+            url:driveUrl,
+            driveFileId:uploaded?.driveFileId || "",
+            prompt:card.generatedImagePrompt || card.visual || item.imagePrompt || "",
+            createdAt:savedAt,
+          };
+          const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+          const nextRows = baseRows.map((row:any)=>{
+            if(row.id!==item.id) return row;
+            const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((carouselCard:any,index:number)=>index===cardIndex ? { ...carouselCard, savedImageAt:savedAt, savedImageUrl:driveUrl, driveFileId:uploaded?.driveFileId || "" } : carouselCard);
+            return { ...row, carouselCards };
+          });
+          updateAiWorkspace("digital",{
+            productIntroCreativeRows:nextRows,
+            productIntroRowsCleared:nextRows.length===0,
+            savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
+${entry.imagePrompt || ""}`).join("
+
+---
+
+"),
+            generatedAt:savedAt,
+          });
+          markActionDone(`save-drive-${cardId}`);
+        } catch(err:any) {
+          updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:err?.message || "Failed to save image to Google Drive." });
+        }
       };
 
 
-      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")
+      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g," ")
         .trim();
@@ -7776,38 +7869,58 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"", savedImageAt:"", savedImageUrl:"" });
       };
 
-      const saveProductIntroDcGmvImageOutput = (item:any, row:any, rowIndex:number) => {
+      const saveProductIntroDcGmvImageOutput = async (item:any, row:any, rowIndex:number) => {
         if(!row?.generatedImageUrl) return;
         const savedAt = new Date().toISOString();
         const cardId = `${item.id}-gmv-${rowIndex}`;
-        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
-        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-        const savedEntry = {
-          id:uid(),
-          source:"Product Introduction Digital Creative",
-          cardId,
-          sourceRowId:item.id,
-          title:`${item.title || item.product || "Product GMV Max"} · ${row?.pillar || `Pillar ${rowIndex+1}`}`,
-          url:row.generatedImageUrl,
-          prompt:row.generatedImagePrompt || row.creativeDirection || item.imagePrompt || "",
-          createdAt:savedAt,
-        };
-        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
-        const nextRows = baseRows.map((dcRow:any)=>{
-          if(dcRow.id!==item.id) return dcRow;
-          const gmvRows = (Array.isArray(dcRow.gmvRows) ? dcRow.gmvRows : []).map((gmvRow:any,index:number)=>index===rowIndex ? { ...gmvRow, savedImageAt:savedAt, savedImageUrl:row.generatedImageUrl } : gmvRow);
-          return { ...dcRow, gmvRows };
-        });
-        updateAiWorkspace("digital",{
-          productIntroCreativeRows:nextRows,
-          productIntroRowsCleared:nextRows.length===0,
-          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-          generatedAt:savedAt,
-        });
+        try {
+          const uploaded = await uploadGeneratedImageToDrive({
+            url:row.generatedImageUrl,
+            prompt:row.generatedImagePrompt || row.creativeDirection || item.imagePrompt || "",
+            title:`${item.title || item.product || "Product GMV Max"} · ${row?.pillar || `Pillar ${rowIndex+1}`}`,
+            source:"Product Introduction Digital Creative",
+            cardId,
+            sourceRowId:item.id,
+          });
+          const driveUrl = uploaded?.url || uploaded?.imageUrl || row.generatedImageUrl;
+          const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+          const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+          const savedEntry = {
+            id:uid(),
+            source:"Product Introduction Digital Creative",
+            cardId,
+            sourceRowId:item.id,
+            title:`${item.title || item.product || "Product GMV Max"} · ${row?.pillar || `Pillar ${rowIndex+1}`}`,
+            url:driveUrl,
+            driveFileId:uploaded?.driveFileId || "",
+            prompt:row.generatedImagePrompt || row.creativeDirection || item.imagePrompt || "",
+            createdAt:savedAt,
+          };
+          const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+          const nextRows = baseRows.map((dcRow:any)=>{
+            if(dcRow.id!==item.id) return dcRow;
+            const gmvRows = (Array.isArray(dcRow.gmvRows) ? dcRow.gmvRows : []).map((gmvRow:any,index:number)=>index===rowIndex ? { ...gmvRow, savedImageAt:savedAt, savedImageUrl:driveUrl, driveFileId:uploaded?.driveFileId || "" } : gmvRow);
+            return { ...dcRow, gmvRows };
+          });
+          updateAiWorkspace("digital",{
+            productIntroCreativeRows:nextRows,
+            productIntroRowsCleared:nextRows.length===0,
+            savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
+${entry.imagePrompt || ""}`).join("
+
+---
+
+"),
+            generatedAt:savedAt,
+          });
+          markActionDone(`save-drive-${cardId}`);
+        } catch(err:any) {
+          updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageError:err?.message || "Failed to save image to Google Drive." });
+        }
       };
 
-      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
+      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
         const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : (Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }]);
         const links = Array.from(new Set([...(rowProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
         const uploadedReferenceImages = Array.isArray(row?.referenceImages) ? row.referenceImages : (Array.isArray(item.referenceImages) ? item.referenceImages : []);
