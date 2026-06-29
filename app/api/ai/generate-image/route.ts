@@ -69,21 +69,25 @@ const validateImageUrl = async (url: string) => {
 };
 
 const toBytePlusSize = (value: unknown) => {
-  const size = clean(value) || "1K";
+  const rawSize = clean(value).toUpperCase();
+
+  // Seedream 4.5 does not support 1K.
+  // Use 2K as the safest small web-optimized output size supported by BytePlus Ark Seedream 4.5.
   const map: Record<string, string> = {
-    "1024x1024": "1K",
-    "1024x1536": "1K",
-    "1536x1024": "1K",
-    "1080x1920": "1K",
-    "1920x1080": "1K",
-    "1920x1920": "1K",
-    "2048x2048": "1K",
-    "4096x4096": "4K",
-    "1K": "1K",
+    "1024X1024": "2K",
+    "1024X1536": "2K",
+    "1536X1024": "2K",
+    "1080X1920": "2K",
+    "1920X1080": "2K",
+    "1920X1920": "2K",
+    "2048X2048": "2K",
+    "4096X4096": "4K",
+    "1K": "2K",
     "2K": "2K",
     "4K": "4K",
   };
-  return map[size] || size;
+
+  return map[rawSize] || "2K";
 };
 
 const getBytePlusEndpoint = () => {
@@ -213,7 +217,7 @@ export async function POST(req: NextRequest) {
       image: validProductImageLinks,
       sequential_image_generation: "disabled",
       response_format: "url",
-      size: toBytePlusSize(body?.optimizeForSite ? "1K" : body?.size),
+      size: toBytePlusSize(body?.size),
       stream: true,
       watermark: false,
     };
@@ -268,7 +272,7 @@ export async function POST(req: NextRequest) {
       url,
       imageUrl:url,
       optimizedForSite:true,
-      compressionMode:"BytePlus URL output + 1K web-optimized generation + base64 blocked",
+      compressionMode:"BytePlus URL output + 2K supported web output + base64 blocked",
       prompt: strictPrompt,
       provider: "byteplus-seedream",
       model,
