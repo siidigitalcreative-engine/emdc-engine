@@ -6362,7 +6362,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       if(!raw) return "";
       return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     };
-    const uploadGeneratedImageToDrive = async ({ url, prompt, title, source, cardId, sourceRowId }: any) => {
+const isDriveSavedImage = (item:any) => {
+      const fileId = String(item?.driveFileId || "").trim();
+      const savedUrl = String(item?.savedImageUrl || item?.url || "").trim();
+      return !!fileId || /drive\.google\.com|googleusercontent\.com/i.test(savedUrl);
+    };
+    const getDriveSaveLabel = (item:any) => isDriveSavedImage(item) ? "Saved ✓" : "Save";
+    const getDriveSaveVariant = (item:any) => isDriveSavedImage(item) ? "primary" : "outline";
+        const uploadGeneratedImageToDrive = async ({ url, prompt, title, source, cardId, sourceRowId }: any) => {
       const imageUrl = String(url || "").trim();
       if(!imageUrl) throw new Error("No generated image URL to save.");
       if(/^data:image\//i.test(imageUrl)) throw new Error("Base64 images are blocked. Please regenerate using URL output.");
@@ -6979,7 +6986,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                       <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150 }}>
                                         <div style={{ display:"grid",gap:6 }}>
                                           <Btn xs onClick={()=>generateProductIntroDcGmvImage(item,row,rowIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                          {row?.generatedImageUrl&&<Btn xs variant={row?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcGmvImageOutput(item,row,rowIndex)}>{row?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
+                                          {row?.generatedImageUrl&&<Btn xs variant={getDriveSaveVariant(row)} onClick={(e:any)=>{ e?.stopPropagation?.(); saveProductIntroDcGmvImageOutput(item,row,rowIndex); }}>{getDriveSaveLabel(row)}</Btn>}
                                           {row?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcGmvImageOutput(item,rowIndex)}>Delete Image</Btn>}
                                         </div>
                                       </td>
@@ -8056,7 +8063,7 @@ ${entry.imagePrompt || ""}`).join("
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p><p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card?.cta || "Shop Now"}</p></div>
                                   <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
                                     <Btn xs onClick={()=>generateProductIntroDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                    {card?.generatedImageUrl&&<Btn xs variant={card?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcCarouselImageOutput(item,card,cardIndex)}>{card?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
+                                    {card?.generatedImageUrl&&<Btn xs variant={getDriveSaveVariant(card)} onClick={(e:any)=>{ e?.stopPropagation?.(); saveProductIntroDcCarouselImageOutput(item,card,cardIndex); }}>{getDriveSaveLabel(card)}</Btn>}
                                     {card?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
                                   </div>
                                 </div>
@@ -8226,7 +8233,7 @@ ${entry.imagePrompt || ""}`).join("
                               style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
                             />
                             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
-                              <Btn xs variant={item.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcImageOutput(item)}>{item.savedImageAt ? "Saved ✓" : "Save"}</Btn>
+                              <Btn xs variant={getDriveSaveVariant(item)} onClick={(e:any)=>{ e?.stopPropagation?.(); saveProductIntroDcImageOutput(item); }}>{getDriveSaveLabel(item)}</Btn>
                               <Btn xs variant="danger" onClick={()=>deleteProductIntroDcImageOutput(item)}>Delete</Btn>
                             </div>
                           </div>
