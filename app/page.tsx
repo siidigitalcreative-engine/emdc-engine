@@ -3870,11 +3870,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       selectedMarketingProductKeys:[],
       placedMarketingProductKeys:[],
       generatedText:nextCards.map((entry:any)=>`${entry.product || "Product"}
-${entry.imagePrompt || ""}`).join("
-
----
-
-"),
+${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
   };
