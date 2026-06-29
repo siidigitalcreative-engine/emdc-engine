@@ -3750,8 +3750,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const makeProductIntroDcGroupedItem = (rows:any[]) => {
     const cleanRows = (rows || []).filter(Boolean);
+    const transferGroupId = uid();
     return {
-      id:uid(),
+      id:transferGroupId,
+      transferGroupId,
+      isProductListCard:true,
       sourceRowId:`group-${Date.now()}`,
       platform:"All Platforms",
       brand:joinUniqueCampaignValues(cleanRows.map((row:any)=>row.brand || "")),
@@ -3766,6 +3769,32 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       linkedEventContext:group.groupName || "Product Introduction",
       createdAt:new Date().toISOString(),
     };
+  };
+
+  const normalizeProductIntroTransferCards = (rows:any[]) => {
+    const cleanRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+    if (!cleanRows.length) return [];
+
+    const cards:any[] = [];
+    const legacySingles:any[] = [];
+
+    cleanRows.forEach((row:any) => {
+      const products = Array.isArray(row.products) && row.products.length ? row.products : [];
+      if (row.isProductListCard || row.transferGroupId || products.length > 1) {
+        cards.push(row);
+        return;
+      }
+      legacySingles.push(row);
+    });
+
+    if (legacySingles.length) {
+      const legacyCard = makeProductIntroDcGroupedItem(legacySingles);
+      legacyCard.id = `legacy-${legacySingles.map((row:any)=>row.id || row.sku || row.product || "item").join("-")}`;
+      legacyCard.createdAt = legacySingles[0]?.createdAt || new Date().toISOString();
+      cards.unshift(legacyCard);
+    }
+
+    return cards;
   };
 
   const getProductIntroDigitalRows = () => {
@@ -5263,7 +5292,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
           {isProductIntroductionChecklist&&productIntroMarketingRows.length>0&&(
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-              {productIntroMarketingRows.map((transfer:any,transferIndex:number)=>{
+              {normalizeProductIntroTransferCards(productIntroMarketingRows).map((transfer:any,transferIndex:number)=>{
                 const transferProducts = Array.isArray(transfer.products) && transfer.products.length ? transfer.products : [transfer];
                 return (
                   <div key={transfer.id || transferIndex} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -5671,7 +5700,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           {productIntroLivestreamRows.length>0&&(
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-              {productIntroLivestreamRows.map((transfer:any,transferIndex:number)=>{
+              {normalizeProductIntroTransferCards(productIntroLivestreamRows).map((transfer:any,transferIndex:number)=>{
                 const transferProducts = Array.isArray(transfer.products) && transfer.products.length ? transfer.products : [transfer];
                 return (
                   <div key={transfer.id || transferIndex} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -6899,8 +6928,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       });
       const makeProductIntroDcGroupedItem = (rows:any[]) => {
         const cleanRows = rows.filter(Boolean);
+        const transferGroupId = uid();
         return {
-          id:uid(),
+          id:transferGroupId,
+          transferGroupId,
+          isProductListCard:true,
           sourceRowId:`group-${Date.now()}`,
           platform:"All Platforms",
           brand:Array.from(new Set(cleanRows.map((row:any)=>row.brand).filter(Boolean))).join(", "),
