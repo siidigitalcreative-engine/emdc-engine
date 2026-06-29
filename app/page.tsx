@@ -5869,7 +5869,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               prompt,
-              size:"1920x1920",
+              size:"1K",
               aspectRatio:"1:1",
               watermark:false,
               referenceImages:uploadedReferenceImages,
@@ -5877,6 +5877,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               productImageLinks:imageLinks,
               requireProductImageLinks:true,
               outputCount:1,
+              optimizeForSite:true,
+              avoidBase64:true,
+              maxOutputBytes:900000,
             }),
           });
           const raw = await res.text();
@@ -5884,6 +5887,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          if(/^data:image\//i.test(url)) throw new Error("Generated image was returned as base64. EMDC blocks base64 images to keep the site lightweight. Please generate again using URL output.");
           const nextRows = campaignCreativeRows.map((row:any)=>row.id===item.id ? { ...row, generatedImageUrl:url, generatedImagePrompt:prompt, imagePrompt:item.imagePrompt || "", imageLinks, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" } : row);
           updateAiWorkspace("digital",{
             campaignCreativeRows:nextRows,
@@ -6072,7 +6076,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               prompt,
-              size:"1920x1920",
+              size:"1K",
               aspectRatio:"1:1",
               watermark:false,
               referenceImages:uploadedReferenceImages,
@@ -6080,6 +6084,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               productImageLinks:imageLinks,
               requireProductImageLinks:true,
               outputCount:1,
+              optimizeForSite:true,
+              avoidBase64:true,
+              maxOutputBytes:900000,
             }),
           });
           const raw = await res.text();
@@ -6087,6 +6094,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          if(/^data:image\//i.test(url)) throw new Error("Generated image was returned as base64. EMDC blocks base64 images to keep the site lightweight. Please generate again using URL output.");
           updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
         } catch (err:any) {
           updateCampaignDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks, referenceImages:uploadedReferenceImages });
@@ -6749,13 +6757,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               prompt,
-              size:"1920x1920",
+              size:"1K",
               aspectRatio:"1:1",
               watermark:false,
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:links,
               productImageLinks:links,
               outputCount:1,
+              optimizeForSite:true,
+              avoidBase64:true,
+              maxOutputBytes:900000,
             }),
           });
           const raw = await res.text();
@@ -6763,6 +6774,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          if(/^data:image\//i.test(url)) throw new Error("Generated image was returned as base64. EMDC blocks base64 images to keep the site lightweight. Please generate again using URL output.");
           updateProductIntroDigitalItem(item.id,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
         } catch(err:any) {
           updateProductIntroDigitalItem(item.id,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages });
@@ -6951,13 +6963,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"1920x1920", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1 }),
+            body:JSON.stringify({ prompt, size:"1K", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          if(/^data:image\//i.test(url)) throw new Error("Generated image was returned as base64. EMDC blocks base64 images to keep the site lightweight. Please generate again using URL output.");
           updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
         } catch(err:any) {
           updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages });
@@ -7039,13 +7052,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"1920x1920", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1 }),
+            body:JSON.stringify({ prompt, size:"1K", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
           try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
           if(!res.ok) throw new Error(result?.error || result?.message || "Image generation failed.");
           const url = result?.url || result?.imageUrl || result?.image_url || result?.data?.[0]?.url || result?.data?.[0]?.image_url || "";
+          if(/^data:image\//i.test(url)) throw new Error("Generated image was returned as base64. EMDC blocks base64 images to keep the site lightweight. Please generate again using URL output.");
           updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageUrl:url, generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages, generatedImageAt:new Date().toISOString(), generatedImageError:"" });
         } catch(err:any) {
           updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageError:err?.message || "Image generation failed.", generatedImagePrompt:prompt, imageLinks:links, referenceImages:uploadedReferenceImages });
