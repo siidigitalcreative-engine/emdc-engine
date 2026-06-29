@@ -5741,7 +5741,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             {items.map((item:any)=>{
                               const active = livestreamData.selectedGeneratedTopicId===item.id;
                               return (
-                                <button key={item.id} type="button" onClick={()=>updateLivestream({ selectedGeneratedTopicId:item.id })}
+                                <button key={item.id} type="button" onClick={()=>updateLivestream({ selectedGeneratedTopicId:active ? "" : item.id })}
                                   style={{ textAlign:"left",padding:10,borderRadius:10,border:`1.5px solid ${active?C.accent:C.border}`,background:active?"#EEF2FF":C.surface,cursor:"pointer",display:"inline-block",width:"100%",margin:"0 0 8px",verticalAlign:"top",breakInside:"avoid",WebkitColumnBreakInside:"avoid",pageBreakInside:"avoid" }}>
                                   <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start" }}>
                                     <strong style={{ fontSize:12.5,color:C.text,lineHeight:1.35 }}>{item.title}</strong>
