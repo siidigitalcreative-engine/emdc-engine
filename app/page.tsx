@@ -3701,6 +3701,24 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     );
   };
 
+
+  const setMainPromotionAcrossTabs = (promo:any) => {
+    const current = group.aiWorkspace || {};
+    const next = {
+      ...current,
+      ecommerce:{ ...(current.ecommerce || {}), mainPromotion:promo, mainPromotionDraft:promo, mainPromotionEditing:false },
+      marketing:{ ...(current.marketing || {}), mainPromotion:promo },
+      digital:{ ...(current.digital || {}), mainPromotion:promo },
+      livestream:{ ...(current.livestream || {}), mainPromotion:promo },
+    };
+    if(onUpdateGroup) onUpdateGroup({ aiWorkspace:next });
+  };
+
+  const clearMainPromotionAcrossTabs = () => {
+    setMainPromotionAcrossTabs("");
+    markActionDone("promo-clear");
+  };
+
   const deleteOverviewItem = (id:string) => {
     updateAiWorkspace("overview",{ items:getOverviewItems().filter((item:any)=>item.id!==id) });
   };
@@ -7930,10 +7948,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     <div style={{ display:"flex",flexDirection:"column",gap:10,minWidth:0 }}>
                       <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
                         <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?220:300 }}>
-                          <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                          <table style={{ width:"100%",minWidth:760,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                             <thead>
                               <tr style={{ background:C.surfaceAlt }}>
-                                {["Platform","Brand","Category","Product","SKU","Headline","Subheadline","CTA"].map((label:string)=>(
+                                {["Platform","Brand","Category","Product","SKU"].map((label:string)=>(
                                   <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                                 ))}
                               </tr>
@@ -7946,19 +7964,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
                                   <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.sku || ""}</td>
-                                  {mergeCopyCells ? (
-                                    idx===0&&<>
-                                      <td rowSpan={tableProducts.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:190 }}>{row.headline || ""}</td>
-                                      <td rowSpan={tableProducts.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:260 }}>{row.subheadline || ""}</td>
-                                      <td rowSpan={tableProducts.length} style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"middle",textAlign:"center",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
-                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:260 }}>{row.subheadline || ""}</td>
-                                      <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
-                                    </>
-                                  )}
                                 </tr>
                               ))}
                             </tbody>
@@ -8111,8 +8116,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     </div>
                     <div style={{ padding:10,display:"flex",flexDirection:"column",gap:8 }}>
                       {saved.url&&<img src={saved.url} alt={saved.title || "Saved digital output"} style={{ width:"100%",maxHeight:240,objectFit:"contain",borderRadius:9,border:`1px solid ${C.border}`,background:C.surface }} />}
-                      {saved.ownPrompt&&<div style={{ padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface }}><p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Own Prompt</p><p style={{ margin:0,fontSize:12,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{saved.ownPrompt}</p></div>}
-                      {saved.prompt&&<div style={{ padding:8,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,maxHeight:220,overflowY:"auto" }}><p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Saved Prompt</p><p style={{ margin:0,fontSize:12,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{saved.prompt}</p></div>}
+                      {!saved.url&&<div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,textAlign:"center",fontSize:12,color:C.muted }}>No generated image saved for this output.</div>}
                     </div>
                   </div>
                 ))}
@@ -8181,6 +8185,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
                           <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion }); markActionDone("promo-digital"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-digital")?"✓ Sent":"Send to DC"}</Btn>
                           <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
+                          <Btn xs variant="danger" onClick={clearMainPromotionAcrossTabs} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-clear")?"✓ Removed":"Remove"}</Btn>
                         </div>
                       </div>
                       {data.mainPromotionEditing ? (
@@ -8201,7 +8206,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
                           />
                           <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
-                            <Btn xs onClick={()=>{ const draft=data.mainPromotionDraft || {}; updateAiWorkspace(tab,{ mainPromotion:draft, mainPromotionEditing:false }); markActionDone("promo-save"); }}>{actionDone("promo-save")?"✓ Saved":"Save"}</Btn>
+                            <Btn xs onClick={()=>{ const draft=data.mainPromotionDraft || {}; const hasDraft=!!formatMainPromotion(draft); if(hasDraft){ updateAiWorkspace(tab,{ mainPromotion:draft, mainPromotionEditing:false }); } else { clearMainPromotionAcrossTabs(); } markActionDone("promo-save"); }}>{actionDone("promo-save")?"✓ Saved":"Save"}</Btn>
                             <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:false })}>Done</Btn>
                           </div>
                         </div>
@@ -8510,9 +8515,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                           <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                             <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
-                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!Array.isArray(savedEcommercePreview?.productRows) || !savedEcommercePreview.productRows.length}>Send to Marketing</Btn>
-                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!Array.isArray(savedEcommercePreview?.productRows) || !savedEcommercePreview.productRows.length}>Send to Livestream</Btn>
-                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!Array.isArray(savedEcommercePreview?.productRows) || !savedEcommercePreview.productRows.length}>Send to DC</Btn>
+                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</Btn>
+                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</Btn>
+                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</Btn>
                             <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output"); markActionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`); }}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
                           </div>
@@ -8544,6 +8549,47 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   <Btn xs variant="outline" onClick={saveEcommerceCampaignOutput} disabled={!campaignHasOutput}>Save All Outputs</Btn>
                   <Btn xs onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}>{aiBusy.ecommerceCampaign?"Generating All...":"Generate All Rows"}</Btn>
                 </div>
+              </div>
+
+              <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,marginBottom:12 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
+                  <div>
+                    <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Main Promotion</h4>
+                    <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>Optional. Add the current offer, voucher, discount, bundle, or sale mechanics here.</p>
+                  </div>
+                  <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                    <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:true, mainPromotionDraft:data.mainPromotionDraft || (typeof data.mainPromotion === "object" ? data.mainPromotion : { type:"text", value:"", text:String(data.mainPromotion || "") }) })}>Edit</Btn>
+                    <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
+                    <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion }); markActionDone("promo-digital"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-digital")?"✓ Sent":"Send to DC"}</Btn>
+                    <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
+                    <Btn xs variant="danger" onClick={clearMainPromotionAcrossTabs} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-clear")?"✓ Removed":"Remove"}</Btn>
+                  </div>
+                </div>
+                {data.mainPromotionEditing ? (
+                  <div style={{ display:"grid",gap:10 }}>
+                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"180px minmax(0,1fr)",gap:10 }}>
+                      <Select value={(data.mainPromotionDraft || {}).type || "text"} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), type:v } })}>
+                        <option value="text">Custom Text</option>
+                        <option value="discount">Discount %</option>
+                        <option value="php">PHP Value</option>
+                      </Select>
+                      <TI value={(data.mainPromotionDraft || {}).value || ""} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), value:v } })} placeholder="Value e.g. 20 or 100" />
+                    </div>
+                    <textarea
+                      value={(data.mainPromotionDraft || {}).text || ""}
+                      onChange={e=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), text:e.target.value } })}
+                      placeholder="Promotion details. Example: 6.30 Payday Sale, free shipping voucher, TikTok Shop exclusive offer."
+                      rows={3}
+                      style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                    />
+                    <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                      <Btn xs onClick={()=>{ const draft=data.mainPromotionDraft || {}; const hasDraft=!!formatMainPromotion(draft); if(hasDraft){ updateAiWorkspace(tab,{ mainPromotion:draft, mainPromotionEditing:false }); } else { clearMainPromotionAcrossTabs(); } markActionDone("promo-save"); }}>{actionDone("promo-save")?"✓ Saved":"Save"}</Btn>
+                      <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:false })}>Done</Btn>
+                    </div>
+                  </div>
+                ) : (
+                  renderMainPromotionCard(data.mainPromotion)
+                )}
               </div>
 
               <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10 }}>
