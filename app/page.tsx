@@ -3886,9 +3886,32 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
   };
 
   const deleteProductIntroMarketingTransferAtIndex = (transferIndex:number) => {
-    const currentCards = normalizeProductIntroTransferCards(getProductIntroMarketingRows());
-    const nextCards = currentCards.filter((_:any,idx:number)=>idx!==transferIndex);
-    saveProductIntroMarketingRows(nextCards);
+    const current = group.aiWorkspace || {};
+    const marketing = (current.marketing || {}) as any;
+    const existingRows = Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
+    const currentCards = normalizeProductIntroTransferCards(existingRows);
+    const nextCards = currentCards
+      .filter((_:any,idx:number)=>idx!==transferIndex)
+      .map((card:any)=>({
+        ...card,
+        isProductListCard:true,
+        transferGroupId:card.transferGroupId || card.id || uid(),
+      }));
+
+    const nextWorkspace = {
+      ...current,
+      marketing:{
+        ...marketing,
+        productIntroMarketingRows:nextCards,
+        productIntroMarketingRowsCleared:nextCards.length===0,
+        selectedMarketingProductKeys:[],
+        placedMarketingProductKeys:[],
+        generatedText:nextCards.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+        generatedAt:new Date().toISOString(),
+      }
+    };
+
+    if(onUpdateGroup) onUpdateGroup({ aiWorkspace:nextWorkspace });
   };
 
   const deleteProductIntroLivestreamTransferAtIndex = (transferIndex:number) => {
@@ -5363,7 +5386,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       </div>
                       <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
                         <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
-                        <Btn xs variant="danger" onClick={(e:any)=>{ e?.stopPropagation?.(); deleteProductIntroMarketingTransferAtIndex(transferIndex); }}>Delete</Btn>
+                        <button
+                          type="button"
+                          onMouseDown={(e:any)=>{ e.preventDefault(); e.stopPropagation(); }}
+                          onClick={(e:any)=>{ e.preventDefault(); e.stopPropagation(); deleteProductIntroMarketingTransferAtIndex(transferIndex); }}
+                          style={{ border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
