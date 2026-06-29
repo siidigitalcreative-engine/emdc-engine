@@ -6588,8 +6588,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               prompt,
-              size:"1K",
-              aspectRatio:"1:1",
+              size:"2K",
+              aspectRatio:item.imageRatio || "1:1",
               watermark:false,
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:imageLinks,
@@ -6795,8 +6795,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               prompt,
-              size:"1K",
-              aspectRatio:"1:1",
+              size:"2K",
+              aspectRatio:item.imageRatio || "1:1",
               watermark:false,
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:imageLinks,
@@ -7151,6 +7151,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{ width:"100%",boxSizing:"border-box",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
                           />
                           <p style={{ margin:"-4px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>Generate Detailed Prompt improves your own prompt while still following it. Product image links remain the main visual reference.</p>
+                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(180px,260px) minmax(0,1fr)",gap:8,alignItems:"end" }}>
+                            <Field label="Image Ratio" hint="Seedream 4.5 compatible">
+                              <Select value={item.imageRatio || "1:1"} onChange={(v:any)=>updateCampaignDigitalItem(item.id,{ imageRatio:v })}>
+                                <option value="1:1">1:1 Square</option>
+                                <option value="4:5">4:5 Portrait</option>
+                                <option value="3:4">3:4 Portrait</option>
+                                <option value="9:16">9:16 Vertical</option>
+                                <option value="16:9">16:9 Landscape</option>
+                                <option value="4:3">4:3 Landscape</option>
+                                <option value="3:2">3:2 Landscape</option>
+                                <option value="2:3">2:3 Portrait</option>
+                              </Select>
+                            </Field>
+                            <div style={{ fontSize:10.5,color:C.faint,lineHeight:1.35 }}>The selected ratio is sent as a scene/composition requirement while the route keeps Seedream size on supported 2K output.</div>
+                          </div>
                           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:0 }}>
                             <input
                               type="file"
@@ -7402,6 +7417,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
       const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       const savedProductIntroDigitalOutputs = Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : [];
+      const deleteSavedProductIntroDigitalOutput = (savedId:string) => {
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{ savedImageOutputs:saved.filter((entry:any)=>entry.id!==savedId) });
+        markActionDone(`delete-digital-saved-${savedId}`);
+      };
       const defaultProductIntroDetailedPromptInstructions = "Create a highly executable product image prompt for AI image generation. Strictly preserve the product look from the provided product image links. Improve the user's own prompt without changing its core request. Include clear scene, composition, lighting, camera angle, product placement, styling, quality, and negative restrictions. Avoid text overlays unless the user specifically asks for text.";
       const getProductIntroDetailedPromptInstructions = () => String(digitalData.detailedPromptInstructions || defaultProductIntroDetailedPromptInstructions);
       const buildProductIntroDetailedPrompt = (item:any) => {
@@ -7514,8 +7535,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               prompt,
-              size:"1K",
-              aspectRatio:"1:1",
+              size:"2K",
+              aspectRatio:item.imageRatio || "1:1",
               watermark:false,
               referenceImages:uploadedReferenceImages,
               referenceImageUrls:links,
@@ -7720,7 +7741,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"1K", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -7809,7 +7830,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"1K", aspectRatio:"1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -8041,6 +8062,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{ width:"100%",boxSizing:"border-box",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
                           />
                           <p style={{ margin:"-4px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>Generate Detailed Prompt improves your own prompt while still following it. Product image links remain the main visual reference.</p>
+                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(180px,260px) minmax(0,1fr)",gap:8,alignItems:"end" }}>
+                            <Field label="Image Ratio" hint="Seedream 4.5 compatible">
+                              <Select value={item.imageRatio || "1:1"} onChange={(v:any)=>updateProductIntroDigitalItem(item.id,{ imageRatio:v })}>
+                                <option value="1:1">1:1 Square</option>
+                                <option value="4:5">4:5 Portrait</option>
+                                <option value="3:4">3:4 Portrait</option>
+                                <option value="9:16">9:16 Vertical</option>
+                                <option value="16:9">16:9 Landscape</option>
+                                <option value="4:3">4:3 Landscape</option>
+                                <option value="3:2">3:2 Landscape</option>
+                                <option value="2:3">2:3 Portrait</option>
+                              </Select>
+                            </Field>
+                            <div style={{ fontSize:10.5,color:C.faint,lineHeight:1.35 }}>The selected ratio is sent as a scene/composition requirement while the route keeps Seedream size on supported 2K output.</div>
+                          </div>
                           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:0 }}>
                             <input
                               type="file"
@@ -8115,7 +8151,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text,lineHeight:1.35,wordBreak:"break-word" }}>{saved.title || "Saved Digital Creative Output"}</p>
                         <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted }}>{saved.kind || (saved.url ? "Generated Image" : "Detailed Prompt")}</p>
                       </div>
-                      <Btn xs variant={actionDone(`overview-digital-saved-${saved.id}`)?"primary":"outline"} onClick={()=>addSavedProductIntroDigitalOutputToOverview(saved)}>{actionDone(`overview-digital-saved-${saved.id}`)?"✓ Added":"Add to Overview"}</Btn>
+                      <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
+                        <Btn xs variant={actionDone(`overview-digital-saved-${saved.id}`)?"primary":"outline"} onClick={()=>addSavedProductIntroDigitalOutputToOverview(saved)}>{actionDone(`overview-digital-saved-${saved.id}`)?"✓ Added":"Add to Overview"}</Btn>
+                        <Btn xs variant="danger" onClick={()=>deleteSavedProductIntroDigitalOutput(saved.id)}>Delete</Btn>
+                      </div>
                     </div>
                     <div style={{ padding:10,display:"flex",flexDirection:"column",gap:8 }}>
                       {saved.url&&<img src={saved.url} alt={saved.title || "Saved digital output"} style={{ width:"100%",maxHeight:240,objectFit:"contain",borderRadius:9,border:`1px solid ${C.border}`,background:C.surface }} />}
