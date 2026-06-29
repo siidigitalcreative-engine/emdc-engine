@@ -5403,6 +5403,31 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const placedMarketingProductKeys = Array.isArray(data.placedMarketingProductKeys) ? data.placedMarketingProductKeys : [];
       const selectedMarketingProducts = marketingAdProducts.filter((item:any,idx:number)=>selectedMarketingProductKeys.includes(marketingProductKey(item,idx)));
       const placedMarketingProducts = marketingAdProducts.filter((item:any,idx:number)=>placedMarketingProductKeys.includes(marketingProductKey(item,idx)));
+      const getMarketingProductKeysForTransfer = (products:any[] = []) => {
+        const usedIndexes = new Set<number>();
+        return (products || []).map((transferProduct:any)=>{
+          const targetSku = String(transferProduct?.sku || transferProduct?.skuCode || "").trim().toLowerCase();
+          const targetProduct = String(transferProduct?.product || transferProduct?.productName || "").trim().toLowerCase();
+          const matchIndex = marketingAdProducts.findIndex((item:any,idx:number)=>{
+            if (usedIndexes.has(idx)) return false;
+            const itemSku = String(item?.sku || item?.skuCode || "").trim().toLowerCase();
+            const itemProduct = String(item?.product || item?.productName || "").trim().toLowerCase();
+            return (!!targetSku && itemSku === targetSku) || (!!targetProduct && itemProduct === targetProduct);
+          });
+          if (matchIndex < 0) return "";
+          usedIndexes.add(matchIndex);
+          return marketingProductKey(marketingAdProducts[matchIndex],matchIndex);
+        }).filter(Boolean);
+      };
+      const setMarketingTransferSelected = (transferProducts:any[], selected:boolean) => {
+        const transferKeys = getMarketingProductKeysForTransfer(transferProducts);
+        const current = new Set(selectedMarketingProductKeys);
+        transferKeys.forEach((key:string)=>{
+          if (selected) current.add(key);
+          else current.delete(key);
+        });
+        updateAiWorkspace("marketing",{ selectedMarketingProductKeys:Array.from(current) });
+      };
 
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
@@ -5417,16 +5442,40 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
           {isProductIntroductionChecklist&&productIntroMarketingRows.length>0&&(
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+              <div style={{ padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <div>
+                  <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>1. Select Product Row Groups for Marketing</span>
+                  <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedMarketingProducts.length} selected · {placedMarketingProducts.length} placed in Ad Menu · {normalizeProductIntroTransferCards(productIntroMarketingRows).length} group{normalizeProductIntroTransferCards(productIntroMarketingRows).length!==1?"s":""} from E-commerce</span>
+                </div>
+                <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
+                  <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ selectedMarketingProductKeys:marketingAdProducts.map((item:any,idx:number)=>marketingProductKey(item,idx)) })} disabled={!marketingAdProducts.length}>Select All Groups</Btn>
+                  <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ selectedMarketingProductKeys:[] })} disabled={!selectedMarketingProductKeys.length}>Clear Selection</Btn>
+                  <Btn xs onClick={()=>updateAiWorkspace("marketing",{ placedMarketingProductKeys:selectedMarketingProductKeys })} disabled={!selectedMarketingProductKeys.length}>Add Selected to Ad Menu</Btn>
+                  <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ placedMarketingProductKeys:[] })} disabled={!placedMarketingProductKeys.length}>Clear Ad Menu Products</Btn>
+                </div>
+              </div>
+              {placedMarketingProducts.length>0&&(
+                <div style={{ padding:"8px 12px",background:"#ECFDF5",border:`1px solid ${C.border}`,borderRadius:10,fontSize:11.5,color:"#047857",fontWeight:850 }}>
+                  Ad Menu will generate using {placedMarketingProducts.length} placed product{placedMarketingProducts.length!==1?"s":""}: {placedMarketingProducts.map((item:any)=>item.product || item.productName || item.sku).filter(Boolean).join(", ")}
+                </div>
+              )}
               {normalizeProductIntroTransferCards(productIntroMarketingRows).map((transfer:any,transferIndex:number)=>{
                 const transferProducts = Array.isArray(transfer.products) && transfer.products.length ? transfer.products : [transfer];
+                const transferProductKeys = getMarketingProductKeysForTransfer(transferProducts);
+                const transferSelected = transferProductKeys.length > 0 && transferProductKeys.every((key:string)=>selectedMarketingProductKeys.includes(key));
+                const transferPlaced = transferProductKeys.length > 0 && transferProductKeys.every((key:string)=>placedMarketingProductKeys.includes(key));
                 return (
                   <div key={transfer.id || transferIndex} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                    <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                      <div style={{ minWidth:0 }}>
-                        <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
-                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
-                      </div>
+                    <div style={{ padding:"10px 12px",background:transferPlaced?"#ECFDF5":transferSelected?"#EEF2FF":C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                      <label style={{ display:"flex",alignItems:"flex-start",gap:9,minWidth:0,flex:1,cursor:"pointer" }}>
+                        <input type="checkbox" checked={transferSelected} onChange={(e:any)=>setMarketingTransferSelected(transferProducts,e.target.checked)} style={{ marginTop:3,flexShrink:0 }} />
+                        <div style={{ minWidth:0 }}>
+                          <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
+                          <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
+                        </div>
+                      </label>
                       <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
+                        {transferPlaced&&<span style={{ fontSize:10.5,fontWeight:800,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 8px" }}>Placed</span>}
                         <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
                         <button
                           type="button"
@@ -5466,6 +5515,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             </div>
           )}
 
+          {!isProductIntroductionChecklist&&(
           <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
             <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
               <div>
@@ -5525,6 +5575,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </div>
             )}
           </div>
+          )}
 
           <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} mainPromotion={((group.aiWorkspace || {}).marketing || {}).mainPromotion || ""} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}`} onAddToOverview={(ad:any)=>addToOverview("Marketing",`${ad?.platformName || "Marketing"} · ${ad?.formatName || ad?.title || "Generated Output"}`,ad?.text || ad?.imagePrompt || "","Marketing Output")} onSendToDC={(ad:any)=>{
             const adText = String(ad?.text || "").trim();
@@ -5624,6 +5675,31 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const placedLivestreamProductKeys = Array.isArray(livestreamData.placedProductKeys) ? livestreamData.placedProductKeys : [];
       const selectedLivestreamProducts = livestreamMappedProducts.filter((item:any,idx:number)=>selectedLivestreamProductKeys.includes(livestreamProductKey(item,idx)));
       const placedLivestreamProducts = livestreamMappedProducts.filter((item:any,idx:number)=>placedLivestreamProductKeys.includes(livestreamProductKey(item,idx)));
+      const getLivestreamProductKeysForTransfer = (products:any[] = []) => {
+        const usedIndexes = new Set<number>();
+        return (products || []).map((transferProduct:any)=>{
+          const targetSku = String(transferProduct?.sku || transferProduct?.skuCode || "").trim().toLowerCase();
+          const targetProduct = String(transferProduct?.product || transferProduct?.productName || "").trim().toLowerCase();
+          const matchIndex = livestreamMappedProducts.findIndex((item:any,idx:number)=>{
+            if (usedIndexes.has(idx)) return false;
+            const itemSku = String(item?.sku || item?.skuCode || "").trim().toLowerCase();
+            const itemProduct = String(item?.product || item?.productName || "").trim().toLowerCase();
+            return (!!targetSku && itemSku === targetSku) || (!!targetProduct && itemProduct === targetProduct);
+          });
+          if (matchIndex < 0) return "";
+          usedIndexes.add(matchIndex);
+          return livestreamProductKey(livestreamMappedProducts[matchIndex],matchIndex);
+        }).filter(Boolean);
+      };
+      const setLivestreamTransferSelected = (transferProducts:any[], selected:boolean) => {
+        const transferKeys = getLivestreamProductKeysForTransfer(transferProducts);
+        const current = new Set(selectedLivestreamProductKeys);
+        transferKeys.forEach((key:string)=>{
+          if (selected) current.add(key);
+          else current.delete(key);
+        });
+        updateLivestream({ selectedProductKeys:Array.from(current) });
+      };
       const livestreamPromotions = Array.isArray(livestreamData.promotions) ? livestreamData.promotions : [];
       const livestreamVoucherCards = Array.isArray(livestreamData.voucherCards) ? livestreamData.voucherCards : [];
       const updateLivestream = (patch:any) => updateAiWorkspace("livestream",{ ...livestreamData,...patch });
@@ -5835,16 +5911,40 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           {productIntroLivestreamRows.length>0&&(
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+              <div style={{ padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <div>
+                  <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Main Livestream Product Row Groups</span>
+                  <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedLivestreamProducts.length} selected · {placedLivestreamProducts.length} placed · {normalizeProductIntroTransferCards(productIntroLivestreamRows).length} group{normalizeProductIntroTransferCards(productIntroLivestreamRows).length!==1?"s":""} from E-commerce</span>
+                </div>
+                <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
+                  <Btn xs variant="outline" onClick={()=>updateLivestream({ selectedProductKeys:livestreamMappedProducts.map((item:any,idx:number)=>livestreamProductKey(item,idx)) })} disabled={!livestreamMappedProducts.length}>Select All Groups</Btn>
+                  <Btn xs variant="outline" onClick={()=>updateLivestream({ selectedProductKeys:[] })} disabled={!selectedLivestreamProductKeys.length}>Clear Selection</Btn>
+                  <Btn xs onClick={()=>updateLivestream({ placedProductKeys:selectedLivestreamProductKeys })} disabled={!selectedLivestreamProductKeys.length}>Add Selected</Btn>
+                  <Btn xs variant="danger" onClick={()=>updateLivestream({ placedProductKeys:[] })} disabled={!placedLivestreamProductKeys.length}>Clear Products</Btn>
+                </div>
+              </div>
+              {placedLivestreamProducts.length>0&&(
+                <div style={{ padding:"8px 12px",background:"#ECFDF5",border:`1px solid ${C.border}`,borderRadius:10,fontSize:11.5,color:"#047857",fontWeight:850 }}>
+                  Main Livestream will use {placedLivestreamProducts.length} placed product{placedLivestreamProducts.length!==1?"s":""}: {placedLivestreamProducts.map((item:any)=>item.product || item.sku).filter(Boolean).join(", ")}
+                </div>
+              )}
               {normalizeProductIntroTransferCards(productIntroLivestreamRows).map((transfer:any,transferIndex:number)=>{
                 const transferProducts = Array.isArray(transfer.products) && transfer.products.length ? transfer.products : [transfer];
+                const transferProductKeys = getLivestreamProductKeysForTransfer(transferProducts);
+                const transferSelected = transferProductKeys.length > 0 && transferProductKeys.every((key:string)=>selectedLivestreamProductKeys.includes(key));
+                const transferPlaced = transferProductKeys.length > 0 && transferProductKeys.every((key:string)=>placedLivestreamProductKeys.includes(key));
                 return (
                   <div key={transfer.id || transferIndex} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                    <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                      <div style={{ minWidth:0 }}>
-                        <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
-                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
-                      </div>
+                    <div style={{ padding:"10px 12px",background:transferPlaced?"#ECFDF5":transferSelected?"#EEF2FF":C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                      <label style={{ display:"flex",alignItems:"flex-start",gap:9,minWidth:0,flex:1,cursor:"pointer" }}>
+                        <input type="checkbox" checked={transferSelected} onChange={(e:any)=>setLivestreamTransferSelected(transferProducts,e.target.checked)} style={{ marginTop:3,flexShrink:0 }} />
+                        <div style={{ minWidth:0 }}>
+                          <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
+                          <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
+                        </div>
+                      </label>
                       <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
+                        {transferPlaced&&<span style={{ fontSize:10.5,fontWeight:800,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 8px" }}>Added</span>}
                         <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
                         <Btn xs variant="danger" onClick={(e:any)=>{ e?.stopPropagation?.(); deleteProductIntroLivestreamTransferAtIndex(transferIndex); }}>Delete</Btn>
                       </div>
@@ -5890,6 +5990,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             <LivestreamPlaceholder title={livestreamTabs.find((item:any)=>item.id===activeLivestreamTab)?.label || "Livestream Sub Page"} />
           ) : (
             <>
+              {!isProductIntroductionChecklist&&(
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                 <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                   <div>
@@ -5946,6 +6047,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   <div style={{ padding:16,fontSize:12,color:C.muted,textAlign:"center" }}>No mapped products available yet.</div>
                 )}
               </div>
+              )}
 
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
                 <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
