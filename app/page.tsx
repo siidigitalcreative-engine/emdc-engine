@@ -3837,6 +3837,45 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     });
   };
 
+
+  const deleteProductIntroMarketingTransfer = (transfer:any) => {
+    const id = String(transfer?.id || "");
+    const groupId = String(transfer?.transferGroupId || "");
+    const productKeys = new Set((Array.isArray(transfer?.products) ? transfer.products : [])
+      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || ""))
+      .filter(Boolean));
+
+    const next = getProductIntroMarketingRows().filter((row:any)=>{
+      if (id && String(row?.id || "") === id) return false;
+      if (groupId && String(row?.transferGroupId || "") === groupId) return false;
+      if (id.startsWith("legacy-") && productKeys.size) {
+        const rowKey = String(row?.sku || row?.skuCode || row?.product || row?.productName || "");
+        if (productKeys.has(rowKey)) return false;
+      }
+      return true;
+    });
+    saveProductIntroMarketingRows(next);
+  };
+
+  const deleteProductIntroLivestreamTransfer = (transfer:any) => {
+    const id = String(transfer?.id || "");
+    const groupId = String(transfer?.transferGroupId || "");
+    const productKeys = new Set((Array.isArray(transfer?.products) ? transfer.products : [])
+      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || ""))
+      .filter(Boolean));
+
+    const next = getProductIntroLivestreamRows().filter((row:any)=>{
+      if (id && String(row?.id || "") === id) return false;
+      if (groupId && String(row?.transferGroupId || "") === groupId) return false;
+      if (id.startsWith("legacy-") && productKeys.size) {
+        const rowKey = String(row?.sku || row?.skuCode || row?.product || row?.productName || "");
+        if (productKeys.has(rowKey)) return false;
+      }
+      return true;
+    });
+    saveProductIntroLivestreamRows(next);
+  };
+
   const defaultEcommerceOutputSections = [
     "Product Overview",
     "Key Features",
@@ -5301,7 +5340,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
                         <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
                       </div>
-                      <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
+                      <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
+                        <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
+                        <Btn xs variant="danger" onClick={()=>deleteProductIntroMarketingTransfer(transfer)}>Delete</Btn>
+                      </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
                       <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
@@ -5709,7 +5751,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
                         <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
                       </div>
-                      <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
+                      <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
+                        <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
+                        <Btn xs variant="danger" onClick={()=>deleteProductIntroLivestreamTransfer(transfer)}>Delete</Btn>
+                      </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
                       <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
