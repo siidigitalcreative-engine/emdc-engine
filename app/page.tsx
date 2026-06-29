@@ -7692,11 +7692,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
             generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
-${entry.imagePrompt || ""}`).join("
-
----
-
-"),
+${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -7706,7 +7702,7 @@ ${entry.imagePrompt || ""}`).join("
       };
 
 
-      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")
+      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g," ")
         .trim();
@@ -7836,7 +7832,7 @@ ${entry.imagePrompt || ""}`).join("
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -7909,11 +7905,7 @@ ${entry.imagePrompt || ""}`).join("
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
             generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
-${entry.imagePrompt || ""}`).join("
-
----
-
-"),
+${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -7922,7 +7914,7 @@ ${entry.imagePrompt || ""}`).join("
         }
       };
 
-      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
+      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
         const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : (Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }]);
         const links = Array.from(new Set([...(rowProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
         const uploadedReferenceImages = Array.isArray(row?.referenceImages) ? row.referenceImages : (Array.isArray(item.referenceImages) ? item.referenceImages : []);
@@ -7945,7 +7937,7 @@ ${entry.imagePrompt || ""}`).join("
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
