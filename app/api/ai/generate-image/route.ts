@@ -69,14 +69,15 @@ const validateImageUrl = async (url: string) => {
 };
 
 const toBytePlusSize = (value: unknown) => {
-  const size = clean(value) || "1024x1024";
+  const size = clean(value) || "1K";
   const map: Record<string, string> = {
-    "1024x1024": "2K",
-    "1024x1536": "2K",
-    "1536x1024": "2K",
-    "1080x1920": "2K",
-    "1920x1080": "2K",
-    "2048x2048": "2K",
+    "1024x1024": "1K",
+    "1024x1536": "1K",
+    "1536x1024": "1K",
+    "1080x1920": "1K",
+    "1920x1080": "1K",
+    "1920x1920": "1K",
+    "2048x2048": "1K",
     "4096x4096": "4K",
     "1K": "1K",
     "2K": "2K",
@@ -195,6 +196,8 @@ export async function POST(req: NextRequest) {
       "Preserve product shape, silhouette, color, material, texture, proportions, labels, SKU details, packaging, and visible design details.",
       "Only create or change the background, lighting, props, composition, and lifestyle setting requested by the prompt.",
       "The final image must clearly match the product in the reference image links.",
+      "Create a web-optimized image suitable for site preview. Avoid unnecessary 4K detail or oversized output.",
+      "Return an image URL only. Never return base64/b64_json/data URL output.",
       "",
       validProductImageLinks.length ? `PRODUCT IMAGE LINKS TO USE AS REFERENCES:\n${validProductImageLinks.join("\n")}` : "",
       unreadableLinks.length ? `UNREADABLE LINKS NOT USED:\n${unreadableLinks.join("\n")}` : "",
@@ -210,7 +213,7 @@ export async function POST(req: NextRequest) {
       image: validProductImageLinks,
       sequential_image_generation: "disabled",
       response_format: "url",
-      size: toBytePlusSize(body?.size),
+      size: toBytePlusSize(body?.optimizeForSite ? "1K" : body?.size),
       stream: true,
       watermark: false,
     };
@@ -244,6 +247,14 @@ export async function POST(req: NextRequest) {
     }
 
     const url = extractGeneratedImage(parsed) || extractGeneratedImageFromText(responseText);
+    if (/^data:image\//i.test(url)) {
+      return NextResponse.json({
+        error: "Image provider returned base64. EMDC blocks base64 images to protect site transfer and storage. Please retry with URL output.",
+        endpoint,
+        model,
+      }, { status: 502 });
+    }
+
     if (!url) {
       return NextResponse.json({
         error: "BytePlus Seedream returned no image URL.",
@@ -255,6 +266,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       url,
+      imageUrl:url,
+      optimizedForSite:true,
+      compressionMode:"BytePlus URL output + 1K web-optimized generation + base64 blocked",
       prompt: strictPrompt,
       provider: "byteplus-seedream",
       model,
