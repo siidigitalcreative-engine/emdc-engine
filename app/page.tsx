@@ -5242,6 +5242,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:820 }}>{isProductIntroductionChecklist ? "Step 1: select products from the E-commerce product rows, then click Add Selected to Ad Menu. Step 2: choose platform and ad format. Each ad format generate button reads only the products placed in the Ad Menu." : "Step 1: select checklist products, then click Add Selected to Ad Menu. Step 2: choose platform and ad format."}</p>
           </div>
 
+          {!!formatMainPromotion(((group.aiWorkspace || {}).marketing || {}).mainPromotion)&&(
+            renderMainPromotionCard(((group.aiWorkspace || {}).marketing || {}).mainPromotion, true)
+          )}
+
           <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
             <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
               <div>
@@ -5304,10 +5308,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </div>
             )}
           </div>
-
-          {!!formatMainPromotion(((group.aiWorkspace || {}).marketing || {}).mainPromotion)&&(
-            renderMainPromotionCard(((group.aiWorkspace || {}).marketing || {}).mainPromotion, true)
-          )}
 
           <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} mainPromotion={((group.aiWorkspace || {}).marketing || {}).mainPromotion || ""} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}`} onAddToOverview={(ad:any)=>addToOverview("Marketing",`${ad?.platformName || "Marketing"} · ${ad?.formatName || ad?.title || "Generated Output"}`,ad?.text || ad?.imagePrompt || "","Marketing Output")} onSendToDC={(ad:any)=>{
             const adText = String(ad?.text || "").trim();
@@ -5597,6 +5597,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:920 }}>Plan live selling product selections, promotions, voucher card text, AI topic, scripts, talking points, demo flow, offer pushes, and closing CTAs.</p>
           </div>
 
+          {!!formatMainPromotion(livestreamData.mainPromotion)&&(
+            renderMainPromotionCard(livestreamData.mainPromotion, true)
+          )}
+
           <div style={{ display:"flex",gap:8,flexWrap:"wrap",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:8 }}>
             {livestreamTabs.map((item:any)=>(
               <button key={item.id} type="button" onClick={()=>updateLivestream({ activeTab:item.id })}
@@ -5666,10 +5670,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   <div style={{ padding:16,fontSize:12,color:C.muted,textAlign:"center" }}>No mapped products available yet.</div>
                 )}
               </div>
-
-              {!!formatMainPromotion(livestreamData.mainPromotion)&&(
-                renderMainPromotionCard(livestreamData.mainPromotion, true)
-              )}
 
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
                 <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -7665,6 +7665,46 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
+                        <div>
+                          <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Main Promotion</h4>
+                          <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>Optional. Add the current offer, voucher, discount, bundle, or sale mechanics here.</p>
+                        </div>
+                        <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:true, mainPromotionDraft:data.mainPromotionDraft || (typeof data.mainPromotion === "object" ? data.mainPromotion : { type:"text", value:"", text:String(data.mainPromotion || "") }) })}>Edit</Btn>
+                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
+                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion }); markActionDone("promo-digital"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-digital")?"✓ Sent":"Send to DC"}</Btn>
+                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
+                        </div>
+                      </div>
+                      {data.mainPromotionEditing ? (
+                        <div style={{ display:"grid",gap:10 }}>
+                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"180px minmax(0,1fr)",gap:10 }}>
+                            <Select value={(data.mainPromotionDraft || {}).type || "text"} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), type:v } })}>
+                              <option value="text">Custom Text</option>
+                              <option value="discount">Discount %</option>
+                              <option value="php">PHP Value</option>
+                            </Select>
+                            <TI value={(data.mainPromotionDraft || {}).value || ""} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), value:v } })} placeholder="Value e.g. 20 or 100" />
+                          </div>
+                          <textarea
+                            value={(data.mainPromotionDraft || {}).text || ""}
+                            onChange={e=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), text:e.target.value } })}
+                            placeholder="Promotion details. Example: 6.30 Payday Sale, free shipping voucher, TikTok Shop exclusive offer."
+                            rows={3}
+                            style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+                          />
+                          <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                            <Btn xs onClick={()=>{ const draft=data.mainPromotionDraft || {}; updateAiWorkspace(tab,{ mainPromotion:draft, mainPromotionEditing:false }); markActionDone("promo-save"); }}>{actionDone("promo-save")?"✓ Saved":"Save"}</Btn>
+                            <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:false })}>Done</Btn>
+                          </div>
+                        </div>
+                      ) : (
+                        renderMainPromotionCard(data.mainPromotion)
+                      )}
+                    </div>
+
+                    <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
                         <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
                         <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Use Listing Template</Btn>
                       </div>
@@ -7721,48 +7761,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     </div>
 
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
-                        <div>
-                          <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Main Promotion</h4>
-                          <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted,lineHeight:1.45 }}>Optional. Add the current offer, voucher, discount, bundle, or sale mechanics here.</p>
-                        </div>
-                        <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                          <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:true, mainPromotionDraft:data.mainPromotionDraft || (typeof data.mainPromotion === "object" ? data.mainPromotion : { type:"text", value:"", text:String(data.mainPromotion || "") }) })}>Edit</Btn>
-                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
-                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion }); markActionDone("promo-digital"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-digital")?"✓ Sent":"Send to DC"}</Btn>
-                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
-                        </div>
-                      </div>
-                      {data.mainPromotionEditing ? (
-                        <div style={{ display:"grid",gap:10 }}>
-                          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"180px minmax(0,1fr)",gap:10 }}>
-                            <Select value={(data.mainPromotionDraft || {}).type || "text"} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), type:v } })}>
-                              <option value="text">Custom Text</option>
-                              <option value="discount">Discount %</option>
-                              <option value="php">PHP Value</option>
-                            </Select>
-                            <TI value={(data.mainPromotionDraft || {}).value || ""} onChange={(v:string)=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), value:v } })} placeholder="Value e.g. 20 or 100" />
-                          </div>
-                          <textarea
-                            value={(data.mainPromotionDraft || {}).text || ""}
-                            onChange={e=>updateAiWorkspace(tab,{ mainPromotionDraft:{ ...(data.mainPromotionDraft || {}), text:e.target.value } })}
-                            placeholder="Promotion details. Example: 6.30 Payday Sale, free shipping voucher, TikTok Shop exclusive offer."
-                            rows={3}
-                            style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
-                          />
-                          <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
-                            <Btn xs onClick={()=>{ const draft=data.mainPromotionDraft || {}; updateAiWorkspace(tab,{ mainPromotion:draft, mainPromotionEditing:false }); markActionDone("promo-save"); }}>{actionDone("promo-save")?"✓ Saved":"Save"}</Btn>
-                            <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:false })}>Done</Btn>
-                          </div>
-                        </div>
-                      ) : (
-                        (()=>{
-return renderMainPromotionCard(data.mainPromotion);
-                        })()
-                      )}
-                    </div>
-
-                                        <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap" }}>
                         <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>Required Output Structure</h4>
                         <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(3,minmax(0,1fr))":"auto auto auto",gap:8,width:isMobile?"100%":"auto" }}>
