@@ -4116,6 +4116,46 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     return rows.length ? rows : productRows;
   };
 
+  const getEcommerceGeneratedProductRows = (data:any) => {
+    const savedRows = Array.isArray(data?.productRows) ? data.productRows.filter(Boolean) : [];
+    if (savedRows.length) return savedRows;
+    const generatedRows = Array.isArray(data?.generatedProductRows) ? data.generatedProductRows.filter(Boolean) : [];
+    if (generatedRows.length) return generatedRows;
+    const promptRows = Array.isArray(data?.promptProductRows) ? data.promptProductRows.filter(Boolean) : [];
+    if (promptRows.length) return promptRows;
+    return productRows;
+  };
+
+  const makeProductIntroTransferRowsForEcommerceOutput = (sourceData:any) => {
+    const rows = getEcommerceGeneratedProductRows(sourceData);
+    return rows.length ? [makeProductIntroDcGroupedItem(rows)] : [];
+  };
+
+  const sendProductIntroEcommerceOutputToMarketing = (sourceData:any) => {
+    const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
+    if (!rowsToSend.length) return;
+    const marketingData = ((group.aiWorkspace || {}).marketing || {}) as any;
+    const existingRows = Array.isArray(marketingData.productIntroMarketingRows) ? marketingData.productIntroMarketingRows : [];
+    saveProductIntroMarketingRows([...existingRows, ...rowsToSend]);
+    setActiveGroupTab("marketing");
+  };
+
+  const sendProductIntroEcommerceOutputToDigital = (sourceData:any) => {
+    const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
+    if (!rowsToSend.length) return;
+    saveProductIntroDigitalRows(rowsToSend);
+    setActiveGroupTab("digital");
+  };
+
+  const sendProductIntroEcommerceOutputToLivestream = (sourceData:any) => {
+    const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
+    if (!rowsToSend.length) return;
+    const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
+    const existingRows = Array.isArray(livestreamData.productIntroLivestreamRows) ? livestreamData.productIntroLivestreamRows : [];
+    saveProductIntroLivestreamRows([...existingRows, ...rowsToSend]);
+    setActiveGroupTab("livestream");
+  };
+
   const setEcommercePromptForProducts = (rows:any[]) => {
     const promptRows = Array.isArray(rows) && rows.length ? rows : productRows;
     updateAiWorkspace("ecommerce",{
@@ -4204,6 +4244,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         title:`E-commerce Listing ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
         text:output,
         prompt:data.textPrompt || "",
+        productRows:getEcommerceGeneratedProductRows(data),
         createdAt:new Date().toISOString(),
       },...saved].slice(0,20)
     });
@@ -4404,6 +4445,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       updateAiWorkspace(tab,{
         textPrompt:prompt,
         generatedText:cleanReadyToUseOutput(payload?.text || ""),
+        generatedProductRows:promptProductRows,
         generatedAt:new Date().toISOString(),
       });
     } catch (err:any) {
@@ -8185,28 +8227,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
                           <Btn sm variant={actionDone("overview-ecommerce-product-rows")?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows"); markActionDone("overview-ecommerce-product-rows"); }} disabled={!productRows.length}>{actionDone("overview-ecommerce-product-rows")?"✓ Added":"Add to Overview"}</Btn>
-                          <Btn sm variant="outline" onClick={()=>{
-                            const marketingData = ((group.aiWorkspace || {}).marketing || {}) as any;
-                            const existingRows = Array.isArray(marketingData.productIntroMarketingRows) ? marketingData.productIntroMarketingRows : [];
-                            const ecommerceProductRows = getProductIntroDigitalRows();
-                            const rowsToSend = ecommerceProductRows.length ? ecommerceProductRows : (productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : []);
-                            saveProductIntroMarketingRows([...existingRows,...rowsToSend]);
-                            setActiveGroupTab("marketing");
-                          }} disabled={!productRows.length && !getProductIntroDigitalRows().length}>Send to Marketing</Btn>
-                          <Btn sm variant="outline" onClick={()=>{
-                            const ecommerceProductRows = getProductIntroDigitalRows();
-                            const rowsToSend = ecommerceProductRows.length ? ecommerceProductRows : (productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : []);
-                            if(rowsToSend.length) saveProductIntroDigitalRows(rowsToSend);
-                            setActiveGroupTab("digital");
-                          }} disabled={!productRows.length && !getProductIntroDigitalRows().length}>Send to DC</Btn>
-                          <Btn sm variant="outline" onClick={()=>{
-                            const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
-                            const existingRows = Array.isArray(livestreamData.productIntroLivestreamRows) ? livestreamData.productIntroLivestreamRows : [];
-                            const ecommerceProductRows = getProductIntroDigitalRows();
-                            const rowsToSend = ecommerceProductRows.length ? ecommerceProductRows : (productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : []);
-                            saveProductIntroLivestreamRows([...existingRows,...rowsToSend]);
-                            setActiveGroupTab("livestream");
-                          }} disabled={!productRows.length && !getProductIntroDigitalRows().length}>Send to Livestream</Btn>
+                          <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Marketing</Btn>
+                          <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to DC</Btn>
+                          <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Livestream</Btn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                         </div>
                       </div>
@@ -8259,6 +8282,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                           <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                             <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
+                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!Array.isArray(savedEcommercePreview?.productRows) || !savedEcommercePreview.productRows.length}>Send to Marketing</Btn>
+                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!Array.isArray(savedEcommercePreview?.productRows) || !savedEcommercePreview.productRows.length}>Send to Livestream</Btn>
+                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!Array.isArray(savedEcommercePreview?.productRows) || !savedEcommercePreview.productRows.length}>Send to DC</Btn>
                             <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output"); markActionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`); }}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
                           </div>
