@@ -3347,6 +3347,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
   const actionDone = (id:any) => actionDoneIds.includes(String(id || ""));
   const [campaignDigitalSentIds,setCampaignDigitalSentIds] = useState<string[]>([]);
+  const [campaignMarketingSentIds,setCampaignMarketingSentIds] = useState<string[]>([]);
   const [campaignDcGeneratingImageId,setCampaignDcGeneratingImageId] = useState("");
   const [dcProductRefEditKeys,setDcProductRefEditKeys] = useState<Record<string,boolean>>({});
   const toggleDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: !prev?.[key] }));
@@ -4754,6 +4755,55 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
 
+  const sendEcommerceCampaignRowToMarketing = (row:any) => {
+    const builder = getEcommerceCampaignBuilder();
+    const rowKey = String(row.id || row.productKey || row.product || uid());
+    const products = getEcommerceCampaignRowProducts(row).map((product:any)=>({
+      product:product.product || row.product || "",
+      productName:product.product || row.product || "",
+      sku:product.sku || row.sku || "",
+      skuCode:product.sku || row.sku || "",
+      brand:product.brand || row.brand || "",
+      collection:product.collection || row.collection || row.category || "",
+      category:product.collection || row.collection || row.category || "",
+      platform:row.platform || builder.platform || "All Platforms",
+      headline:row.headline || "",
+      subheadline:row.subheadline || "",
+      cta:row.cta || "",
+      discount:row.discount || "",
+      mechanics:row.mechanics || "",
+    }));
+    const fallbackProduct = {
+      product:row.product || "",
+      productName:row.product || "",
+      sku:row.sku || "",
+      skuCode:row.sku || "",
+      brand:row.brand || "",
+      collection:row.collection || row.category || "",
+      category:row.collection || row.category || "",
+      platform:row.platform || builder.platform || "All Platforms",
+      headline:row.headline || "",
+      subheadline:row.subheadline || "",
+      cta:row.cta || "",
+      discount:row.discount || "",
+      mechanics:row.mechanics || "",
+    };
+    const marketingProducts = products.length ? products : [fallbackProduct];
+    const marketingData = ((group.aiWorkspace || {}).marketing || {}) as any;
+    const existingRows = Array.isArray(marketingData.campaignMarketingRows) ? marketingData.campaignMarketingRows : [];
+    const nextRows = [
+      { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:marketingProducts, createdAt:new Date().toISOString() },
+      ...existingRows.filter((existing:any)=>String(existing.sourceRowId || existing.id || "")!==rowKey),
+    ].slice(0,30);
+    updateAiWorkspace("marketing",{
+      campaignMarketingRows:nextRows,
+      placedMarketingProductKeys:marketingProducts.map((item:any,idx:number)=>`${item.sku || item.product || "marketing-product"}__${idx}`),
+      selectedMarketingProductKeys:marketingProducts.map((item:any,idx:number)=>`${item.sku || item.product || "marketing-product"}__${idx}`),
+    });
+    setCampaignMarketingSentIds((prev:string[])=>Array.from(new Set([...prev,rowKey])));
+    window.setTimeout(()=>setCampaignMarketingSentIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
+  };
+
   const buildCampaignDigitalCreativeItem = (row:any) => {
     const builder = getEcommerceCampaignBuilder();
     const productList = getEcommerceCampaignRowProducts(row);
@@ -5099,13 +5149,29 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           subheadline:row.subheadline || "",
           cta:row.cta || "",
         }]);
-      const campaignMarketingProducts = isCampaignChecklist ? productRows.map((row:any)=>({
+      const campaignMarketingRows = isCampaignChecklist && Array.isArray((((group.aiWorkspace || {}).marketing || {}).campaignMarketingRows))
+        ? (((group.aiWorkspace || {}).marketing || {}).campaignMarketingRows || [])
+        : [];
+      const campaignMarketingProductsFromRows = campaignMarketingRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((product:any)=>({
+        product:product.product || product.productName || row.product || "",
+        productName:product.productName || product.product || row.product || "",
+        sku:product.sku || product.skuCode || "",
+        skuCode:product.skuCode || product.sku || "",
+        brand:product.brand || row.brand || "",
+        collection:product.collection || product.category || row.collection || "",
+        category:product.category || product.collection || row.collection || "",
+        headline:product.headline || row.headline || "",
+        subheadline:product.subheadline || row.subheadline || "",
+        cta:product.cta || row.cta || "",
+      })) : []);
+      const campaignMarketingProductsFallback = isCampaignChecklist ? productRows.map((row:any)=>({
         product:row.product || row.productName || "",
         sku:row.skuCode || row.sku || "",
         brand:row.brand || "",
         collection:row.collection || row.category || "",
         category:row.collection || row.category || "",
       })) : [];
+      const campaignMarketingProducts = campaignMarketingProductsFromRows.length ? campaignMarketingProductsFromRows : campaignMarketingProductsFallback;
       const marketingAdProducts = isProductIntroductionChecklist ? productIntroMarketingProducts : campaignMarketingProducts;
       const marketingProductKey = (item:any,idx:number) => `${item.sku || item.product || "marketing-product"}__${idx}`;
       const selectedMarketingProductKeys = Array.isArray(data.selectedMarketingProductKeys) ? data.selectedMarketingProductKeys : [];
@@ -6198,7 +6264,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           {campaignCreativeRows.length===0 ? (
             <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
-              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No campaign product row sent yet. Go to Campaign E-commerce and click Send DC beside a generated row.</p>
+              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No campaign product row sent yet. Go to Campaign E-commerce and click Send to DC beside a generated row.</p>
             </div>
           ) : (
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
@@ -8023,7 +8089,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                                             <Btn xs onClick={()=>saveEcommerceCampaignRowOutput(row)}>Save Output</Btn>
                                             <Btn xs variant="outline" onClick={()=>copyEcommerceCampaignRowOutput(row)}>Copy</Btn>
-                                            <Btn xs variant={campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToDigitalCreative(row)}>{campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent DC ✓":"Send DC"}</Btn>
+                                            <Btn xs variant={campaignMarketingSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToMarketing(row)}>{campaignMarketingSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent Marketing ✓":"Send to Marketing"}</Btn>
+                                            <Btn xs variant={campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToDigitalCreative(row)}>{campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent DC ✓":"Send to DC"}</Btn>
                                             <Btn xs variant={campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>addEcommerceCampaignRowToOverview(row)}>{campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"Added ✓":"Add to Overview"}</Btn>
                                           </div>
                                         )}
