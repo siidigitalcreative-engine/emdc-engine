@@ -3838,42 +3838,55 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
 
-  const deleteProductIntroMarketingTransfer = (transfer:any) => {
-    const id = String(transfer?.id || "");
-    const groupId = String(transfer?.transferGroupId || "");
-    const productKeys = new Set((Array.isArray(transfer?.products) ? transfer.products : [])
-      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || ""))
-      .filter(Boolean));
+  const getTransferProductSignature = (transfer:any) => {
+    const products = Array.isArray(transfer?.products) && transfer.products.length ? transfer.products : [transfer];
+    return products
+      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || "").trim())
+      .filter(Boolean)
+      .sort()
+      .join("|");
+  };
 
-    const next = getProductIntroMarketingRows().filter((row:any)=>{
-      if (id && String(row?.id || "") === id) return false;
-      if (groupId && String(row?.transferGroupId || "") === groupId) return false;
-      if (id.startsWith("legacy-") && productKeys.size) {
-        const rowKey = String(row?.sku || row?.skuCode || row?.product || row?.productName || "");
-        if (productKeys.has(rowKey)) return false;
-      }
-      return true;
+  const isSameProductIntroTransferCard = (a:any,b:any) => {
+    const aId = String(a?.id || "");
+    const bId = String(b?.id || "");
+    if (aId && bId && aId === bId) return true;
+
+    const aGroupId = String(a?.transferGroupId || "");
+    const bGroupId = String(b?.transferGroupId || "");
+    if (aGroupId && bGroupId && aGroupId === bGroupId) return true;
+
+    const aSig = getTransferProductSignature(a);
+    const bSig = getTransferProductSignature(b);
+    return !!aSig && !!bSig && aSig === bSig;
+  };
+
+  const deleteProductIntroMarketingTransfer = (transfer:any) => {
+    const currentCards = normalizeProductIntroTransferCards(getProductIntroMarketingRows());
+    const nextCards = currentCards.filter((card:any)=>!isSameProductIntroTransferCard(card,transfer));
+    updateAiWorkspace("marketing",{
+      productIntroMarketingRows:nextCards,
+      productIntroMarketingRowsCleared:nextCards.length===0,
+      selectedMarketingProductKeys:[],
+      placedMarketingProductKeys:[],
+      generatedText:nextCards.map((entry:any)=>`${entry.product || "Product"}
+${entry.imagePrompt || ""}`).join("
+
+---
+
+"),
+      generatedAt:new Date().toISOString(),
     });
-    saveProductIntroMarketingRows(next);
   };
 
   const deleteProductIntroLivestreamTransfer = (transfer:any) => {
-    const id = String(transfer?.id || "");
-    const groupId = String(transfer?.transferGroupId || "");
-    const productKeys = new Set((Array.isArray(transfer?.products) ? transfer.products : [])
-      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || ""))
-      .filter(Boolean));
-
-    const next = getProductIntroLivestreamRows().filter((row:any)=>{
-      if (id && String(row?.id || "") === id) return false;
-      if (groupId && String(row?.transferGroupId || "") === groupId) return false;
-      if (id.startsWith("legacy-") && productKeys.size) {
-        const rowKey = String(row?.sku || row?.skuCode || row?.product || row?.productName || "");
-        if (productKeys.has(rowKey)) return false;
-      }
-      return true;
+    const currentCards = normalizeProductIntroTransferCards(getProductIntroLivestreamRows());
+    const nextCards = currentCards.filter((card:any)=>!isSameProductIntroTransferCard(card,transfer));
+    updateAiWorkspace("livestream",{
+      productIntroLivestreamRows:nextCards,
+      productIntroLivestreamRowsCleared:nextCards.length===0,
+      generatedAt:new Date().toISOString(),
     });
-    saveProductIntroLivestreamRows(next);
   };
 
   const defaultEcommerceOutputSections = [
