@@ -5600,7 +5600,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             </div>
           )}
 
-          {!isProductIntroductionChecklist&&(
+          {!isProductIntroductionChecklist&&!isCampaignChecklist&&(
           <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
             <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
               <div>
@@ -6116,7 +6116,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             <LivestreamPlaceholder title={livestreamTabs.find((item:any)=>item.id===activeLivestreamTab)?.label || "Livestream Sub Page"} />
           ) : (
             <>
-              {!isProductIntroductionChecklist&&(
+              {!isProductIntroductionChecklist&&!isCampaignChecklist&&(
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                 <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                   <div>
