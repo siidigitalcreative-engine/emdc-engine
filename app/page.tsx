@@ -5029,6 +5029,54 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     window.setTimeout(()=>setCampaignMarketingSentIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
 
+  const sendEcommerceCampaignRowToLivestream = (row:any) => {
+    const builder = getEcommerceCampaignBuilder();
+    const rowKey = String(row.id || row.productKey || row.product || uid());
+    const products = getEcommerceCampaignRowProducts(row).map((product:any)=>({
+      product:product.product || row.product || "",
+      productName:product.product || row.product || "",
+      sku:product.sku || row.sku || "",
+      skuCode:product.sku || row.sku || "",
+      brand:product.brand || row.brand || "",
+      collection:product.collection || row.collection || row.category || "",
+      category:product.collection || row.collection || row.category || "",
+      platform:row.platform || builder.platform || "All Platforms",
+      headline:row.headline || "",
+      subheadline:row.subheadline || "",
+      cta:row.cta || "",
+      discount:row.discount || "",
+      mechanics:row.mechanics || "",
+    }));
+    const fallbackProduct = {
+      product:row.product || "",
+      productName:row.product || "",
+      sku:row.sku || "",
+      skuCode:row.sku || "",
+      brand:row.brand || "",
+      collection:row.collection || row.category || "",
+      category:row.collection || row.category || "",
+      platform:row.platform || builder.platform || "All Platforms",
+      headline:row.headline || "",
+      subheadline:row.subheadline || "",
+      cta:row.cta || "",
+      discount:row.discount || "",
+      mechanics:row.mechanics || "",
+    };
+    const livestreamProducts = products.length ? products : [fallbackProduct];
+    const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
+    const existingRows = Array.isArray(livestreamData.campaignLivestreamRows) ? livestreamData.campaignLivestreamRows : [];
+    const nextRows = [
+      { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:livestreamProducts, createdAt:new Date().toISOString() },
+      ...existingRows.filter((existing:any)=>String(existing.sourceRowId || existing.id || "")!==rowKey),
+    ].slice(0,30);
+    updateAiWorkspace("livestream",{
+      campaignLivestreamRows:nextRows,
+      placedProductKeys:livestreamProducts.map((item:any,idx:number)=>`${item.sku || item.product || "livestream-product"}__${idx}`),
+      selectedProductKeys:livestreamProducts.map((item:any,idx:number)=>`${item.sku || item.product || "livestream-product"}__${idx}`),
+    });
+    setActiveGroupTab("livestream");
+  };
+
   const buildCampaignDigitalCreativeItem = (row:any) => {
     const builder = getEcommerceCampaignBuilder();
     const productList = getEcommerceCampaignRowProducts(row);
@@ -5397,6 +5445,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         category:row.collection || row.category || "",
       })) : [];
       const campaignMarketingProducts = campaignMarketingProductsFromRows.length ? campaignMarketingProductsFromRows : campaignMarketingProductsFallback;
+      const marketingTransferRows = isProductIntroductionChecklist ? productIntroMarketingRows : (isCampaignChecklist ? campaignMarketingRows : []);
+      const marketingTransferCards = normalizeProductIntroTransferCards(marketingTransferRows);
       const marketingAdProducts = isProductIntroductionChecklist ? productIntroMarketingProducts : campaignMarketingProducts;
       const marketingProductKey = (item:any,idx:number) => `${item.sku || item.product || "marketing-product"}__${idx}`;
       const selectedMarketingProductKeys = Array.isArray(data.selectedMarketingProductKeys) ? data.selectedMarketingProductKeys : [];
@@ -5448,12 +5498,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             renderMainPromotionCard(((group.aiWorkspace || {}).marketing || {}).mainPromotion, true)
           )}
 
-          {isProductIntroductionChecklist&&productIntroMarketingRows.length>0&&(
+          {((isProductIntroductionChecklist&&productIntroMarketingRows.length>0) || (isCampaignChecklist&&campaignMarketingRows.length>0))&&(
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
               <div style={{ padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <div>
-                  <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>1. Select Product Row Groups for Marketing</span>
-                  <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedMarketingProducts.length} selected · {placedMarketingProducts.length} placed in Ad Menu · {normalizeProductIntroTransferCards(productIntroMarketingRows).length} group{normalizeProductIntroTransferCards(productIntroMarketingRows).length!==1?"s":""} from E-commerce</span>
+                  <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{isProductIntroductionChecklist ? "1. Select Product Row Groups for Marketing" : "1. Select Campaign Product Row Groups for Marketing"}</span>
+                  <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedMarketingProducts.length} selected · {placedMarketingProducts.length} placed in Ad Menu · {marketingTransferCards.length} group{marketingTransferCards.length!==1?"s":""} from E-commerce</span>
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
                   <Btn xs variant="outline" onClick={()=>updateAiWorkspace("marketing",{ selectedMarketingProductKeys:marketingAdProducts.map((item:any,idx:number)=>marketingProductKey(item,idx)) })} disabled={!marketingAdProducts.length}>Select All Groups</Btn>
@@ -5467,7 +5517,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   Ad Menu will generate using {placedMarketingProducts.length} placed product{placedMarketingProducts.length!==1?"s":""}: {placedMarketingProducts.map((item:any)=>item.product || item.productName || item.sku).filter(Boolean).join(", ")}
                 </div>
               )}
-              {normalizeProductIntroTransferCards(productIntroMarketingRows).map((transfer:any,transferIndex:number)=>{
+              {marketingTransferCards.map((transfer:any,transferIndex:number)=>{
                 const transferProducts = Array.isArray(transfer.products) && transfer.products.length ? transfer.products : [transfer];
                 const transferProductKeys = getMarketingProductKeysForTransfer(transferProducts);
                 const transferSelected = transferProductKeys.length > 0 && transferProductKeys.every((key:string)=>selectedMarketingProductKeys.includes(key));
@@ -5488,7 +5538,21 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <button
                           type="button"
                           onMouseDown={(e:any)=>{ e.preventDefault(); e.stopPropagation(); }}
-                          onClick={(e:any)=>{ e.preventDefault(); e.stopPropagation(); deleteProductIntroMarketingTransferAtIndex(transferIndex); }}
+                          onClick={(e:any)=>{
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (isProductIntroductionChecklist) {
+                              deleteProductIntroMarketingTransferAtIndex(transferIndex);
+                            } else {
+                              const nextRows = campaignMarketingRows.filter((_:any,idx:number)=>idx!==transferIndex);
+                              updateAiWorkspace("marketing",{
+                                campaignMarketingRows:nextRows,
+                                selectedMarketingProductKeys:[],
+                                placedMarketingProductKeys:[],
+                                generatedAt:new Date().toISOString(),
+                              });
+                            }
+                          }}
                           style={{ border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}
                         >
                           Delete
@@ -5684,6 +5748,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         collection:row.category || row.collection || "",
         category:row.category || row.collection || "",
       }]);
+      const campaignLivestreamRows = isCampaignChecklist && Array.isArray(livestreamData.campaignLivestreamRows) ? livestreamData.campaignLivestreamRows : [];
+      const campaignLivestreamProductsFromRows = campaignLivestreamRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((product:any)=>({
+        product:product.product || product.productName || row.product || "",
+        productName:product.productName || product.product || row.product || "",
+        sku:product.sku || product.skuCode || "",
+        skuCode:product.skuCode || product.sku || "",
+        brand:product.brand || row.brand || "",
+        collection:product.collection || product.category || row.collection || "",
+        category:product.category || product.collection || row.collection || "",
+      })) : []);
+      const livestreamTransferRows = isProductIntroductionChecklist ? productIntroLivestreamRows : (isCampaignChecklist ? campaignLivestreamRows : []);
+      const livestreamTransferCards = normalizeProductIntroTransferCards(livestreamTransferRows);
       const fallbackLivestreamProducts = (productRows || []).map((row:any)=>({
         product:row.product || row.productName || row.name || "",
         sku:row.skuCode || row.sku || row.value || "",
@@ -5691,7 +5767,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         collection:row.collection || row.category || "",
         category:row.category || row.collection || "",
       })).filter((item:any)=>String(item.product || item.sku).trim());
-      const livestreamMappedProducts = productIntroLivestreamProducts.length ? productIntroLivestreamProducts : fallbackLivestreamProducts;
+      const livestreamMappedProducts = productIntroLivestreamProducts.length ? productIntroLivestreamProducts : (campaignLivestreamProductsFromRows.length ? campaignLivestreamProductsFromRows : fallbackLivestreamProducts);
       const selectedLivestreamProductKeys = Array.isArray(livestreamData.selectedProductKeys) ? livestreamData.selectedProductKeys : [];
       const placedLivestreamProductKeys = Array.isArray(livestreamData.placedProductKeys) ? livestreamData.placedProductKeys : [];
       const selectedLivestreamProducts = livestreamMappedProducts.filter((item:any,idx:number)=>selectedLivestreamProductKeys.includes(livestreamProductKey(item,idx)));
@@ -5938,12 +6014,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             renderMainPromotionCard(livestreamData.mainPromotion, true)
           )}
 
-          {productIntroLivestreamRows.length>0&&(
+          {((isProductIntroductionChecklist&&productIntroLivestreamRows.length>0) || (isCampaignChecklist&&campaignLivestreamRows.length>0))&&(
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
               <div style={{ padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <div>
-                  <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Main Livestream Product Row Groups</span>
-                  <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedLivestreamProducts.length} selected · {placedLivestreamProducts.length} placed · {normalizeProductIntroTransferCards(productIntroLivestreamRows).length} group{normalizeProductIntroTransferCards(productIntroLivestreamRows).length!==1?"s":""} from E-commerce</span>
+                  <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{isProductIntroductionChecklist ? "Main Livestream Product Row Groups" : "Campaign Livestream Product Row Groups"}</span>
+                  <span style={{ display:"block",fontSize:10.5,color:C.muted,marginTop:2 }}>{selectedLivestreamProducts.length} selected · {placedLivestreamProducts.length} placed · {livestreamTransferCards.length} group{livestreamTransferCards.length!==1?"s":""} from E-commerce</span>
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",width:isMobile?"100%":"auto" }}>
                   <Btn xs variant="outline" onClick={()=>updateLivestream({ selectedProductKeys:livestreamMappedProducts.map((item:any,idx:number)=>livestreamProductKey(item,idx)) })} disabled={!livestreamMappedProducts.length}>Select All Groups</Btn>
@@ -5957,7 +6033,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   Main Livestream will use {placedLivestreamProducts.length} placed product{placedLivestreamProducts.length!==1?"s":""}: {placedLivestreamProducts.map((item:any)=>item.product || item.sku).filter(Boolean).join(", ")}
                 </div>
               )}
-              {normalizeProductIntroTransferCards(productIntroLivestreamRows).map((transfer:any,transferIndex:number)=>{
+              {livestreamTransferCards.map((transfer:any,transferIndex:number)=>{
                 const transferProducts = Array.isArray(transfer.products) && transfer.products.length ? transfer.products : [transfer];
                 const transferProductKeys = getLivestreamProductKeysForTransfer(transferProducts);
                 const transferSelected = transferProductKeys.length > 0 && transferProductKeys.every((key:string)=>selectedLivestreamProductKeys.includes(key));
@@ -5975,7 +6051,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
                         {transferPlaced&&<span style={{ fontSize:10.5,fontWeight:800,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 8px" }}>Added</span>}
                         <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
-                        <Btn xs variant="danger" onClick={(e:any)=>{ e?.stopPropagation?.(); deleteProductIntroLivestreamTransferAtIndex(transferIndex); }}>Delete</Btn>
+                        <Btn xs variant="danger" onClick={(e:any)=>{
+                          e?.stopPropagation?.();
+                          if (isProductIntroductionChecklist) {
+                            deleteProductIntroLivestreamTransferAtIndex(transferIndex);
+                          } else {
+                            const nextRows = campaignLivestreamRows.filter((_:any,idx:number)=>idx!==transferIndex);
+                            updateLivestream({ campaignLivestreamRows:nextRows, selectedProductKeys:[], placedProductKeys:[] });
+                          }
+                        }}>Delete</Btn>
                       </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
@@ -8569,6 +8653,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                             <Btn xs variant="outline" onClick={()=>copyEcommerceCampaignRowOutput(row)}>Copy</Btn>
                                             <Btn xs variant={campaignMarketingSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToMarketing(row)}>{campaignMarketingSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent Marketing ✓":"Send to Marketing"}</Btn>
                                             <Btn xs variant={campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToDigitalCreative(row)}>{campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent DC ✓":"Send to DC"}</Btn>
+                                            <Btn xs variant="outline" onClick={()=>sendEcommerceCampaignRowToLivestream(row)}>Send to Livestream</Btn>
                                             <Btn xs variant={campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>addEcommerceCampaignRowToOverview(row)}>{campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"Added ✓":"Add to Overview"}</Btn>
                                           </div>
                                         )}
