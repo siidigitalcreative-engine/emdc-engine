@@ -4599,6 +4599,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     setCampaignInstructionOpen(false);
   };
 
+  const getCampaignMainPromotionDefault = () => formatMainPromotion(((group.aiWorkspace || {}).ecommerce || {}).mainPromotion || "");
+  const getCampaignRowDiscountValue = (row:any) => String(row?.discount || "").trim() || getCampaignMainPromotionDefault();
+
   const getEcommerceCampaignRows = () => {
     const builder = getEcommerceCampaignBuilder();
     return (builder.productRows || []).map((row:any)=>{
@@ -4656,7 +4659,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       brand:summary.brand,
       collection:summary.collection,
       platform:builder.platform || "All Platforms",
-      discount:"",
+      discount:getCampaignMainPromotionDefault(),
       mechanics:"",
       headline:"",
       subheadline:"",
@@ -4804,7 +4807,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const getEcommerceCampaignProductSummary = (rows:any[]) => rows.map((row:any,idx:number)=>{
     const products = getEcommerceCampaignRowProducts(row);
     const productList = products.length ? products.map((item:any)=>`${item.product || "Product"} (${item.sku || "No SKU"})`).join("; ") : `${row.product || ""} (${row.sku || "No SKU"})`;
-    return `${idx+1}. Platform: ${row.platform || "All Platforms"} | Products: ${productList} | Brand: ${row.brand || "Unbranded"} | Collection/Category: ${row.collection || "No collection/category"} | Discount/Offer: ${row.discount || "Not specified"} | Mechanics/Notes: ${row.mechanics || "Not specified"}`;
+    return `${idx+1}. Platform: ${row.platform || "All Platforms"} | Products: ${productList} | Brand: ${row.brand || "Unbranded"} | Collection/Category: ${row.collection || "No collection/category"} | Discount/Offer: ${getCampaignRowDiscountValue(row) || "Not specified"} | Mechanics/Notes: ${row.mechanics || "Not specified"}`;
   }).join("\n");
 
   const parseCampaignCopySections = (value:any) => {
@@ -4897,7 +4900,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           sku:row.sku,
           brand:row.brand,
           collection:row.collection,
-          discountOrOffer:row.discount || "",
+          discountOrOffer:getCampaignRowDiscountValue(row) || "",
           mechanicsOrNotes:row.mechanics || "",
         },null,2),
         maxOutputTokens:700,
@@ -5013,7 +5016,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
-      discount:row.discount || "",
+      discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
     }));
     const fallbackProduct = {
@@ -5028,7 +5031,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
-      discount:row.discount || "",
+      discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
     };
     const marketingProducts = products.length ? products : [fallbackProduct];
@@ -5062,7 +5065,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
-      discount:row.discount || "",
+      discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
     }));
     const fallbackProduct = {
@@ -5077,7 +5080,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
-      discount:row.discount || "",
+      discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
     };
     const livestreamProducts = products.length ? products : [fallbackProduct];
@@ -5108,7 +5111,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       brand:row.brand || "",
       collection:row.collection || "",
       platform:row.platform || builder.platform || "All Platforms",
-      discount:row.discount || "",
+      discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
       linkedEventContext:linkedContext,
       products:productList,
@@ -8681,7 +8684,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                         </div>
                                       </Field>
                                       <Field label="Discount / Offer">
-                                        <TI value={row.discount || ""} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ discount:value },rowIndex)} placeholder="e.g. 20% OFF" style={{ fontSize:12,padding:"8px 9px" }} />
+                                        <div style={{ display:"flex",flexDirection:"column",gap:5 }}>
+                                          <TI value={getCampaignRowDiscountValue(row)} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ discount:value },rowIndex)} placeholder={getCampaignMainPromotionDefault() || "e.g. 20% OFF"} style={{ fontSize:12,padding:"8px 9px" }} />
+                                          {!!getCampaignMainPromotionDefault()&&String(row.discount || "").trim()===getCampaignMainPromotionDefault()&&(
+                                            <span style={{ fontSize:10.5,color:"#047857",fontWeight:800 }}>Using Main Promotion as default</span>
+                                          )}
+                                        </div>
                                       </Field>
                                       <Field label="Mechanics / Notes">
                                         <TI value={row.mechanics || ""} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ mechanics:value },rowIndex)} placeholder="e.g. Min spend ₱599" style={{ fontSize:12,padding:"8px 9px" }} />
