@@ -6312,6 +6312,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             </div>
           </div>
 
+          {!!formatMainPromotion(((group.aiWorkspace || {}).digital || {}).mainPromotion)&&(
+            renderMainPromotionCard(((group.aiWorkspace || {}).digital || {}).mainPromotion, true)
+          )}
+
           {campaignCreativeRows.length===0 ? (
             <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
               <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No campaign product row sent yet. Go to Campaign E-commerce and click Send to DC beside a generated row.</p>
@@ -7309,6 +7313,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             </div>
           </div>
 
+          {!!formatMainPromotion(((group.aiWorkspace || {}).digital || {}).mainPromotion)&&(
+            renderMainPromotionCard(((group.aiWorkspace || {}).digital || {}).mainPromotion, true)
+          )}
+
           {sourceRows.length===0 ? (
             <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
               <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No selected products yet. Add SKUs to this Product Introduction checklist group first.</p>
@@ -7721,6 +7729,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                           <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:true, mainPromotionDraft:data.mainPromotionDraft || (typeof data.mainPromotion === "object" ? data.mainPromotion : { type:"text", value:"", text:String(data.mainPromotion || "") }) })}>Edit</Btn>
                           <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
+                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion }); markActionDone("promo-digital"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-digital")?"✓ Sent":"Send to DC"}</Btn>
                           <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
                         </div>
                       </div>
