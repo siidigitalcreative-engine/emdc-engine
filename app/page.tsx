@@ -5842,6 +5842,84 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
 
+      const defaultCampaignDetailedPromptInstructions = "Create a highly executable campaign digital creative prompt for AI image generation. Strictly preserve the product look from the provided product image links. Improve the user's own prompt without changing its core request. Include campaign context, scene, composition, lighting, camera angle, product placement, styling, quality, and negative restrictions. Avoid text overlays unless the user specifically asks for text.";
+      const getCampaignDetailedPromptInstructions = () => String(data.campaignDetailedPromptInstructions || data.detailedPromptInstructions || defaultCampaignDetailedPromptInstructions);
+      const buildCampaignDetailedPrompt = (item:any) => {
+        const productRows = getCampaignDigitalProductRows(item);
+        const imageLinks = Array.from(new Set([...(productRows.flatMap((row:any)=>row.links || [])), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const ownPrompt = String(item.ownPrompt || "").trim();
+        const productLines = productRows.map((row:any,index:number)=>`${index+1}. ${[row.brand,row.category,row.product,row.sku].filter(Boolean).join(" · ")}`).join("\n");
+        return [
+          "AI CAMPAIGN DIGITAL CREATIVE IMAGE PROMPT",
+          "",
+          "PRIMARY USER DIRECTION TO FOLLOW:",
+          ownPrompt || "Create a premium campaign digital creative image using the selected campaign product/s.",
+          "",
+          "SAVED DETAILED PROMPT INSTRUCTIONS TO FOLLOW:",
+          getCampaignDetailedPromptInstructions(),
+          "",
+          "CAMPAIGN / AD CONTEXT:",
+          item.linkedEventContext ? `Linked campaign/event: ${item.linkedEventContext}` : "Campaign Digital Creative",
+          `Platform: ${item.platform || "All Platforms"}`,
+          item.headline ? `Headline: ${item.headline}` : "",
+          item.subheadline ? `Subheadline: ${item.subheadline}` : "",
+          item.cta ? `CTA: ${item.cta}` : "",
+          "",
+          "FEATURED PRODUCT/S:",
+          productLines || [item.brand,item.collection,item.product,item.sku].filter(Boolean).join(" · "),
+          "",
+          "PRODUCT IMAGE LINKS - REQUIRED VISUAL REFERENCES:",
+          imageLinks.length ? imageLinks.map((link:string,index:number)=>`${index+1}. ${link}`).join("\n") : "No product image links were found. Use only the provided product details and any uploaded references.",
+          "",
+          "FINAL EXECUTION:",
+          ownPrompt
+            ? `Improve and expand the user direction above while still following it exactly. The final scene must clearly match this request: ${ownPrompt}`
+            : "Create a clean, premium product-focused campaign visual based on the selected campaign row.",
+          "Use the product image links as the default reference for product accuracy. Preserve exact product color, shape, scale, material, proportions, packaging, logo placement, and visible details. Do not invent a different product.",
+          "",
+          "SCENE AND COMPOSITION:",
+          ownPrompt ? `Build the campaign visual around the user's requested setting/concept: ${ownPrompt}` : "Use a premium campaign ecommerce setup that supports the headline, subheadline, CTA, and campaign context.",
+          "Make the product/s the clear hero. Arrange the selected product/s in a balanced composition with enough breathing room for marketplace, ad, or social layout use.",
+          "",
+          "LIGHTING AND CAMERA:",
+          "Use soft natural commercial lighting, crisp focus, realistic shadows, clean highlights, accurate product reflections, and a premium campaign photography look. Use a realistic camera angle that clearly shows the product form and important details.",
+          "",
+          "QUALITY STYLE:",
+          "Hyper-realistic premium ecommerce campaign product photography, sharp, clean, high-resolution, natural colors, accurate materials, modern layout, polished but not overly artificial.",
+          "",
+          "NEGATIVE RESTRICTIONS:",
+          "No wrong product shape, no color changes, no invented accessories, no extra labels, no text overlay, no watermark, no distorted handles, no incorrect size relationship, no messy clutter, no unrealistic reflections, no people unless the user's own prompt asks for people."
+        ].filter(Boolean).join("\n");
+      };
+      const generateCampaignDetailedPrompt = (item:any) => {
+        const prompt = buildCampaignDetailedPrompt(item);
+        updateCampaignDigitalItem(item.id,{ imagePrompt:prompt, generatedDetailedPromptAt:new Date().toISOString() });
+        markActionDone(`campaign-detailed-prompt-${item.id}`);
+      };
+      const saveCampaignDigitalPromptOutput = (item:any) => {
+        const text = String(item.imagePrompt || "").trim();
+        if(!text) return;
+        const savedAt = new Date().toISOString();
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        const savedEntry = {
+          id:uid(),
+          source:"Campaign Digital Creative",
+          cardId:`prompt-${item.id}`,
+          sourceRowId:item.id,
+          title:`${item.title || item.product || "Campaign Digital Creative"} · Detailed Prompt`,
+          url:item.generatedImageUrl || "",
+          prompt:text,
+          ownPrompt:item.ownPrompt || "",
+          kind:"Detailed Prompt",
+          createdAt:savedAt,
+        };
+        updateAiWorkspace("digital",{
+          savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==`prompt-${item.id}`)].slice(0,60),
+        });
+        markActionDone(`campaign-save-prompt-${item.id}`);
+      };
+
       const generateCampaignDcImage = async (item:any) => {
         const productRows = getCampaignDigitalProductRows(item);
         const imageLinks = Array.from(new Set([...(productRows.flatMap((row:any)=>row.links || [])), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
@@ -6385,19 +6463,50 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       </div>
 
                       <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Image Prompt</span>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Detailed Prompt</span>
+                          <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+                            <Btn xs variant="outline" onClick={()=>updateAiWorkspace("digital",{ campaignDetailedPromptInstructionsEditing:!data.campaignDetailedPromptInstructionsEditing })}>{data.campaignDetailedPromptInstructionsEditing ? "Hide Instructions" : "Edit Instructions"}</Btn>
+                            <Btn xs variant={actionDone(`campaign-detailed-prompt-${item.id}`)?"primary":"outline"} onClick={()=>generateCampaignDetailedPrompt(item)}>{actionDone(`campaign-detailed-prompt-${item.id}`)?"✓ Prompt Generated":"Generate Detailed Prompt"}</Btn>
+                            <Btn xs variant={actionDone(`campaign-save-prompt-${item.id}`)?"primary":"outline"} onClick={()=>saveCampaignDigitalPromptOutput(item)} disabled={!String(item.imagePrompt || "").trim()}>{actionDone(`campaign-save-prompt-${item.id}`)?"✓ Saved":"Save Prompt"}</Btn>
+                          </div>
                         </div>
-                        <div style={{ padding:10 }}>
+                        <div style={{ padding:10,display:"flex",flexDirection:"column",gap:10 }}>
+                          {data.campaignDetailedPromptInstructionsEditing&&(
+                            <div style={{ padding:10,border:`1px solid ${C.border}`,borderRadius:9,background:C.surface }}>
+                              <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:6 }}>
+                                <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Detailed Prompt Creator Instructions</span>
+                                <Btn xs onClick={()=>{ updateAiWorkspace("digital",{ campaignDetailedPromptInstructionsEditing:false }); markActionDone("campaign-detailed-instructions-save"); }}>{actionDone("campaign-detailed-instructions-save")?"✓ Saved":"Save"}</Btn>
+                              </div>
+                              <textarea
+                                value={data.campaignDetailedPromptInstructions || data.detailedPromptInstructions || defaultCampaignDetailedPromptInstructions}
+                                onChange={(e:any)=>updateAiWorkspace("digital",{ campaignDetailedPromptInstructions:e.target.value })}
+                                rows={4}
+                                style={{ width:"100%",boxSizing:"border-box",minHeight:92,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.bg }}
+                              />
+                            </div>
+                          )}
+                          <div style={{ border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,overflow:"hidden" }}>
+                            <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+                              <span style={{ fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Your Own Prompt (Optional)</span>
+                            </div>
+                            <textarea
+                              value={item.ownPrompt || ""}
+                              onChange={(e:any)=>updateCampaignDigitalItem(item.id,{ ownPrompt:e.target.value })}
+                              placeholder="Type your own direction. Example: put these products in a modern kitchen counter"
+                              rows={isMobile?3:3}
+                              style={{ width:"100%",boxSizing:"border-box",minHeight:74,resize:"vertical",padding:"10px 12px",border:"none",outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
+                            />
+                          </div>
                           <textarea
                             value={item.imagePrompt || ""}
                             onChange={(e:any)=>updateCampaignDigitalItem(item.id,{ imagePrompt:e.target.value })}
-                            placeholder="Add image direction for this card. Example: premium studio product ad, clean white background, product hero centered, soft shadows, no text overlay..."
-                            rows={isMobile?4:5}
-                            style={{ width:"100%",boxSizing:"border-box",minHeight:100,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
+                            placeholder="Generated detailed prompt will appear here. You can also edit it before generating the image."
+                            rows={isMobile?5:6}
+                            style={{ width:"100%",boxSizing:"border-box",minHeight:120,resize:"vertical",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,outline:"none",fontSize:12.5,lineHeight:1.5,color:C.text,background:C.surface }}
                           />
-                          <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>This prompt is combined with the table details and product image links when you click Generate Image.</p>
-                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8 }}>
+                          <p style={{ margin:"-4px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.35 }}>Generate Detailed Prompt improves your own prompt while still following it. Product image links remain the main visual reference.</p>
+                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:0 }}>
                             <input
                               type="file"
                               accept="image/*"
