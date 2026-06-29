@@ -5269,18 +5269,32 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   <div key={transfer.id || transferIndex} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                     <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                       <div style={{ minWidth:0 }}>
-                        <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>Product List Card {transferIndex+1}</p>
-                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted }}>{transferProducts.length} product{transferProducts.length!==1?"s":""} sent from E-commerce</p>
+                        <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
+                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
                       </div>
                       <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
                     </div>
-                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:8,padding:10 }}>
-                      {transferProducts.map((product:any,idx:number)=>(
-                        <div key={`${product.sku || product.product || idx}`} style={{ padding:"9px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:9 }}>
-                          <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{product.product || product.productName || "Product"}</p>
-                          <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted }}>{product.brand || "No brand"} · {product.collection || product.category || "No category"} · {product.sku || product.skuCode || "No SKU"}</p>
-                        </div>
-                      ))}
+                    <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+                      <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                        <thead>
+                          <tr style={{ background:C.surfaceAlt }}>
+                            {["Platform","Brand","Category","Product","SKU"].map((label:string)=>(
+                              <th key={label} style={{ padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {transferProducts.map((product:any,idx:number)=>(
+                            <tr key={`${product.sku || product.skuCode || product.product || idx}`} style={{ background:idx%2?C.surface:C.bg }}>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>All Platforms</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 );
@@ -5663,18 +5677,32 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   <div key={transfer.id || transferIndex} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                     <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                       <div style={{ minWidth:0 }}>
-                        <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text }}>Livestream Product List Card {transferIndex+1}</p>
-                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted }}>{transferProducts.length} product{transferProducts.length!==1?"s":""} sent from E-commerce</p>
+                        <p style={{ margin:0,fontSize:13,fontWeight:950,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>product.product || product.productName || "Product").filter(Boolean).join(" + ") || `Product List Card ${transferIndex+1}`}</p>
+                        <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{transferProducts.map((product:any)=>[product.brand,product.collection || product.category,product.sku || product.skuCode].filter(Boolean).join(" · ")).filter(Boolean).join(", ") || `${transferProducts.length} product${transferProducts.length!==1?"s":""} sent from E-commerce`}</p>
                       </div>
                       <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
                     </div>
-                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:8,padding:10 }}>
-                      {transferProducts.map((product:any,idx:number)=>(
-                        <div key={`${product.sku || product.product || idx}`} style={{ padding:"9px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:9 }}>
-                          <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{product.product || product.productName || "Product"}</p>
-                          <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted }}>{product.brand || "No brand"} · {product.collection || product.category || "No category"} · {product.sku || product.skuCode || "No SKU"}</p>
-                        </div>
-                      ))}
+                    <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+                      <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                        <thead>
+                          <tr style={{ background:C.surfaceAlt }}>
+                            {["Platform","Brand","Category","Product","SKU"].map((label:string)=>(
+                              <th key={label} style={{ padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {transferProducts.map((product:any,idx:number)=>(
+                            <tr key={`${product.sku || product.skuCode || product.product || idx}`} style={{ background:idx%2?C.surface:C.bg }}>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>All Platforms</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.brand || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 );
