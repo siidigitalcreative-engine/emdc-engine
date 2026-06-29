@@ -3885,6 +3885,18 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
     });
   };
 
+  const deleteProductIntroMarketingTransferAtIndex = (transferIndex:number) => {
+    const currentCards = normalizeProductIntroTransferCards(getProductIntroMarketingRows());
+    const nextCards = currentCards.filter((_:any,idx:number)=>idx!==transferIndex);
+    saveProductIntroMarketingRows(nextCards);
+  };
+
+  const deleteProductIntroLivestreamTransferAtIndex = (transferIndex:number) => {
+    const currentCards = normalizeProductIntroTransferCards(getProductIntroLivestreamRows());
+    const nextCards = currentCards.filter((_:any,idx:number)=>idx!==transferIndex);
+    saveProductIntroLivestreamRows(nextCards);
+  };
+
   const defaultEcommerceOutputSections = [
     "Product Overview",
     "Key Features",
@@ -5351,7 +5363,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       </div>
                       <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
                         <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
-                        <Btn xs variant="danger" onClick={()=>deleteProductIntroMarketingTransfer(transfer)}>Delete</Btn>
+                        <Btn xs variant="danger" onClick={(e:any)=>{ e?.stopPropagation?.(); deleteProductIntroMarketingTransferAtIndex(transferIndex); }}>Delete</Btn>
                       </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
@@ -5762,7 +5774,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       </div>
                       <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
                         <span style={{ fontSize:10.5,fontWeight:800,color:C.muted,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{transferProducts.length} product{transferProducts.length!==1?"s":""}</span>
-                        <Btn xs variant="danger" onClick={()=>deleteProductIntroLivestreamTransfer(transfer)}>Delete</Btn>
+                        <Btn xs variant="danger" onClick={(e:any)=>{ e?.stopPropagation?.(); deleteProductIntroLivestreamTransferAtIndex(transferIndex); }}>Delete</Btn>
                       </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
