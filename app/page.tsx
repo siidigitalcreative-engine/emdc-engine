@@ -3645,6 +3645,19 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return String(promo || "").trim();
   };
 
+  const getMainPromotionDisplay = (promo:any) => {
+    const formatted = formatMainPromotion(promo);
+    if (promo && typeof promo === "object") {
+      const type = String(promo.type || "text");
+      const value = String(promo.value || "").trim();
+      const text = String(promo.text || "").trim();
+      const typeLabel = type === "discount" ? "Percentage Discount" : type === "php" ? "PHP Discount" : "Custom Promotion";
+      const valueLabel = type === "discount" && value ? `${value}%` : type === "php" && value ? `₱${value}` : value || "—";
+      return { formatted, type, typeLabel, valueLabel, text };
+    }
+    return { formatted, type:"text", typeLabel:"Custom Promotion", valueLabel:formatted || "—", text:formatted };
+  };
+
   const deleteOverviewItem = (id:string) => {
     updateAiWorkspace("overview",{ items:getOverviewItems().filter((item:any)=>item.id!==id) });
   };
@@ -7697,7 +7710,47 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                         </div>
                       ) : (
-                        <p style={{ margin:0,fontSize:13,color:C.textSub,lineHeight:1.5,whiteSpace:"pre-wrap" }}>{formatMainPromotion(data.mainPromotion) || "No main promotion set yet. Click Edit to add one."}</p>
+                        (()=>{
+                          const promoInfo:any = getMainPromotionDisplay(data.mainPromotion);
+                          const hasPromo = !!promoInfo.formatted;
+                          return (
+                            <div style={{ border:`1.5px solid ${hasPromo?"#A7F3D0":C.border}`,background:hasPromo?"#F0FDF4":C.bg,borderRadius:12,padding:14,display:"grid",gap:10 }}>
+                              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap" }}>
+                                <div style={{ minWidth:0 }}>
+                                  <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6 }}>
+                                    <span style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:8,background:hasPromo?"#D1FAE5":C.surfaceAlt,border:`1px solid ${hasPromo?"#A7F3D0":C.border}`,fontSize:14 }}>🏷</span>
+                                    <span style={{ fontSize:11,fontWeight:900,color:hasPromo?"#047857":C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Main Promotion</span>
+                                    <span style={{ fontSize:10.5,fontWeight:900,color:hasPromo?"#047857":C.faint,background:hasPromo?"#D1FAE5":C.surface,border:`1px solid ${hasPromo?"#A7F3D0":C.border}`,borderRadius:999,padding:"3px 8px" }}>{hasPromo?"Active":"Not set"}</span>
+                                  </div>
+                                  <div style={{ fontSize:22,fontWeight:950,color:hasPromo?"#064E3B":C.text,lineHeight:1.15,wordBreak:"break-word" }}>
+                                    {hasPromo ? promoInfo.formatted.split(" · ")[0] : "No main promotion yet"}
+                                  </div>
+                                  {hasPromo&&promoInfo.text&&promoInfo.formatted.includes(" · ")&&(
+                                    <p style={{ margin:"8px 0 0",fontSize:12.5,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{promoInfo.text}</p>
+                                  )}
+                                  {!hasPromo&&(
+                                    <p style={{ margin:"8px 0 0",fontSize:12,color:C.muted,lineHeight:1.45 }}>Click Edit to add a discount, voucher, bundle, sale mechanic, or campaign offer.</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:8 }}>
+                                <div style={{ padding:"9px 10px",borderRadius:9,background:C.surface,border:`1px solid ${C.border}` }}>
+                                  <div style={{ fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:3 }}>Promotion Type</div>
+                                  <div style={{ fontSize:12.5,fontWeight:850,color:C.text }}>{hasPromo ? promoInfo.typeLabel : "—"}</div>
+                                </div>
+                                <div style={{ padding:"9px 10px",borderRadius:9,background:C.surface,border:`1px solid ${C.border}` }}>
+                                  <div style={{ fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:3 }}>Value</div>
+                                  <div style={{ fontSize:12.5,fontWeight:850,color:C.text }}>{hasPromo ? promoInfo.valueLabel : "—"}</div>
+                                </div>
+                                <div style={{ padding:"9px 10px",borderRadius:9,background:C.surface,border:`1px solid ${C.border}` }}>
+                                  <div style={{ fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:3 }}>Applies To</div>
+                                  <div style={{ fontSize:12.5,fontWeight:850,color:C.text }}>Selected Products</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
 
