@@ -8092,24 +8092,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           <Btn sm variant="outline" onClick={()=>{
                             const marketingData = ((group.aiWorkspace || {}).marketing || {}) as any;
                             const existingRows = Array.isArray(marketingData.productIntroMarketingRows) ? marketingData.productIntroMarketingRows : [];
-                            const row = makeProductIntroDcGroupedItem(productRows);
-                            saveProductIntroMarketingRows([...existingRows,row]);
+                            const ecommerceProductRows = getProductIntroDigitalRows();
+                            const rowsToSend = ecommerceProductRows.length ? ecommerceProductRows : (productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : []);
+                            saveProductIntroMarketingRows([...existingRows,...rowsToSend]);
                             setActiveGroupTab("marketing");
-                          }} disabled={!productRows.length}>Send to Marketing</Btn>
+                          }} disabled={!productRows.length && !getProductIntroDigitalRows().length}>Send to Marketing</Btn>
                           <Btn sm variant="outline" onClick={()=>{
-                            const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
-                            const existingRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
-                            const row = makeProductIntroDcGroupedItem(productRows);
-                            saveProductIntroDigitalRows([...existingRows,row]);
+                            const ecommerceProductRows = getProductIntroDigitalRows();
+                            const rowsToSend = ecommerceProductRows.length ? ecommerceProductRows : (productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : []);
+                            if(rowsToSend.length) saveProductIntroDigitalRows(rowsToSend);
                             setActiveGroupTab("digital");
-                          }} disabled={!productRows.length}>Send to DC</Btn>
+                          }} disabled={!productRows.length && !getProductIntroDigitalRows().length}>Send to DC</Btn>
                           <Btn sm variant="outline" onClick={()=>{
                             const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
                             const existingRows = Array.isArray(livestreamData.productIntroLivestreamRows) ? livestreamData.productIntroLivestreamRows : [];
-                            const row = makeProductIntroDcGroupedItem(productRows);
-                            saveProductIntroLivestreamRows([...existingRows,row]);
+                            const ecommerceProductRows = getProductIntroDigitalRows();
+                            const rowsToSend = ecommerceProductRows.length ? ecommerceProductRows : (productRows.length ? [makeProductIntroDcGroupedItem(productRows)] : []);
+                            saveProductIntroLivestreamRows([...existingRows,...rowsToSend]);
                             setActiveGroupTab("livestream");
-                          }} disabled={!productRows.length}>Send to Livestream</Btn>
+                          }} disabled={!productRows.length && !getProductIntroDigitalRows().length}>Send to Livestream</Btn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                         </div>
                       </div>
