@@ -11646,7 +11646,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const saveBulkSkus = () => {
     const currentBulkRows = parseGridRows(bulkGridRows);
     const rows=currentBulkRows.filter((r:any)=>r.valid);
-    if(!rows.length){ setBulkError(bulkMode==="edit" ? "No valid SKU rows to save." : "No valid SKU rows to import."); return; }
+
+    // Paste/import mode still needs at least 1 valid SKU.
+    // Edit Sheet mode must allow saving 0 rows after Clear Sheet so the user can intentionally empty the SKU sheet.
+    if(!rows.length && bulkMode!=="edit"){
+      setBulkError("No valid SKU rows to import.");
+      return;
+    }
 
     const nextBrands=[...brands];
     const getBrandId = (brandName:string) => {
@@ -12182,14 +12188,14 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             </div>
           </div>
           {bulkError&&<p style={{ margin:0,fontSize:12,color:C.muted }}>{bulkError}</p>}
-          {bulkRows.length>0&&(
+          {(bulkRows.length>0 || bulkMode==="edit")&&(
             <p style={{ margin:0,fontSize:12,color:bulkRows.some((r:any)=>r.error)?"#DC2626":C.muted,fontWeight:bulkRows.some((r:any)=>r.error)?700:400 }}>
-              {bulkRows.filter((r:any)=>r.valid).length} valid SKU{bulkRows.filter((r:any)=>r.valid).length!==1?"s":""}{bulkRows.some((r:any)=>r.error) ? ` · Fix highlighted rows before ${bulkMode==="edit"?"saving":"importing"} invalid items.` : (bulkMode==="edit" ? " ready to save." : " ready to import.")}{bulkMode==="edit"?(bulkSearch.trim()?` · Showing ${bulkVisibleRows.length}/${bulkVisibleRowsAll.length} matching row${bulkVisibleRowsAll.length!==1?"s":""}. Save still applies to the full sheet.`:bulkVisibleRowsAll.length>bulkVisibleRows.length?` · Showing ${bulkVisibleRows.length}/${bulkVisibleRowsAll.length} rows for smoother editing.`:""):""}
+              {bulkRows.filter((r:any)=>r.valid).length} valid SKU{bulkRows.filter((r:any)=>r.valid).length!==1?"s":""}{bulkRows.some((r:any)=>r.error) ? ` · Fix highlighted rows before ${bulkMode==="edit"?"saving":"importing"} invalid items.` : (bulkMode==="edit" ? (bulkRows.filter((r:any)=>r.valid).length===0 ? " ready to save as an empty sheet." : " ready to save.") : " ready to import.")}{bulkMode==="edit"?(bulkSearch.trim()?` · Showing ${bulkVisibleRows.length}/${bulkVisibleRowsAll.length} matching row${bulkVisibleRowsAll.length!==1?"s":""}. Save still applies to the full sheet.`:bulkVisibleRowsAll.length>bulkVisibleRows.length?` · Showing ${bulkVisibleRows.length}/${bulkVisibleRowsAll.length} rows for smoother editing.`:""):""}
             </p>
           )}
           <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
             <Btn variant="outline" onClick={()=>setBulkModal(false)}>Cancel</Btn>
-            <Btn onClick={saveBulkSkus} disabled={bulkRows.filter(r=>r.valid).length===0}>{bulkMode==="edit" ? `Save ${bulkRows.filter(r=>r.valid).length} SKU${bulkRows.filter(r=>r.valid).length!==1?"s":""}` : `Import ${bulkRows.filter(r=>r.valid).length} SKU${bulkRows.filter(r=>r.valid).length!==1?"s":""}`}</Btn>
+            <Btn onClick={saveBulkSkus} disabled={bulkMode!=="edit" && bulkRows.filter(r=>r.valid).length===0}>{bulkMode==="edit" ? `Save ${bulkRows.filter(r=>r.valid).length} SKU${bulkRows.filter(r=>r.valid).length!==1?"s":""}` : `Import ${bulkRows.filter(r=>r.valid).length} SKU${bulkRows.filter(r=>r.valid).length!==1?"s":""}`}</Btn>
           </div>
         </div>
       </Modal>
