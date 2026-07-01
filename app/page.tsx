@@ -7704,7 +7704,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
 
-      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")
+      const normalizeIntroCarouselMatchText = (value:any) => String(value || "")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g," ")
         .trim();
