@@ -445,19 +445,17 @@ const Divider = ({ my=16 }) => <div style={{ height:1,background:C.border,margin
 
 const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
   if (!open) return null;
-  const modalIsDesktop = typeof window !== "undefined" ? window.innerWidth >= 640 : true;
-  const modalIsMobile = typeof window !== "undefined" ? window.innerWidth < 640 : false;
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:0 }}
       onClick={onClose}
       // On tablet+ center it
-      onMouseEnter={e=>{ if(typeof window!=="undefined" && window.innerWidth>=640) { e.currentTarget.style.alignItems="center"; e.currentTarget.style.padding="16px"; } }}>
+      onMouseEnter={e=>{ if(window.innerWidth>=640) { e.currentTarget.style.alignItems="center"; e.currentTarget.style.padding="16px"; } }}>
       <div style={{ background:C.surface,borderRadius:"16px 16px 0 0",padding:24,width:"100%",maxWidth:width,
         boxShadow:"0 -4px 32px rgba(0,0,0,.16)",maxHeight:"92vh",overflowY:"auto",
-        ...(modalIsDesktop?{borderRadius:14,padding:28}:{}) }}
+        ...(window.innerWidth>=640?{borderRadius:14,padding:28}:{}) }}
         onClick={e=>e.stopPropagation()}>
         {/* Drag handle (mobile) */}
-        {modalIsMobile&&<div style={{ width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 20px" }} />}
+        {window.innerWidth<640&&<div style={{ width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 20px" }} />}
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
             {onBack&&<button onClick={onBack} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:15,flexShrink:0 }}>&#8249;</button>}
@@ -3618,8 +3616,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output") => {
-    const textContent = String(content || "").trim();
-    if(!textContent) return;
+    const isStructured = content && typeof content === "object";
+    const textContent = isStructured ? content : String(content || "").trim();
+    if(!isStructured && !textContent) return;
     const items = getOverviewItems();
     const newItem = {
       id:uid(),
@@ -3629,10 +3628,121 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       content:textContent,
       createdAt:new Date().toISOString(),
     };
-    // Keep Overview as a clean master page in natural workflow order.
-    // Items are appended, then displayed by source section: E-commerce, Marketing, Digital Creative, Livestream, Other.
     updateAiWorkspace("overview",{ items:[...items,newItem] });
     markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
+  };
+
+  const addProductIntroEcommerceOutputToOverview = (sourceData:any, actionKey:string="overview-ecommerce-product-rows") => {
+    const output = String(sourceData?.generatedText || sourceData?.text || "").trim();
+    if(!output) return;
+    addToOverview(
+      "E-commerce",
+      sourceData?.title || "E-commerce Generated Output",
+      {
+        output,
+        productRows:getEcommerceGeneratedProductRows(sourceData),
+        collapsed:true,
+      },
+      "E-commerce Generated Output"
+    );
+    markActionDone(actionKey);
+  };
+
+
+  const renderOverviewProductRowsTable = (rows:any[] = []) => {
+    const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+    if(!safeRows.length) return null;
+    return (
+      <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch",border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,marginBottom:10 }}>
+        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11.5,minWidth:isMobile?520:620 }}>
+          <thead>
+            <tr style={{ background:C.surfaceAlt }}>
+              {["Platform","Brand","Category","Product","SKU"].map((head:string)=>(
+                <th key={head} style={{ textAlign:"left",padding:"8px 9px",borderBottom:`1px solid ${C.border}`,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>{head}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {safeRows.map((row:any,index:number)=>(
+              <tr key={`${row.id || row.sku || row.product || index}`} style={{ borderBottom:index===safeRows.length-1?"none":`1px solid ${C.border}` }}>
+                <td style={{ padding:"8px 9px",color:C.textSub,fontWeight:700 }}>{row.platform || "All Platforms"}</td>
+                <td style={{ padding:"8px 9px",color:C.textSub,fontWeight:700 }}>{row.brand || ""}</td>
+                <td style={{ padding:"8px 9px",color:C.textSub,fontWeight:700 }}>{row.category || row.collection || ""}</td>
+                <td style={{ padding:"8px 9px",color:C.text,fontWeight:850 }}>{row.product || row.productName || ""}</td>
+                <td style={{ padding:"8px 9px",color:C.muted,fontFamily:"monospace",fontWeight:700 }}>{row.sku || row.skuCode || ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderOverviewContent = (item:any) => {
+    const kind = String(item?.kind || "").toLowerCase();
+    const structuredContent = item?.content && typeof item.content === "object" ? item.content : null;
+
+    if(structuredContent && kind.includes("e-commerce generated output")){
+      const output = String(structuredContent.output || "").trim();
+      const rows = Array.isArray(structuredContent.productRows) ? structuredContent.productRows : [];
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          {renderOverviewProductRowsTable(rows)}
+          <details style={{ background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:0,overflow:"hidden" }}>
+            <summary style={{ cursor:"pointer",padding:"10px 12px",fontSize:12,fontWeight:900,color:C.textSub,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+              View E-commerce Generated Output
+            </summary>
+            <div style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.6,color:C.text,padding:14 }}>
+              {output || "No generated output."}
+            </div>
+          </details>
+        </div>
+      );
+    }
+
+    const content = String(item?.content || "");
+
+    if(kind.includes("asset link")){
+      const blocks = content.split(/\n\s*\n/).map((block:string)=>block.trim()).filter(Boolean);
+      const rows = blocks.map((block:string)=>{
+        const lines = block.split(/\n/).map((line:string)=>line.trim()).filter(Boolean);
+        const nameLine = lines[0] || "";
+        const linkLine = lines.find((line:string)=>/^link:/i.test(line)) || "";
+        return {
+          name:nameLine.replace(/^\d+\.\s*/,"").trim() || "Untitled Asset",
+          link:linkLine.replace(/^link:\s*/i,"").trim(),
+        };
+      });
+
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+          {rows.map((row:any,index:number)=>(
+            <div key={`${row.name}-${index}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(0,1.4fr)",gap:8,alignItems:"center",padding:"9px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:9 }}>
+              <div style={{ fontSize:12,fontWeight:900,color:C.text,wordBreak:"break-word" }}>{row.name}</div>
+              {row.link ? (
+                <a href={row.link} target="_blank" rel="noreferrer" style={{ fontSize:12,fontWeight:800,color:"#2563EB",textDecoration:"underline",wordBreak:"break-all" }}>
+                  {row.link}
+                </a>
+              ) : (
+                <span style={{ fontSize:12,color:C.faint }}>No link added</span>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = content.split(urlRegex);
+    return (
+      <div style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.6,color:C.text,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:14 }}>
+        {parts.map((part:string,index:number)=>/^https?:\/\//.test(part) ? (
+          <a key={index} href={part} target="_blank" rel="noreferrer" style={{ color:"#2563EB",fontWeight:800,textDecoration:"underline",wordBreak:"break-all" }}>{part}</a>
+        ) : (
+          <React.Fragment key={index}>{part}</React.Fragment>
+        ))}
+      </div>
+    );
   };
 
   const formatMainPromotion = (promo:any) => {
@@ -3725,30 +3835,30 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     updateAiWorkspace("overview",{ items:getOverviewItems().filter((item:any)=>item.id!==id) });
   };
 
+  const overviewItemToText = (item:any) => {
+    const content:any = item?.content;
+    if(content && typeof content === "object"){
+      const rows = Array.isArray(content.productRows) ? content.productRows : [];
+      const rowText = rows.length ? rows.map((row:any)=>[row.platform || "All Platforms", row.brand || "", row.category || row.collection || "", row.product || row.productName || "", row.sku || row.skuCode || ""].filter(Boolean).join(" | ")).join("\n") : "";
+      return [rowText, String(content.output || "")].filter(Boolean).join("\n\n");
+    }
+    return String(content || "");
+  };
+
   const copyOverviewItem = async (item:any) => {
-    try { await navigator.clipboard.writeText(String(item?.content || "")); } catch {}
+    try { await navigator.clipboard.writeText(overviewItemToText(item)); } catch {}
   };
 
   const copyAllOverviewItems = async () => {
-    const output = getOverviewItems().map((item:any)=>`${item.title}\n${item.content}`).join("\n\n---\n\n");
+    const output = getOverviewItems().map((item:any)=>`${item.title}\n${overviewItemToText(item)}`).join("\n\n---\n\n");
     if(!output) return;
     try { await navigator.clipboard.writeText(output); } catch {}
   };
 
   const formatProductIntroOverviewRows = (extraOutput:any="") => {
-    const header = "PLATFORM\tBRAND\tCATEGORY\tPRODUCT\tHEADLINE\tSUBHEADLINE\tCTA";
-    const rows = productRows.map((row:any)=>[
-      "All Platforms",
-      row.brand || "",
-      row.collection || row.category || "",
-      row.product || row.productName || "",
-      "",
-      "",
-      "",
-    ].join("\t"));
-    const table = [header,...rows].join("\n");
-    const extra = String(extraOutput || "").trim();
-    return extra ? `${table}\n\nGenerated E-commerce Output\n${extra}` : table;
+    // Overview should receive the actual generated E-commerce output only.
+    // Do not include the product-row table with PLATFORM / BRAND / CATEGORY / PRODUCT columns.
+    return String(extraOutput || "").trim();
   };
 
   const makeProductIntroDcItem = (row:any) => ({
@@ -3830,11 +3940,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
-  };
-
-  const getProductIntroMarketingRows = () => {
-    const marketing = ((group.aiWorkspace || {}).marketing || {}) as any;
-    return Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
   };
 
   const saveProductIntroMarketingRows = (rows:any[]) => {
@@ -4330,7 +4435,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       product:row.product || row.productName || "",
       sku:row.skuCode || row.sku || "",
     }));
-    const selectedSections = getSelectedEcommerceSections();
 
     const instruction = [
       "Create the AI E-commerce Prompt only, not the final listing output.",
@@ -5372,9 +5476,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No overview items yet. Go to E-commerce, Marketing, or Digital Creative and click Add to Overview on any output.</p>
             </div>
           ) : (
-            <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start" }}>
               {(() => {
-                const sectionOrder = ["E-commerce","Marketing","Digital Creative","Livestream"];
+                const sourceRank:any = { "E-commerce":0, "Marketing":1, "Digital Creative":2, "Livestream":3 };
                 const normalizeSource = (value:any) => {
                   const v = String(value || "").toLowerCase();
                   if(v.includes("e-commerce") || v.includes("ecommerce")) return "E-commerce";
@@ -5383,39 +5487,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   if(v.includes("livestream") || v.includes("live")) return "Livestream";
                   return "Other";
                 };
-                const grouped:any = {};
-                overviewItems.forEach((item:any)=>{
-                  const key = normalizeSource(item.sourceTab);
-                  if(!grouped[key]) grouped[key] = [];
-                  grouped[key].push(item);
+                const sorted = [...overviewItems].sort((a:any,b:any)=>{
+                  const ar = sourceRank[normalizeSource(a.sourceTab)] ?? 9;
+                  const br = sourceRank[normalizeSource(b.sourceTab)] ?? 9;
+                  if(ar!==br) return ar-br;
+                  return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
                 });
-                const sections = [...sectionOrder,"Other"].filter((key:string)=>grouped[key]?.length);
-                return sections.map((section:string)=>(
-                  <section key={section} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)" }}>
-                    <div style={{ padding:"13px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",background:C.surfaceAlt }}>
-                      <div>
-                        <h4 style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{section}</h4>
-                        <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted }}>{grouped[section].length} overview item{grouped[section].length!==1?"s":""}</p>
+                return sorted.map((item:any)=>(
+                  <article key={item.id} style={{ padding:16,border:`1.5px solid ${C.border}`,borderRadius:14,background:C.surface,minWidth:0,boxShadow:"0 2px 8px rgba(15,23,42,.04)" }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:10 }}>
+                      <div style={{ minWidth:0,flex:1 }}>
+                        <span style={{ display:"inline-flex",fontSize:10.5,fontWeight:900,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px",marginBottom:7 }}>{normalizeSource(item.sourceTab)}</span>
+                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
+                        <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+                      </div>
+                      <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                        <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
+                        <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                       </div>
                     </div>
-                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:12,padding:12,alignItems:"start" }}>
-                      {grouped[section].map((item:any,index:number)=>(
-                        <article key={item.id} style={{ padding:16,border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,minWidth:0,boxShadow:"0 1px 2px rgba(15,23,42,.03)" }}>
-                          <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:10 }}>
-                            <div style={{ minWidth:0,flex:1 }}>
-                              <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
-                              <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
-                            </div>
-                            <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-                              <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
-                              <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
-                            </div>
-                          </div>
-                          <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.6,color:C.text,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:14 }}>{item.content || ""}</pre>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
+                    {renderOverviewContent(item)}
+                  </article>
                 ));
               })()}
             </div>
@@ -5514,6 +5606,35 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         if (selected) current.add(productKey);
         else current.delete(productKey);
         updateAiWorkspace("marketing",{ selectedMarketingProductKeys:Array.from(current) });
+      };
+
+      const defaultProductIntroDigitalAssetRows = [
+        { id:"product-image", name:"Product Image", link:"" },
+        { id:"cem-banner", name:"CEM Banner", link:"" },
+        { id:"store-banner", name:"Store Banner", link:"" },
+        { id:"feed", name:"Feed", link:"" },
+        { id:"story", name:"Story", link:"" },
+        { id:"showcase-video", name:"Showcase Video", link:"" },
+      ];
+      const productIntroDigitalAssetRows = Array.isArray(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks) && ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks.length
+        ? ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks
+        : defaultProductIntroDigitalAssetRows;
+      const updateProductIntroDigitalAssetRows = (rows:any[]) => {
+        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+      };
+      const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
+      };
+      const addProductIntroDigitalAssetRow = () => {
+        updateProductIntroDigitalAssetRows([...productIntroDigitalAssetRows,{ id:uid(), name:"New Asset", link:"" }]);
+      };
+      const deleteProductIntroDigitalAssetRow = (rowId:string) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
+      };
+      const addProductIntroDigitalAssetTableToOverview = () => {
+        const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
+        markActionDone("overview-product-intro-digital-assets");
       };
 
       return (
@@ -7371,6 +7492,35 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
     if(tab==="digital" && !isCampaignChecklist){
       const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
+      const defaultProductIntroDigitalAssetRows = [
+        { id:"product-image", name:"Product Image", link:"" },
+        { id:"cem-banner", name:"CEM Banner", link:"" },
+        { id:"store-banner", name:"Store Banner", link:"" },
+        { id:"feed", name:"Feed", link:"" },
+        { id:"story", name:"Story", link:"" },
+        { id:"showcase-video", name:"Showcase Video", link:"" },
+      ];
+      const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks) && digitalData.productIntroAssetLinks.length
+        ? digitalData.productIntroAssetLinks
+        : defaultProductIntroDigitalAssetRows;
+      const updateProductIntroDigitalAssetRows = (rows:any[]) => {
+        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+      };
+      const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
+      };
+      const addProductIntroDigitalAssetRow = () => {
+        updateProductIntroDigitalAssetRows([...productIntroDigitalAssetRows,{ id:uid(), name:"New Asset", link:"" }]);
+      };
+      const deleteProductIntroDigitalAssetRow = (rowId:string) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
+      };
+      const addProductIntroDigitalAssetTableToOverview = () => {
+        const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
+        markActionDone("overview-product-intro-digital-assets");
+      };
+
       const productIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
       const productIntroRowsCleared = !!digitalData.productIntroRowsCleared;
       const makeProductIntroDcItem = (row:any) => ({
@@ -7468,8 +7618,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==item.id)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}
-${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${item.id}`);
@@ -7693,8 +7842,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
-${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -7834,7 +7982,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -7906,8 +8054,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
-${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -7916,7 +8063,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
         }
       };
 
-      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
+      const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
         const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : (Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }]);
         const links = Array.from(new Set([...(rowProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
         const uploadedReferenceImages = Array.isArray(row?.referenceImages) ? row.referenceImages : (Array.isArray(item.referenceImages) ? item.referenceImages : []);
@@ -7939,7 +8086,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -7974,6 +8121,59 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           {!!formatMainPromotion(((group.aiWorkspace || {}).digital || {}).mainPromotion)&&(
             renderMainPromotionCard(((group.aiWorkspace || {}).digital || {}).mainPromotion, true)
           )}
+
+          <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+            <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 4px",fontSize:15,fontWeight:900,color:C.text }}>Digital Creative Asset Links</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>Add editable asset names and final output links for Product Image, banners, feed, story, and video deliverables.</p>
+              </div>
+              <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
+                <Btn xs variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"} onClick={()=>{ updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows); markActionDone("save-product-intro-digital-assets"); }}>{actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}</Btn>
+                <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
+              </div>
+            </div>
+            <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:isMobile?620:760 }}>
+                <thead>
+                  <tr style={{ background:C.surfaceAlt }}>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Asset Name</th>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Link</th>
+                    <th style={{ textAlign:"right",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:110 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productIntroDigitalAssetRows.map((row:any)=>(
+                    <tr key={row.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
+                        <input
+                          value={row.name || ""}
+                          onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ name:e.target.value })}
+                          placeholder="Asset name"
+                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,fontWeight:700,color:C.text,outline:"none",background:C.surface }}
+                        />
+                      </td>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top" }}>
+                        <input
+                          value={row.link || ""}
+                          onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ link:e.target.value })}
+                          placeholder="Paste final output link here"
+                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,color:C.text,outline:"none",background:C.surface }}
+                        />
+                      </td>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",textAlign:"right",whiteSpace:"nowrap" }}>
+                        <div style={{ display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
+                          {row.link&&<Btn xs variant="outline" onClick={async()=>{ try { await navigator.clipboard.writeText(row.link || ""); markActionDone(`copy-digital-asset-${row.id}`); } catch {} }}>{actionDone(`copy-digital-asset-${row.id}`)?"✓":"Copy"}</Btn>}
+                          <Btn xs variant="danger" onClick={()=>deleteProductIntroDigitalAssetRow(row.id)}>Delete</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {sourceRows.length===0 ? (
             <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
@@ -8610,7 +8810,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
                           {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
-                          <Btn sm variant={actionDone("overview-ecommerce-product-rows")?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows"); markActionDone("overview-ecommerce-product-rows"); }} disabled={!productRows.length}>{actionDone("overview-ecommerce-product-rows")?"✓ Added":"Add to Overview"}</Btn>
+                          <Btn sm variant={actionDone("overview-ecommerce-product-rows")?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(data,"overview-ecommerce-product-rows")} disabled={!data.generatedText}>{actionDone("overview-ecommerce-product-rows")?"✓ Added":"Add to Overview"}</Btn>
                           <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Marketing</Btn>
                           <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to DC</Btn>
                           <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Livestream</Btn>
@@ -8644,7 +8844,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
                                 <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Saved Output"}</p>
                                 <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"} · Click to view</p>
                               </button>
-                              <button onClick={(e:any)=>{ e.stopPropagation(); addToOverview("E-commerce",item.title || "Saved E-commerce Output",item.text,"Saved Output"); markActionDone(`overview-ecomm-saved-${item.id}`); }} style={{ border:"none",background:actionDone(`overview-ecomm-saved-${item.id}`)?C.accent:C.surfaceAlt,color:actionDone(`overview-ecomm-saved-${item.id}`)?"#fff":C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>{actionDone(`overview-ecomm-saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>
+                              <button onClick={(e:any)=>{ e.stopPropagation(); addProductIntroEcommerceOutputToOverview(item,`overview-ecomm-saved-${item.id}`); }} style={{ border:"none",background:actionDone(`overview-ecomm-saved-${item.id}`)?C.accent:C.surfaceAlt,color:actionDone(`overview-ecomm-saved-${item.id}`)?"#fff":C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>{actionDone(`overview-ecomm-saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>
                               <button onClick={(e:any)=>{ e.stopPropagation(); deleteSavedEcommerceOutput(item.id); if(savedEcommercePreview?.id===item.id) setSavedEcommercePreview(null); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                             </div>
                           ))}
@@ -8669,7 +8869,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
                             <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</Btn>
                             <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</Btn>
                             <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</Btn>
-                            <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output"); markActionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`); }}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
+                            <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(savedEcommercePreview,`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
                           </div>
                         </div>
@@ -14548,24 +14748,8 @@ export default function App({
   onStateChange?: (patch: Record<string, unknown>) => void;
 }) {
   const { isMobile } = useBreakpoint();
-  const parseRouteNow = () => {
-    if (typeof window === "undefined") return { tab:"calendar", groupId:null, groupTab:"tasks" };
-    try {
-      const raw = String(window.location.hash || "").replace(/^#\/?/,"");
-      const [pathPart, queryPart] = raw.split("?");
-      const nextTab = safeRouteTab(pathPart || "calendar");
-      const params = new URLSearchParams(queryPart || "");
-      return {
-        tab: nextTab,
-        groupId: params.get("group") || null,
-        groupTab: safeChecklistInnerTab(params.get("groupTab") || "tasks"),
-      };
-    } catch {
-      return { tab:"calendar", groupId:null, groupTab:"tasks" };
-    }
-  };
   const initialRouteRef = useRef<any>(null);
-  if(initialRouteRef.current===null) initialRouteRef.current = parseRouteNow();
+  if(initialRouteRef.current===null) initialRouteRef.current = parseEmdcRoute();
   const [tab,setTab] = useState(()=>initialRouteRef.current.tab || "calendar");
   const [routeGroupId,setRouteGroupId] = useState<any>(()=>initialRouteRef.current.groupId || null);
   const [routeGroupTab,setRouteGroupTab] = useState<any>(()=>safeChecklistInnerTab(initialRouteRef.current.groupTab || "tasks"));
@@ -15025,7 +15209,7 @@ export default function App({
   useEffect(()=>{
     if (typeof window === "undefined") return;
     const onHashChange = () => {
-      const next = parseRouteNow();
+      const next = parseEmdcRoute();
       setTab(next.tab);
       setRouteGroupId(next.tab==="checklists" ? next.groupId : null);
       setRouteGroupTab(next.tab==="checklists" ? next.groupTab : "tasks");
@@ -15144,6 +15328,4 @@ export default function App({
       </div>
     </>
   );
-}
-
 }
