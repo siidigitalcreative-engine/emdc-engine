@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const STATE_KEY = "emdc:app-state:v1";
 const LAST_GOOD_KEY = "emdc:app-state:v1:last-good";
 const HISTORY_KEY = "emdc:app-state:v1:history";
-const MAX_HISTORY_ITEMS = 25;
+const MAX_HISTORY_ITEMS = 10;
 
 function getRedisClient() {
   const url =
@@ -78,18 +78,61 @@ function getStateWeight(payload: any) {
   );
 }
 
-async function saveBackup(redis: Redis, current: any, reason: string) {
-  if (!current || getStateWeight(current) <= 0) return;
+function getSafeCloudLocalStorage(localStorageValue: any) {
+  if (!localStorageValue || typeof localStorageValue !== "object") return {};
+  const next: Record<string, any> = {};
+  const omitted: string[] = [];
 
-  const backup = {
-    reason,
-    savedAt: new Date().toISOString(),
-    data: current,
+  Object.entries(localStorageValue).forEach(([key,value]: any) => {
+    const size = String(value || "").length;
+    const k = String(key || "");
+    const heavy =
+      k === "emdc_app_state_v1" ||
+      k === "emdc_app_state_last_good_v1" ||
+      k === "emdc_app_state_history_v1" ||
+      k.includes("history") ||
+      k.includes("last_good") ||
+      k.includes("generated_batch_outputs") ||
+      k.includes("saved_outputs") ||
+      k.includes("ai_saved_outputs") ||
+      size > 120000;
+
+    if (heavy) {
+      omitted.push(k);
+      return;
+    }
+    next[k] = value;
+  });
+
+  if (omitted.length) next.emdc_cloud_omitted_large_local_keys_v1 = JSON.stringify(omitted);
+  return next;
+}
+
+function compactPayload(payload: any) {
+  if (!payload || typeof payload !== "object") return payload;
+  return {
+    ...payload,
+    localStorage: getSafeCloudLocalStorage(payload.localStorage),
   };
+}
 
-  await redis.set(LAST_GOOD_KEY, backup);
-  await redis.lpush(HISTORY_KEY, backup);
-  await redis.ltrim(HISTORY_KEY, 0, MAX_HISTORY_ITEMS - 1);
+async function saveBackup(redis: Redis, current: any, reason: string) {
+  try {
+    if (!current || getStateWeight(current) <= 0) return;
+
+    const compactCurrent = compactPayload(current);
+    const backup = {
+      reason,
+      savedAt: new Date().toISOString(),
+      data: compactCurrent,
+    };
+
+    await redis.set(LAST_GOOD_KEY, backup);
+    await redis.lpush(HISTORY_KEY, backup);
+    await redis.ltrim(HISTORY_KEY, 0, MAX_HISTORY_ITEMS - 1);
+  } catch {
+    // Do not fail the main save just because backup/history write failed.
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -142,11 +185,11 @@ export async function POST(req: NextRequest) {
     const currentWeight = getStateWeight(current);
     const lastGoodWeight = getStateWeight(safeParse((lastGood as any)?.data) || (lastGood as any)?.data || lastGood);
 
-    const payload = {
+    const payload = compactPayload({
       version: 1,
       ...body,
       updatedAt: body?.updatedAt || new Date().toISOString(),
-    };
+    });
 
     const nextWeight = getStateWeight(payload);
 
