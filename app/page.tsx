@@ -3752,9 +3752,47 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     persistChecklistGroupPatchNow(groupPatch);
   };
 
+  const getOverviewLocalStorageKey = () => group?.id ? `emdc_overview_items_v1_${group.id}` : "";
+
+  const readOverviewItemsFromLocal = () => {
+    if (typeof window === "undefined") return [];
+    const key = getOverviewLocalStorageKey();
+    if(!key) return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const writeOverviewItemsToLocal = (items:any[] = []) => {
+    if (typeof window === "undefined") return;
+    const key = getOverviewLocalStorageKey();
+    if(!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(Array.isArray(items) ? items : []));
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
+  };
+
+  const mergeOverviewItems = (...lists:any[][]) => {
+    const map = new Map();
+    lists.flat().filter(Boolean).forEach((item:any)=>{
+      const key = String(item?.id || `${item?.title || ""}-${item?.createdAt || ""}-${item?.updatedAt || ""}`);
+      if(!key.trim()) return;
+      map.set(key, { ...(map.get(key) || {}), ...item });
+    });
+    return Array.from(map.values()).sort((a:any,b:any)=>String(b?.updatedAt || b?.createdAt || "").localeCompare(String(a?.updatedAt || a?.createdAt || "")));
+  };
+
   const getOverviewItems = () => {
-    const overview = ((group.aiWorkspace || {}).overview || {}) as any;
-    return Array.isArray(overview.items) ? overview.items : [];
+    const currentOverview = ((group.aiWorkspace || {}).overview || {}) as any;
+    const persistedOverview = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}).overview || {}) as any;
+    const currentItems = Array.isArray(currentOverview.items) ? currentOverview.items : [];
+    const persistedItems = Array.isArray(persistedOverview.items) ? persistedOverview.items : [];
+    const localItems = readOverviewItemsFromLocal();
+    return mergeOverviewItems(currentItems,persistedItems,localItems);
   };
 
   const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output", sourceRef:any=null) => {
@@ -3772,7 +3810,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       updatedAt:new Date().toISOString(),
       createdAt:new Date().toISOString(),
     };
-    updateAiWorkspace("overview",{ items:[...items,newItem] });
+    const nextItems = [...items,newItem];
+    writeOverviewItemsToLocal(nextItems);
+    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
     markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
   };
 
@@ -4171,14 +4211,17 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       content:nextContent,
       updatedAt:new Date().toISOString(),
     } : item);
-    updateAiWorkspace("overview",{ items:nextItems });
+    writeOverviewItemsToLocal(nextItems);
+    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
     updateOverviewSourceFromEdit({ ...original, title:overviewEdit.title },nextContent);
     markActionDone(`overview-edit-${overviewEdit.id}`);
     setOverviewEdit(null);
   };
 
   const deleteOverviewItem = (id:string) => {
-    updateAiWorkspace("overview",{ items:getOverviewItems().filter((item:any)=>item.id!==id) });
+    const nextItems = getOverviewItems().filter((item:any)=>item.id!==id);
+    writeOverviewItemsToLocal(nextItems);
+    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
   };
 
   const overviewItemToText = (item:any) => {
@@ -4398,6 +4441,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
   };
 
   const defaultEcommerceOutputSections = [
+    "Product Name",
     "Product Overview",
     "Key Features",
     "Variants Available",
@@ -4413,14 +4457,29 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
     "Search Keywords",
   ];
 
+  const isProductIntroEcommerceChecklist = () => {
+    const raw = `${group?.launchType || ""} ${lt?.label || ""} ${lt?.tag || ""}`.toLowerCase();
+    return raw.includes("introduction") || raw.includes("new launch") || raw.includes("product intro");
+  };
+
+  const hasProductNameSection = (sections:any[] = []) => (sections || [])
+    .some((section:any)=>String(section || "").trim().toLowerCase() === "product name");
+
+  const normalizeEcommerceOutputSections = (sections:any[] = []) => {
+    const clean = Array.from(new Set((sections || []).map((s:any)=>String(s || "").trim()).filter(Boolean)));
+    if(!isProductIntroEcommerceChecklist()) return clean;
+    const withoutProductName = clean.filter((section:string)=>section.toLowerCase() !== "product name");
+    return ["Product Name", ...withoutProductName];
+  };
+
   const getEcommerceOutputSections = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
-    // Important: if outputSections exists as an empty array, respect it.
-    // That means the user intentionally deleted all sections.
+    // Important: if outputSections exists as an empty array, respect it,
+    // but Product Introduction defaults must always keep Product Name first.
     if(Array.isArray(data.outputSections)){
-      return data.outputSections.map((s:any)=>String(s||"").trim()).filter(Boolean);
+      return normalizeEcommerceOutputSections(data.outputSections);
     }
-    return [...defaultEcommerceOutputSections];
+    return normalizeEcommerceOutputSections(defaultEcommerceOutputSections);
   };
 
   const ecommerceOutputSections = getEcommerceOutputSections();
@@ -4446,13 +4505,16 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
     // Important: if selectedSections exists as an empty array, respect it.
     // That means the user intentionally cleared all selected sections.
     if(Array.isArray(data.selectedSections)){
-      return data.selectedSections.filter((s:string)=>all.includes(s));
+      const selected = data.selectedSections.filter((s:string)=>all.includes(s));
+      const savedSections = Array.isArray(data.outputSections) ? data.outputSections : [];
+      const needsProductNameMigration = isProductIntroEcommerceChecklist() && !hasProductNameSection(savedSections) && all.includes("Product Name");
+      return needsProductNameMigration ? Array.from(new Set(["Product Name", ...selected])) : selected;
     }
     return [...all];
   };
 
   const saveEcommerceSections = (sections:string[], selected?:string[], instructionsPatch?:any) => {
-    const cleanSections = Array.from(new Set((sections||[]).map((s:any)=>String(s||"").trim()).filter(Boolean)));
+    const cleanSections = normalizeEcommerceOutputSections(sections || []);
     const nextSections = cleanSections;
     const currentSelected = Array.isArray(selected) ? selected : getSelectedEcommerceSections();
     const nextSelected = currentSelected.filter((s:string)=>nextSections.includes(s));
@@ -4836,8 +4898,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const cleanReadyToUseOutput = (value:any) => {
     return String(value || "")
       .replace(/^\s*#{1,6}\s*/gm,"")
-      .replace(/^\s*\d+\.\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
-      .replace(/^\s*[-*]\s+(Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
+      .replace(/^\s*\d+\.\s+(Product Name|Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
+      .replace(/^\s*[-*]\s+(Product Name|Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
       .replace(/\n\s*(?:\d+\.\s*)?Recommended Final Listing Structure[\s\S]*$/i,"")
       .trim();
   };
