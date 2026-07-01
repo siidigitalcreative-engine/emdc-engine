@@ -7392,6 +7392,35 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
     if(tab==="digital" && !isCampaignChecklist){
       const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
+      const defaultProductIntroDigitalAssetRows = [
+        { id:"product-image", name:"Product Image", link:"" },
+        { id:"cem-banner", name:"CEM Banner", link:"" },
+        { id:"store-banner", name:"Store Banner", link:"" },
+        { id:"feed", name:"Feed", link:"" },
+        { id:"story", name:"Story", link:"" },
+        { id:"showcase-video", name:"Showcase Video", link:"" },
+      ];
+      const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks) && digitalData.productIntroAssetLinks.length
+        ? digitalData.productIntroAssetLinks
+        : defaultProductIntroDigitalAssetRows;
+      const updateProductIntroDigitalAssetRows = (rows:any[]) => {
+        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+      };
+      const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
+      };
+      const addProductIntroDigitalAssetRow = () => {
+        updateProductIntroDigitalAssetRows([...productIntroDigitalAssetRows,{ id:uid(), name:"New Asset", link:"" }]);
+      };
+      const deleteProductIntroDigitalAssetRow = (rowId:string) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
+      };
+      const addProductIntroDigitalAssetTableToOverview = () => {
+        const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
+        markActionDone("overview-product-intro-digital-assets");
+      };
+
       const productIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
       const productIntroRowsCleared = !!digitalData.productIntroRowsCleared;
       const makeProductIntroDcItem = (row:any) => ({
