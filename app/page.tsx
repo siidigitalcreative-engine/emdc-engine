@@ -5516,8 +5516,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         { id:"story", name:"Story", link:"" },
         { id:"showcase-video", name:"Showcase Video", link:"" },
       ];
-      const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks) && digitalData.productIntroAssetLinks.length
-        ? digitalData.productIntroAssetLinks
+      const productIntroDigitalAssetRows = Array.isArray(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks) && ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks.length
+        ? ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks
         : defaultProductIntroDigitalAssetRows;
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
         updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
