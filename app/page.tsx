@@ -3354,7 +3354,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignSubheadlineInstructionDraft,setCampaignSubheadlineInstructionDraft] = useState("");
   const [campaignCtaInstructionDraft,setCampaignCtaInstructionDraft] = useState("");
   const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
-  const [overviewEdit,setOverviewEdit] = useState<any>(null);
   const [actionDoneIds,setActionDoneIds] = useState<string[]>([]);
   const markActionDone = (id:any) => {
     const key = String(id || uid());
@@ -3672,7 +3671,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return Array.isArray(overview.items) ? overview.items : [];
   };
 
-  const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output", sourceRef:any=null) => {
+  const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output") => {
     const isStructured = content && typeof content === "object";
     const textContent = isStructured ? content : String(content || "").trim();
     if(!isStructured && !textContent) return;
@@ -3683,8 +3682,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       kind,
       title:title || `${sourceTab} output`,
       content:textContent,
-      sourceRef:sourceRef || null,
-      updatedAt:new Date().toISOString(),
       createdAt:new Date().toISOString(),
     };
     updateAiWorkspace("overview",{ items:[...items,newItem] });
@@ -3702,8 +3699,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         productRows:getEcommerceGeneratedProductRows(sourceData),
         collapsed:true,
       },
-      "E-commerce Generated Output",
-      { tab:"ecommerce", type:"productIntroGeneratedOutput", id:sourceData?.id || "", actionKey }
+      "E-commerce Generated Output"
     );
     markActionDone(actionKey);
   };
@@ -3889,207 +3885,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const clearMainPromotionAcrossTabs = () => {
     setMainPromotionAcrossTabs("");
     markActionDone("promo-clear");
-  };
-
-  const getOverviewEditableContent = (item:any) => {
-    const content:any = item?.content;
-    if(content && typeof content === "object") return String(content.output || "");
-    return String(content || "");
-  };
-
-  const parseOverviewAssetRows = (value:any) => {
-    const text = String(value || "").trim();
-    if(!text) return [];
-    const blocks = text.split(/\n\s*\n/).map((block:string)=>block.trim()).filter(Boolean);
-    return blocks.map((block:string,index:number)=>{
-      const lines = block.split(/\n/).map((line:string)=>line.trim()).filter(Boolean);
-      const first = lines[0] || `Asset ${index+1}`;
-      const name = first.replace(/^\d+\.\s*/,"").replace(/^Asset\s*Name:\s*/i,"").trim() || `Asset ${index+1}`;
-      const linkLine = lines.find((line:string)=>/^Link\s*:/i.test(line)) || "";
-      const link = linkLine ? linkLine.replace(/^Link\s*:\s*/i,"").trim() : (lines.find((line:string)=>/^https?:\/\//i.test(line)) || "");
-      return { id:String(name).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || uid(), name, link };
-    });
-  };
-
-  const formatOverviewAssetRows = (rows:any[] = []) => (Array.isArray(rows) ? rows : [])
-    .map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`)
-    .join("\n\n");
-
-  const pickOverviewLabeledValue = (text:any, label:string) => {
-    const lines = String(text || "").split(/\n/);
-    const cleanLabel = String(label || "").toLowerCase();
-    for(let i=0;i<lines.length;i++){
-      if(lines[i].trim().toLowerCase()===cleanLabel){
-        return String(lines[i+1] || "").trim();
-      }
-      const inline = lines[i].match(new RegExp(`^\\s*${label}\\s*:\\s*(.*)$`,"i"));
-      if(inline) return String(inline[1] || "").trim();
-    }
-    return "";
-  };
-
-  const parseSavedDigitalOverviewContent = (value:any) => {
-    const text = String(value || "");
-    const imageMatch = text.match(/Generated Image:\s*(https?:\/\/[^\s]+)/i);
-    const ownPromptMatch = text.match(/Own Prompt:\s*([\s\S]*?)(?:\n\s*\nPrompt:|$)/i);
-    const promptMatch = text.match(/Prompt:\s*([\s\S]*)$/i);
-    return {
-      url:imageMatch?.[1] || "",
-      ownPrompt:String(ownPromptMatch?.[1] || "").trim(),
-      prompt:String(promptMatch?.[1] || "").trim(),
-    };
-  };
-
-  const updateMarketingOverviewSource = (sourceRef:any, nextText:string, previousText:string="") => {
-    if(typeof window === "undefined") return;
-    const sourceId = String(sourceRef?.id || "");
-    const previousClean = String(previousText || "").trim();
-    const storageKeys = Array.from(new Set([
-      sourceRef?.storageKey ? `emdc_marketing_generated_batch_outputs_v1_${sourceRef.storageKey}` : "",
-      `emdc_marketing_generated_batch_outputs_v1_${group.id || group.groupName || "group"}_marketing_product_intro`,
-      `emdc_marketing_generated_batch_outputs_v1_${group.id || group.groupName || "group"}_marketing_campaign`,
-      "emdc_marketing_generated_batch_outputs_v1_global_marketing_default",
-    ].filter(Boolean)));
-
-    storageKeys.forEach((key:string)=>{
-      try {
-        const raw = localStorage.getItem(key);
-        const parsed = raw ? JSON.parse(raw) : [];
-        if(!Array.isArray(parsed)) return;
-        const shouldUpdate = (item:any) => (sourceId && String(item?.id || "")===sourceId) || (!!previousClean && String(item?.text || item?.imagePrompt || "").trim()===previousClean);
-        if(parsed.some(shouldUpdate)){
-          localStorage.setItem(key, JSON.stringify(parsed.map((item:any)=>shouldUpdate(item) ? { ...item, text:nextText, updatedAt:new Date().toISOString() } : item)));
-        }
-      } catch {}
-    });
-
-    try {
-      const raw = localStorage.getItem("emdc_saved_ad_templates_v1");
-      const parsed = raw ? JSON.parse(raw) : [];
-      if(Array.isArray(parsed)){
-        const shouldUpdate = (item:any) => (sourceId && String(item?.id || "")===sourceId) || (!!previousClean && String(item?.text || "").trim()===previousClean);
-        if(parsed.some(shouldUpdate)){
-          localStorage.setItem("emdc_saved_ad_templates_v1", JSON.stringify(parsed.map((item:any)=>shouldUpdate(item) ? { ...item, text:nextText, updatedAt:new Date().toISOString() } : item)));
-        }
-      }
-    } catch {}
-    try { window.dispatchEvent(new Event("storage")); } catch {}
-  };
-
-  const updateOverviewSourceFromEdit = (originalItem:any, nextContent:any) => {
-    const sourceRef = originalItem?.sourceRef || {};
-    const sourceTab = String(sourceRef.tab || originalItem?.sourceTab || "").toLowerCase();
-    const sourceType = String(sourceRef.type || "");
-    const itemKindText = `${originalItem?.kind || ""} ${originalItem?.title || ""}`.toLowerCase();
-    const nextText = typeof nextContent === "object" ? String(nextContent?.output || "") : String(nextContent || "");
-    const now = new Date().toISOString();
-
-    if(sourceTab.includes("digital") && (sourceType==="productIntroAssetLinks" || itemKindText.includes("asset link"))){
-      const rows = parseOverviewAssetRows(nextText);
-      updateAiWorkspace("digital",{ productIntroAssetLinks:rows, productIntroAssetLinksSavedAt:now });
-      return;
-    }
-
-    if(sourceTab.includes("digital") && sourceType==="savedImageOutput"){
-      const parsed = parseSavedDigitalOverviewContent(nextText);
-      const digital = ((group.aiWorkspace || {}).digital || {}) as any;
-      const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-      const nextSaved = saved.map((entry:any)=>String(entry?.id || "")===String(sourceRef.id || "") ? {
-        ...entry,
-        url:parsed.url || entry.url || "",
-        ownPrompt:parsed.ownPrompt,
-        prompt:parsed.prompt || nextText,
-        title:overviewEdit?.title || entry.title,
-        updatedAt:now,
-      } : entry);
-      const patch:any = { savedImageOutputs:nextSaved };
-      if(sourceRef.sourceRowId){
-        const updateRows = (rows:any[]) => Array.isArray(rows) ? rows.map((row:any)=>String(row?.id || "")===String(sourceRef.sourceRowId) ? {
-          ...row,
-          ownPrompt:parsed.ownPrompt || row.ownPrompt,
-          imagePrompt:parsed.prompt || row.imagePrompt,
-          generatedImageUrl:parsed.url || row.generatedImageUrl,
-          updatedAt:now,
-        } : row) : rows;
-        if(Array.isArray(digital.productIntroCreativeRows)) patch.productIntroCreativeRows = updateRows(digital.productIntroCreativeRows);
-        if(Array.isArray(digital.campaignCreativeRows)) patch.campaignCreativeRows = updateRows(digital.campaignCreativeRows);
-      }
-      updateAiWorkspace("digital",patch);
-      return;
-    }
-
-    if(sourceTab.includes("digital") && sourceType==="campaignDigitalItem"){
-      const digital = ((group.aiWorkspace || {}).digital || {}) as any;
-      const rows = Array.isArray(digital.campaignCreativeRows) ? digital.campaignCreativeRows : [];
-      const nextRows = rows.map((row:any)=>String(row?.id || "")===String(sourceRef.id || "") ? {
-        ...row,
-        headline:pickOverviewLabeledValue(nextText,"Headline") || row.headline,
-        subheadline:pickOverviewLabeledValue(nextText,"Subheadline") || row.subheadline,
-        cta:pickOverviewLabeledValue(nextText,"CTA") || row.cta,
-        overviewEditedText:nextText,
-        updatedAt:now,
-      } : row);
-      updateAiWorkspace("digital",{ campaignCreativeRows:nextRows, generatedText:nextRows.map((entry:any)=>entry.overviewEditedText || formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"), generatedAt:now });
-      return;
-    }
-
-    if(sourceTab.includes("ecommerce") && (sourceType==="productIntroGeneratedOutput" || itemKindText.includes("e-commerce generated output"))){
-      const ecommerce = ((group.aiWorkspace || {}).ecommerce || {}) as any;
-      const saved = Array.isArray(ecommerce.savedOutputs) ? ecommerce.savedOutputs : [];
-      const patch:any = { generatedText:nextText, generatedAt:now };
-      if(sourceRef.id){
-        patch.savedOutputs = saved.map((entry:any)=>String(entry?.id || "")===String(sourceRef.id || "") ? { ...entry, text:nextText, title:overviewEdit?.title || entry.title, updatedAt:now } : entry);
-      }
-      updateAiWorkspace("ecommerce",patch);
-      return;
-    }
-
-    if(sourceTab.includes("marketing")){
-      updateMarketingOverviewSource(sourceRef,nextText,getOverviewEditableContent(originalItem));
-      return;
-    }
-
-    if(sourceType==="workspaceText" && sourceRef.tab){
-      updateAiWorkspace(String(sourceRef.tab),{ generatedText:nextText, generatedAt:now });
-      return;
-    }
-
-    if(sourceType==="workspaceImage" && sourceRef.tab){
-      updateAiWorkspace(String(sourceRef.tab),{ generatedImagePrompt:nextText, imagePrompt:nextText, dcImagePrompt:nextText, generatedAt:now });
-      return;
-    }
-
-    if(sourceTab.includes("livestream") && sourceType==="topic"){
-      updateAiWorkspace("livestream",{ generatedTopicText:nextText, generatedAt:now });
-    }
-  };
-
-  const openOverviewEdit = (item:any) => {
-    setOverviewEdit({
-      id:item?.id || "",
-      title:item?.title || "Overview Item",
-      content:getOverviewEditableContent(item),
-      original:item,
-    });
-  };
-
-  const saveOverviewEdit = () => {
-    if(!overviewEdit?.id) return;
-    const items = getOverviewItems();
-    const original = overviewEdit.original || items.find((item:any)=>item.id===overviewEdit.id) || {};
-    const nextContent = original?.content && typeof original.content === "object"
-      ? { ...(original.content || {}), output:String(overviewEdit.content || "") }
-      : String(overviewEdit.content || "");
-    const nextItems = items.map((item:any)=>item.id===overviewEdit.id ? {
-      ...item,
-      title:overviewEdit.title || item.title,
-      content:nextContent,
-      updatedAt:new Date().toISOString(),
-    } : item);
-    updateAiWorkspace("overview",{ items:nextItems });
-    updateOverviewSourceFromEdit({ ...original, title:overviewEdit.title },nextContent);
-    markActionDone(`overview-edit-${overviewEdit.id}`);
-    setOverviewEdit(null);
   };
 
   const deleteOverviewItem = (id:string) => {
@@ -5370,7 +5165,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const builder = getEcommerceCampaignBuilder();
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     const rowKey = String(row.id || row.productKey || row.product || uid());
-    addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.product || "Product"} · ${row.platform || builder.platform} · ${theme}`, { tab:"ecommerce", type:"campaignRow", id:row?.id || row?.productKey || row?.product || "" });
+    addToOverview("E-commerce","Campaign Copy",formatCampaignRowOutput(row),`${row.product || "Product"} · ${row.platform || builder.platform} · ${theme}`);
     setCampaignOverviewAddedIds((prev:string[])=>Array.from(new Set([...prev,rowKey])));
     window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
@@ -5539,7 +5334,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const addEcommerceCampaignToOverview = () => {
     const builder = getEcommerceCampaignBuilder();
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
-    addToOverview("E-commerce","Campaign Copy",getEcommerceCampaignCombinedOutput() || builder.generatedText || "",`${builder.platform} · ${theme}`, { tab:"ecommerce", type:"campaignCombined" });
+    addToOverview("E-commerce","Campaign Copy",getEcommerceCampaignCombinedOutput() || builder.generatedText || "",`${builder.platform} · ${theme}`);
   };
 
   const getEcommerceCampaignCombinedOutput = () => {
@@ -5764,7 +5559,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
                       </div>
                       <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-                        <button onClick={()=>openOverviewEdit(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Edit</button>
                         <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
                         <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                       </div>
@@ -5775,28 +5569,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               })()}
             </div>
           )}
-
-          <Modal open={!!overviewEdit} onClose={()=>setOverviewEdit(null)} title="Edit Overview Output" width={760}>
-            {overviewEdit&&(
-              <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-                <Field label="Overview Card Title">
-                  <TI value={overviewEdit.title || ""} onChange={(value:any)=>setOverviewEdit((prev:any)=>({ ...prev, title:value }))} placeholder="Overview title" />
-                </Field>
-                <Field label="Output Content" hint="Saving also updates the source card when a source reference is available.">
-                  <textarea
-                    value={overviewEdit.content || ""}
-                    onChange={(e:any)=>setOverviewEdit((prev:any)=>({ ...prev, content:e.target.value }))}
-                    rows={isMobile?14:20}
-                    style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:10,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.55,padding:"11px 12px",outline:"none" }}
-                  />
-                </Field>
-                <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
-                  <Btn variant="outline" onClick={()=>setOverviewEdit(null)}>Cancel</Btn>
-                  <Btn onClick={saveOverviewEdit}>{actionDone(`overview-edit-${overviewEdit.id}`)?"✓ Saved":"Save Changes"}</Btn>
-                </div>
-              </div>
-            )}
-          </Modal>
         </div>
       );
     }
@@ -5919,7 +5691,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
       const addProductIntroDigitalAssetTableToOverview = () => {
         const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
-        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table", { tab:"digital", type:"productIntroAssetLinks" });
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
         markActionDone("overview-product-intro-digital-assets");
       };
 
@@ -6098,7 +5870,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           </div>
           )}
 
-          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} mainPromotion={((group.aiWorkspace || {}).marketing || {}).mainPromotion || ""} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}`} onAddToOverview={(ad:any)=>addToOverview("Marketing",`${ad?.platformName || "Marketing"} · ${ad?.formatName || ad?.title || "Generated Output"}`,ad?.text || ad?.imagePrompt || "","Marketing Output", { tab:"marketing", type:"adTemplate", id:ad?.id || "", storageKey:`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}` })} onSendToDC={(ad:any)=>{
+          <AIAdTemplates skuStorage={skuStorage} brands={brands} hideProductSelector presetProducts={placedMarketingProducts} mainPromotion={((group.aiWorkspace || {}).marketing || {}).mainPromotion || ""} generatedOutputsStorageKey={`${group.id || group.groupName || "group"}_marketing_${isProductIntroductionChecklist ? "product_intro" : "campaign"}`} onAddToOverview={(ad:any)=>addToOverview("Marketing",`${ad?.platformName || "Marketing"} · ${ad?.formatName || ad?.title || "Generated Output"}`,ad?.text || ad?.imagePrompt || "","Marketing Output")} onSendToDC={(ad:any)=>{
             const adText = String(ad?.text || "").trim();
             const adProducts = Array.isArray(ad?.products) && ad.products.length ? ad.products : selectedMarketingProducts;
             const selectedProductList = adProducts.map((product:any,idx:number)=>`${idx+1}. ${product?.productName || product?.product || "Product"}${product?.sku ? ` · SKU: ${product.sku}` : ""}`).join("\n");
@@ -6759,7 +6531,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Generated Live Script</p>
                     <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.5,color:C.text }}>{livestreamData.generatedTopicText}</pre>
                     <div style={{ display:"flex",justifyContent:"flex-end",gap:8,marginTop:10 }}>
-                      <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream AI Topic · ${((Array.isArray(livestreamData.selectedAiTopics) && livestreamData.selectedAiTopics.length) ? livestreamData.selectedAiTopics.join(" / ") : (livestreamData.aiTopic || "BAU"))}`,livestreamData.generatedTopicText,"Livestream Output", { tab:"livestream", type:"topic" }); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
+                      <Btn xs variant={actionDone("overview-livestream-topic")?"primary":"outline"} onClick={()=>{ addToOverview("Livestream",`Livestream AI Topic · ${((Array.isArray(livestreamData.selectedAiTopics) && livestreamData.selectedAiTopics.length) ? livestreamData.selectedAiTopics.join(" / ") : (livestreamData.aiTopic || "BAU"))}`,livestreamData.generatedTopicText,"Livestream Output"); markActionDone("overview-livestream-topic"); }}>{actionDone("overview-livestream-topic")?"✓ Added":"Add to Overview"}</Btn>
                     </div>
                   </div>
                 )}
@@ -6861,7 +6633,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         try { await navigator.clipboard.writeText(formatCampaignDigitalCreativeItem(item)); } catch {}
       };
       const addCampaignDigitalItemToOverview = (item:any) => {
-        addToOverview("Digital Creative","Campaign Digital Creative",formatCampaignDigitalCreativeItem(item),item.linkedEventContext || "Campaign Digital Creative", { tab:"digital", type:"campaignDigitalItem", id:item?.id || "" });
+        addToOverview("Digital Creative","Campaign Digital Creative",formatCampaignDigitalCreativeItem(item),item.linkedEventContext || "Campaign Digital Creative");
       };
       const deleteCampaignDigitalItem = (id:string) => {
         const nextRows = campaignCreativeRows.filter((item:any)=>item.id!==id);
@@ -7804,7 +7576,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
       const addProductIntroDigitalAssetTableToOverview = () => {
         const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
-        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table", { tab:"digital", type:"productIntroAssetLinks" });
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
         markActionDone("overview-product-intro-digital-assets");
       };
 
@@ -8062,7 +7834,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           saved?.ownPrompt ? `Own Prompt: ${saved.ownPrompt}` : "",
           saved?.prompt ? `Prompt:\n${saved.prompt}` : "",
         ].filter(Boolean).join("\n\n");
-        addToOverview("Digital Creative", saved?.title || "Saved Digital Creative Output", content, saved?.kind || "Saved Output", { tab:"digital", type:"savedImageOutput", id:saved?.id || "", cardId:saved?.cardId || "", sourceRowId:saved?.sourceRowId || "" });
+        addToOverview("Digital Creative", saved?.title || "Saved Digital Creative Output", content, saved?.kind || "Saved Output");
         markActionDone(`overview-digital-saved-${saved?.id}`);
       };
       const generateProductIntroDcImage = async (item:any) => {
@@ -9608,7 +9380,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             />
             <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",marginTop:10 }}>
               <Btn sm variant="outline" disabled>Save Prompt</Btn>
-              <Btn sm variant={actionDone(`overview-${tab}-text`)?"primary":"outline"} onClick={()=>{ addToOverview(tab,`${cfg.title} Text`,data.generatedText || data.textPrompt,"Text Output", { tab, type:"workspaceText" }); markActionDone(`overview-${tab}-text`); }} disabled={!(data.generatedText || data.textPrompt)}>{actionDone(`overview-${tab}-text`)?"✓ Added":"Add to Overview"}</Btn>
+              <Btn sm variant={actionDone(`overview-${tab}-text`)?"primary":"outline"} onClick={()=>{ addToOverview(tab,`${cfg.title} Text`,data.generatedText || data.textPrompt,"Text Output"); markActionDone(`overview-${tab}-text`); }} disabled={!(data.generatedText || data.textPrompt)}>{actionDone(`overview-${tab}-text`)?"✓ Added":"Add to Overview"}</Btn>
               <Btn sm disabled>Generate Text</Btn>
             </div>
           </div>
@@ -9638,7 +9410,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <option value="lifestyle">Lifestyle</option>
                 <option value="ugc">UGC / TikTok Style</option>
               </Select>
-              <Btn sm variant={actionDone(`overview-${tab}-image`)?"primary":"outline"} onClick={()=>{ addToOverview(tab,`${cfg.title} Image Prompt`,data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt),"Image Prompt", { tab, type:"workspaceImage" }); markActionDone(`overview-${tab}-image`); }} disabled={!(data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt))}>{actionDone(`overview-${tab}-image`)?"✓ Added":"Add to Overview"}</Btn>
+              <Btn sm variant={actionDone(`overview-${tab}-image`)?"primary":"outline"} onClick={()=>{ addToOverview(tab,`${cfg.title} Image Prompt`,data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt),"Image Prompt"); markActionDone(`overview-${tab}-image`); }} disabled={!(data.generatedImagePrompt || (tab==="digital" ? data.dcImagePrompt : data.imagePrompt))}>{actionDone(`overview-${tab}-image`)?"✓ Added":"Add to Overview"}</Btn>
               <Btn sm disabled>Generate Image</Btn>
             </div>
           </div>
