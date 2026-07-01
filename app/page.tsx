@@ -10869,13 +10869,13 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
 // ─── SKU STORAGE ─────────────────────────────────────────────────────────────
 const DEFAULT_GLOBAL_SKU_TABLE_COLUMNS = [
-  { key:"productName", label:"Product",  base:true },
-  { key:"sku",         label:"SKU",      base:true },
-  { key:"brand",       label:"Brand",    base:true },
-  { key:"inventory",   label:"Stock",    base:true },
-  { key:"status",      label:"Status",   base:true },
-  { key:"collection",  label:"Category", base:true },
-  { key:"tag",         label:"Tag",      base:true },
+  { key:"brand",       label:"Brand",      base:true },
+  { key:"sku",         label:"SKU",        base:true },
+  { key:"collection",  label:"Category",   base:true },
+  { key:"tag",         label:"Tag",        base:true },
+  { key:"productName", label:"Product",    base:true },
+  { key:"srp",         label:"SRP",        base:true },
+  { key:"imageLink",   label:"Image Link", base:true },
 ];
 
 // Keep SKU Storage in the original/default table layout.
@@ -10913,6 +10913,14 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     status:{ key:"status", label:"Status", base:true },
     tag:{ key:"tag", label:"Tag", base:true },
     tags:{ key:"tag", label:"Tag", base:true },
+    srp:{ key:"srp", label:"SRP", base:true },
+    price:{ key:"srp", label:"SRP", base:true },
+    sellingprice:{ key:"srp", label:"SRP", base:true },
+    imagelink:{ key:"imageLink", label:"Image Link", base:true },
+    imageurl:{ key:"imageLink", label:"Image Link", base:true },
+    image:{ key:"imageLink", label:"Image Link", base:true },
+    link:{ key:"imageLink", label:"Image Link", base:true },
+    url:{ key:"imageLink", label:"Image Link", base:true },
   };
   const [internalSkuTableColumns,setInternalSkuTableColumns] = useState<any[]>(DEFAULT_SKU_TABLE_COLUMNS);
   const skuTableColumns = DEFAULT_SKU_TABLE_COLUMNS;
@@ -10925,12 +10933,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const deferredSkuSearch = useDeferredValue(skuSearch);
   const [activeSkuTag,setActiveSkuTag] = useState("all");
   const DEFAULT_BULK_COLUMNS = [
-    { key:"productName", label:"Product Name", placeholder:"Desk Organizer", locked:true },
-    { key:"sku",         label:"SKU",          placeholder:"GL-DO001",        locked:true },
-    { key:"brand",       label:"Brand",        placeholder:"Gray Label",      locked:true },
-    { key:"collection",  label:"Collection",   placeholder:"Workspace",       locked:true },
-    { key:"inventory",   label:"Stock",        placeholder:"50",              locked:true },
-    { key:"status",      label:"Status",       placeholder:"Active",          locked:true },
+    { key:"brand",       label:"Brand",      placeholder:"Quencha",                          locked:true },
+    { key:"sku",         label:"SKU",        placeholder:"QNH-COOL12-TP",                    locked:true },
+    { key:"collection",  label:"Category",   placeholder:"Cooler",                           locked:true },
+    { key:"tag",         label:"Tag",        placeholder:"Phase Out",                        locked:true },
+    { key:"productName", label:"Product",    placeholder:"12L,Sand",                         locked:true },
+    { key:"srp",         label:"SRP",        placeholder:"1799",                             locked:true },
+    { key:"imageLink",   label:"Image Link", placeholder:"https://ph-live.staticflickr.com/", locked:true },
   ];
   const [bulkColumns,setBulkColumns] = useState<any[]>(DEFAULT_BULK_COLUMNS);
   const [bulkNewColumn,setBulkNewColumn] = useState("");
@@ -11048,6 +11057,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         s.category,
         s.inventory,
         s.srp,
+        s.imageLink,
+        s.imageUrl,
         s.status,
         statusLabel,
         tagText,
@@ -11110,13 +11121,15 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const normalizeKey = (v:any) => String(v||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
 
   const BULK_PLACEHOLDERS:any = {
-    productName:"Desk Organizer",
-    sku:"GL-DO001",
-    brand:"Gray Label",
-    collection:"Workspace",
+    brand:"Quencha",
+    sku:"QNH-COOL12-TP",
+    collection:"Cooler",
+    tag:"Phase Out",
+    productName:"12L,Sand",
+    srp:"1799",
+    imageLink:"https://ph-live.staticflickr.com/",
     inventory:"50",
     status:"Active",
-    tag:"Phase Out",
   };
   const buildBulkColumnsFromSkuTable = (cols:any[]=skuTableColumns) => cols.map((col:any)=>({
     key:col.key,
@@ -11243,6 +11256,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(col.key==="sku") return s.sku||"";
     if(col.key==="brand") return brand?.name||"";
     if(col.key==="collection") return s.collection||"";
+    if(col.key==="srp") return s.srp || s.extraFields?.SRP || s.extraFields?.srp || "";
+    if(col.key==="imageLink") return s.imageLink || s.imageUrl || s.extraFields?.["Image Link"] || s.extraFields?.imageLink || s.extraFields?.imagelink || "";
     if(col.key==="inventory") return String(s.inventory ?? "");
     if(col.key==="status") {
       if(s.status==="active") return "Active";
@@ -11265,6 +11280,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     commitSkuStorage((p:any[])=>p.map((s:any)=>{
       if(s.id!==id) return s;
       if(isTagColumn(col)) return setSkuTagsOnItem(s,value);
+      if(col?.key==="srp") return {...s,srp:value};
+      if(col?.key==="imageLink") return {...s,imageLink:value};
       const extra={...(s.extraFields||{})};
       extra[col.label||col.key]=value;
       return {...s,extraFields:extra};
@@ -11293,6 +11310,9 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     sku:"sku", skucode:"sku", code:"sku",
     brand:"brand", brandname:"brand",
     collection:"collection", collectionname:"collection", category:"collection",
+    tag:"tag", tags:"tag",
+    srp:"srp", price:"srp", sellingprice:"srp", regularprice:"srp",
+    imagelink:"imageLink", imageurl:"imageLink", image:"imageLink", productimage:"imageLink", link:"imageLink", url:"imageLink",
     stock:"inventory", inventory:"inventory", qty:"inventory", quantity:"inventory",
     status:"status"
   };
@@ -11493,7 +11513,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     const sku=String(r.sku||"").trim();
     const brand=String(r.brand||"").trim();
     const collection=String(r.collection||"").trim();
+    const tag=String(r.tag||"").trim();
     const inventory=parseStock(r.inventory);
+    const srp=String(r.srp||"").trim();
+    const imageLink=String(r.imageLink||"").trim();
     const st=parseStatusValue(r.status);
     const extraFields:any = {};
     BULK_COLUMNS.filter((c:any)=>c.custom).forEach((c:any)=>{
@@ -11503,7 +11526,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     });
     const empty=!rowHasInput(r);
     const error=empty?"":!productName?"Missing product name":!sku?"Missing SKU":"";
-    return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, inventory, extraFields, ...st, error, valid:!empty&&!error, empty };
+    return { id:r.id||`bulk-${idx}`, productName, sku, brand, collection, tag, inventory, srp, imageLink, extraFields, ...st, error, valid:!empty&&!error, empty };
   }).filter((r:any)=>!r.empty);
   const deferredBulkGridRows = useDeferredValue(bulkGridRows);
   const bulkRows = useMemo(()=>parseGridRows(deferredBulkGridRows),[deferredBulkGridRows,bulkColumns]);
@@ -11645,6 +11668,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
         collection:r.collection.trim(),
         sku:r.sku.trim(),
         inventory:r.inventory,
+        srp:r.srp || existing?.srp || "",
+        imageLink:r.imageLink || existing?.imageLink || existing?.imageUrl || "",
         status:r.status,
         customStatus:r.customStatus||"",
         extraFields:r.extraFields||{},
@@ -11694,26 +11719,30 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const getSD = s=>{ if(s.status==="active") return{label:"Active",color:"#22C55E"}; if(s.status==="nostocks") return{label:"No Stocks",color:"#EF4444"}; return{label:s.customStatus||"Custom",color:"#6B7280"}; };
   const bulkColumnWidth = (key:string) => {
     if(isMobile){
-      if(key==="productName") return "180px";
+      if(key==="productName") return "190px";
+      if(key==="imageLink") return "220px";
       if(key==="sku") return "140px";
-      if(key==="inventory") return "90px";
+      if(key==="srp"||key==="inventory") return "90px";
       return "130px";
     }
-    if(key==="productName") return "1.5fr";
-    if(key==="inventory") return ".7fr";
+    if(key==="productName") return "1.4fr";
+    if(key==="imageLink") return "1.4fr";
+    if(key==="srp"||key==="inventory") return ".7fr";
     if(key==="status") return ".9fr";
     return "1fr";
   };
   const bulkGridTemplate = `${isMobile?"36px":"42px"} ${BULK_COLUMNS.map((c:any)=>bulkColumnWidth(c.key)).join(" ")}`;
   const bulkTableMinWidth = isMobile ? Math.max(820,36+(BULK_COLUMNS.length*140)) : Math.max(760,42+(BULK_COLUMNS.length*120));
   const skuTableColumnWidth = (key:string) => {
-    if(key==="productName") return "minmax(220px,1.6fr)";
+    if(key==="brand") return "minmax(130px,.85fr)";
     if(key==="sku") return "minmax(150px,.9fr)";
-    if(key==="brand") return "minmax(130px,.8fr)";
-    if(key==="collection") return "minmax(150px,.85fr)";
+    if(key==="collection") return "minmax(140px,.85fr)";
+    if(key==="tag") return "minmax(130px,.75fr)";
+    if(key==="productName") return "minmax(230px,1.45fr)";
+    if(key==="srp") return "minmax(90px,.5fr)";
+    if(key==="imageLink") return "minmax(240px,1.45fr)";
     if(key==="inventory") return "minmax(90px,.5fr)";
     if(key==="status") return "minmax(140px,.75fr)";
-    if(key==="tag") return "minmax(130px,.75fr)";
     return "minmax(170px,1fr)";
   };
   const skuActionsColumnWidth = "104px";
@@ -11790,6 +11819,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(col.key==="collection") return skuTableEditMode
       ? <EditableSkuLinkInput value={s.collection||""} onChange={(value:string)=>setSkuCollectionValue(s.id,value)} placeholder="Uncategorized" />
       : renderClickableSkuCellText(s.collection||"Uncategorized","Uncategorized",{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
+    if(col.key==="srp") return renderClickableSkuCellText(s.srp || s.extraFields?.SRP || s.extraFields?.srp || "—","—",{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
+    if(col.key==="imageLink") return skuTableEditMode
+      ? <EditableSkuLinkInput value={s.imageLink || s.imageUrl || s.extraFields?.["Image Link"] || s.extraFields?.imageLink || s.extraFields?.imagelink || ""} onChange={(value:string)=>commitSkuStorage((p:any[])=>p.map((item:any)=>item.id===s.id?{...item,imageLink:value}:item), true)} placeholder="Paste image link" />
+      : renderClickableSkuCellText(s.imageLink || s.imageUrl || s.extraFields?.["Image Link"] || s.extraFields?.imageLink || s.extraFields?.imagelink || "—","—",{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
     if(col.key==="inventory") return <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>;
     if(col.key==="status") return <span title={st.label} style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"block",whiteSpace:"nowrap",maxWidth:"100%",minWidth:0,overflow:"hidden",textOverflow:"ellipsis" }}>{st.label}</span>;
     const extraValue = getSkuExtraValue(s,col);
@@ -11861,7 +11894,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               <input
                 value={skuSearch}
                 onChange={e=>setSkuSearch(e.target.value)}
-                placeholder="Search SKU, product, brand, collection, category, stock, status..."
+                placeholder="Search brand, SKU, category, tag, product, SRP, image link..."
                 style={{ flex:1,minWidth:0,height:30,border:"none",outline:"none",background:"transparent",fontSize:13,color:C.text }}
               />
               {skuSearch.trim()&&(
@@ -11889,7 +11922,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
             {!isMobile&&skuTableEditMode&&(
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
-                <span style={{ fontSize:12,color:C.muted }}>Edit mode: the SKU table is back to the default format. Use product row actions to edit, delete, or reorder rows.</span>
+                <span style={{ fontSize:12,color:C.muted }}>Preview columns follow the pasted sheet format: Brand, SKU, Category, Tag, Product, SRP, Image Link. Use product row actions to edit, delete, or reorder rows.</span>
               </div>
             )}
 
@@ -11982,11 +12015,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                               <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{renderClickableSkuCellText(s.productName,"—",{ color:C.text })}</p>
                               {renderClickableSkuCellText(s.sku,"—",{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4,display:"inline-block" })}
                             </div>
-                            {skuTableEditMode&&<div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center" }}>
-                              <span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint }}>&#8942;&#8942;</span>
+                            <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center" }}>
+                              {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint }}>&#8942;&#8942;</span>}
                               <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
                               <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
-                            </div>}
+                            </div>
                           </div>
                           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                             {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
@@ -12063,7 +12096,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
               <input
                 value={bulkSearch}
                 onChange={e=>setBulkSearch(e.target.value)}
-                placeholder="Search product, SKU, brand, collection, category, status, stock, SRP..."
+                placeholder="Search brand, SKU, category, tag, product, SRP, image link..."
                 style={{ flex:1,minWidth:0,height:30,border:"none",outline:"none",background:"transparent",fontSize:13,color:C.text }}
               />
               <span style={{ fontSize:11,color:C.muted,whiteSpace:"nowrap",flexShrink:0 }}>
