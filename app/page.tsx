@@ -10869,30 +10869,18 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
 // ─── SKU STORAGE ─────────────────────────────────────────────────────────────
 const DEFAULT_GLOBAL_SKU_TABLE_COLUMNS = [
-  { key:"productName", label:"Product",    base:true },
-  { key:"sku",         label:"SKU",        base:true },
-  { key:"brand",       label:"Brand",      base:true },
-  { key:"inventory",   label:"Stock",      base:true },
-  { key:"status",      label:"Status",     base:true },
+  { key:"productName", label:"Product",  base:true },
+  { key:"sku",         label:"SKU",      base:true },
+  { key:"brand",       label:"Brand",    base:true },
+  { key:"inventory",   label:"Stock",    base:true },
+  { key:"status",      label:"Status",   base:true },
+  { key:"collection",  label:"Category", base:true },
+  { key:"tag",         label:"Tag",      base:true },
 ];
 
-const sanitizeSkuTableColumns = (columns:any[] = []) => {
-  const used = new Set<string>();
-  const safe = (Array.isArray(columns) ? columns : [])
-    .filter((col:any)=>col && col.key && col.label)
-    .map((col:any)=>({
-      key:String(col.key),
-      label:String(col.label),
-      base:!!col.base,
-      custom:!!col.custom,
-    }))
-    .filter((col:any)=>{
-      if(used.has(col.key)) return false;
-      used.add(col.key);
-      return true;
-    });
-  return safe.length ? safe : DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
-};
+// Keep SKU Storage in the original/default table layout.
+// This intentionally ignores any previously saved column arrangement that may have broken the UI.
+const sanitizeSkuTableColumns = (columns:any[] = []) => DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
 
 const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
   const { isMobile } = useBreakpoint();
@@ -10917,8 +10905,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     sku:{ key:"sku", label:"SKU", base:true },
     skucode:{ key:"sku", label:"SKU", base:true },
     brand:{ key:"brand", label:"Brand", base:true },
-    collection:{ key:"collection", label:"Collection", base:true },
-    category:{ key:"collection", label:"Collection", base:true },
+    collection:{ key:"collection", label:"Category", base:true },
+    category:{ key:"collection", label:"Category", base:true },
     stock:{ key:"inventory", label:"Stock", base:true },
     inventory:{ key:"inventory", label:"Stock", base:true },
     qty:{ key:"inventory", label:"Stock", base:true },
@@ -10927,7 +10915,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     tags:{ key:"tag", label:"Tag", base:true },
   };
   const [internalSkuTableColumns,setInternalSkuTableColumns] = useState<any[]>(DEFAULT_SKU_TABLE_COLUMNS);
-  const skuTableColumns = sanitizeSkuTableColumns(controlledSkuTableColumns || internalSkuTableColumns);
+  const skuTableColumns = DEFAULT_SKU_TABLE_COLUMNS;
   const setSkuTableColumns = controlledSetSkuTableColumns || setInternalSkuTableColumns;
   const [skuNewColumn,setSkuNewColumn] = useState("");
   const [skuColumnDragIndex,setSkuColumnDragIndex] = useState<number|null>(null);
@@ -11730,7 +11718,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
   const skuActionsColumnWidth = "104px";
   const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")} ${skuActionsColumnWidth}`;
-  const skuTableMinWidth = Math.max(980,(skuTableEditMode?42:0)+104+(skuTableColumns.length*160));
+  const skuTableMinWidth = Math.max(1120,(skuTableEditMode?42:0)+104+(skuTableColumns.length*145));
 
   const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
   const normalizeSkuCellUrl = (url:any) => {
@@ -11901,13 +11889,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
             {!isMobile&&skuTableEditMode&&(
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
-                <span style={{ fontSize:12,color:C.muted }}>Edit mode: use the 6-dot handles to drag columns or product rows, rename headers, hide columns, or add columns.</span>
-                <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-                  <input value={skuNewColumn} placeholder="New column name" onChange={e=>setSkuNewColumn(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addSkuTableColumn(); } }}
-                    style={{ height:30,width:150,padding:"6px 9px",fontSize:12,borderRadius:7,border:`1.5px solid ${C.border}`,outline:"none",background:C.surface,color:C.text }} />
-                  <Btn xs variant="outline" onClick={addSkuTableColumn}>+ Column</Btn>
-                  <Btn xs variant="outline" onClick={resetSkuTableColumns}>Reset Columns</Btn>
-                </div>
+                <span style={{ fontSize:12,color:C.muted }}>Edit mode: the SKU table is back to the default format. Use product row actions to edit, delete, or reorder rows.</span>
               </div>
             )}
 
@@ -11926,22 +11908,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                     <div style={{ minWidth:skuTableMinWidth,width:"max-content",maxWidth:"none" }}>
                       <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
                         {skuTableEditMode&&<span style={{ padding:"9px 10px",fontSize:12,fontWeight:700,color:C.faint,letterSpacing:".02em",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8942;&#8942;</span>}
-                        {skuTableColumns.map((col:any,colIdx:number)=>(
+                        {skuTableColumns.map((col:any)=>(
                           <div key={col.key}
-                            draggable={skuTableEditMode}
-                            onDragStart={()=>skuTableEditMode&&setSkuColumnDragIndex(colIdx)}
-                            onDragOver={e=>{ if(skuTableEditMode) e.preventDefault(); }}
-                            onDrop={e=>{ if(!skuTableEditMode) return; e.preventDefault(); if(skuColumnDragIndex!==null) moveSkuTableColumn(skuColumnDragIndex,colIdx); setSkuColumnDragIndex(null); }}
-                            onDragEnd={()=>setSkuColumnDragIndex(null)}
-                            title={skuTableEditMode?"Drag the 6-dot handle to rearrange this column":""}
-                            style={{ padding:"7px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,cursor:skuTableEditMode?"grab":"default",display:"flex",alignItems:"center",gap:6,minWidth:0,overflow:"hidden" }}>
-                            {skuTableEditMode&&<span style={{ color:C.faint,fontSize:12,lineHeight:1,flexShrink:0 }}>&#8942;&#8942;</span>}
-                            {skuTableEditMode?
-                              <input value={col.label} onChange={e=>renameSkuTableColumn(col.key,e.target.value)} placeholder="Column"
-                                style={{ minWidth:0,width:"100%",background:"transparent",border:"none",outline:"none",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em" }} />
-                              : <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{col.label}</span>}
-                            {skuTableEditMode&&<button type="button" onClick={()=>removeSkuTableColumn(col)} title={col.custom?"Delete custom column":"Hide column"}
-                              style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>}
+                            style={{ padding:"7px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:6,minWidth:0,overflow:"hidden" }}>
+                            <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{col.label}</span>
                           </div>
                         ))}
                         <span style={{ padding:"9px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}` }}>Actions</span>
