@@ -3346,6 +3346,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     window.setTimeout(()=>setActionDoneIds((prev:string[])=>prev.filter((item:string)=>item!==key)),1600);
   };
   const actionDone = (id:any) => actionDoneIds.includes(String(id || ""));
+  const makeOverviewSnapshot = (value:any) => {
+    try { return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value)); }
+    catch {
+      try { return JSON.parse(JSON.stringify(value)); }
+      catch { return value; }
+    }
+  };
   const [campaignDigitalSentIds,setCampaignDigitalSentIds] = useState<string[]>([]);
   const [campaignMarketingSentIds,setCampaignMarketingSentIds] = useState<string[]>([]);
   const [campaignDcGeneratingImageId,setCampaignDcGeneratingImageId] = useState("");
@@ -3612,23 +3619,29 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const getOverviewItems = () => {
     const overview = ((group.aiWorkspace || {}).overview || {}) as any;
-    return Array.isArray(overview.items) ? overview.items : [];
+    const items = Array.isArray(overview.items) ? overview.items : [];
+    // Overview must only show items that were explicitly added through an Add to Overview button.
+    // This prevents generated/saved Digital Creative outputs from appearing automatically.
+    return items.filter((item:any)=>item && item.explicitOverview === true);
   };
 
   const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output") => {
     const isStructured = content && typeof content === "object";
-    const textContent = isStructured ? content : String(content || "").trim();
+    const textContent = isStructured ? makeOverviewSnapshot(content) : String(content || "").trim();
     if(!isStructured && !textContent) return;
-    const items = getOverviewItems();
+    const currentOverview = ((group.aiWorkspace || {}).overview || {}) as any;
+    const allItems = Array.isArray(currentOverview.items) ? currentOverview.items : [];
+    const explicitItems = allItems.filter((item:any)=>item && item.explicitOverview === true);
     const newItem = {
       id:uid(),
+      explicitOverview:true,
       sourceTab,
       kind,
       title:title || `${sourceTab} output`,
       content:textContent,
       createdAt:new Date().toISOString(),
     };
-    updateAiWorkspace("overview",{ items:[...items,newItem] });
+    updateAiWorkspace("overview",{ items:[...explicitItems,newItem] });
     markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
   };
 
@@ -5616,11 +5629,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         { id:"story", name:"Story", link:"" },
         { id:"showcase-video", name:"Showcase Video", link:"" },
       ];
-      const productIntroDigitalAssetRows = Array.isArray(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks) && ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks.length
+      const productIntroDigitalAssetRows = Array.isArray(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks)
         ? ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks
         : defaultProductIntroDigitalAssetRows;
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
-        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+        const cleanRows = (Array.isArray(rows) ? rows : []).map((row:any,index:number)=>({
+          id:row?.id || `asset-${index}-${uid()}`,
+          name:String(row?.name || "").trim() || "Untitled Asset",
+          link:String(row?.link || "").trim(),
+        }));
+        updateAiWorkspace("digital",{ productIntroAssetLinks:makeOverviewSnapshot(cleanRows) });
       };
       const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
@@ -5632,8 +5650,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
       };
       const addProductIntroDigitalAssetTableToOverview = () => {
-        const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
-        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
+        const rowsSnapshot = makeOverviewSnapshot(productIntroDigitalAssetRows);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", { assetRows:rowsSnapshot }, "Asset Link Table");
         markActionDone("overview-product-intro-digital-assets");
       };
 
@@ -7500,11 +7518,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         { id:"story", name:"Story", link:"" },
         { id:"showcase-video", name:"Showcase Video", link:"" },
       ];
-      const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks) && digitalData.productIntroAssetLinks.length
+      const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks)
         ? digitalData.productIntroAssetLinks
         : defaultProductIntroDigitalAssetRows;
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
-        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+        const cleanRows = (Array.isArray(rows) ? rows : []).map((row:any,index:number)=>({
+          id:row?.id || `asset-${index}-${uid()}`,
+          name:String(row?.name || "").trim() || "Untitled Asset",
+          link:String(row?.link || "").trim(),
+        }));
+        updateAiWorkspace("digital",{ productIntroAssetLinks:makeOverviewSnapshot(cleanRows) });
       };
       const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
@@ -7516,8 +7539,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
       };
       const addProductIntroDigitalAssetTableToOverview = () => {
-        const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
-        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
+        const rowsSnapshot = makeOverviewSnapshot(productIntroDigitalAssetRows);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", { assetRows:rowsSnapshot }, "Asset Link Table");
         markActionDone("overview-product-intro-digital-assets");
       };
 
@@ -8130,7 +8153,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
               <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
-                <Btn xs variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"} onClick={()=>{ updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows); markActionDone("save-product-intro-digital-assets"); }}>{actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}</Btn>
+                <Btn xs variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"} onClick={()=>{ const rowsSnapshot=makeOverviewSnapshot(productIntroDigitalAssetRows); updateProductIntroDigitalAssetRows(rowsSnapshot); markActionDone("save-product-intro-digital-assets"); }}>{actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}</Btn>
                 <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
               </div>
             </div>
