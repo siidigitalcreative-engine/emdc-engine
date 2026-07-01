@@ -165,8 +165,10 @@ const EMDC_PRE_WRITE_BACKUP_KEY = "emdc_app_state_before_last_write_v1";
 const EMDC_PRE_WRITE_HISTORY_KEY = "emdc_app_state_before_last_write_history_v1";
 const EMDC_LOCAL_KEY_PREFIX = "emdc";
 const EMDC_GROUP_AI_WORKSPACE_PREFIX = "emdc_group_ai_workspace_v1_";
+const EMDC_CHECKLIST_ITEMS_PREFIX = "emdc_checklist_items_v1_";
 
 const getEmdcGroupWorkspaceBackupKey = (groupId:any) => `${EMDC_GROUP_AI_WORKSPACE_PREFIX}${String(groupId || "")}`;
+const getEmdcChecklistItemsBackupKey = (groupId:any) => `${EMDC_CHECKLIST_ITEMS_PREFIX}${String(groupId || "")}`;
 
 const readEmdcGroupWorkspaceBackups = () => {
   const map:any = {};
@@ -194,6 +196,45 @@ const writeEmdcGroupWorkspaceBackup = (groupId:any, aiWorkspace:any) => {
       aiWorkspace,
     }));
   } catch {}
+};
+
+const readEmdcChecklistItemsBackups = () => {
+  const map:any = {};
+  if (typeof window === "undefined") return map;
+  try {
+    for (let i=0; i<localStorage.length; i++) {
+      const key = localStorage.key(i) || "";
+      if (!key.startsWith(EMDC_CHECKLIST_ITEMS_PREFIX)) continue;
+      const parsed = parseEmdcJson(localStorage.getItem(key));
+      const groupId = String(parsed?.groupId || key.replace(EMDC_CHECKLIST_ITEMS_PREFIX, ""));
+      if (groupId && parsed?.items && typeof parsed.items === "object") {
+        map[groupId] = parsed;
+      }
+    }
+  } catch {}
+  return map;
+};
+
+const writeEmdcChecklistItemsBackup = (groupId:any, items:any) => {
+  if (typeof window === "undefined" || !groupId || !items || typeof items !== "object") return;
+  try {
+    localStorage.setItem(getEmdcChecklistItemsBackupKey(groupId), JSON.stringify({
+      groupId:String(groupId),
+      updatedAt:new Date().toISOString(),
+      items,
+    }));
+  } catch {}
+};
+
+const mergeChecklistItemsWithLocalBackups = (items:any = {}) => {
+  const base = items && typeof items === "object" && !Array.isArray(items) ? { ...items } : {};
+  const backups = readEmdcChecklistItemsBackups();
+  Object.keys(backups).forEach((groupId:string)=>{
+    if (backups[groupId]?.items && typeof backups[groupId].items === "object") {
+      base[groupId] = backups[groupId].items;
+    }
+  });
+  return base;
 };
 
 const mergeChecklistGroupsWithWorkspaceBackups = (groups:any[] = []) => {
@@ -4364,6 +4405,120 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return String(extraOutput || "").trim();
   };
 
+  const normalizeTransferLookupText = (value:any) => String(value || "")
+    .toLowerCase()
+    .replace(/&/g," and ")
+    .replace(/[^a-z0-9]+/g," ")
+    .trim();
+
+  const extractTransferUrlsFromValue = (value:any):string[] => {
+    const raw = String(value || "");
+    if(!raw) return [];
+    const matches = raw.match(/https?:\/\/[^\s,"'<>]+/gi) || [];
+    return matches.map((url:string)=>url.trim().replace(/[)\].,;]+$/g,"")).filter(Boolean);
+  };
+
+  const getTransferImageLinksFromAny = (item:any):string[] => {
+    const directValues:any[] = [
+      item?.imageLink,
+      item?.imageUrl,
+      item?.imageURL,
+      item?.imageLinks,
+      item?.productImageLink,
+      item?.productImageUrl,
+      item?.referenceLink,
+      item?.referenceUrl,
+      item?.link,
+      item?.url,
+      item?.productLink,
+      item?.links,
+    ];
+    const extra = item?.extraFields && typeof item.extraFields === "object" ? item.extraFields : {};
+    Object.entries(extra).forEach(([key,value]:any)=>{
+      const cleanKey = String(key || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
+      if(cleanKey.includes("image") || cleanKey.includes("link") || cleanKey.includes("url") || cleanKey.includes("reference")) directValues.push(value);
+    });
+    Object.entries(item || {}).forEach(([key,value]:any)=>{
+      const cleanKey = String(key || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
+      if(cleanKey.includes("image") || cleanKey.includes("link") || cleanKey.includes("url") || cleanKey.includes("reference")) directValues.push(value);
+    });
+    const urls = directValues.flatMap((value:any)=>Array.isArray(value) ? value : [value])
+      .flatMap((value:any)=>extractTransferUrlsFromValue(value));
+    return Array.from(new Set(urls));
+  };
+
+  const findSkuStorageMatchForTransfer = (row:any) => {
+    const rows = Array.isArray(skuStorage) ? skuStorage : [];
+    if(!rows.length || !row) return null;
+    const targetSku = normalizeTransferLookupText(row.sku || row.skuCode || row.value || "");
+    const targetProduct = normalizeTransferLookupText(row.product || row.productName || row.name || "");
+    if(targetSku){
+      const skuMatch = rows.find((item:any)=>normalizeTransferLookupText(item.sku || item.skuCode || item.value || "") === targetSku);
+      if(skuMatch) return skuMatch;
+    }
+    if(targetProduct){
+      const productMatch = rows.find((item:any)=>{
+        const itemProduct = normalizeTransferLookupText(item.productName || item.product || item.name || "");
+        return itemProduct && (itemProduct === targetProduct || itemProduct.includes(targetProduct) || targetProduct.includes(itemProduct));
+      });
+      if(productMatch) return productMatch;
+    }
+    return null;
+  };
+
+  const enrichEcommerceTransferProductRow = (row:any) => {
+    const skuMatch = findSkuStorageMatchForTransfer(row);
+    const links = Array.from(new Set([
+      ...getTransferImageLinksFromAny(row),
+      ...getTransferImageLinksFromAny(skuMatch || {}),
+    ])).filter(Boolean);
+    return {
+      ...row,
+      product:row?.product || row?.productName || skuMatch?.productName || skuMatch?.product || "",
+      productName:row?.productName || row?.product || skuMatch?.productName || skuMatch?.product || "",
+      sku:row?.sku || row?.skuCode || skuMatch?.sku || skuMatch?.skuCode || "",
+      skuCode:row?.skuCode || row?.sku || skuMatch?.skuCode || skuMatch?.sku || "",
+      brand:row?.brand || skuMatch?.brand || "",
+      collection:row?.collection || row?.category || skuMatch?.collection || skuMatch?.category || "",
+      category:row?.category || row?.collection || skuMatch?.category || skuMatch?.collection || "",
+      imageLink:links[0] || row?.imageLink || skuMatch?.imageLink || "",
+      imageLinks:links,
+      links,
+      productLink:links[0] || row?.productLink || row?.link || "",
+      extraFields:{ ...(skuMatch?.extraFields || {}), ...(row?.extraFields || {}) },
+    };
+  };
+
+  const makeProductIntroTransferProduct = (row:any) => {
+    const enriched = enrichEcommerceTransferProductRow(row || {});
+    const links = getTransferImageLinksFromAny(enriched);
+    return {
+      product:enriched.product || enriched.productName || "",
+      productName:enriched.productName || enriched.product || "",
+      sku:enriched.sku || enriched.skuCode || "",
+      skuCode:enriched.skuCode || enriched.sku || "",
+      brand:enriched.brand || "",
+      collection:enriched.collection || enriched.category || "",
+      category:enriched.category || enriched.collection || "",
+      imageLink:links[0] || "",
+      imageLinks:links,
+      links,
+      productLink:links[0] || "",
+    };
+  };
+
+  const renderTransferImageLinkCell = (product:any) => {
+    const links = getTransferImageLinksFromAny(product);
+    const first = links[0] || "";
+    if(!first) return <span style={{ color:C.faint }}>—</span>;
+    return (
+      <a href={first} target="_blank" rel="noreferrer" title={first}
+        style={{ display:"inline-block",maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.accent,fontSize:12,fontWeight:800,textDecoration:"underline" }}>
+        Open Link
+      </a>
+    );
+  };
+
   const makeProductIntroDcItem = (row:any) => ({
     id:uid(),
     sourceRowId:String(row.id || row.skuCode || row.sku || ""),
@@ -4376,7 +4531,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     subheadline:"",
     cta:"",
     imagePrompt:"",
-    products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "", imageLink:row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || "", links:[row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || ""].filter(Boolean) }],
+    products:[makeProductIntroTransferProduct(row)],
     linkedEventContext:group.groupName || "Product Introduction",
     createdAt:new Date().toISOString(),
   });
@@ -4398,7 +4553,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       subheadline:"",
       cta:"",
       imagePrompt:"",
-      products:cleanRows.map((row:any)=>({ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "", imageLink:row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || "", links:[row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || ""].filter(Boolean) })),
+      products:cleanRows.map((row:any)=>makeProductIntroTransferProduct(row)),
       linkedEventContext:group.groupName || "Product Introduction",
       createdAt:new Date().toISOString(),
     };
@@ -4430,6 +4585,53 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return cards;
   };
 
+  const getEcommerceTransferRowsBackupKey = (targetTab:string, transferType:string) => group?.id ? `emdc_ecommerce_transfer_rows_v1_${group.id}_${targetTab}_${transferType}` : "";
+
+  const getTransferRowIdentity = (row:any, idx:number=0) => {
+    const products = Array.isArray(row?.products) && row.products.length ? row.products : [row];
+    const productSig = products
+      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || "").trim())
+      .filter(Boolean)
+      .sort()
+      .join("|");
+    return String(row?.sourceRowId || row?.transferGroupId || row?.id || productSig || `row-${idx}`);
+  };
+
+  const normalizeTransferRowsForStorage = (rows:any[] = []) => (Array.isArray(rows) ? rows : []).filter(Boolean).map((row:any)=>({
+    ...row,
+    products:Array.isArray(row?.products) && row.products.length ? row.products.map((product:any)=>makeProductIntroTransferProduct(product)) : [makeProductIntroTransferProduct(row)],
+    updatedAt:row?.updatedAt || new Date().toISOString(),
+  }));
+
+  const readEcommerceTransferRowsBackup = (targetTab:string, transferType:string) => {
+    if (typeof window === "undefined") return [];
+    const key = getEcommerceTransferRowsBackupKey(targetTab,transferType);
+    if(!key) return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch { return []; }
+  };
+
+  const writeEcommerceTransferRowsBackup = (targetTab:string, transferType:string, rows:any[] = []) => {
+    if (typeof window === "undefined") return;
+    const key = getEcommerceTransferRowsBackupKey(targetTab,transferType);
+    if(!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(normalizeTransferRowsForStorage(rows)));
+      markEmdcLocalStateUpdated();
+    } catch {}
+  };
+
+  const mergeEcommerceTransferRows = (...lists:any[][]) => {
+    const map = new Map<string,any>();
+    lists.flat().filter(Boolean).forEach((row:any,idx:number)=>{
+      const normalized = normalizeTransferRowsForStorage([row])[0] || row;
+      map.set(getTransferRowIdentity(normalized,idx), normalized);
+    });
+    return Array.from(map.values());
+  };
+
   const getProductIntroDigitalRows = () => {
     const digital = ((group.aiWorkspace || {}).digital || {}) as any;
     return Array.isArray(digital.productIntroCreativeRows) ? digital.productIntroCreativeRows : [];
@@ -4446,8 +4648,18 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     });
   };
 
+  const getProductIntroMarketingRows = () => {
+    const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
+    const marketing = ((group.aiWorkspace || {}).marketing || {}) as any;
+    const stateRows = Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
+    const persistedRows = Array.isArray(persistedMarketing.productIntroMarketingRows) ? persistedMarketing.productIntroMarketingRows : [];
+    const backupRows = readEcommerceTransferRowsBackup("marketing","product_intro");
+    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+  };
+
   const saveProductIntroMarketingRows = (rows:any[]) => {
-    const cleanRows = Array.isArray(rows) ? rows : [];
+    const cleanRows = normalizeTransferRowsForStorage(Array.isArray(rows) ? rows : []);
+    writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
     updateAiWorkspace("marketing",{
       productIntroMarketingRows:cleanRows,
       productIntroMarketingRowsCleared:cleanRows.length===0,
@@ -4458,12 +4670,17 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
 
   const getProductIntroLivestreamRows = () => {
+    const persistedLivestream = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).livestream || {}) as any;
     const livestream = ((group.aiWorkspace || {}).livestream || {}) as any;
-    return Array.isArray(livestream.productIntroLivestreamRows) ? livestream.productIntroLivestreamRows : [];
+    const stateRows = Array.isArray(livestream.productIntroLivestreamRows) ? livestream.productIntroLivestreamRows : [];
+    const persistedRows = Array.isArray(persistedLivestream.productIntroLivestreamRows) ? persistedLivestream.productIntroLivestreamRows : [];
+    const backupRows = readEcommerceTransferRowsBackup("livestream","product_intro");
+    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
   };
 
   const saveProductIntroLivestreamRows = (rows:any[]) => {
-    const cleanRows = Array.isArray(rows) ? rows : [];
+    const cleanRows = normalizeTransferRowsForStorage(Array.isArray(rows) ? rows : []);
+    writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
     updateAiWorkspace("livestream",{
       productIntroLivestreamRows:cleanRows,
       productIntroLivestreamRowsCleared:cleanRows.length===0,
@@ -4780,15 +4997,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const makeProductIntroTransferRowsForEcommerceOutput = (sourceData:any) => {
-    const rows = getEcommerceGeneratedProductRows(sourceData);
+    const rows = getEcommerceGeneratedProductRows(sourceData).map((row:any)=>enrichEcommerceTransferProductRow(row));
     return rows.length ? [makeProductIntroDcGroupedItem(rows)] : [];
   };
 
   const sendProductIntroEcommerceOutputToMarketing = (sourceData:any) => {
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
-    const marketingData = ((group.aiWorkspace || {}).marketing || {}) as any;
-    const existingRows = Array.isArray(marketingData.productIntroMarketingRows) ? marketingData.productIntroMarketingRows : [];
+    const existingRows = getProductIntroMarketingRows();
     saveProductIntroMarketingRows([...existingRows, ...rowsToSend]);
     setActiveGroupTab("marketing");
   };
@@ -4803,8 +5019,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const sendProductIntroEcommerceOutputToLivestream = (sourceData:any) => {
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
-    const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
-    const existingRows = Array.isArray(livestreamData.productIntroLivestreamRows) ? livestreamData.productIntroLivestreamRows : [];
+    const existingRows = getProductIntroLivestreamRows();
     saveProductIntroLivestreamRows([...existingRows, ...rowsToSend]);
     setActiveGroupTab("livestream");
   };
@@ -5745,6 +5960,24 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
 
+  const getCampaignMarketingRowsWithBackup = () => {
+    const marketing = ((group.aiWorkspace || {}).marketing || {}) as any;
+    const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
+    const stateRows = Array.isArray(marketing.campaignMarketingRows) ? marketing.campaignMarketingRows : [];
+    const persistedRows = Array.isArray(persistedMarketing.campaignMarketingRows) ? persistedMarketing.campaignMarketingRows : [];
+    const backupRows = readEcommerceTransferRowsBackup("marketing","campaign");
+    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+  };
+
+  const getCampaignLivestreamRowsWithBackup = () => {
+    const livestream = ((group.aiWorkspace || {}).livestream || {}) as any;
+    const persistedLivestream = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).livestream || {}) as any;
+    const stateRows = Array.isArray(livestream.campaignLivestreamRows) ? livestream.campaignLivestreamRows : [];
+    const persistedRows = Array.isArray(persistedLivestream.campaignLivestreamRows) ? persistedLivestream.campaignLivestreamRows : [];
+    const backupRows = readEcommerceTransferRowsBackup("livestream","campaign");
+    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+  };
+
   const sendEcommerceCampaignRowToMarketing = (row:any) => {
     const builder = getEcommerceCampaignBuilder();
     const rowKey = String(row.id || row.productKey || row.product || uid());
@@ -5779,12 +6012,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       mechanics:row.mechanics || "",
     };
     const marketingProducts = products.length ? products : [fallbackProduct];
-    const marketingData = ((group.aiWorkspace || {}).marketing || {}) as any;
-    const existingRows = Array.isArray(marketingData.campaignMarketingRows) ? marketingData.campaignMarketingRows : [];
+    const existingRows = getCampaignMarketingRowsWithBackup();
     const nextRows = [
       { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:marketingProducts, createdAt:new Date().toISOString() },
       ...existingRows.filter((existing:any)=>String(existing.sourceRowId || existing.id || "")!==rowKey),
     ].slice(0,30);
+    writeEcommerceTransferRowsBackup("marketing","campaign",nextRows);
     updateAiWorkspace("marketing",{
       campaignMarketingRows:nextRows,
       placedMarketingProductKeys:marketingProducts.map((item:any,idx:number)=>`${item.sku || item.product || "marketing-product"}__${idx}`),
@@ -5828,12 +6061,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       mechanics:row.mechanics || "",
     };
     const livestreamProducts = products.length ? products : [fallbackProduct];
-    const livestreamData = ((group.aiWorkspace || {}).livestream || {}) as any;
-    const existingRows = Array.isArray(livestreamData.campaignLivestreamRows) ? livestreamData.campaignLivestreamRows : [];
+    const existingRows = getCampaignLivestreamRowsWithBackup();
     const nextRows = [
       { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:livestreamProducts, createdAt:new Date().toISOString() },
       ...existingRows.filter((existing:any)=>String(existing.sourceRowId || existing.id || "")!==rowKey),
     ].slice(0,30);
+    writeEcommerceTransferRowsBackup("livestream","campaign",nextRows);
     updateAiWorkspace("livestream",{
       campaignLivestreamRows:nextRows,
       placedProductKeys:livestreamProducts.map((item:any,idx:number)=>`${item.sku || item.product || "livestream-product"}__${idx}`),
@@ -6178,7 +6411,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     if(tab==="marketing" && (isCampaignChecklist || isProductIntroductionChecklist)){
       const productIntroMarketingRows = isProductIntroductionChecklist
-        ? (((group.aiWorkspace || {}).marketing || {}).productIntroMarketingRows || [])
+        ? getProductIntroMarketingRows()
         : [];
       const productIntroMarketingProducts = productIntroMarketingRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((p:any)=>({
           product:p.product || row.product || "",
@@ -6199,9 +6432,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           subheadline:row.subheadline || "",
           cta:row.cta || "",
         }]);
-      const campaignMarketingRows = isCampaignChecklist && Array.isArray((((group.aiWorkspace || {}).marketing || {}).campaignMarketingRows))
-        ? (((group.aiWorkspace || {}).marketing || {}).campaignMarketingRows || [])
-        : [];
+      const campaignMarketingRows = isCampaignChecklist ? getCampaignMarketingRowsWithBackup() : [];
       const campaignMarketingProductsFromRows = campaignMarketingRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((product:any)=>({
         product:product.product || product.productName || row.product || "",
         productName:product.productName || product.product || row.product || "",
@@ -6352,6 +6583,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                               deleteProductIntroMarketingTransferAtIndex(transferIndex);
                             } else {
                               const nextRows = campaignMarketingRows.filter((_:any,idx:number)=>idx!==transferIndex);
+                              writeEcommerceTransferRowsBackup("marketing","campaign",nextRows);
                               updateAiWorkspace("marketing",{
                                 campaignMarketingRows:nextRows,
                                 selectedMarketingProductKeys:[],
@@ -6367,10 +6599,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
-                      <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                      <table style={{ width:"100%",minWidth:920,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                         <thead>
                           <tr style={{ background:C.surfaceAlt }}>
-                            {["Select","Platform","Brand","Category","Product","SKU"].map((label:string)=>(
+                            {["Select","Platform","Brand","Category","Product","SKU","Image Link"].map((label:string)=>(
                               <th key={label} style={{ padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                             ))}
                           </tr>
@@ -6395,6 +6627,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                                 <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
                                 <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
                                 <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",maxWidth:240 }}>{renderTransferImageLinkCell(product)}</td>
                               </tr>
                             );
                           })}
@@ -6428,10 +6661,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             )}
             {marketingAdProducts.length ? (
               <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:380 }}>
-                <table style={{ width:"100%",minWidth:760,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                <table style={{ width:"100%",minWidth:960,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                   <thead>
                     <tr style={{ background:C.surfaceAlt }}>
-                      {["Select","Ad Menu","Platform","Brand","Category","Product","SKU"].map((label:string)=>(
+                      {["Select","Ad Menu","Platform","Brand","Category","Product","SKU","Image Link"].map((label:string)=>(
                         <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                       ))}
                     </tr>
@@ -6455,6 +6688,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
                           <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>{product.sku || product.skuCode || ""}</td>
+                          <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",maxWidth:240 }}>{renderTransferImageLinkCell(product)}</td>
                         </tr>
                       );
                     })}
@@ -6548,7 +6782,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       ];
       const activeLivestreamTab = livestreamTabs.some((item:any)=>item.id===livestreamData.activeTab) ? livestreamData.activeTab : "main";
       const livestreamProductKey = (item:any,idx:number) => `${item.sku || item.skuCode || item.product || item.productName || "livestream-product"}__${idx}`;
-      const productIntroLivestreamRows = isProductIntroductionChecklist ? (Array.isArray(livestreamData.productIntroLivestreamRows) ? livestreamData.productIntroLivestreamRows : []) : [];
+      const productIntroLivestreamRows = isProductIntroductionChecklist ? getProductIntroLivestreamRows() : [];
       const productIntroLivestreamProducts = productIntroLivestreamRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((p:any)=>({
         product:p.product || row.product || "",
         sku:p.sku || row.sku || "",
@@ -6562,7 +6796,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         collection:row.category || row.collection || "",
         category:row.category || row.collection || "",
       }]);
-      const campaignLivestreamRows = isCampaignChecklist && Array.isArray(livestreamData.campaignLivestreamRows) ? livestreamData.campaignLivestreamRows : [];
+      const campaignLivestreamRows = isCampaignChecklist ? getCampaignLivestreamRowsWithBackup() : [];
       const campaignLivestreamProductsFromRows = campaignLivestreamRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((product:any)=>({
         product:product.product || product.productName || row.product || "",
         productName:product.productName || product.product || row.product || "",
@@ -6871,16 +7105,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             deleteProductIntroLivestreamTransferAtIndex(transferIndex);
                           } else {
                             const nextRows = campaignLivestreamRows.filter((_:any,idx:number)=>idx!==transferIndex);
+                            writeEcommerceTransferRowsBackup("livestream","campaign",nextRows);
                             updateLivestream({ campaignLivestreamRows:nextRows, selectedProductKeys:[], placedProductKeys:[] });
                           }
                         }}>Delete</Btn>
                       </div>
                     </div>
                     <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
-                      <table style={{ width:"100%",minWidth:720,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                      <table style={{ width:"100%",minWidth:920,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                         <thead>
                           <tr style={{ background:C.surfaceAlt }}>
-                            {["Select","Platform","Brand","Category","Product","SKU"].map((label:string)=>(
+                            {["Select","Platform","Brand","Category","Product","SKU","Image Link"].map((label:string)=>(
                               <th key={label} style={{ padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                             ))}
                           </tr>
@@ -6905,6 +7140,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
                                 <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220 }}>{product.product || product.productName || ""}</td>
                                 <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:850 }}>{product.sku || product.skuCode || ""}</td>
+                                <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",maxWidth:240 }}>{renderTransferImageLinkCell(product)}</td>
                               </tr>
                             );
                           })}
@@ -6951,10 +7187,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 )}
                 {livestreamMappedProducts.length ? (
                   <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?280:360 }}>
-                    <table style={{ width:"100%",minWidth:760,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                    <table style={{ width:"100%",minWidth:940,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                       <thead>
                         <tr style={{ background:C.surfaceAlt }}>
-                          {["Select","Added","Brand","Category","Product","SKU"].map((label:string)=>(
+                          {["Select","Added","Brand","Category","Product","SKU","Image Link"].map((label:string)=>(
                             <th key={label} style={{ position:"sticky",top:0,zIndex:1,background:C.surfaceAlt,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                           ))}
                         </tr>
@@ -6977,6 +7213,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap" }}>{product.collection || product.category || ""}</td>
                               <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,minWidth:220,fontWeight:850,color:C.text }}>{product.product || ""}</td>
                               <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",fontWeight:750 }}>{product.sku || ""}</td>
+                              <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,whiteSpace:"nowrap",maxWidth:240 }}>{renderTransferImageLinkCell(product)}</td>
                             </tr>
                           );
                         })}
@@ -10980,10 +11217,48 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
 
-  const updateGroupItems = (groupId:string, items:any) => {
-    setAllGroupItems((p:any)=>{ const next={...p,[groupId]:items}; if(onStateChange) onStateChange({checklistItems:{[groupId]:items}}); return next; });
+  const persistChecklistItemsNow = (nextItems:any) => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = raw ? parseEmdcJson(raw) : {};
+      localStorage.setItem("emdc_app_state_v1", JSON.stringify({
+        ...(parsed || {}),
+        checklistItems:nextItems,
+      }));
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
   };
-  const updateStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
+
+  const persistChecklistStatusesNow = (nextStatuses:any[]) => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = raw ? parseEmdcJson(raw) : {};
+      localStorage.setItem("emdc_app_state_v1", JSON.stringify({
+        ...(parsed || {}),
+        checklistStatuses:nextStatuses,
+      }));
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
+  };
+
+  const updateGroupItems = (groupId:string, items:any) => {
+    setAllGroupItems((p:any)=>{
+      const next={...(p||{}),[groupId]:items};
+      writeEmdcChecklistItemsBackup(groupId,items);
+      persistChecklistItemsNow(next);
+      if(onStateChange) onStateChange({checklistItems:next});
+      return next;
+    });
+  };
+  const updateStatuses = (s:any[]) => {
+    setStatuses(s);
+    persistChecklistStatusesNow(s);
+    if(onStateChange) onStateChange({checklistStatuses:s});
+  };
   const [launchTypes,setLaunchTypes] = useState<any>(() => {
     if (typeof window === "undefined") return mergeChecklistLaunchTypesWithDefaults(null);
     try {
@@ -11151,7 +11426,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     const initialItems = buildChecklistItemsFromTemplates(g.launchType,templates,null);
 
     setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; });
-    setAllGroupItems((p:any)=>{ const next={...p,[g.id]:initialItems}; if(onStateChange) onStateChange({checklistItems:next}); return next; });
+    setAllGroupItems((p:any)=>{ const next={...p,[g.id]:initialItems}; writeEmdcChecklistItemsBackup(g.id,initialItems); persistChecklistItemsNow(next); if(onStateChange) onStateChange({checklistItems:next}); return next; });
 
     if(onGroupCreated) onGroupCreated(g);
     setActive(g.id);
@@ -11172,6 +11447,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       if(!prev || !prev[id]) return prev;
       const next = { ...prev };
       delete next[id];
+      try { if (typeof window !== "undefined") localStorage.removeItem(getEmdcChecklistItemsBackupKey(id)); } catch {}
+      persistChecklistItemsNow(next);
       if(onStateChange) onStateChange({checklistItems:next});
       return next;
     });
@@ -11209,6 +11486,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       const freshItems = buildChecklistItemsFromTemplates(patch.launchType,templates,null);
       setAllGroupItems((prev:any)=>{
         const next = { ...prev, [id]: freshItems };
+        writeEmdcChecklistItemsBackup(id,freshItems);
+        persistChecklistItemsNow(next);
         if(onStateChange) onStateChange({checklistItems:next});
         return next;
       });
@@ -15989,6 +16268,7 @@ export default function App({
     "emdc_app_state_local_updated_at_v1",
     "emdc_app_state_last_good_v1",
     "emdc_app_state_history_v1",
+    "emdc_checklist_items_v1_",
   ];
 
   const isEmdcSyncLocalKey = (key:any) => {
@@ -16001,7 +16281,7 @@ export default function App({
     skuItems: skuStorage,
     skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
     checklistGroups: mergeChecklistGroupsWithWorkspaceBackups(checklistGroups),
-    checklistItems: checklistAllItems,
+    checklistItems: mergeChecklistItemsWithLocalBackups(checklistAllItems),
     checklistStatuses,
     calendarEvents: calendarManualEvents,
     calendarTypes: calendarEventTypes,
@@ -16106,7 +16386,7 @@ export default function App({
     if (Array.isArray(parsed?.skuItems)) setSkuStorage(parsed.skuItems);
     if (Array.isArray(parsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(parsed.skuTableColumns));
     if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(mergeChecklistGroupsWithWorkspaceBackups(parsed.checklistGroups));
-    if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(parsed.checklistItems);
+    if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(mergeChecklistItemsWithLocalBackups(parsed.checklistItems));
     if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
     if (Array.isArray(parsed?.calendarEvents)) setCalendarManualEvents(parsed.calendarEvents);
     if (Array.isArray(parsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(parsed.calendarTypes));
