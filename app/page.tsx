@@ -85,8 +85,9 @@ const DEPTS = {
 };
 const LAUNCH_TYPES = {
   introduction:{ label:"Product Introduction", tag:"New Launch", color:"#111827" },
-  reactivation:{ label:"Product Reactivation",  tag:"Relaunch",  color:"#374151" },
-  phaseout:    { label:"Product Phase-Out",      tag:"Closeout",  color:"#9CA3AF" },
+  campaign:    { label:"Campaign Checklist",    tag:"Campaign",   color:"#F59E0B" },
+  reactivation:{ label:"Product Reactivation",  tag:"Relaunch",   color:"#374151" },
+  phaseout:    { label:"Product Phase-Out",      tag:"Closeout",   color:"#9CA3AF" },
 };
 const STATUS_PALETTE = [
   "#111827","#374151","#6B7280","#9CA3AF",
@@ -105,6 +106,11 @@ const TEMPLATES = {
     marketing:["Brief campaign concept and messaging direction for launch","Define target audience segments and key messaging pillars","Plan launch campaign timeline with content milestones","Coordinate with KOLs or brand partners for launch seeding","Draft and schedule announcement copy for IG, TikTok, and Facebook","Set up Meta Ads launch campaign (awareness + conversion objectives)","Create paid media brief and allocate launch budget per channel","Plan and schedule TikTok LIVE session for launch day","Write email campaign copy for Klaviyo launch broadcast","Monitor launch-day performance and prepare day-1 report"],
     digital:["Produce primary product photography or CGI renders","Create platform-compliant listing infographics (Shopee, Lazada, TikTok)","Design IG Feed posts, Reels cover, and Stories assets","Produce TikTok launch video (hook, demo, CTA format)","Design Meta Ads creatives (static, carousel, and Story units)","Build product highlight reel or unboxing-style short video","Export all assets in platform-required specs and file formats","Update Shopify product page layout and featured imagery","Deliver Klaviyo email header and banner design","Archive final production files to shared drive with naming convention"],
   },
+  campaign:{
+    ecommerce:["Map campaign product list and confirm SKU availability per platform","Create campaign product rows for Shopee, Lazada, TikTok Shop, Shopify, and Meta","Set campaign pricing, bundle offers, vouchers, and platform mechanics","Confirm inventory allocation and fulfillment readiness before campaign go-live","QA all campaign listings, product links, prices, variants, and stock display","Prepare campaign schedule with launch date, promo period, and cut-off deadlines","Add campaign product links and final marketplace URLs for team reference","Coordinate flash sale, payday sale, mega sale, and platform ad placements","Track campaign product performance and flag items needing optimization","Finalize campaign post-mortem notes and next action items"],
+    marketing:["Define campaign objective, promotion angle, and key selling message","Build campaign content plan for Meta, TikTok, Shopee, Lazada, and website","Create ad copy directions for single image, carousel, collection, Reels, and TikTok ads","Prepare campaign caption sets, hooks, headlines, and CTA variations","Set paid media budget, targeting, retargeting, and optimization schedule","Coordinate affiliate, KOL, livestream, and social posting requirements","Review campaign creative outputs and approve final marketing assets","Monitor campaign performance and update optimization notes","Prepare daily or milestone campaign performance summary","Collect learnings for the next campaign cycle"],
+    digital:["Create campaign key visual direction and overall design treatment","Design campaign banners for marketplace, website, Meta, and TikTok placements","Create product image prompts, lifestyle prompts, and creative asset directions","Produce carousel, feed, story, and Reels/TikTok creative layouts","Prepare digital creative asset links table for product image, CEM banner, store banner, feed, story, and showcase video","Generate or upload final creative output links and add approved assets to Overview manually","Export all campaign assets in required sizes and platform-safe formats","QA all creative assets for readability, spacing, product accuracy, and brand consistency","Archive final campaign files with clear naming convention","Update source tabs when Overview cards are edited or finalized"],
+  },
   reactivation:{
     ecommerce:["Audit and update existing listings — refresh titles, descriptions, images","Review historical pricing and set competitive relaunch price points","Reassess inventory levels and restock allocation per channel","Update product categorization and search keyword tags","Re-enable listings that were paused or delisted","Set up relaunch bundle or value-add promotional offer","Check and resolve any previous platform flags, reviews, or disputes","Sync updated product data via Ginee across all active channels","Configure flash deal or voucher mechanic for relaunch window","QA all updated listings before go-live"],
     marketing:["Define relaunch narrative — what has changed or improved","Develop new and improved or back by demand campaign angle","Plan content rollout to address previous customer pain points","Brief influencer or affiliate partners on updated product story","Schedule re-engagement email to past purchasers via Klaviyo","Set up retargeting campaign targeting previous product page visitors","Coordinate platform relaunch mechanics (featured listing, flash deal)","Draft announcement copy for social channels","Align relaunch timing with payday cycle or platform campaign window","Track relaunch uplift vs. previous performance baseline"],
@@ -115,6 +121,26 @@ const TEMPLATES = {
     marketing:["Plan final stock clearance campaign with urgency messaging","Draft internal announcement to sales and support teams","Suppress SKU from ongoing paid media campaigns","Redirect any active campaigns toward replacement or alternative product","Create last-chance email send to past purchasers via Klaviyo","Communicate product discontinuation to key affiliates and partners","Update any active landing pages referencing the discontinued SKU","Monitor clearance sell-through rate and adjust promotions accordingly","Archive campaign and performance documentation","Brief team on transition messaging to maintain brand continuity"],
     digital:["Remove product from active featured placements on website and social","Create clearance sale asset set (banners, Stories, Reels)","Update Shopify product page to reflect clearance or final stock status","Suppress discontinued SKU from catalog and collection displays","Produce transition content introducing the replacement product if applicable","Archive all production files, raw assets, and final exports","Update Klaviyo template visuals for clearance email","Remove or replace ads featuring discontinued product","Notify design team to exclude SKU from future campaign briefs","Document asset archive location and update internal file index"],
   },
+};
+
+const mergeChecklistLaunchTypesWithDefaults = (saved:any) => {
+  const base = { ...LAUNCH_TYPES };
+  const safeSaved = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  return { ...base, ...safeSaved, campaign: safeSaved.campaign || base.campaign };
+};
+
+const mergeChecklistTemplatesWithDefaults = (saved:any) => {
+  const safeSaved = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  const merged:any = { ...TEMPLATES, ...safeSaved };
+  Object.keys(LAUNCH_TYPES).forEach((typeKey:string)=>{
+    merged[typeKey] = { ...(TEMPLATES as any)[typeKey], ...(safeSaved as any)[typeKey] };
+    Object.keys(DEPTS).forEach((deptKey:string)=>{
+      if (!Array.isArray(merged[typeKey]?.[deptKey])) {
+        merged[typeKey][deptKey] = ((TEMPLATES as any)[typeKey]?.[deptKey] || []);
+      }
+    });
+  });
+  return merged;
 };
 
 const uid = () => Math.random().toString(36).slice(2,9);
@@ -10562,22 +10588,22 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
   const updateStatuses = (s:any[]) => { setStatuses(s); if(onStateChange) onStateChange({checklistStatuses:s}); };
   const [launchTypes,setLaunchTypes] = useState<any>(() => {
-    if (typeof window === "undefined") return LAUNCH_TYPES;
+    if (typeof window === "undefined") return mergeChecklistLaunchTypesWithDefaults(null);
     try {
       const raw = localStorage.getItem("emdc_checklist_launch_types_v1");
       const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && typeof parsed === "object" && Object.keys(parsed).length) return parsed;
+      return mergeChecklistLaunchTypesWithDefaults(parsed);
     } catch {}
-    return LAUNCH_TYPES;
+    return mergeChecklistLaunchTypesWithDefaults(null);
   });
   const [templates,setTemplates]   = useState<any>(() => {
-    if (typeof window === "undefined") return TEMPLATES;
+    if (typeof window === "undefined") return mergeChecklistTemplatesWithDefaults(null);
     try {
       const raw = localStorage.getItem("emdc_checklist_templates_v1");
       const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && typeof parsed === "object") return parsed;
+      return mergeChecklistTemplatesWithDefaults(parsed);
     } catch {}
-    return TEMPLATES;
+    return mergeChecklistTemplatesWithDefaults(null);
   });
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
