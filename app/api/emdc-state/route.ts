@@ -5,6 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const STATE_KEY = "emdc:app-state:v1";
+const SKU_CHUNK_PREFIX = "emdc:app-state:v1:sku-items:chunk:";
+const SKU_META_KEY = "emdc:app-state:v1:sku-items:meta";
 const LAST_GOOD_KEY = "emdc:app-state:v1:last-good";
 const HISTORY_INDEX_KEY = "emdc:app-state:v1:history";
 const HISTORY_PREFIX = "emdc:app-state:v1:backup:";
@@ -61,6 +63,8 @@ function isMeaningfulState(data: any) {
   const appState = data?.appState || data || {};
   return (
     safeArray(appState.skuItems).length > 0 ||
+    Number(appState.skuItemsExternalCount || 0) > 0 ||
+    Number(appState.skuItemsCloudChunkCount || 0) > 0 ||
     safeArray(appState.checklistGroups).length > 0 ||
     hasChecklistItems(appState.checklistItems) ||
     safeArray(appState.overviewOutputs).length > 0 ||
@@ -101,6 +105,37 @@ function compactLocalStorage(localStorageValue: any) {
   return result;
 }
 
+async function hydrateSkuChunks(redis: Redis, data: any) {
+  if (!isRecord(data) || !isRecord(data.appState)) return data;
+
+  const appState = data.appState;
+  const needsSkuHydration =
+    !!appState.skuItemsExternalCloud ||
+    Number(appState.skuItemsCloudChunkCount || 0) > 0 ||
+    (safeArray(appState.skuItems).length === 0 && Number(appState.skuItemsExternalCount || 0) > 0);
+
+  if (!needsSkuHydration) return data;
+
+  const meta: any = (await redis.get(SKU_META_KEY)) || {};
+  const chunkCount = Number(meta.chunkCount || appState.skuItemsCloudChunkCount || 0);
+  if (!Number.isFinite(chunkCount) || chunkCount <= 0 || chunkCount > 1000) return data;
+
+  const chunks = await Promise.all(
+    Array.from({ length: chunkCount }, (_, index) => redis.get(`${SKU_CHUNK_PREFIX}${index}`))
+  );
+
+  const skuItems = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
+  if (!skuItems.length) return data;
+
+  return {
+    ...data,
+    appState:{
+      ...appState,
+      skuItems,
+    },
+  };
+}
+
 async function saveBackup(redis: Redis, currentData: any, label = "auto") {
   if (!currentData || !isMeaningfulState(currentData)) return;
 
@@ -124,7 +159,7 @@ export async function GET(req: NextRequest) {
 
     if (mode === "last-good") {
       const data = await redis.get(LAST_GOOD_KEY);
-      return NextResponse.json({ ok: true, mode, data: data || emptyState });
+      return NextResponse.json({ ok: true, mode, data: data ? await hydrateSkuChunks(redis,data) : emptyState });
     }
 
     if (mode === "history") {
@@ -138,7 +173,7 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await redis.get(STATE_KEY);
-    return NextResponse.json({ ok: true, mode: "current", data: data || emptyState });
+    return NextResponse.json({ ok: true, mode: "current", data: data ? await hydrateSkuChunks(redis,data) : emptyState });
   } catch (error: any) {
     return NextResponse.json(
       {
@@ -154,7 +189,32 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const redis = getRedisClient();
+    const { searchParams } = new URL(req.url);
+    const mode = searchParams.get("mode") || "";
     const body = await req.json();
+
+    if (mode === "sku-chunk" || body?.mode === "sku-chunk") {
+      const index = Number(body?.index);
+      const total = Number(body?.total);
+      const rows = safeArray(body?.rows);
+      if (!Number.isInteger(index) || !Number.isInteger(total) || index < 0 || total <= 0 || index >= total) {
+        return NextResponse.json({ ok:false, error:"Invalid SKU chunk index." }, { status:400 });
+      }
+
+      await Promise.all([
+        redis.set(`${SKU_CHUNK_PREFIX}${index}`, rows),
+        redis.set(SKU_META_KEY, {
+          version:1,
+          clientId:body?.clientId || "",
+          updatedAt:body?.updatedAt || new Date().toISOString(),
+          chunkCount:total,
+          totalItems:Number(body?.totalItems || 0),
+        }),
+      ]);
+
+      return NextResponse.json({ ok:true, mode:"sku-chunk", index, total, count:rows.length });
+    }
+
     const currentData = await redis.get(STATE_KEY);
 
     // Always protect the previous good state before replacing the main key.
