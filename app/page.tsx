@@ -5508,6 +5508,35 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         updateAiWorkspace("marketing",{ selectedMarketingProductKeys:Array.from(current) });
       };
 
+      const defaultProductIntroDigitalAssetRows = [
+        { id:"product-image", name:"Product Image", link:"" },
+        { id:"cem-banner", name:"CEM Banner", link:"" },
+        { id:"store-banner", name:"Store Banner", link:"" },
+        { id:"feed", name:"Feed", link:"" },
+        { id:"story", name:"Story", link:"" },
+        { id:"showcase-video", name:"Showcase Video", link:"" },
+      ];
+      const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks) && digitalData.productIntroAssetLinks.length
+        ? digitalData.productIntroAssetLinks
+        : defaultProductIntroDigitalAssetRows;
+      const updateProductIntroDigitalAssetRows = (rows:any[]) => {
+        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+      };
+      const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
+      };
+      const addProductIntroDigitalAssetRow = () => {
+        updateProductIntroDigitalAssetRows([...productIntroDigitalAssetRows,{ id:uid(), name:"New Asset", link:"" }]);
+      };
+      const deleteProductIntroDigitalAssetRow = (rowId:string) => {
+        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
+      };
+      const addProductIntroDigitalAssetTableToOverview = () => {
+        const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table");
+        markActionDone("overview-product-intro-digital-assets");
+      };
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -6370,7 +6399,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const res = await fetch("/api/ai/save-image", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
-        cache:"no-store",
         body:JSON.stringify({ imageUrl, prompt, title, source, cardId, sourceRowId }),
       });
       const raw = await res.text();
@@ -6378,12 +6406,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       try { result = raw ? JSON.parse(raw) : {}; } catch { result = { error:raw }; }
       if(!res.ok) throw new Error(result?.error || result?.message || "Failed to save image to Google Drive.");
       return result;
-    };
-
-    const isDriveSavedImage = (item:any) => {
-      const driveFileId = String(item?.driveFileId || "").trim();
-      const savedUrl = String(item?.savedImageUrl || item?.url || "").trim();
-      return !!driveFileId || /drive\.google\.com|googleusercontent\.com/i.test(savedUrl);
     };
 
     const extractDcLinks = (value:any) => {
@@ -6986,7 +7008,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                       <td style={{ padding:10,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150 }}>
                                         <div style={{ display:"grid",gap:6 }}>
                                           <Btn xs onClick={()=>generateProductIntroDcGmvImage(item,row,rowIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                          {row?.generatedImageUrl&&<Btn xs variant={isDriveSavedImage(row) ? "primary" : "outline"} onClick={(e:any)=>{ e?.preventDefault?.(); e?.stopPropagation?.(); saveProductIntroDcGmvImageOutput(item,row,rowIndex); }}>{isDriveSavedImage(row) ? "Saved ✓" : "Save"}</Btn>}
+                                          {row?.generatedImageUrl&&<Btn xs variant={row?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcGmvImageOutput(item,row,rowIndex)}>{row?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
                                           {row?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcGmvImageOutput(item,rowIndex)}>Delete Image</Btn>}
                                         </div>
                                       </td>
@@ -7076,7 +7098,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   </div>
                                   <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
                                     <Btn xs onClick={()=>generateCampaignDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                    {card?.generatedImageUrl&&<Btn xs variant={isDriveSavedImage(card) ? "primary" : "outline"} onClick={(e:any)=>{ e?.preventDefault?.(); e?.stopPropagation?.(); saveCampaignDcCarouselImageOutput(item,card,cardIndex); }}>{isDriveSavedImage(card) ? "Saved ✓" : "Save"}</Btn>}
+                                    {card?.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveCampaignDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>}
                                     {card?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteCampaignDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
                                   </div>
                                 </div>
@@ -7300,7 +7322,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   </div>
                                   <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
                                     <Btn xs onClick={()=>generateCampaignDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                    {card.generatedImageUrl&&<Btn xs variant={isDriveSavedImage(card) ? "primary" : "outline"} onClick={(e:any)=>{ e?.preventDefault?.(); e?.stopPropagation?.(); saveCampaignDcCarouselImageOutput(item,card,cardIndex); }}>{isDriveSavedImage(card) ? "Saved ✓" : "Save"}</Btn>}
+                                    {card.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveCampaignDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>}
                                     {card.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteCampaignDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
                                   </div>
                                 </div>
@@ -7325,7 +7347,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
                               />
                               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
-                                <Btn xs variant={isDriveSavedImage(item) ? "primary" : "outline"} onClick={(e:any)=>{ e?.preventDefault?.(); e?.stopPropagation?.(); saveCampaignDcImageOutput(item); }}>{isDriveSavedImage(item) ? "Saved ✓" : "Save"}</Btn>
+                                <Btn xs variant="outline" onClick={()=>saveCampaignDcImageOutput(item)}>Save</Btn>
                                 <Btn xs variant="danger" onClick={()=>deleteCampaignDcImageOutput(item)}>Delete</Btn>
                               </div>
                             </div>
@@ -7691,8 +7713,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
-${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -7832,7 +7853,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -7904,8 +7925,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
-${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -7937,7 +7957,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -7972,6 +7992,58 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           {!!formatMainPromotion(((group.aiWorkspace || {}).digital || {}).mainPromotion)&&(
             renderMainPromotionCard(((group.aiWorkspace || {}).digital || {}).mainPromotion, true)
           )}
+
+          <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+            <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 4px",fontSize:15,fontWeight:900,color:C.text }}>Digital Creative Asset Links</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>Add editable asset names and final output links for Product Image, banners, feed, story, and video deliverables.</p>
+              </div>
+              <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
+                <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
+              </div>
+            </div>
+            <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:isMobile?620:760 }}>
+                <thead>
+                  <tr style={{ background:C.surfaceAlt }}>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Asset Name</th>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Link</th>
+                    <th style={{ textAlign:"right",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:110 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productIntroDigitalAssetRows.map((row:any)=>(
+                    <tr key={row.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
+                        <input
+                          value={row.name || ""}
+                          onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ name:e.target.value })}
+                          placeholder="Asset name"
+                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,fontWeight:700,color:C.text,outline:"none",background:C.surface }}
+                        />
+                      </td>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top" }}>
+                        <input
+                          value={row.link || ""}
+                          onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ link:e.target.value })}
+                          placeholder="Paste final output link here"
+                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,color:C.text,outline:"none",background:C.surface }}
+                        />
+                      </td>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",textAlign:"right",whiteSpace:"nowrap" }}>
+                        <div style={{ display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
+                          {row.link&&<Btn xs variant="outline" onClick={async()=>{ try { await navigator.clipboard.writeText(row.link || ""); markActionDone(`copy-digital-asset-${row.id}`); } catch {} }}>{actionDone(`copy-digital-asset-${row.id}`)?"✓":"Copy"}</Btn>}
+                          <Btn xs variant="danger" onClick={()=>deleteProductIntroDigitalAssetRow(row.id)}>Delete</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {sourceRows.length===0 ? (
             <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
@@ -8050,7 +8122,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p><p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card?.cta || "Shop Now"}</p></div>
                                   <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
                                     <Btn xs onClick={()=>generateProductIntroDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                    {card?.generatedImageUrl&&<Btn xs variant={isDriveSavedImage(card) ? "primary" : "outline"} onClick={(e:any)=>{ e?.preventDefault?.(); e?.stopPropagation?.(); saveProductIntroDcCarouselImageOutput(item,card,cardIndex); }}>{isDriveSavedImage(card) ? "Saved ✓" : "Save"}</Btn>}
+                                    {card?.generatedImageUrl&&<Btn xs variant={card?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcCarouselImageOutput(item,card,cardIndex)}>{card?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
                                     {card?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
                                   </div>
                                 </div>
@@ -8220,7 +8292,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
                               style={{ maxWidth:"100%",maxHeight:320,borderRadius:9,objectFit:"contain",border:`1px solid ${C.border}`,cursor:"zoom-in" }}
                             />
                             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,width:"100%",maxWidth:260 }}>
-                              <Btn xs variant={isDriveSavedImage(item) ? "primary" : "outline"} onClick={(e:any)=>{ e?.preventDefault?.(); e?.stopPropagation?.(); saveProductIntroDcImageOutput(item); }}>{isDriveSavedImage(item) ? "Saved ✓" : "Save"}</Btn>
+                              <Btn xs variant={item.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcImageOutput(item)}>{item.savedImageAt ? "Saved ✓" : "Save"}</Btn>
                               <Btn xs variant="danger" onClick={()=>deleteProductIntroDcImageOutput(item)}>Delete</Btn>
                             </div>
                           </div>
