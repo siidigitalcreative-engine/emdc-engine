@@ -118,6 +118,21 @@ const TEMPLATES = {
 };
 
 const uid = () => Math.random().toString(36).slice(2,9);
+const EMDC_LOCAL_STATE_UPDATED_AT_KEY = "emdc_app_state_local_updated_at_v1";
+const markEmdcLocalStateUpdated = (updatedAt = new Date().toISOString()) => {
+  if (typeof window === "undefined") return updatedAt;
+  try { localStorage.setItem(EMDC_LOCAL_STATE_UPDATED_AT_KEY, updatedAt); } catch {}
+  return updatedAt;
+};
+const getEmdcLocalStateUpdatedAt = () => {
+  if (typeof window === "undefined") return "";
+  try { return localStorage.getItem(EMDC_LOCAL_STATE_UPDATED_AT_KEY) || ""; } catch { return ""; }
+};
+const isIsoTimeNewer = (a:any, b:any, toleranceMs = 500) => {
+  const at = Date.parse(String(a || ""));
+  const bt = Date.parse(String(b || ""));
+  return Number.isFinite(at) && Number.isFinite(bt) && at > bt + toleranceMs;
+};
 const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) ? "video" : "image");
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
@@ -3625,6 +3640,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         ...parsed,
         checklistGroups:nextGroups,
       }));
+      markEmdcLocalStateUpdated();
       window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
   };
@@ -3977,6 +3993,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     updateAiWorkspace("digital",{
       productIntroCreativeRows:cleanRows,
       productIntroRowsCleared:cleanRows.length===0,
+      deletedProductIntroDcRowIds:cleanRows.length ? [] : (((group.aiWorkspace || {}).digital || {}) as any).deletedProductIntroDcRowIds || [],
       generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
@@ -7563,7 +7580,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         markActionDone("overview-product-intro-digital-assets");
       };
 
-      const productIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
+      const productIntroDeletedRowIds = Array.from(new Set(
+        (Array.isArray(digitalData.deletedProductIntroDcRowIds) ? digitalData.deletedProductIntroDcRowIds : [])
+          .map((value:any)=>String(value || ""))
+          .filter(Boolean)
+      ));
+      const isDeletedProductIntroDcRow = (row:any) => productIntroDeletedRowIds.includes(String(row?.id || ""));
+      const rawProductIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
+      const productIntroRows = rawProductIntroRows.filter((row:any)=>!isDeletedProductIntroDcRow(row));
       const productIntroRowsCleared = !!digitalData.productIntroRowsCleared;
       const makeProductIntroDcItem = (row:any) => ({
         id:uid(),
@@ -7603,7 +7627,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           createdAt:new Date().toISOString(),
         };
       };
-      const sourceRows = productIntroRows.length ? productIntroRows : (productIntroRowsCleared ? [] : productRows.map(makeProductIntroDcItem));
+      const sourceRows = rawProductIntroRows.length ? productIntroRows : (productIntroRowsCleared ? [] : productRows.map(makeProductIntroDcItem));
       const copyProductIntroDigitalItem = async (item:any) => {
         const output = [
           "Platform", item.platform || "All Platforms", "",
@@ -7691,18 +7715,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
       const deleteProductIntroDigitalItem = (id:string) => {
-        const nextRows = (productIntroRows.length ? productIntroRows : sourceRows).filter((row:any)=>row.id!==id);
+        const cleanId = String(id || "");
+        const baseRows = rawProductIntroRows.length ? rawProductIntroRows : sourceRows;
+        const nextRows = baseRows.filter((row:any)=>String(row.id || "")!==cleanId);
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        const deletedIds = Array.from(new Set([
+          ...productIntroDeletedRowIds,
+          cleanId,
+        ].filter(Boolean))).slice(-250);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
           productIntroRowsCleared:nextRows.length===0,
-          savedImageOutputs:filterSavedProductIntroOutputsForItem(saved,id),
+          deletedProductIntroDcRowIds:deletedIds,
+          savedImageOutputs:filterSavedProductIntroOutputsForItem(saved,cleanId),
           generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
           generatedAt:new Date().toISOString(),
         });
       };
-      const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
+      const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, deletedProductIntroDcRowIds:[], generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       const savedProductIntroDigitalOutputs = Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : [];
       const filterSavedProductIntroOutputsForItem = (saved:any[] = [], itemId:any, extraCardIds:any[] = []) => {
         const id = String(itemId || "");
@@ -15147,11 +15178,23 @@ export default function App({
 
   const applyCloudState = (cloud:any) => {
     if (!cloud || typeof cloud !== "object") return;
+
+    const cloudUpdatedAt = String(cloud.updatedAt || "");
+    const localUpdatedAt = getEmdcLocalStateUpdatedAt();
+    if (cloudUpdatedAt && localUpdatedAt && isIsoTimeNewer(localUpdatedAt, cloudUpdatedAt)) {
+      // Keep local edits/deletions from being resurrected by an older cloud snapshot after refresh.
+      setCloudSyncStatus("Local pending sync");
+      return;
+    }
+
     cloudApplyingRef.current = true;
     try {
       writeLocalSnapshot(cloud.localStorage || {});
       applyAppState(cloud.appState || cloud);
-      if (cloud.updatedAt) cloudLastUpdatedAtRef.current = cloud.updatedAt;
+      if (cloud.updatedAt) {
+        cloudLastUpdatedAtRef.current = cloud.updatedAt;
+        markEmdcLocalStateUpdated(cloud.updatedAt);
+      }
       setCloudSyncStatus("Synced");
     } finally {
       setTimeout(()=>{ cloudApplyingRef.current = false; }, 350);
@@ -15197,6 +15240,7 @@ export default function App({
       if (!res.ok) throw new Error("Save failed");
       const data = await res.json().catch(()=>({}));
       cloudLastUpdatedAtRef.current = data?.data?.updatedAt || updatedAt;
+      markEmdcLocalStateUpdated(cloudLastUpdatedAtRef.current);
       setCloudSyncStatus("Synced");
     } catch {
       setCloudSyncStatus("Sync save failed");
@@ -15247,6 +15291,7 @@ export default function App({
       idleJob = scheduleIdleWork(()=>{
         try {
           localStorage.setItem("emdc_app_state_v1", JSON.stringify(makeAppStatePayload()));
+          markEmdcLocalStateUpdated();
         } catch {}
       }, 1200);
     }, PERF_IDLE_SAVE_DELAY);
