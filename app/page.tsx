@@ -5627,26 +5627,46 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const productIntroDigitalAssetRows = Array.isArray(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks)
         ? ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks
         : defaultProductIntroDigitalAssetRows;
+      const normalizeProductIntroDigitalAssetRows = (rows:any[]) => (Array.isArray(rows) ? rows : []).map((row:any,index:number)=>({
+        id:row?.id || `asset-${index}-${uid()}`,
+        name:String(row?.name || "").trim() || "Untitled Asset",
+        link:String(row?.link || "").trim(),
+      }));
+      const readProductIntroDigitalAssetRowsFromDom = () => {
+        if (typeof document === "undefined") return normalizeProductIntroDigitalAssetRows(productIntroDigitalAssetRows);
+        const tableRows = Array.from(document.querySelectorAll('[data-product-intro-digital-asset-row="true"]')) as HTMLElement[];
+        if (!tableRows.length) return normalizeProductIntroDigitalAssetRows(productIntroDigitalAssetRows);
+        return normalizeProductIntroDigitalAssetRows(tableRows.map((rowEl:any,index:number)=>({
+          id:rowEl.getAttribute("data-asset-id") || `asset-${index}`,
+          name:(rowEl.querySelector('[data-asset-field="name"]') as HTMLInputElement)?.value || "",
+          link:(rowEl.querySelector('[data-asset-field="link"]') as HTMLInputElement)?.value || "",
+        })));
+      };
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
-        const cleanRows = (Array.isArray(rows) ? rows : []).map((row:any,index:number)=>({
-          id:row?.id || `asset-${index}-${uid()}`,
-          name:String(row?.name || "").trim() || "Untitled Asset",
-          link:String(row?.link || "").trim(),
-        }));
+        const cleanRows = normalizeProductIntroDigitalAssetRows(rows);
         updateAiWorkspace("digital",{ productIntroAssetLinks:makeOverviewSnapshot(cleanRows) });
       };
       const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
-        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
+        const latestRows = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(latestRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
       };
       const addProductIntroDigitalAssetRow = () => {
-        updateProductIntroDigitalAssetRows([...productIntroDigitalAssetRows,{ id:uid(), name:"New Asset", link:"" }]);
+        const latestRows = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows([...latestRows,{ id:uid(), name:"New Asset", link:"" }]);
       };
       const deleteProductIntroDigitalAssetRow = (rowId:string) => {
-        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
+        const latestRows = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(latestRows.filter((row:any)=>row.id!==rowId));
+      };
+      const saveProductIntroDigitalAssetTable = () => {
+        const rowsSnapshot = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(rowsSnapshot);
+        markActionDone("save-product-intro-digital-assets");
       };
       const addProductIntroDigitalAssetTableToOverview = () => {
-        const rowsSnapshot = makeOverviewSnapshot(productIntroDigitalAssetRows);
-        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", { assetRows:rowsSnapshot }, "Asset Link Table");
+        const rowsSnapshot = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(rowsSnapshot);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", { assetRows:makeOverviewSnapshot(rowsSnapshot) }, "Asset Link Table");
         markActionDone("overview-product-intro-digital-assets");
       };
 
@@ -7516,26 +7536,46 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks)
         ? digitalData.productIntroAssetLinks
         : defaultProductIntroDigitalAssetRows;
+      const normalizeProductIntroDigitalAssetRows = (rows:any[]) => (Array.isArray(rows) ? rows : []).map((row:any,index:number)=>({
+        id:row?.id || `asset-${index}-${uid()}`,
+        name:String(row?.name || "").trim() || "Untitled Asset",
+        link:String(row?.link || "").trim(),
+      }));
+      const readProductIntroDigitalAssetRowsFromDom = () => {
+        if (typeof document === "undefined") return normalizeProductIntroDigitalAssetRows(productIntroDigitalAssetRows);
+        const tableRows = Array.from(document.querySelectorAll('[data-product-intro-digital-asset-row="true"]')) as HTMLElement[];
+        if (!tableRows.length) return normalizeProductIntroDigitalAssetRows(productIntroDigitalAssetRows);
+        return normalizeProductIntroDigitalAssetRows(tableRows.map((rowEl:any,index:number)=>({
+          id:rowEl.getAttribute("data-asset-id") || `asset-${index}`,
+          name:(rowEl.querySelector('[data-asset-field="name"]') as HTMLInputElement)?.value || "",
+          link:(rowEl.querySelector('[data-asset-field="link"]') as HTMLInputElement)?.value || "",
+        })));
+      };
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
-        const cleanRows = (Array.isArray(rows) ? rows : []).map((row:any,index:number)=>({
-          id:row?.id || `asset-${index}-${uid()}`,
-          name:String(row?.name || "").trim() || "Untitled Asset",
-          link:String(row?.link || "").trim(),
-        }));
+        const cleanRows = normalizeProductIntroDigitalAssetRows(rows);
         updateAiWorkspace("digital",{ productIntroAssetLinks:makeOverviewSnapshot(cleanRows) });
       };
       const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
-        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
+        const latestRows = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(latestRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
       };
       const addProductIntroDigitalAssetRow = () => {
-        updateProductIntroDigitalAssetRows([...productIntroDigitalAssetRows,{ id:uid(), name:"New Asset", link:"" }]);
+        const latestRows = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows([...latestRows,{ id:uid(), name:"New Asset", link:"" }]);
       };
       const deleteProductIntroDigitalAssetRow = (rowId:string) => {
-        updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
+        const latestRows = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(latestRows.filter((row:any)=>row.id!==rowId));
+      };
+      const saveProductIntroDigitalAssetTable = () => {
+        const rowsSnapshot = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(rowsSnapshot);
+        markActionDone("save-product-intro-digital-assets");
       };
       const addProductIntroDigitalAssetTableToOverview = () => {
-        const rowsSnapshot = makeOverviewSnapshot(productIntroDigitalAssetRows);
-        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", { assetRows:rowsSnapshot }, "Asset Link Table");
+        const rowsSnapshot = readProductIntroDigitalAssetRowsFromDom();
+        updateProductIntroDigitalAssetRows(rowsSnapshot);
+        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", { assetRows:makeOverviewSnapshot(rowsSnapshot) }, "Asset Link Table");
         markActionDone("overview-product-intro-digital-assets");
       };
 
@@ -7656,8 +7696,23 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
       const deleteProductIntroDigitalItem = (id:string) => {
-        const nextRows = (productIntroRows.length ? productIntroRows : sourceRows).filter((row:any)=>row.id!==id);
-        saveProductIntroDigitalRows(nextRows);
+        const targetKey = String(id || "");
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = (Array.isArray(baseRows) ? baseRows : []).filter((row:any)=>{
+          const rowKeys = [row?.id,row?.transferGroupId,row?.sourceRowId,row?.sku,row?.skuCode,row?.product].map((value:any)=>String(value || "")).filter(Boolean);
+          return !rowKeys.includes(targetKey);
+        });
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:makeOverviewSnapshot(nextRows),
+          productIntroRowsCleared:nextRows.length===0,
+          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+          savedImageOutputs:(Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : []).filter((img:any)=>{
+            const imageKeys = [img?.cardId,img?.sourceRowId,img?.id].map((value:any)=>String(value || "")).filter(Boolean);
+            return !imageKeys.includes(targetKey);
+          }),
+        });
+        markActionDone(`delete-product-intro-digital-${targetKey}`);
       };
       const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       const savedProductIntroDigitalOutputs = Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : [];
@@ -8159,7 +8214,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
               <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
-                <Btn xs variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"} onClick={()=>{ const rowsSnapshot=makeOverviewSnapshot(productIntroDigitalAssetRows); updateProductIntroDigitalAssetRows(rowsSnapshot); markActionDone("save-product-intro-digital-assets"); }}>{actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}</Btn>
+                <Btn xs variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"} onClick={saveProductIntroDigitalAssetTable}>{actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}</Btn>
                 <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
               </div>
             </div>
@@ -8174,10 +8229,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 </thead>
                 <tbody>
                   {productIntroDigitalAssetRows.map((row:any)=>(
-                    <tr key={row.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                    <tr key={row.id} data-product-intro-digital-asset-row="true" data-asset-id={row.id} style={{ borderBottom:`1px solid ${C.border}` }}>
                       <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
                         <input
                           value={row.name || ""}
+                          data-asset-field="name"
                           onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ name:e.target.value })}
                           placeholder="Asset name"
                           style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,fontWeight:700,color:C.text,outline:"none",background:C.surface }}
@@ -8186,6 +8242,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <td style={{ padding:"8px 10px",verticalAlign:"top" }}>
                         <input
                           value={row.link || ""}
+                          data-asset-field="link"
                           onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ link:e.target.value })}
                           placeholder="Paste final output link here"
                           style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,color:C.text,outline:"none",background:C.surface }}
