@@ -3887,7 +3887,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       productIntroMarketingRowsCleared:nextCards.length===0,
       selectedMarketingProductKeys:[],
       placedMarketingProductKeys:[],
-      generatedText:nextCards.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+      generatedText:nextCards.map((entry:any)=>`${entry.product || "Product"}
+${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
   };
@@ -7402,9 +7403,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           createdAt:new Date().toISOString(),
         };
       };
-      // Digital Creative must use its own saved transfer snapshot only.
-      // Do not rebuild from E-commerce productRows on render, otherwise deleted DC groups come back after refresh.
-      const sourceRows = productIntroRows;
+      const sourceRows = productIntroRows.length ? productIntroRows : (productIntroRowsCleared ? [] : productRows.map(makeProductIntroDcItem));
       const copyProductIntroDigitalItem = async (item:any) => {
         const output = [
           "Platform", item.platform || "All Platforms", "",
@@ -7461,7 +7460,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==item.id)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}
+${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${item.id}`);
@@ -7481,17 +7481,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
       const deleteProductIntroDigitalItem = (id:string) => {
-        const currentRows = Array.isArray(((group.aiWorkspace || {}).digital || {}).productIntroCreativeRows)
-          ? ((group.aiWorkspace || {}).digital || {}).productIntroCreativeRows
-          : [];
-        const nextRows = currentRows.filter((row:any)=>String(row.id)!==String(id));
-        updateAiWorkspace("digital",{
-          productIntroCreativeRows:nextRows,
-          productIntroRowsCleared:true,
-          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-          generatedAt:new Date().toISOString(),
-        });
-        markActionDone(`delete-dc-transfer-${id}`);
+        const nextRows = (productIntroRows.length ? productIntroRows : sourceRows).filter((row:any)=>row.id!==id);
+        saveProductIntroDigitalRows(nextRows);
       };
       const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       const savedProductIntroDigitalOutputs = Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : [];
@@ -7694,7 +7685,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
+${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -7906,7 +7898,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
             savedImageOutputs:[savedEntry,...saved.filter((img:any)=>img.cardId!==cardId)].slice(0,60),
-            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+            generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}
+${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
             generatedAt:savedAt,
           });
           markActionDone(`save-drive-${cardId}`);
@@ -14528,7 +14521,6 @@ const getCurrentShareUrl = (tab:any, groupId:any=null, groupTab:any="tasks") => 
   return `${window.location.origin}${window.location.pathname}${buildEmdcRouteHash(tab,groupId,groupTab)}`;
 };
 
-}
 // ─── APP SHELL ───────────────────────────────────────────────────────────────
 const TABS = [
   { id:"calendar",   label:"Calendar"         },
@@ -14548,8 +14540,24 @@ export default function App({
   onStateChange?: (patch: Record<string, unknown>) => void;
 }) {
   const { isMobile } = useBreakpoint();
+  const parseRouteNow = () => {
+    if (typeof window === "undefined") return { tab:"calendar", groupId:null, groupTab:"tasks" };
+    try {
+      const raw = String(window.location.hash || "").replace(/^#\/?/,"");
+      const [pathPart, queryPart] = raw.split("?");
+      const nextTab = safeRouteTab(pathPart || "calendar");
+      const params = new URLSearchParams(queryPart || "");
+      return {
+        tab: nextTab,
+        groupId: params.get("group") || null,
+        groupTab: safeChecklistInnerTab(params.get("groupTab") || "tasks"),
+      };
+    } catch {
+      return { tab:"calendar", groupId:null, groupTab:"tasks" };
+    }
+  };
   const initialRouteRef = useRef<any>(null);
-  if(initialRouteRef.current===null) initialRouteRef.current = parseEmdcRoute();
+  if(initialRouteRef.current===null) initialRouteRef.current = parseRouteNow();
   const [tab,setTab] = useState(()=>initialRouteRef.current.tab || "calendar");
   const [routeGroupId,setRouteGroupId] = useState<any>(()=>initialRouteRef.current.groupId || null);
   const [routeGroupTab,setRouteGroupTab] = useState<any>(()=>safeChecklistInnerTab(initialRouteRef.current.groupTab || "tasks"));
@@ -15009,7 +15017,7 @@ export default function App({
   useEffect(()=>{
     if (typeof window === "undefined") return;
     const onHashChange = () => {
-      const next = parseEmdcRoute();
+      const next = parseRouteNow();
       setTab(next.tab);
       setRouteGroupId(next.tab==="checklists" ? next.groupId : null);
       setRouteGroupTab(next.tab==="checklists" ? next.groupTab : "tasks");
@@ -15128,4 +15136,6 @@ export default function App({
       </div>
     </>
   );
+}
+
 }
