@@ -3598,16 +3598,56 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     },
   };
 
+  const getPersistedChecklistGroup = () => {
+    if (typeof window === "undefined" || !group?.id) return null;
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      const storedGroups = Array.isArray(parsed?.checklistGroups) ? parsed.checklistGroups : [];
+      return storedGroups.find((item:any)=>item?.id===group.id) || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const persistChecklistGroupPatchNow = (patch:any) => {
+    if (typeof window === "undefined" || !group?.id || !patch || typeof patch !== "object") return;
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = raw ? JSON.parse(raw) : {};
+      const storedGroups = Array.isArray(parsed?.checklistGroups) ? parsed.checklistGroups : [];
+      const nextGroup = { ...(getPersistedChecklistGroup() || group), ...patch };
+      const nextGroups = storedGroups.some((item:any)=>item?.id===group.id)
+        ? storedGroups.map((item:any)=>item?.id===group.id ? nextGroup : item)
+        : [...storedGroups,nextGroup];
+
+      localStorage.setItem("emdc_app_state_v1", JSON.stringify({
+        ...parsed,
+        checklistGroups:nextGroups,
+      }));
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
+  };
+
   const updateAiWorkspace = (tab:string, patch:any) => {
-    const current = group.aiWorkspace || {};
+    const persistedGroup = getPersistedChecklistGroup();
+    const storedWorkspace = ((persistedGroup || {}).aiWorkspace || {}) as any;
+    const groupWorkspace = (group.aiWorkspace || {}) as any;
+    const current = {
+      ...storedWorkspace,
+      ...groupWorkspace,
+    };
     const next = {
       ...current,
       [tab]: {
-        ...(current[tab] || {}),
+        ...(storedWorkspace[tab] || {}),
+        ...(groupWorkspace[tab] || {}),
         ...patch,
       }
     };
-    if(onUpdateGroup) onUpdateGroup({ aiWorkspace:next });
+    const groupPatch = { aiWorkspace:next };
+    if(onUpdateGroup) onUpdateGroup(groupPatch);
+    persistChecklistGroupPatchNow(groupPatch);
   };
 
   const getOverviewItems = () => {
@@ -5620,7 +5660,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         ? ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks
         : defaultProductIntroDigitalAssetRows;
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
-        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+        const cleanRows = Array.isArray(rows) ? rows : [];
+        updateAiWorkspace("digital",{ productIntroAssetLinks:cleanRows, productIntroAssetLinksSavedAt:new Date().toISOString() });
       };
       const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
@@ -7504,7 +7545,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         ? digitalData.productIntroAssetLinks
         : defaultProductIntroDigitalAssetRows;
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
-        updateAiWorkspace("digital",{ productIntroAssetLinks:rows });
+        const cleanRows = Array.isArray(rows) ? rows : [];
+        updateAiWorkspace("digital",{ productIntroAssetLinks:cleanRows, productIntroAssetLinksSavedAt:new Date().toISOString() });
       };
       const updateProductIntroDigitalAssetRow = (rowId:string, patch:any) => {
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.map((row:any)=>row.id===rowId ? { ...row, ...patch } : row));
@@ -7627,7 +7669,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         }
       };
       const deleteProductIntroDcImageOutput = (item:any) => {
-        updateProductIntroDigitalItem(item.id,{
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>row.id===item.id ? {
+          ...row,
           generatedImageUrl:"",
           generatedImagePrompt:"",
           generatedImageAt:"",
@@ -7635,14 +7679,40 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           savedImageAt:"",
           savedImageUrl:"",
           imageLinks:item.imageLinks || [],
+        } : row);
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          savedImageOutputs:filterSavedProductIntroOutputsForItem(saved,item.id),
+          generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
         });
       };
       const deleteProductIntroDigitalItem = (id:string) => {
         const nextRows = (productIntroRows.length ? productIntroRows : sourceRows).filter((row:any)=>row.id!==id);
-        saveProductIntroDigitalRows(nextRows);
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          savedImageOutputs:filterSavedProductIntroOutputsForItem(saved,id),
+          generatedText:nextRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
       };
       const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       const savedProductIntroDigitalOutputs = Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : [];
+      const filterSavedProductIntroOutputsForItem = (saved:any[] = [], itemId:any, extraCardIds:any[] = []) => {
+        const id = String(itemId || "");
+        const cardIds = new Set([id, `prompt-${id}`, ...extraCardIds.map((value:any)=>String(value || ""))].filter(Boolean));
+        return (Array.isArray(saved) ? saved : []).filter((entry:any)=>{
+          const entryCardId = String(entry?.cardId || "");
+          const entrySourceRowId = String(entry?.sourceRowId || "");
+          return entrySourceRowId !== id && !cardIds.has(entryCardId) && !entryCardId.startsWith(`${id}-`);
+        });
+      };
       const deleteSavedProductIntroDigitalOutput = (savedId:string) => {
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
@@ -7802,7 +7872,30 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const deleteProductIntroDcCarouselImageOutput = (item:any, cardIndex:number) => {
-        updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"", savedImageAt:"", savedImageUrl:"" });
+        const cardId = `${item.id}-carousel-${cardIndex}`;
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>{
+          if(row.id!==item.id) return row;
+          const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((card:any,index:number)=>index===cardIndex ? {
+            ...card,
+            generatedImageUrl:"",
+            generatedImagePrompt:"",
+            generatedImageAt:"",
+            generatedImageError:"",
+            savedImageAt:"",
+            savedImageUrl:"",
+          } : card);
+          return { ...row, carouselCards };
+        });
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          savedImageOutputs:saved.filter((entry:any)=>String(entry?.cardId || "")!==cardId),
+          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
       };
 
       const saveProductIntroDcCarouselImageOutput = async (item:any, card:any, cardIndex:number) => {
@@ -8014,7 +8107,30 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const deleteProductIntroDcGmvImageOutput = (item:any, rowIndex:number) => {
-        updateProductIntroDigitalGmvRow(item.id,rowIndex,{ generatedImageUrl:"", generatedImagePrompt:"", generatedImageAt:"", generatedImageError:"", savedImageAt:"", savedImageUrl:"" });
+        const cardId = `${item.id}-gmv-${rowIndex}`;
+        const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
+        const nextRows = baseRows.map((row:any)=>{
+          if(row.id!==item.id) return row;
+          const gmvRows = (Array.isArray(row.gmvRows) ? row.gmvRows : []).map((gmvRow:any,index:number)=>index===rowIndex ? {
+            ...gmvRow,
+            generatedImageUrl:"",
+            generatedImagePrompt:"",
+            generatedImageAt:"",
+            generatedImageError:"",
+            savedImageAt:"",
+            savedImageUrl:"",
+          } : gmvRow);
+          return { ...row, gmvRows };
+        });
+        const digital = ((group.aiWorkspace || {}).digital || {}) as any;
+        const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateAiWorkspace("digital",{
+          productIntroCreativeRows:nextRows,
+          productIntroRowsCleared:nextRows.length===0,
+          savedImageOutputs:saved.filter((entry:any)=>String(entry?.cardId || "")!==cardId),
+          generatedText:nextRows.map((entry:any)=>`${entry.product || entry.title || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+          generatedAt:new Date().toISOString(),
+        });
       };
 
       const saveProductIntroDcGmvImageOutput = async (item:any, row:any, rowIndex:number) => {
