@@ -4219,7 +4219,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     subheadline:"",
     cta:"",
     imagePrompt:"",
-    products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" }],
+    products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "", imageLink:row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || "", links:[row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || ""].filter(Boolean) }],
     linkedEventContext:group.groupName || "Product Introduction",
     createdAt:new Date().toISOString(),
   });
@@ -4241,7 +4241,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       subheadline:"",
       cta:"",
       imagePrompt:"",
-      products:cleanRows.map((row:any)=>({ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" })),
+      products:cleanRows.map((row:any)=>({ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "", imageLink:row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || "", links:[row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || ""].filter(Boolean) })),
       linkedEventContext:group.groupName || "Product Introduction",
       createdAt:new Date().toISOString(),
     };
@@ -5067,6 +5067,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     collection:item.collection || item.category || "",
     product:item.product || item.productName || "",
     sku:item.skuCode || item.sku || "",
+    imageLink:item.imageLink || item.imageUrl || item.extraFields?.["Image Link"] || item.extraFields?.imageLink || item.extraFields?.imagelink || "",
+    links:[item.imageLink || item.imageUrl || item.extraFields?.["Image Link"] || item.extraFields?.imageLink || item.extraFields?.imagelink || ""].filter(Boolean),
   }));
 
   const getCampaignLinkedEventItems = () => (linkedEvents || []).map((ev:any)=>({
@@ -6983,20 +6985,123 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const found = raw.match(dcUrlRegex) || [];
       return Array.from(new Set(found.map((item:string)=>item.trim()).filter(Boolean)));
     };
+    const normalizeDcMatchKey = (value:any) => String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g,"");
+
     const getSkuStorageRowByProduct = (product:any) => {
-      const skuValue = String(product?.sku || product?.skuCode || product?.value || "").trim().toLowerCase();
-      const productValue = String(product?.product || product?.productName || "").trim().toLowerCase();
+      const safeProduct:any = product || {};
+      const skuCandidates = [
+        safeProduct.sku,
+        safeProduct.skuCode,
+        safeProduct.value,
+        safeProduct.id,
+        safeProduct.sourceId,
+      ].map((value:any)=>String(value || "").trim()).filter(Boolean);
+      const productCandidates = [
+        safeProduct.product,
+        safeProduct.productName,
+        safeProduct.name,
+        safeProduct.title,
+      ].map((value:any)=>String(value || "").trim()).filter(Boolean);
+
+      const skuKeys = skuCandidates.map(normalizeDcMatchKey).filter(Boolean);
+      const productKeys = productCandidates.map(normalizeDcMatchKey).filter(Boolean);
+      const matchesPartialKey = (left:string,right:string) => {
+        if(!left || !right || left.length<4 || right.length<4) return false;
+        return left===right || left.includes(right) || right.includes(left);
+      };
+
       return (skuStorage || []).find((sku:any)=>{
-        const skuCode = String(sku.sku || sku.skuCode || sku.value || "").trim().toLowerCase();
-        const productName = String(sku.productName || sku.product || "").trim().toLowerCase();
-        return (skuValue && skuCode===skuValue) || (productValue && productName===productValue);
+        const rowSkuCandidates = [sku.sku, sku.skuCode, sku.value, sku.id, sku.sourceId]
+          .map((value:any)=>String(value || "").trim())
+          .filter(Boolean);
+        const rowProductCandidates = [sku.productName, sku.product, sku.name, sku.title]
+          .map((value:any)=>String(value || "").trim())
+          .filter(Boolean);
+        const rowAllCandidates = [
+          ...Object.values(sku || {}).filter((value:any)=>typeof value!=="object"),
+          ...Object.values(sku?.extraFields || {}),
+        ].map((value:any)=>String(value || "").trim()).filter(Boolean);
+        const rowSkuKeys = rowSkuCandidates.map(normalizeDcMatchKey).filter(Boolean);
+        const rowProductKeys = rowProductCandidates.map(normalizeDcMatchKey).filter(Boolean);
+        const rowAllKeys = rowAllCandidates.map(normalizeDcMatchKey).filter(Boolean);
+
+        const skuMatch = skuKeys.some((key:string)=>rowSkuKeys.includes(key));
+        if(skuMatch) return true;
+
+        const productMatch = productKeys.some((key:string)=>rowProductKeys.includes(key));
+        if(productMatch) return true;
+
+        // Fallback for transferred/generated rows where product names are shortened.
+        // Example: "Oval Bake Dish 2000ml" should match "CRYSALIS Oval Bake Dish 2000ml" in SKU Storage.
+        const productPartialMatch = productKeys.some((key:string)=>rowProductKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
+        if(productPartialMatch) return true;
+
+        const skuPartialMatch = skuKeys.some((key:string)=>rowAllKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
+        if(skuPartialMatch) return true;
+
+        const broadProductMatch = productKeys.some((key:string)=>rowAllKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
+        if(broadProductMatch) return true;
+
+        // Last fallback for pasted/generated rows where the product text contains the SKU or vice versa.
+        return skuKeys.some((key:string)=>rowProductKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey))) ||
+          productKeys.some((key:string)=>rowSkuKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
       });
     };
+
     const getDcProductLinks = (product:any) => {
       const safeProduct:any = product || {};
       const skuRow:any = getSkuStorageRowByProduct(safeProduct) || {};
-      const extraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
+      const safeExtraValues = safeProduct.extraFields && typeof safeProduct.extraFields==="object" ? Object.values(safeProduct.extraFields) : [];
+      const skuExtraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
+      const safeAllValues = Object.values(safeProduct || {}).filter((value:any)=>typeof value!=="object");
+      const skuAllValues = Object.values(skuRow || {}).filter((value:any)=>typeof value!=="object");
+      const linkArrays = [
+        safeProduct.links,
+        safeProduct.imageLinks,
+        safeProduct.referenceLinks,
+        safeProduct.productImageLinks,
+        skuRow.links,
+        skuRow.imageLinks,
+        skuRow.referenceLinks,
+        skuRow.productImageLinks,
+      ].flatMap((value:any)=>Array.isArray(value) ? value : []);
       const linkSources = [
+        // Direct links carried by E-commerce/Marketing transfer rows
+        safeProduct.link,
+        safeProduct.url,
+        safeProduct.image,
+        safeProduct.imageUrl,
+        safeProduct.imageURL,
+        safeProduct.imageLink,
+        safeProduct.productLink,
+        safeProduct.productImage,
+        safeProduct.productImageUrl,
+        safeProduct.productImageLink,
+        safeProduct.reference,
+        safeProduct.referenceLink,
+        safeProduct.referenceImage,
+        safeProduct.referenceImageUrl,
+        safeProduct.referenceImageLink,
+        // Links from the matched SKU Storage row
+        skuRow.link,
+        skuRow.url,
+        skuRow.image,
+        skuRow.imageUrl,
+        skuRow.imageURL,
+        skuRow.imageLink,
+        skuRow.productLink,
+        skuRow.productImage,
+        skuRow.productImageUrl,
+        skuRow.productImageLink,
+        skuRow.reference,
+        skuRow.referenceLink,
+        skuRow.referenceImage,
+        skuRow.referenceImageUrl,
+        skuRow.referenceImageLink,
+        // Keep these as fallback because some pasted rows hide the link inside text/extra fields
         safeProduct.product,
         safeProduct.productName,
         safeProduct.sku,
@@ -7007,15 +7112,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         skuRow.sku,
         skuRow.collection,
         skuRow.category,
-        skuRow.link,
-        skuRow.url,
-        skuRow.image,
-        skuRow.imageUrl,
-        skuRow.productLink,
-        skuRow.reference,
-        ...extraValues,
+        ...linkArrays,
+        ...safeExtraValues,
+        ...skuExtraValues,
+        ...safeAllValues,
+        ...skuAllValues,
       ];
-      return Array.from(new Set(linkSources.flatMap((source:any)=>extractDcLinks(source))));
+      return Array.from(new Set(linkSources.flatMap((source:any)=>extractDcLinks(source)).map(normalizeDcUrl).filter(Boolean)));
     };
 
     if(tab==="digital" && isCampaignChecklist){
@@ -8013,7 +8116,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         subheadline:"",
         cta:"",
         imagePrompt:"",
-        products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" }],
+        products:[{ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "", imageLink:row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || "", links:[row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || ""].filter(Boolean) }],
         linkedEventContext:group.groupName || "Product Introduction",
         createdAt:new Date().toISOString(),
       });
@@ -8034,7 +8137,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           subheadline:"",
           cta:"",
           imagePrompt:"",
-          products:cleanRows.map((row:any)=>({ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "" })),
+          products:cleanRows.map((row:any)=>({ product:row.product || row.productName || "", sku:row.skuCode || row.sku || "", brand:row.brand || "", collection:row.collection || row.category || "", imageLink:row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || "", links:[row.imageLink || row.imageUrl || row.extraFields?.["Image Link"] || row.extraFields?.imageLink || row.extraFields?.imagelink || ""].filter(Boolean) })),
           linkedEventContext:group.groupName || "Product Introduction",
           createdAt:new Date().toISOString(),
         };
