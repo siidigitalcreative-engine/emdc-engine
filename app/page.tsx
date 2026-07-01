@@ -3782,19 +3782,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const formatProductIntroOverviewRows = (extraOutput:any="") => {
-    const header = "PLATFORM\tBRAND\tCATEGORY\tPRODUCT\tHEADLINE\tSUBHEADLINE\tCTA";
-    const rows = productRows.map((row:any)=>[
-      "All Platforms",
-      row.brand || "",
-      row.collection || row.category || "",
-      row.product || row.productName || "",
-      "",
-      "",
-      "",
-    ].join("\t"));
-    const table = [header,...rows].join("\n");
-    const extra = String(extraOutput || "").trim();
-    return extra ? `${table}\n\nGenerated E-commerce Output\n${extra}` : table;
+    // Overview should receive the actual generated E-commerce output only.
+    // Do not include the product-row table with PLATFORM / BRAND / CATEGORY / PRODUCT columns.
+    return String(extraOutput || "").trim();
   };
 
   const makeProductIntroDcItem = (row:any) => ({
