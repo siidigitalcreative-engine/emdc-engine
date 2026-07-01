@@ -166,6 +166,10 @@ const EMDC_PRE_WRITE_HISTORY_KEY = "emdc_app_state_before_last_write_history_v1"
 const EMDC_LOCAL_KEY_PREFIX = "emdc";
 const EMDC_GROUP_AI_WORKSPACE_PREFIX = "emdc_group_ai_workspace_v1_";
 const EMDC_CHECKLIST_ITEMS_PREFIX = "emdc_checklist_items_v1_";
+const EMDC_SKU_ITEMS_STORAGE_KEY = "emdc_sku_items_v1";
+const EMDC_SKU_ITEMS_COUNT_KEY = "emdc_sku_items_count_v1";
+const EMDC_LARGE_SKU_COUNT = 1000;
+const EMDC_CLOUD_SKU_CHUNK_SIZE = 250;
 
 const getEmdcGroupWorkspaceBackupKey = (groupId:any) => `${EMDC_GROUP_AI_WORKSPACE_PREFIX}${String(groupId || "")}`;
 const getEmdcChecklistItemsBackupKey = (groupId:any) => `${EMDC_CHECKLIST_ITEMS_PREFIX}${String(groupId || "")}`;
@@ -263,9 +267,21 @@ const countEmdcChecklistItems = (items:any) => {
   },0);
 };
 
+const getEmdcExternalSkuCount = (state:any) => {
+  const direct = Number(state?.skuItemsExternalCount || 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  if (typeof window === "undefined") return 0;
+  try {
+    const saved = Number(localStorage.getItem(EMDC_SKU_ITEMS_COUNT_KEY) || 0);
+    return Number.isFinite(saved) && saved > 0 ? saved : 0;
+  } catch {
+    return 0;
+  }
+};
+
 const getEmdcAppStateWeight = (state:any) => {
   if (!state || typeof state !== "object") return 0;
-  return (Array.isArray(state.skuItems) ? state.skuItems.length : 0) +
+  return (Array.isArray(state.skuItems) ? state.skuItems.length : getEmdcExternalSkuCount(state)) +
     (Array.isArray(state.checklistGroups) ? state.checklistGroups.length : 0) +
     countEmdcChecklistItems(state.checklistItems);
 };
@@ -274,14 +290,90 @@ const parseEmdcJson = (value:any) => {
   try { return typeof value === "string" ? JSON.parse(value) : value; } catch { return null; }
 };
 
+const readExternalSkuItemsFromLocal = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_STORAGE_KEY));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const hydrateExternalSkuItems = (state:any) => {
+  if (!state || typeof state !== "object") return state;
+  if (Array.isArray(state.skuItems) && state.skuItems.length) return state;
+  if (!state.skuItemsExternal && !state.skuItemsExternalCloud && !state.skuItemsExternalCount) return state;
+  const skuItems = readExternalSkuItemsFromLocal();
+  return skuItems.length ? { ...state, skuItems } : state;
+};
+
+const clearHeavyEmdcLocalBackupKeys = () => {
+  if (typeof window === "undefined") return;
+  [
+    EMDC_PRE_WRITE_BACKUP_KEY,
+    EMDC_PRE_WRITE_HISTORY_KEY,
+    EMDC_LAST_GOOD_APP_STATE_KEY,
+    EMDC_APP_STATE_HISTORY_KEY,
+  ].forEach((key:string)=>{ try { localStorage.removeItem(key); } catch {} });
+};
+
+const makeLocalStorableEmdcAppState = (state:any) => {
+  if (!state || typeof state !== "object") return state;
+  const skuItems = Array.isArray(state.skuItems) ? state.skuItems : [];
+  if (skuItems.length < EMDC_LARGE_SKU_COUNT) return state;
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(EMDC_SKU_ITEMS_STORAGE_KEY, JSON.stringify(skuItems));
+      localStorage.setItem(EMDC_SKU_ITEMS_COUNT_KEY, String(skuItems.length));
+    } catch {
+      clearHeavyEmdcLocalBackupKeys();
+      try {
+        localStorage.setItem(EMDC_SKU_ITEMS_STORAGE_KEY, JSON.stringify(skuItems));
+        localStorage.setItem(EMDC_SKU_ITEMS_COUNT_KEY, String(skuItems.length));
+      } catch {}
+    }
+  }
+
+  return {
+    ...state,
+    skuItems:[],
+    skuItemsExternal:true,
+    skuItemsExternalCount:skuItems.length,
+  };
+};
+
+const safeSetEmdcAppStateLocal = (state:any) => {
+  if (typeof window === "undefined") return false;
+  const storable = makeLocalStorableEmdcAppState(state);
+  const json = JSON.stringify(storable);
+  try {
+    localStorage.setItem("emdc_app_state_v1", json);
+    return true;
+  } catch {
+    clearHeavyEmdcLocalBackupKeys();
+    try {
+      localStorage.setItem("emdc_app_state_v1", json);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
 const readStoredEmdcAppState = () => {
   if (typeof window === "undefined") return null;
-  try { return parseEmdcJson(localStorage.getItem("emdc_app_state_v1")); } catch { return null; }
+  try { return hydrateExternalSkuItems(parseEmdcJson(localStorage.getItem("emdc_app_state_v1"))); } catch { return null; }
 };
 
 const readLastGoodEmdcAppState = () => {
   if (typeof window === "undefined") return null;
-  try { return parseEmdcJson(localStorage.getItem(EMDC_LAST_GOOD_APP_STATE_KEY)); } catch { return null; }
+  try {
+    const parsed:any = parseEmdcJson(localStorage.getItem(EMDC_LAST_GOOD_APP_STATE_KEY));
+    if (parsed?.appState) return { ...parsed, appState:hydrateExternalSkuItems(parsed.appState) };
+    return hydrateExternalSkuItems(parsed);
+  } catch { return null; }
 };
 
 const rememberLastGoodEmdcAppState = (state:any) => {
@@ -289,13 +381,21 @@ const rememberLastGoodEmdcAppState = (state:any) => {
   if (getEmdcAppStateWeight(state) <= 0) return;
 
   try {
-    const entry = { savedAt:new Date().toISOString(), appState:state };
+    const storableState = makeLocalStorableEmdcAppState(state);
+    const entry = { savedAt:new Date().toISOString(), appState:storableState };
     localStorage.setItem(EMDC_LAST_GOOD_APP_STATE_KEY, JSON.stringify(entry));
+
+    // Avoid duplicating a 1000+ SKU catalog many times in localStorage.
+    // The main app state + external SKU key are the source of truth; history stays lightweight.
+    const skuCount = Array.isArray(state?.skuItems) ? state.skuItems.length : getEmdcExternalSkuCount(state);
+    const historyEntry = skuCount >= EMDC_LARGE_SKU_COUNT
+      ? { savedAt:entry.savedAt, skuItemsExternal:true, skuItemsExternalCount:skuCount, checklistGroupsCount:Array.isArray(state?.checklistGroups)?state.checklistGroups.length:0 }
+      : entry;
 
     const rawHistory = parseEmdcJson(localStorage.getItem(EMDC_APP_STATE_HISTORY_KEY));
     const history = Array.isArray(rawHistory) ? rawHistory : [];
-    history.unshift(entry);
-    localStorage.setItem(EMDC_APP_STATE_HISTORY_KEY, JSON.stringify(history.slice(0,8)));
+    history.unshift(historyEntry);
+    localStorage.setItem(EMDC_APP_STATE_HISTORY_KEY, JSON.stringify(history.slice(0,4)));
   } catch {}
 };
 
@@ -3811,10 +3911,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         ? storedGroups.map((item:any)=>item?.id===group.id ? nextGroup : item)
         : [...storedGroups,nextGroup];
 
-      localStorage.setItem("emdc_app_state_v1", JSON.stringify({
+      const nextAppState = {
         ...parsed,
         checklistGroups:nextGroups,
-      }));
+      };
+      safeSetEmdcAppStateLocal(nextAppState);
       if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(group.id, patch.aiWorkspace);
       markEmdcLocalStateUpdated();
       window.dispatchEvent(new Event("emdc-local-sync"));
@@ -4618,8 +4719,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const key = getEcommerceTransferRowsBackupKey(targetTab,transferType);
     if(!key) return;
     try {
-      localStorage.setItem(key, JSON.stringify(normalizeTransferRowsForStorage(rows)));
+      const cleanRows = normalizeTransferRowsForStorage(rows);
+      localStorage.setItem(key, JSON.stringify(cleanRows));
       markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
   };
 
@@ -16297,6 +16400,8 @@ export default function App({
     if (k === "emdc_app_state_v1") return true;
     if (k === "emdc_app_state_last_good_v1") return true;
     if (k === "emdc_app_state_history_v1") return true;
+    if (k === EMDC_SKU_ITEMS_STORAGE_KEY) return true;
+    if (k === EMDC_SKU_ITEMS_COUNT_KEY) return true;
     if (k.includes("history")) return true;
     if (k.includes("last_good")) return true;
 
@@ -16347,18 +16452,20 @@ export default function App({
       const parsed = parseEmdcJson(raw);
       if (getEmdcAppStateWeight(parsed) <= 0) return;
 
+      const storableParsed = makeLocalStorableEmdcAppState(parsed);
+      const skuCount = Array.isArray(parsed?.skuItems) ? parsed.skuItems.length : getEmdcExternalSkuCount(parsed);
       const entry = {
         reason,
         savedAt:new Date().toISOString(),
-        appState:parsed,
-        localStorage:readLocalSnapshot(),
+        appState:storableParsed,
+        localStorage: skuCount >= EMDC_LARGE_SKU_COUNT ? {} : readLocalSnapshot(),
       };
 
       localStorage.setItem(EMDC_PRE_WRITE_BACKUP_KEY, JSON.stringify(entry));
       const rawHistory = parseEmdcJson(localStorage.getItem(EMDC_PRE_WRITE_HISTORY_KEY));
       const history = Array.isArray(rawHistory) ? rawHistory : [];
-      history.unshift(entry);
-      localStorage.setItem(EMDC_PRE_WRITE_HISTORY_KEY, JSON.stringify(history.slice(0,12)));
+      history.unshift(skuCount >= EMDC_LARGE_SKU_COUNT ? { reason, savedAt:entry.savedAt, skuItemsExternal:true, skuItemsExternalCount:skuCount } : entry);
+      localStorage.setItem(EMDC_PRE_WRITE_HISTORY_KEY, JSON.stringify(history.slice(0,4)));
     } catch {}
   };
 
@@ -16368,12 +16475,14 @@ export default function App({
       Object.entries(snapshot).forEach(([key,value]:any)=>{
         if (isEmdcSyncLocalKey(key) && typeof value === "string") {
           if (key === "emdc_app_state_v1") {
-            const parsedValue = parseEmdcJson(value);
+            const parsedValue = hydrateExternalSkuItems(parseEmdcJson(value));
             if (shouldBlockEmptyEmdcState(parsedValue)) return;
             rememberPreWriteLocalStateBackup("before-cloud-snapshot-write");
             rememberLastGoodEmdcAppState(parsedValue);
+            safeSetEmdcAppStateLocal(parsedValue || value);
+          } else {
+            localStorage.setItem(key, value);
           }
-          localStorage.setItem(key, value);
         }
       });
     } catch {}
@@ -16441,17 +16550,58 @@ export default function App({
     }
   };
 
+  const saveCloudSkuItemsChunked = async (skuItems:any[] = [], updatedAt:string) => {
+    const chunks:any[][] = [];
+    for (let i=0; i<skuItems.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
+      chunks.push(skuItems.slice(i,i+EMDC_CLOUD_SKU_CHUNK_SIZE));
+    }
+
+    for (let index=0; index<chunks.length; index++) {
+      const res = await fetch("/api/emdc-state?mode=sku-chunk", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"sku-chunk",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          index,
+          total:chunks.length,
+          totalItems:skuItems.length,
+          rows:chunks[index],
+        }),
+      });
+      if (!res.ok) throw new Error("SKU chunk save failed");
+    }
+  };
+
+  const makeCloudAppStatePayload = async (updatedAt:string) => {
+    const fullAppState = makeAppStatePayload();
+    const skuItems = Array.isArray(fullAppState.skuItems) ? fullAppState.skuItems : [];
+    if (skuItems.length < EMDC_LARGE_SKU_COUNT) return fullAppState;
+
+    await saveCloudSkuItemsChunked(skuItems,updatedAt);
+    return {
+      ...fullAppState,
+      skuItems:[],
+      skuItemsExternalCloud:true,
+      skuItemsExternalCount:skuItems.length,
+      skuItemsCloudChunkCount:Math.ceil(skuItems.length/EMDC_CLOUD_SKU_CHUNK_SIZE),
+      skuItemsCloudUpdatedAt:updatedAt,
+    };
+  };
+
   const saveCloudState = async () => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
 
     const updatedAt = new Date().toISOString();
+    const appStateForCloud = await makeCloudAppStatePayload(updatedAt);
     const payload = {
       version: 1,
       clientId: cloudClientIdRef.current,
       updatedAt,
-      appState: makeAppStatePayload(),
+      appState: appStateForCloud,
       // Keep the shared sync payload compact. The full local browser backup remains local.
-      // The main SKU/checklist/catalog data is already sent in appState.
+      // Large SKU catalogs are saved to Redis in chunks before this main state save.
       localStorage: readLocalSnapshot("cloud"),
     };
 
@@ -16489,7 +16639,7 @@ export default function App({
       cloudClientIdRef.current = clientId;
 
       const raw = localStorage.getItem("emdc_app_state_v1");
-      const parsed = raw ? parseEmdcJson(raw) : null;
+      const parsed = raw ? hydrateExternalSkuItems(parseEmdcJson(raw)) : null;
       if (parsed && shouldBlockEmptyEmdcState(parsed)) {
         const lastGoodEntry:any = readLastGoodEmdcAppState();
         const lastGood = lastGoodEntry?.appState || lastGoodEntry;
@@ -16525,23 +16675,15 @@ export default function App({
 
   useEffect(() => {
     if (!appStateHydrated) return;
-    let idleJob:any = null;
-    const timer = setTimeout(()=>{
-      idleJob = scheduleIdleWork(()=>{
-        try {
-          const nextAppState = makeAppStatePayload();
-          if (shouldBlockEmptyEmdcState(nextAppState)) return;
-          rememberPreWriteLocalStateBackup("before-auto-local-save");
-          rememberLastGoodEmdcAppState(nextAppState);
-          localStorage.setItem("emdc_app_state_v1", JSON.stringify(nextAppState));
-          markEmdcLocalStateUpdated();
-        } catch {}
-      }, 1200);
-    }, PERF_IDLE_SAVE_DELAY);
-    return () => {
-      clearTimeout(timer);
-      cancelIdleWork(idleJob);
-    };
+    try {
+      const nextAppState = makeAppStatePayload();
+      if (shouldBlockEmptyEmdcState(nextAppState)) return;
+      rememberPreWriteLocalStateBackup("before-auto-local-save");
+      rememberLastGoodEmdcAppState(nextAppState);
+      const saved = safeSetEmdcAppStateLocal(nextAppState);
+      if (saved) markEmdcLocalStateUpdated();
+      else setCloudSyncStatus("Local save failed: storage full");
+    } catch {}
   }, [
     appStateHydrated,
     brands,
