@@ -6312,25 +6312,32 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               linkedEventContext:group.groupName || "Marketing",
               createdAt:new Date().toISOString(),
             };
-            const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
-            if(isProductIntroductionChecklist){
-              const existingRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
-              const rows = [...existingRows,row];
-              updateAiWorkspace("digital",{
-                productIntroCreativeRows:rows,
-                productIntroRowsCleared:rows.length===0,
-                generatedText:rows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-                generatedAt:new Date().toISOString(),
-              });
-            } else {
-              const existingRows = Array.isArray(digitalData.campaignCreativeRows) ? digitalData.campaignCreativeRows : [];
-              const rows = [...existingRows,row];
-              updateAiWorkspace("digital",{
-                campaignCreativeRows:rows,
-                generatedText:rows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-                generatedAt:new Date().toISOString(),
-              });
-            }
+            const persistedDigital = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).digital || {}) as any;
+            const digitalData = {
+              ...persistedDigital,
+              ...(((group.aiWorkspace || {}).digital || {}) as any),
+            };
+
+            // Marketing → Digital Creative must be reliable even when the checklist type
+            // changes or the current tab renders before parent state finishes updating.
+            // Save the transferred ad into BOTH Digital Creative row stores; the active
+            // Digital Creative tab will read the correct one for the current checklist type.
+            const existingProductIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
+            const existingCampaignRows = Array.isArray(digitalData.campaignCreativeRows) ? digitalData.campaignCreativeRows : [];
+            const productIntroRows = [...existingProductIntroRows,row];
+            const campaignRows = [...existingCampaignRows,row];
+            const visibleRows = isCampaignChecklist ? campaignRows : productIntroRows;
+            const now = new Date().toISOString();
+
+            updateAiWorkspace("digital",{
+              productIntroCreativeRows:productIntroRows,
+              productIntroRowsCleared:false,
+              campaignCreativeRows:campaignRows,
+              generatedText:visibleRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+              generatedAt:now,
+              lastMarketingDcTransferAt:now,
+            });
+            markActionDone(`marketing-send-dc-${row.id}`);
             setActiveGroupTab("digital");
           }} />
         </div>
@@ -15695,19 +15702,55 @@ export default function App({
     seasonalEvents,
   });
 
-  const readLocalSnapshot = () => {
+  const isLargeCloudLocalStorageKey = (key:any, value:any) => {
+    const k = String(key || "");
+    const size = String(value || "").length;
+
+    // These keys duplicate the main appState or are local safety/history backups.
+    // Sending them to the server makes bulk SKU saves too large and can break sync.
+    if (k === "emdc_app_state_v1") return true;
+    if (k === "emdc_app_state_last_good_v1") return true;
+    if (k === "emdc_app_state_history_v1") return true;
+    if (k.includes("history")) return true;
+    if (k.includes("last_good")) return true;
+
+    // Generated outputs and reference images can contain very large text/base64 data.
+    // Keep them in the browser, but do not include them in the shared cloud payload.
+    if (k.includes("generated_batch_outputs")) return true;
+    if (k.includes("saved_outputs")) return true;
+    if (k.includes("ai_saved_outputs")) return true;
+
+    // Final safety limit per key for cloud sync.
+    return size > 120000;
+  };
+
+  const readLocalSnapshot = (mode:"full"|"cloud"="full") => {
     const snapshot:any = {};
+    const omitted:string[] = [];
     try {
       for (let i=0; i<localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key || !isEmdcSyncLocalKey(key)) continue;
         const value = localStorage.getItem(key);
-        if (value !== null) snapshot[key] = value;
+        if (value === null) continue;
+        if (mode === "cloud" && isLargeCloudLocalStorageKey(key,value)) {
+          omitted.push(key);
+          continue;
+        }
+        snapshot[key] = value;
       }
       EMDC_SYNC_LOCAL_KEYS.forEach(key=>{
         const value = localStorage.getItem(key);
-        if (value !== null) snapshot[key] = value;
+        if (value === null) return;
+        if (mode === "cloud" && isLargeCloudLocalStorageKey(key,value)) {
+          if (!omitted.includes(key)) omitted.push(key);
+          return;
+        }
+        snapshot[key] = value;
       });
+      if (mode === "cloud" && omitted.length) {
+        snapshot.emdc_cloud_omitted_large_local_keys_v1 = JSON.stringify(omitted);
+      }
     } catch {}
     return snapshot;
   };
@@ -15821,7 +15864,9 @@ export default function App({
       clientId: cloudClientIdRef.current,
       updatedAt,
       appState: makeAppStatePayload(),
-      localStorage: readLocalSnapshot(),
+      // Keep the shared sync payload compact. The full local browser backup remains local.
+      // The main SKU/checklist/catalog data is already sent in appState.
+      localStorage: readLocalSnapshot("cloud"),
     };
 
     if (shouldBlockEmptyEmdcState(payload.appState)) {
