@@ -4608,8 +4608,16 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     };
   };
 
+  const getTransferProductImageLinks = (product:any):string[] => {
+    const skuMatch = findSkuStorageMatchForTransfer(product);
+    return Array.from(new Set([
+      ...getTransferImageLinksFromAny(product),
+      ...getTransferImageLinksFromAny(skuMatch || {}),
+    ])).filter(Boolean);
+  };
+
   const renderTransferImageLinkCell = (product:any) => {
-    const links = getTransferImageLinksFromAny(product);
+    const links = getTransferProductImageLinks(product);
     const first = links[0] || "";
     if(!first) return <span style={{ color:C.faint }}>—</span>;
     return (
@@ -4818,15 +4826,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const deleteProductIntroMarketingTransfer = (transfer:any) => {
     const currentCards = normalizeProductIntroTransferCards(getProductIntroMarketingRows());
     const nextCards = currentCards.filter((card:any)=>!isSameProductIntroTransferCard(card,transfer));
-    updateAiWorkspace("marketing",{
-      productIntroMarketingRows:nextCards,
-      productIntroMarketingRowsCleared:nextCards.length===0,
-      selectedMarketingProductKeys:[],
-      placedMarketingProductKeys:[],
-      generatedText:nextCards.map((entry:any)=>`${entry.product || "Product"}
-${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-      generatedAt:new Date().toISOString(),
-    });
+    saveProductIntroMarketingRows(nextCards);
   };
 
   const deleteProductIntroLivestreamTransfer = (transfer:any) => {
@@ -4840,10 +4840,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
   };
 
   const deleteProductIntroMarketingTransferAtIndex = (transferIndex:number) => {
-    const current = group.aiWorkspace || {};
-    const marketing = (current.marketing || {}) as any;
-    const existingRows = Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
-    const currentCards = normalizeProductIntroTransferCards(existingRows);
+    const currentCards = normalizeProductIntroTransferCards(getProductIntroMarketingRows());
     const nextCards = currentCards
       .filter((_:any,idx:number)=>idx!==transferIndex)
       .map((card:any)=>({
@@ -4852,20 +4849,7 @@ ${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
         transferGroupId:card.transferGroupId || card.id || uid(),
       }));
 
-    const nextWorkspace = {
-      ...current,
-      marketing:{
-        ...marketing,
-        productIntroMarketingRows:nextCards,
-        productIntroMarketingRowsCleared:nextCards.length===0,
-        selectedMarketingProductKeys:[],
-        placedMarketingProductKeys:[],
-        generatedText:nextCards.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-        generatedAt:new Date().toISOString(),
-      }
-    };
-
-    if(onUpdateGroup) onUpdateGroup({ aiWorkspace:nextWorkspace });
+    saveProductIntroMarketingRows(nextCards);
   };
 
   const deleteProductIntroLivestreamTransferAtIndex = (transferIndex:number) => {
@@ -6114,7 +6098,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
     };
-    const marketingProducts = products.length ? products : [fallbackProduct];
+    const marketingProducts = (products.length ? products : [fallbackProduct]).map((item:any)=>enrichEcommerceTransferProductRow(item));
     const existingRows = getCampaignMarketingRowsWithBackup();
     const nextRows = [
       { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:marketingProducts, createdAt:new Date().toISOString() },
@@ -6163,7 +6147,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
     };
-    const livestreamProducts = products.length ? products : [fallbackProduct];
+    const livestreamProducts = (products.length ? products : [fallbackProduct]).map((item:any)=>enrichEcommerceTransferProductRow(item));
     const existingRows = getCampaignLivestreamRowsWithBackup();
     const nextRows = [
       { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:livestreamProducts, createdAt:new Date().toISOString() },
@@ -6525,6 +6509,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           headline:row.headline || "",
           subheadline:row.subheadline || "",
           cta:row.cta || "",
+          imageLink:getTransferProductImageLinks(p).concat(getTransferProductImageLinks(row))[0] || "",
+          imageLinks:Array.from(new Set([...getTransferProductImageLinks(p),...getTransferProductImageLinks(row)])),
+          links:Array.from(new Set([...getTransferProductImageLinks(p),...getTransferProductImageLinks(row)])),
+          productLink:getTransferProductImageLinks(p).concat(getTransferProductImageLinks(row))[0] || "",
         })) : [{
           product:row.product || "",
           sku:row.sku || "",
@@ -6534,6 +6522,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           headline:row.headline || "",
           subheadline:row.subheadline || "",
           cta:row.cta || "",
+          imageLink:getTransferProductImageLinks(row)[0] || "",
+          imageLinks:getTransferProductImageLinks(row),
+          links:getTransferProductImageLinks(row),
+          productLink:getTransferProductImageLinks(row)[0] || "",
         }]);
       const campaignMarketingRows = isCampaignChecklist ? getCampaignMarketingRowsWithBackup() : [];
       const campaignMarketingProductsFromRows = campaignMarketingRows.flatMap((row:any)=>Array.isArray(row.products) && row.products.length ? row.products.map((product:any)=>({
@@ -6547,6 +6539,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         headline:product.headline || row.headline || "",
         subheadline:product.subheadline || row.subheadline || "",
         cta:product.cta || row.cta || "",
+        imageLink:getTransferProductImageLinks(product).concat(getTransferProductImageLinks(row))[0] || "",
+        imageLinks:Array.from(new Set([...getTransferProductImageLinks(product),...getTransferProductImageLinks(row)])),
+        links:Array.from(new Set([...getTransferProductImageLinks(product),...getTransferProductImageLinks(row)])),
+        productLink:getTransferProductImageLinks(product).concat(getTransferProductImageLinks(row))[0] || "",
       })) : []);
       const campaignMarketingProductsFallback = isCampaignChecklist ? productRows.map((row:any)=>({
         product:row.product || row.productName || "",
@@ -6685,7 +6681,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                             if (isProductIntroductionChecklist) {
                               deleteProductIntroMarketingTransferAtIndex(transferIndex);
                             } else {
-                              const nextRows = campaignMarketingRows.filter((_:any,idx:number)=>idx!==transferIndex);
+                              const nextRows = getCampaignMarketingRowsWithBackup().filter((_:any,idx:number)=>idx!==transferIndex);
                               writeEcommerceTransferRowsBackup("marketing","campaign",nextRows);
                               updateAiWorkspace("marketing",{
                                 campaignMarketingRows:nextRows,
