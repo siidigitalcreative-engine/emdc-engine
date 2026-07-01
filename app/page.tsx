@@ -3616,8 +3616,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output") => {
-    const textContent = String(content || "").trim();
-    if(!textContent) return;
+    const isStructured = content && typeof content === "object";
+    const textContent = isStructured ? content : String(content || "").trim();
+    if(!isStructured && !textContent) return;
     const items = getOverviewItems();
     const newItem = {
       id:uid(),
@@ -3627,16 +3628,79 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       content:textContent,
       createdAt:new Date().toISOString(),
     };
-    // Keep Overview as a clean master page in natural workflow order.
-    // Items are appended, then displayed by source section: E-commerce, Marketing, Digital Creative, Livestream, Other.
     updateAiWorkspace("overview",{ items:[...items,newItem] });
     markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
   };
 
+  const addProductIntroEcommerceOutputToOverview = (sourceData:any, actionKey:string="overview-ecommerce-product-rows") => {
+    const output = String(sourceData?.generatedText || sourceData?.text || "").trim();
+    if(!output) return;
+    addToOverview(
+      "E-commerce",
+      sourceData?.title || "E-commerce Generated Output",
+      {
+        output,
+        productRows:getEcommerceGeneratedProductRows(sourceData),
+        collapsed:true,
+      },
+      "E-commerce Generated Output"
+    );
+    markActionDone(actionKey);
+  };
+
+
+  const renderOverviewProductRowsTable = (rows:any[] = []) => {
+    const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+    if(!safeRows.length) return null;
+    return (
+      <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch",border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,marginBottom:10 }}>
+        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11.5,minWidth:isMobile?520:620 }}>
+          <thead>
+            <tr style={{ background:C.surfaceAlt }}>
+              {["Platform","Brand","Category","Product","SKU"].map((head:string)=>(
+                <th key={head} style={{ textAlign:"left",padding:"8px 9px",borderBottom:`1px solid ${C.border}`,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>{head}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {safeRows.map((row:any,index:number)=>(
+              <tr key={`${row.id || row.sku || row.product || index}`} style={{ borderBottom:index===safeRows.length-1?"none":`1px solid ${C.border}` }}>
+                <td style={{ padding:"8px 9px",color:C.textSub,fontWeight:700 }}>{row.platform || "All Platforms"}</td>
+                <td style={{ padding:"8px 9px",color:C.textSub,fontWeight:700 }}>{row.brand || ""}</td>
+                <td style={{ padding:"8px 9px",color:C.textSub,fontWeight:700 }}>{row.category || row.collection || ""}</td>
+                <td style={{ padding:"8px 9px",color:C.text,fontWeight:850 }}>{row.product || row.productName || ""}</td>
+                <td style={{ padding:"8px 9px",color:C.muted,fontFamily:"monospace",fontWeight:700 }}>{row.sku || row.skuCode || ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   const renderOverviewContent = (item:any) => {
-    const content = String(item?.content || "");
     const kind = String(item?.kind || "").toLowerCase();
+    const structuredContent = item?.content && typeof item.content === "object" ? item.content : null;
+
+    if(structuredContent && kind.includes("e-commerce generated output")){
+      const output = String(structuredContent.output || "").trim();
+      const rows = Array.isArray(structuredContent.productRows) ? structuredContent.productRows : [];
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          {renderOverviewProductRowsTable(rows)}
+          <details style={{ background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:0,overflow:"hidden" }}>
+            <summary style={{ cursor:"pointer",padding:"10px 12px",fontSize:12,fontWeight:900,color:C.textSub,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+              View E-commerce Generated Output
+            </summary>
+            <div style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.6,color:C.text,padding:14 }}>
+              {output || "No generated output."}
+            </div>
+          </details>
+        </div>
+      );
+    }
+
+    const content = String(item?.content || "");
 
     if(kind.includes("asset link")){
       const blocks = content.split(/\n\s*\n/).map((block:string)=>block.trim()).filter(Boolean);
@@ -3771,12 +3835,22 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     updateAiWorkspace("overview",{ items:getOverviewItems().filter((item:any)=>item.id!==id) });
   };
 
+  const overviewItemToText = (item:any) => {
+    const content:any = item?.content;
+    if(content && typeof content === "object"){
+      const rows = Array.isArray(content.productRows) ? content.productRows : [];
+      const rowText = rows.length ? rows.map((row:any)=>[row.platform || "All Platforms", row.brand || "", row.category || row.collection || "", row.product || row.productName || "", row.sku || row.skuCode || ""].filter(Boolean).join(" | ")).join("\n") : "";
+      return [rowText, String(content.output || "")].filter(Boolean).join("\n\n");
+    }
+    return String(content || "");
+  };
+
   const copyOverviewItem = async (item:any) => {
-    try { await navigator.clipboard.writeText(String(item?.content || "")); } catch {}
+    try { await navigator.clipboard.writeText(overviewItemToText(item)); } catch {}
   };
 
   const copyAllOverviewItems = async () => {
-    const output = getOverviewItems().map((item:any)=>`${item.title}\n${item.content}`).join("\n\n---\n\n");
+    const output = getOverviewItems().map((item:any)=>`${item.title}\n${overviewItemToText(item)}`).join("\n\n---\n\n");
     if(!output) return;
     try { await navigator.clipboard.writeText(output); } catch {}
   };
@@ -5402,9 +5476,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No overview items yet. Go to E-commerce, Marketing, or Digital Creative and click Add to Overview on any output.</p>
             </div>
           ) : (
-            <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start" }}>
               {(() => {
-                const sectionOrder = ["E-commerce","Marketing","Digital Creative","Livestream"];
+                const sourceRank:any = { "E-commerce":0, "Marketing":1, "Digital Creative":2, "Livestream":3 };
                 const normalizeSource = (value:any) => {
                   const v = String(value || "").toLowerCase();
                   if(v.includes("e-commerce") || v.includes("ecommerce")) return "E-commerce";
@@ -5413,39 +5487,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   if(v.includes("livestream") || v.includes("live")) return "Livestream";
                   return "Other";
                 };
-                const grouped:any = {};
-                overviewItems.forEach((item:any)=>{
-                  const key = normalizeSource(item.sourceTab);
-                  if(!grouped[key]) grouped[key] = [];
-                  grouped[key].push(item);
+                const sorted = [...overviewItems].sort((a:any,b:any)=>{
+                  const ar = sourceRank[normalizeSource(a.sourceTab)] ?? 9;
+                  const br = sourceRank[normalizeSource(b.sourceTab)] ?? 9;
+                  if(ar!==br) return ar-br;
+                  return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
                 });
-                const sections = [...sectionOrder,"Other"].filter((key:string)=>grouped[key]?.length);
-                return sections.map((section:string)=>(
-                  <section key={section} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)" }}>
-                    <div style={{ padding:"13px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",background:C.surfaceAlt }}>
-                      <div>
-                        <h4 style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{section}</h4>
-                        <p style={{ margin:"3px 0 0",fontSize:11,color:C.muted }}>{grouped[section].length} overview item{grouped[section].length!==1?"s":""}</p>
+                return sorted.map((item:any)=>(
+                  <article key={item.id} style={{ padding:16,border:`1.5px solid ${C.border}`,borderRadius:14,background:C.surface,minWidth:0,boxShadow:"0 2px 8px rgba(15,23,42,.04)" }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:10 }}>
+                      <div style={{ minWidth:0,flex:1 }}>
+                        <span style={{ display:"inline-flex",fontSize:10.5,fontWeight:900,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px",marginBottom:7 }}>{normalizeSource(item.sourceTab)}</span>
+                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
+                        <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+                      </div>
+                      <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                        <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
+                        <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                       </div>
                     </div>
-                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:12,padding:12,alignItems:"start" }}>
-                      {grouped[section].map((item:any,index:number)=>(
-                        <article key={item.id} style={{ padding:16,border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,minWidth:0,boxShadow:"0 1px 2px rgba(15,23,42,.03)" }}>
-                          <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:10 }}>
-                            <div style={{ minWidth:0,flex:1 }}>
-                              <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
-                              <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
-                            </div>
-                            <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-                              <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
-                              <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
-                            </div>
-                          </div>
-                          {renderOverviewContent(item)}
-                        </article>
-                      ))}
-                    </div>
-                  </section>
+                    {renderOverviewContent(item)}
+                  </article>
                 ));
               })()}
             </div>
@@ -7920,7 +7982,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -8024,7 +8086,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -8068,6 +8130,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
               <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
+                <Btn xs variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"} onClick={()=>{ updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows); markActionDone("save-product-intro-digital-assets"); }}>{actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}</Btn>
                 <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
               </div>
             </div>
@@ -8747,7 +8810,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           {data.generatedAt&&<span style={{ fontSize:10.5,color:C.faint,fontWeight:700 }}>Generated {new Date(data.generatedAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
-                          <Btn sm variant={actionDone("overview-ecommerce-product-rows")?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce","E-commerce Product Rows",formatProductIntroOverviewRows(data.generatedText),"Product Rows"); markActionDone("overview-ecommerce-product-rows"); }} disabled={!productRows.length}>{actionDone("overview-ecommerce-product-rows")?"✓ Added":"Add to Overview"}</Btn>
+                          <Btn sm variant={actionDone("overview-ecommerce-product-rows")?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(data,"overview-ecommerce-product-rows")} disabled={!data.generatedText}>{actionDone("overview-ecommerce-product-rows")?"✓ Added":"Add to Overview"}</Btn>
                           <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Marketing</Btn>
                           <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to DC</Btn>
                           <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Livestream</Btn>
@@ -8781,7 +8844,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Saved Output"}</p>
                                 <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Saved"} · Click to view</p>
                               </button>
-                              <button onClick={(e:any)=>{ e.stopPropagation(); addToOverview("E-commerce",item.title || "Saved E-commerce Output",item.text,"Saved Output"); markActionDone(`overview-ecomm-saved-${item.id}`); }} style={{ border:"none",background:actionDone(`overview-ecomm-saved-${item.id}`)?C.accent:C.surfaceAlt,color:actionDone(`overview-ecomm-saved-${item.id}`)?"#fff":C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>{actionDone(`overview-ecomm-saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>
+                              <button onClick={(e:any)=>{ e.stopPropagation(); addProductIntroEcommerceOutputToOverview(item,`overview-ecomm-saved-${item.id}`); }} style={{ border:"none",background:actionDone(`overview-ecomm-saved-${item.id}`)?C.accent:C.surfaceAlt,color:actionDone(`overview-ecomm-saved-${item.id}`)?"#fff":C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>{actionDone(`overview-ecomm-saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>
                               <button onClick={(e:any)=>{ e.stopPropagation(); deleteSavedEcommerceOutput(item.id); if(savedEcommercePreview?.id===item.id) setSavedEcommercePreview(null); }} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                             </div>
                           ))}
@@ -8806,7 +8869,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</Btn>
                             <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</Btn>
                             <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</Btn>
-                            <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>{ addToOverview("E-commerce",savedEcommercePreview.title || "Saved E-commerce Output",savedEcommercePreview.text,"Saved Output"); markActionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`); }}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
+                            <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(savedEcommercePreview,`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
                           </div>
                         </div>
