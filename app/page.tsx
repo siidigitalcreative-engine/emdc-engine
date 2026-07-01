@@ -3802,6 +3802,70 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     persistChecklistGroupPatchNow(groupPatch);
   };
 
+  const getEcommerceSavedOutputsLocalKey = () => group?.id ? `emdc_ecommerce_saved_outputs_v1_${group.id}` : "";
+
+  const readEcommerceSavedOutputsFromLocal = () => {
+    if (typeof window === "undefined") return [];
+    const key = getEcommerceSavedOutputsLocalKey();
+    if(!key) return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const mergeEcommerceSavedOutputs = (...lists:any[][]) => {
+    const map = new Map();
+    lists.flat().filter(Boolean).forEach((item:any)=>{
+      const id = String(item?.id || "").trim();
+      const fallback = `${item?.title || ""}|${item?.createdAt || ""}|${String(item?.text || "").slice(0,120)}`;
+      const key = id || fallback;
+      if(!key.trim()) return;
+      map.set(key, { ...(map.get(key) || {}), ...item });
+    });
+    return Array.from(map.values()).sort((a:any,b:any)=>String(b?.updatedAt || b?.createdAt || "").localeCompare(String(a?.updatedAt || a?.createdAt || "")));
+  };
+
+  const writeEcommerceSavedOutputsToLocal = (items:any[] = []) => {
+    if (typeof window === "undefined") return;
+    const key = getEcommerceSavedOutputsLocalKey();
+    if(!key) return;
+    try {
+      const safeItems = Array.isArray(items) ? items.filter(Boolean).slice(0,60) : [];
+      localStorage.setItem(key, JSON.stringify(safeItems));
+
+      const persistedGroup = getPersistedChecklistGroup() || group || {};
+      const currentWorkspace = (persistedGroup.aiWorkspace || group.aiWorkspace || {}) as any;
+      const nextWorkspace = {
+        ...currentWorkspace,
+        ecommerce:{
+          ...(currentWorkspace.ecommerce || {}),
+          savedOutputs:safeItems,
+          savedOutputsUpdatedAt:new Date().toISOString(),
+        },
+      };
+      writeEmdcGroupWorkspaceBackup(group.id,nextWorkspace);
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
+  };
+
+  const getMergedEcommerceData = (rawData:any = {}) => {
+    const persistedEcommerce = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}).ecommerce || {}) as any;
+    const localSavedOutputs = readEcommerceSavedOutputsFromLocal();
+    return {
+      ...persistedEcommerce,
+      ...rawData,
+      savedOutputs:mergeEcommerceSavedOutputs(
+        localSavedOutputs,
+        Array.isArray(persistedEcommerce.savedOutputs) ? persistedEcommerce.savedOutputs : [],
+        Array.isArray(rawData?.savedOutputs) ? rawData.savedOutputs : [],
+      ),
+    };
+  };
+
   const getOverviewLocalStorageKey = () => group?.id ? `emdc_overview_items_v1_${group.id}` : "";
 
   const readOverviewItemsFromLocal = () => {
@@ -4913,20 +4977,30 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const saveEcommerceOutput = () => {
-    const data = ((group.aiWorkspace || {}).ecommerce || {});
+    const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
     const output = String(data.generatedText || "").trim();
     if(!output) return;
-    const saved = Array.isArray(data.savedOutputs) ? data.savedOutputs : [];
+    const saved = mergeEcommerceSavedOutputs(
+      readEcommerceSavedOutputsFromLocal(),
+      Array.isArray(data.savedOutputs) ? data.savedOutputs : []
+    );
+    const now = new Date().toISOString();
+    const savedEntry = {
+      id:uid(),
+      title:`E-commerce Listing ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+      text:output,
+      prompt:data.textPrompt || "",
+      productRows:getEcommerceGeneratedProductRows(data),
+      createdAt:now,
+      updatedAt:now,
+    };
+    const nextSaved = [savedEntry,...saved].slice(0,60);
+    writeEcommerceSavedOutputsToLocal(nextSaved);
     updateAiWorkspace("ecommerce",{
-      savedOutputs:[{
-        id:uid(),
-        title:`E-commerce Listing ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
-        text:output,
-        prompt:data.textPrompt || "",
-        productRows:getEcommerceGeneratedProductRows(data),
-        createdAt:new Date().toISOString(),
-      },...saved].slice(0,20)
+      savedOutputs:nextSaved,
+      savedOutputsUpdatedAt:now,
     });
+    markActionDone(`ecommerce-save-output-${savedEntry.id}`);
   };
 
   const openSavedEcommerceOutput = (item:any) => {
@@ -4940,9 +5014,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const deleteSavedEcommerceOutput = (id:string) => {
-    const data = ((group.aiWorkspace || {}).ecommerce || {});
-    const saved = Array.isArray(data.savedOutputs) ? data.savedOutputs : [];
-    updateAiWorkspace("ecommerce",{ savedOutputs:saved.filter((item:any)=>item.id!==id) });
+    const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
+    const saved = mergeEcommerceSavedOutputs(
+      readEcommerceSavedOutputsFromLocal(),
+      Array.isArray(data.savedOutputs) ? data.savedOutputs : []
+    );
+    const nextSaved = saved.filter((item:any)=>String(item?.id || "")!==String(id || ""));
+    writeEcommerceSavedOutputsToLocal(nextSaved);
+    updateAiWorkspace("ecommerce",{ savedOutputs:nextSaved, savedOutputsUpdatedAt:new Date().toISOString() });
   };
 
   const cleanReadyToUseOutput = (value:any) => {
@@ -5888,7 +5967,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
-    const data = (group.aiWorkspace || {})[tab] || {};
+    const rawData = (group.aiWorkspace || {})[tab] || {};
+    const data = tab === "ecommerce" ? getMergedEcommerceData(rawData) : rawData;
     if(!cfg) return null;
 
     if(tab==="overview"){
