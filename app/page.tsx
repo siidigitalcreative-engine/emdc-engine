@@ -164,6 +164,54 @@ const EMDC_APP_STATE_HISTORY_KEY = "emdc_app_state_history_v1";
 const EMDC_PRE_WRITE_BACKUP_KEY = "emdc_app_state_before_last_write_v1";
 const EMDC_PRE_WRITE_HISTORY_KEY = "emdc_app_state_before_last_write_history_v1";
 const EMDC_LOCAL_KEY_PREFIX = "emdc";
+const EMDC_GROUP_AI_WORKSPACE_PREFIX = "emdc_group_ai_workspace_v1_";
+
+const getEmdcGroupWorkspaceBackupKey = (groupId:any) => `${EMDC_GROUP_AI_WORKSPACE_PREFIX}${String(groupId || "")}`;
+
+const readEmdcGroupWorkspaceBackups = () => {
+  const map:any = {};
+  if (typeof window === "undefined") return map;
+  try {
+    for (let i=0; i<localStorage.length; i++) {
+      const key = localStorage.key(i) || "";
+      if (!key.startsWith(EMDC_GROUP_AI_WORKSPACE_PREFIX)) continue;
+      const parsed = parseEmdcJson(localStorage.getItem(key));
+      const groupId = String(parsed?.groupId || key.replace(EMDC_GROUP_AI_WORKSPACE_PREFIX, ""));
+      if (groupId && parsed?.aiWorkspace && typeof parsed.aiWorkspace === "object") {
+        map[groupId] = parsed;
+      }
+    }
+  } catch {}
+  return map;
+};
+
+const writeEmdcGroupWorkspaceBackup = (groupId:any, aiWorkspace:any) => {
+  if (typeof window === "undefined" || !groupId || !aiWorkspace || typeof aiWorkspace !== "object") return;
+  try {
+    localStorage.setItem(getEmdcGroupWorkspaceBackupKey(groupId), JSON.stringify({
+      groupId:String(groupId),
+      updatedAt:new Date().toISOString(),
+      aiWorkspace,
+    }));
+  } catch {}
+};
+
+const mergeChecklistGroupsWithWorkspaceBackups = (groups:any[] = []) => {
+  if (!Array.isArray(groups) || !groups.length) return Array.isArray(groups) ? groups : [];
+  const backups = readEmdcGroupWorkspaceBackups();
+  if (!Object.keys(backups).length) return groups;
+  return groups.map((group:any)=>{
+    const backup = backups[String(group?.id || "")];
+    if (!backup?.aiWorkspace || typeof backup.aiWorkspace !== "object") return group;
+    return {
+      ...group,
+      aiWorkspace:{
+        ...(group?.aiWorkspace || {}),
+        ...(backup.aiWorkspace || {}),
+      },
+    };
+  });
+};
 
 const countEmdcChecklistItems = (items:any) => {
   if (!items || typeof items !== "object") return 0;
@@ -3726,6 +3774,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         ...parsed,
         checklistGroups:nextGroups,
       }));
+      if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(group.id, patch.aiWorkspace);
       markEmdcLocalStateUpdated();
       window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
@@ -3748,6 +3797,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       }
     };
     const groupPatch = { aiWorkspace:next };
+    writeEmdcGroupWorkspaceBackup(group.id,next);
     if(onUpdateGroup) onUpdateGroup(groupPatch);
     persistChecklistGroupPatchNow(groupPatch);
   };
@@ -11058,6 +11108,17 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
     setGroups((p:any)=>{
       const next=p.map((g:any)=>g.id===id?{...g,...patch}:g);
+      if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(id,patch.aiWorkspace);
+      try {
+        const raw = localStorage.getItem("emdc_app_state_v1");
+        const parsed = raw ? parseEmdcJson(raw) : {};
+        localStorage.setItem("emdc_app_state_v1", JSON.stringify({
+          ...(parsed || {}),
+          checklistGroups:mergeChecklistGroupsWithWorkspaceBackups(next),
+        }));
+        markEmdcLocalStateUpdated();
+        window.dispatchEvent(new Event("emdc-local-sync"));
+      } catch {}
       if(onStateChange) onStateChange({checklistGroups:next});
       return next;
     });
@@ -15859,7 +15920,7 @@ export default function App({
     skuBrands: brands,
     skuItems: skuStorage,
     skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
-    checklistGroups,
+    checklistGroups: mergeChecklistGroupsWithWorkspaceBackups(checklistGroups),
     checklistItems: checklistAllItems,
     checklistStatuses,
     calendarEvents: calendarManualEvents,
@@ -15964,7 +16025,7 @@ export default function App({
     if (Array.isArray(parsed?.skuBrands)) setBrands(parsed.skuBrands);
     if (Array.isArray(parsed?.skuItems)) setSkuStorage(parsed.skuItems);
     if (Array.isArray(parsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(parsed.skuTableColumns));
-    if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(parsed.checklistGroups);
+    if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(mergeChecklistGroupsWithWorkspaceBackups(parsed.checklistGroups));
     if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(parsed.checklistItems);
     if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
     if (Array.isArray(parsed?.calendarEvents)) setCalendarManualEvents(parsed.calendarEvents);
