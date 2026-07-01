@@ -11728,8 +11728,9 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if(key==="tag") return "minmax(130px,.75fr)";
     return "minmax(170px,1fr)";
   };
-  const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")}${skuTableEditMode?" 90px":""}`;
-  const skuTableMinWidth = Math.max(900,(skuTableEditMode?132:0)+(skuTableColumns.length*160));
+  const skuActionsColumnWidth = "104px";
+  const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")} ${skuActionsColumnWidth}`;
+  const skuTableMinWidth = Math.max(980,(skuTableEditMode?42:0)+104+(skuTableColumns.length*160));
 
   const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
   const normalizeSkuCellUrl = (url:any) => {
@@ -11943,7 +11944,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                               style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>}
                           </div>
                         ))}
-                        {skuTableEditMode&&<span style={{ padding:"9px 10px",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right" }}>Actions</span>}
+                        <span style={{ padding:"9px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}` }}>Actions</span>
                       </div>
                       <div style={{ maxHeight:"calc(100vh - 330px)",overflowY:"auto" }}>
                       {groupedSkus.map(group=>(
@@ -11973,10 +11974,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                                     {renderSkuDesktopCell(s,col,brand,st)}
                                   </div>
                                 ))}
-                                {skuTableEditMode&&<div style={{ minHeight:48,padding:"8px 10px",display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
-                                  <button onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"3px 6px",borderRadius:4 }}>Edit</button>
-                                  <button onClick={()=>delSku(s.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13 }}>&#215;</button>
-                                </div>}
+                                <div style={{ minHeight:48,padding:"8px 10px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center",background:C.surface }}>
+                                  <button type="button" onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5 }}>Edit</button>
+                                  <button type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800 }}>&#215;</button>
+                                </div>
                               </div>
                             );
                           })}
@@ -12219,6 +12220,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             </div>
           </Field>
           <Btn full onClick={saveSku} disabled={!sForm.productName.trim()||!sForm.sku.trim()}>{editSkuId?"Save Changes":"Add SKU"}</Btn>
+          {editSkuId&&<Btn full variant="danger" onClick={()=>{ delSku(editSkuId); setSkuModal(false); setEditSkuId(null); }}>Delete Product Row</Btn>}
         </div>
       </Modal>
     </div>
