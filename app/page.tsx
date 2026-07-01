@@ -161,6 +161,9 @@ const isIsoTimeNewer = (a:any, b:any, toleranceMs = 500) => {
 };
 const EMDC_LAST_GOOD_APP_STATE_KEY = "emdc_app_state_last_good_v1";
 const EMDC_APP_STATE_HISTORY_KEY = "emdc_app_state_history_v1";
+const EMDC_PRE_WRITE_BACKUP_KEY = "emdc_app_state_before_last_write_v1";
+const EMDC_PRE_WRITE_HISTORY_KEY = "emdc_app_state_before_last_write_history_v1";
+const EMDC_LOCAL_KEY_PREFIX = "emdc";
 
 const countEmdcChecklistItems = (items:any) => {
   if (!items || typeof items !== "object") return 0;
@@ -4643,18 +4646,107 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     });
   };
 
+
+  const REFERENCE_IMAGE_MAX_FILES = 8;
+  const REFERENCE_IMAGE_MAX_DIMENSION = 900;
+  const REFERENCE_IMAGE_MAX_BYTES = 180000;
+
+  const getDataUrlByteSize = (dataUrl:any) => {
+    const base64 = String(dataUrl || "").split(",")[1] || "";
+    return Math.ceil((base64.length * 3) / 4);
+  };
+
+  const readFileAsDataUrl = (file:any) => new Promise<string>((resolve)=>{
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+
+  const loadImageFromDataUrl = (dataUrl:string) => new Promise<any>((resolve,reject)=>{
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+
+  const compressCatalogImage = async (file:any) => {
+    const originalDataUrl = await readFileAsDataUrl(file);
+    if(!originalDataUrl) {
+      return { name:file?.name || `Reference image ${Date.now()}`, type:file?.type || "image/png", size:file?.size || 0, dataUrl:"" };
+    }
+
+    try {
+      const img:any = await loadImageFromDataUrl(originalDataUrl);
+      const originalW = Number(img.naturalWidth || img.width || 1);
+      const originalH = Number(img.naturalHeight || img.height || 1);
+      const scale = Math.min(1, REFERENCE_IMAGE_MAX_DIMENSION / Math.max(originalW, originalH));
+      let targetW = Math.max(1, Math.round(originalW * scale));
+      let targetH = Math.max(1, Math.round(originalH * scale));
+      let quality = 0.74;
+      let dataUrl = originalDataUrl;
+
+      for(let attempt=0; attempt<8; attempt++){
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx:any = canvas.getContext("2d");
+        if(!ctx) break;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0,0,targetW,targetH);
+        ctx.drawImage(img,0,0,targetW,targetH);
+        dataUrl = canvas.toDataURL("image/jpeg", quality);
+        if(getDataUrlByteSize(dataUrl) <= REFERENCE_IMAGE_MAX_BYTES) break;
+        if(quality > 0.5) quality -= 0.08;
+        else {
+          targetW = Math.max(480, Math.round(targetW * 0.82));
+          targetH = Math.max(480, Math.round(targetH * 0.82));
+        }
+      }
+
+      return {
+        name:file?.name || `Reference image ${Date.now()}.jpg`,
+        type:"image/jpeg",
+        originalType:file?.type || "",
+        originalSize:file?.size || 0,
+        size:getDataUrlByteSize(dataUrl),
+        compressed:true,
+        dataUrl,
+      };
+    } catch {
+      if(getDataUrlByteSize(originalDataUrl) <= REFERENCE_IMAGE_MAX_BYTES) {
+        return { name:file?.name || `Reference image ${Date.now()}`, type:file?.type || "image/png", size:getDataUrlByteSize(originalDataUrl), dataUrl:originalDataUrl };
+      }
+      return { name:file?.name || `Reference image ${Date.now()}`, type:file?.type || "image/png", size:getDataUrlByteSize(originalDataUrl), dataUrl:originalDataUrl };
+    }
+  };
+
+  const compressExistingCatalogFilesForPayload = async (files:any[] = []) => {
+    const clean = uniqueCatalogFiles(files || []).slice(0,REFERENCE_IMAGE_MAX_FILES);
+    const converted = await Promise.all(clean.map(async (file:any,index:number)=>{
+      const dataUrl = String(file?.dataUrl || "");
+      if(!dataUrl) return null;
+      if(String(file?.type || "").includes("jpeg") && getDataUrlByteSize(dataUrl) <= REFERENCE_IMAGE_MAX_BYTES) {
+        return { name:file?.name || `Reference image ${index+1}.jpg`, type:file?.type || "image/jpeg", size:file?.size || getDataUrlByteSize(dataUrl), dataUrl };
+      }
+      if(!dataUrl.startsWith("data:image/")) return { name:file?.name || `Reference image ${index+1}`, type:file?.type || "image/png", size:file?.size || getDataUrlByteSize(dataUrl), dataUrl };
+      try {
+        const blob = await fetch(dataUrl).then(r=>r.blob());
+        const nextFile:any = new File([blob], file?.name || `Reference image ${index+1}.jpg`, { type:blob.type || file?.type || "image/png" });
+        return await compressCatalogImage(nextFile);
+      } catch {
+        return { name:file?.name || `Reference image ${index+1}`, type:file?.type || "image/png", size:file?.size || getDataUrlByteSize(dataUrl), dataUrl };
+      }
+    }));
+    return converted.filter(Boolean) as any[];
+  };
+
   const handleCatalogUpload = async (tab:string, e:any) => {
-    const files = Array.from(e?.target?.files || []) as any[];
+    const files = Array.from(e?.target?.files || []).filter((file:any)=>String(file?.type||"").startsWith("image/")) as any[];
     if(!files.length) return;
     const existing = ((group.aiWorkspace || {})[tab]?.catalogFiles || []) as any[];
-    const toDataUrl = (file:any) => new Promise((resolve)=>{
-      const reader = new FileReader();
-      reader.onload = () => resolve({ name:file.name, type:file.type, size:file.size, dataUrl:reader.result });
-      reader.onerror = () => resolve({ name:file.name, type:file.type, size:file.size, dataUrl:"" });
-      reader.readAsDataURL(file);
-    });
-    const uploaded:any[] = await Promise.all(files.slice(0,8).map(toDataUrl));
-    updateAiWorkspace(tab,{ catalogFiles:[...existing,...uploaded].slice(0,12) });
+    const uploaded:any[] = await Promise.all(files.slice(0,REFERENCE_IMAGE_MAX_FILES).map(compressCatalogImage));
+    updateAiWorkspace(tab,{ catalogFiles:uniqueCatalogFiles([...existing,...uploaded]).slice(0,REFERENCE_IMAGE_MAX_FILES) });
     e.target.value = "";
   };
 
@@ -4663,12 +4755,13 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     updateAiWorkspace(tab,{ catalogFiles:current.filter((_:any,i:number)=>i!==idx) });
   };
 
-  const readFileAsCatalog = (file:any) => new Promise((resolve)=>{
-    const reader = new FileReader();
-    reader.onload = () => resolve({ name:file.name || `Pasted catalog ${new Date().toLocaleTimeString("en-PH")}`, type:file.type || "image/png", size:file.size || 0, dataUrl:reader.result });
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(file);
-  });
+  const readFileAsCatalog = async (file:any) => {
+    try {
+      return await compressCatalogImage(file);
+    } catch {
+      return null;
+    }
+  };
 
   const addReferenceImages = async (tab:string, filesInput:any) => {
     const files = Array.from(filesInput || []).filter((file:any)=>String(file?.type||"").startsWith("image/")) as any[];
@@ -4677,7 +4770,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if(!converted.length) return;
     const data = (group.aiWorkspace || {})[tab] || {};
     const existing = data.catalogFiles || [];
-    updateAiWorkspace(tab,{ catalogFiles:uniqueCatalogFiles([...existing,...converted]).slice(0,24) });
+    updateAiWorkspace(tab,{ catalogFiles:uniqueCatalogFiles([...existing,...converted]).slice(0,REFERENCE_IMAGE_MAX_FILES) });
   };
 
   const handlePromptImagePaste = async (tab:string, e:any) => {
@@ -4762,7 +4855,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const generateEcommercePromptFromCatalog = async () => {
     const tab = "ecommerce";
     const data = (group.aiWorkspace || {})[tab] || {};
-    const promptCatalogFiles = uniqueCatalogFiles(data.catalogFiles || []).slice(0,12);
+    const promptCatalogFiles = await compressExistingCatalogFilesForPayload(data.catalogFiles || []);
 
     if(!promptCatalogFiles.length && !productRows.length) {
       setAiError((p:any)=>({...p,[tab]:"Paste or upload a catalog image first, or select products from SKU Storage."}));
@@ -4813,7 +4906,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           },null,2),
           catalogFiles:promptCatalogFiles.map((file:any)=>({
             name:file.name,
-            type:file.type || "image/png",
+            type:file.type || "image/jpeg",
+            size:file.size || getDataUrlByteSize(file.dataUrl),
             dataUrl:file.dataUrl,
           })),
           maxOutputTokens:3000,
@@ -4858,7 +4952,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       capacity:row.capacity || row.extraFields?.Capacity || row.extraFields?.capacity || "",
     }));
 
-    const catalogFiles = uniqueCatalogFiles(data.catalogFiles || []);
+    const catalogFiles = await compressExistingCatalogFilesForPayload(data.catalogFiles || []);
 
     const instruction = [
       "You are EMDC's e-commerce listing assistant for Philippine marketplaces.",
@@ -4904,7 +4998,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           },null,2),
           catalogFiles:catalogFiles.map((file:any)=>({
             name:file.name,
-            type:file.type || "application/octet-stream",
+            type:file.type || "image/jpeg",
+            size:file.size || getDataUrlByteSize(file.dataUrl),
             dataUrl:file.dataUrl,
           })),
           maxOutputTokens:7000,
@@ -9039,9 +9134,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           <div style={{ minWidth:0,flex:"1 1 260px" }}>
                             <p style={{ margin:0,fontSize:12,fontWeight:850,color:C.text }}>Reference images</p>
                             <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>
-                              Paste or upload one or more catalog/product images. Use this for per-color collection pages or extra product references.
+                              Paste or upload catalog/product images. Images are compressed automatically before saving/generating to prevent payload errors.
                             </p>
-                            {!!catalogFiles.length&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.faint,fontWeight:700 }}>{catalogFiles.length} reference image{catalogFiles.length>1?"s":""} added</p>}
+                            {!!catalogFiles.length&&<p style={{ margin:"4px 0 0",fontSize:11,color:C.faint,fontWeight:700 }}>{catalogFiles.length} compressed reference image{catalogFiles.length>1?"s":""} added</p>}
                           </div>
                           <label style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",height:32,padding:"0 12px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",width:isMobile?"100%":"auto" }}>
                             Upload Reference Images
@@ -15578,7 +15673,15 @@ export default function App({
     "emdc_saved_ad_templates_v1",
     "emdc_checklist_launch_types_v1",
     "emdc_checklist_templates_v1",
+    "emdc_app_state_local_updated_at_v1",
+    "emdc_app_state_last_good_v1",
+    "emdc_app_state_history_v1",
   ];
+
+  const isEmdcSyncLocalKey = (key:any) => {
+    const k = String(key || "");
+    return EMDC_SYNC_LOCAL_KEYS.includes(k) || k.startsWith(EMDC_LOCAL_KEY_PREFIX);
+  };
 
   const makeAppStatePayload = () => ({
     skuBrands: brands,
@@ -15595,6 +15698,12 @@ export default function App({
   const readLocalSnapshot = () => {
     const snapshot:any = {};
     try {
+      for (let i=0; i<localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !isEmdcSyncLocalKey(key)) continue;
+        const value = localStorage.getItem(key);
+        if (value !== null) snapshot[key] = value;
+      }
       EMDC_SYNC_LOCAL_KEYS.forEach(key=>{
         const value = localStorage.getItem(key);
         if (value !== null) snapshot[key] = value;
@@ -15603,14 +15712,36 @@ export default function App({
     return snapshot;
   };
 
+  const rememberPreWriteLocalStateBackup = (reason="before-local-overwrite") => {
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = parseEmdcJson(raw);
+      if (getEmdcAppStateWeight(parsed) <= 0) return;
+
+      const entry = {
+        reason,
+        savedAt:new Date().toISOString(),
+        appState:parsed,
+        localStorage:readLocalSnapshot(),
+      };
+
+      localStorage.setItem(EMDC_PRE_WRITE_BACKUP_KEY, JSON.stringify(entry));
+      const rawHistory = parseEmdcJson(localStorage.getItem(EMDC_PRE_WRITE_HISTORY_KEY));
+      const history = Array.isArray(rawHistory) ? rawHistory : [];
+      history.unshift(entry);
+      localStorage.setItem(EMDC_PRE_WRITE_HISTORY_KEY, JSON.stringify(history.slice(0,12)));
+    } catch {}
+  };
+
   const writeLocalSnapshot = (snapshot:any) => {
     if (!snapshot || typeof snapshot !== "object") return;
     try {
       Object.entries(snapshot).forEach(([key,value]:any)=>{
-        if (EMDC_SYNC_LOCAL_KEYS.includes(key) && typeof value === "string") {
+        if (isEmdcSyncLocalKey(key) && typeof value === "string") {
           if (key === "emdc_app_state_v1") {
             const parsedValue = parseEmdcJson(value);
             if (shouldBlockEmptyEmdcState(parsedValue)) return;
+            rememberPreWriteLocalStateBackup("before-cloud-snapshot-write");
             rememberLastGoodEmdcAppState(parsedValue);
           }
           localStorage.setItem(key, value);
@@ -15727,7 +15858,14 @@ export default function App({
       cloudClientIdRef.current = clientId;
 
       const raw = localStorage.getItem("emdc_app_state_v1");
-      if (raw) applyAppState(JSON.parse(raw));
+      const parsed = raw ? parseEmdcJson(raw) : null;
+      if (parsed && shouldBlockEmptyEmdcState(parsed)) {
+        const lastGoodEntry:any = readLastGoodEmdcAppState();
+        const lastGood = lastGoodEntry?.appState || lastGoodEntry;
+        if (lastGood && getEmdcAppStateWeight(lastGood) > 0) applyAppState(lastGood);
+      } else if (parsed) {
+        applyAppState(parsed);
+      }
     } catch {}
 
     setAppStateHydrated(true);
@@ -15762,6 +15900,7 @@ export default function App({
         try {
           const nextAppState = makeAppStatePayload();
           if (shouldBlockEmptyEmdcState(nextAppState)) return;
+          rememberPreWriteLocalStateBackup("before-auto-local-save");
           rememberLastGoodEmdcAppState(nextAppState);
           localStorage.setItem("emdc_app_state_v1", JSON.stringify(nextAppState));
           markEmdcLocalStateUpdated();
