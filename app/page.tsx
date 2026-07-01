@@ -3633,6 +3633,54 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
   };
 
+
+  const renderOverviewContent = (item:any) => {
+    const content = String(item?.content || "");
+    const kind = String(item?.kind || "").toLowerCase();
+
+    if(kind.includes("asset link")){
+      const blocks = content.split(/\n\s*\n/).map((block:string)=>block.trim()).filter(Boolean);
+      const rows = blocks.map((block:string)=>{
+        const lines = block.split(/\n/).map((line:string)=>line.trim()).filter(Boolean);
+        const nameLine = lines[0] || "";
+        const linkLine = lines.find((line:string)=>/^link:/i.test(line)) || "";
+        return {
+          name:nameLine.replace(/^\d+\.\s*/,"").trim() || "Untitled Asset",
+          link:linkLine.replace(/^link:\s*/i,"").trim(),
+        };
+      });
+
+      return (
+        <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+          {rows.map((row:any,index:number)=>(
+            <div key={`${row.name}-${index}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(120px,.8fr) minmax(0,1.4fr)",gap:8,alignItems:"center",padding:"9px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:9 }}>
+              <div style={{ fontSize:12,fontWeight:900,color:C.text,wordBreak:"break-word" }}>{row.name}</div>
+              {row.link ? (
+                <a href={row.link} target="_blank" rel="noreferrer" style={{ fontSize:12,fontWeight:800,color:"#2563EB",textDecoration:"underline",wordBreak:"break-all" }}>
+                  {row.link}
+                </a>
+              ) : (
+                <span style={{ fontSize:12,color:C.faint }}>No link added</span>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = content.split(urlRegex);
+    return (
+      <div style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.6,color:C.text,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:14 }}>
+        {parts.map((part:string,index:number)=>/^https?:\/\//.test(part) ? (
+          <a key={index} href={part} target="_blank" rel="noreferrer" style={{ color:"#2563EB",fontWeight:800,textDecoration:"underline",wordBreak:"break-all" }}>{part}</a>
+        ) : (
+          <React.Fragment key={index}>{part}</React.Fragment>
+        ))}
+      </div>
+    );
+  };
+
   const formatMainPromotion = (promo:any) => {
     if (promo && typeof promo === "object") {
       const type = String(promo.type || "text");
@@ -5403,7 +5451,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                               <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
                             </div>
                           </div>
-                          <pre style={{ margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:12.5,lineHeight:1.6,color:C.text,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:14 }}>{item.content || ""}</pre>
+                          {renderOverviewContent(item)}
                         </article>
                       ))}
                     </div>
