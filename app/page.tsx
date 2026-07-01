@@ -14528,6 +14528,7 @@ const getCurrentShareUrl = (tab:any, groupId:any=null, groupTab:any="tasks") => 
   return `${window.location.origin}${window.location.pathname}${buildEmdcRouteHash(tab,groupId,groupTab)}`;
 };
 
+}
 // ─── APP SHELL ───────────────────────────────────────────────────────────────
 const TABS = [
   { id:"calendar",   label:"Calendar"         },
