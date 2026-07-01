@@ -445,17 +445,19 @@ const Divider = ({ my=16 }) => <div style={{ height:1,background:C.border,margin
 
 const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
   if (!open) return null;
+  const modalIsDesktop = typeof window !== "undefined" ? window.innerWidth >= 640 : true;
+  const modalIsMobile = typeof window !== "undefined" ? window.innerWidth < 640 : false;
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:0 }}
       onClick={onClose}
       // On tablet+ center it
-      onMouseEnter={e=>{ if(window.innerWidth>=640) { e.currentTarget.style.alignItems="center"; e.currentTarget.style.padding="16px"; } }}>
+      onMouseEnter={e=>{ if(typeof window!=="undefined" && window.innerWidth>=640) { e.currentTarget.style.alignItems="center"; e.currentTarget.style.padding="16px"; } }}>
       <div style={{ background:C.surface,borderRadius:"16px 16px 0 0",padding:24,width:"100%",maxWidth:width,
         boxShadow:"0 -4px 32px rgba(0,0,0,.16)",maxHeight:"92vh",overflowY:"auto",
-        ...(window.innerWidth>=640?{borderRadius:14,padding:28}:{}) }}
+        ...(modalIsDesktop?{borderRadius:14,padding:28}:{}) }}
         onClick={e=>e.stopPropagation()}>
         {/* Drag handle (mobile) */}
-        {window.innerWidth<640&&<div style={{ width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 20px" }} />}
+        {modalIsMobile&&<div style={{ width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 20px" }} />}
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
             {onBack&&<button onClick={onBack} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:15,flexShrink:0 }}>&#8249;</button>}
@@ -3830,6 +3832,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     });
   };
 
+  const getProductIntroMarketingRows = () => {
+    const marketing = ((group.aiWorkspace || {}).marketing || {}) as any;
+    return Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
+  };
+
   const saveProductIntroMarketingRows = (rows:any[]) => {
     const cleanRows = Array.isArray(rows) ? rows : [];
     updateAiWorkspace("marketing",{
@@ -4323,6 +4330,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       product:row.product || row.productName || "",
       sku:row.skuCode || row.sku || "",
     }));
+    const selectedSections = getSelectedEcommerceSections();
 
     const instruction = [
       "Create the AI E-commerce Prompt only, not the final listing output.",
