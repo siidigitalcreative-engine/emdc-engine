@@ -10929,6 +10929,26 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuColumnDragIndex,setSkuColumnDragIndex] = useState<number|null>(null);
   const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
   const [skuTableEditMode,setSkuTableEditMode] = useState(false);
+  const SKU_COLUMN_WIDTH_SETTINGS_KEY = "emdc_sku_column_width_settings_v1";
+  const DEFAULT_SKU_COLUMN_WIDTHS:any = { brand:160, sku:170, collection:160, tag:150, productName:280, srp:110, imageLink:300, inventory:100, status:140 };
+  const loadSkuColumnWidthSettings = () => {
+    if(typeof window === "undefined") return { mode:"manual", widths:DEFAULT_SKU_COLUMN_WIDTHS };
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SKU_COLUMN_WIDTH_SETTINGS_KEY) || "{}");
+      return {
+        mode:["manual","content","equal"].includes(parsed?.mode) ? parsed.mode : "manual",
+        widths:{ ...DEFAULT_SKU_COLUMN_WIDTHS, ...(parsed?.widths || {}) },
+      };
+    } catch {
+      return { mode:"manual", widths:DEFAULT_SKU_COLUMN_WIDTHS };
+    }
+  };
+  const [skuColumnWidthMode,setSkuColumnWidthMode] = useState<any>(()=>loadSkuColumnWidthSettings().mode);
+  const [skuColumnWidths,setSkuColumnWidths] = useState<any>(()=>loadSkuColumnWidthSettings().widths);
+  useEffect(()=>{
+    if(typeof window === "undefined") return;
+    try { localStorage.setItem(SKU_COLUMN_WIDTH_SETTINGS_KEY, JSON.stringify({ mode:skuColumnWidthMode, widths:skuColumnWidths })); } catch {}
+  },[skuColumnWidthMode,skuColumnWidths]);
   const [skuSearch,setSkuSearch] = useState("");
   const deferredSkuSearch = useDeferredValue(skuSearch);
   const [activeSkuTag,setActiveSkuTag] = useState("all");
@@ -11739,21 +11759,65 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
   const bulkGridTemplate = `${isMobile?"36px":"42px"} ${BULK_COLUMNS.map((c:any)=>bulkColumnWidth(c.key)).join(" ")}`;
   const bulkTableMinWidth = isMobile ? Math.max(820,36+(BULK_COLUMNS.length*140)) : Math.max(760,42+(BULK_COLUMNS.length*120));
-  const skuTableColumnWidth = (key:string) => {
-    if(key==="brand") return "minmax(130px,.85fr)";
-    if(key==="sku") return "minmax(150px,.9fr)";
-    if(key==="collection") return "minmax(140px,.85fr)";
-    if(key==="tag") return "minmax(130px,.75fr)";
-    if(key==="productName") return "minmax(230px,1.45fr)";
-    if(key==="srp") return "minmax(90px,.5fr)";
-    if(key==="imageLink") return "minmax(240px,1.45fr)";
-    if(key==="inventory") return "minmax(90px,.5fr)";
-    if(key==="status") return "minmax(140px,.75fr)";
-    return "minmax(170px,1fr)";
+  const getSkuColumnCellText = (s:any, col:any) => {
+    const brand=brandById[s.brandId];
+    if(col.key==="brand") return brand?.name || "";
+    if(col.key==="sku") return s.sku || "";
+    if(col.key==="collection") return s.collection || "Uncategorized";
+    if(col.key==="tag") return getSkuTags(s).join(", ");
+    if(col.key==="productName") return s.productName || "";
+    if(col.key==="srp") return s.srp || s.extraFields?.SRP || s.extraFields?.srp || "";
+    if(col.key==="imageLink") return s.imageLink || s.imageUrl || s.extraFields?.["Image Link"] || s.extraFields?.imageLink || s.extraFields?.imagelink || "";
+    if(col.key==="inventory") return String(s.inventory ?? "");
+    if(col.key==="status") return getSD(s).label || "";
+    return getSkuExtraValue(s,col);
+  };
+  const getSkuContentWidthPx = (col:any) => {
+    const sample=(filteredSkus || []).slice(0,250);
+    const maxChars=Math.max(
+      String(col.label || "").length,
+      ...sample.map((s:any)=>String(getSkuColumnCellText(s,col) || "").length)
+    );
+    const base=Math.ceil(maxChars * 7.2) + 34;
+    const min:any={ brand:130, sku:140, collection:130, tag:120, productName:190, srp:90, imageLink:220, inventory:90, status:120 };
+    const max:any={ brand:260, sku:240, collection:260, tag:230, productName:420, srp:150, imageLink:520, inventory:140, status:220 };
+    return Math.max(min[col.key] || 130, Math.min(max[col.key] || 360, base));
+  };
+  const getSkuManualWidthPx = (key:string) => {
+    const fallback:any = { brand:160, sku:170, collection:160, tag:150, productName:280, srp:110, imageLink:300, inventory:100, status:140 };
+    const raw = Number(skuColumnWidths?.[key] ?? fallback[key] ?? 170);
+    return Math.max(80, Math.min(640, Number.isFinite(raw) ? raw : (fallback[key] || 170)));
+  };
+  const getSkuColumnWidthPx = (col:any) => {
+    if(skuColumnWidthMode==="equal") return 180;
+    if(skuColumnWidthMode==="content") return getSkuContentWidthPx(col);
+    return getSkuManualWidthPx(col.key);
+  };
+  const setSkuManualColumnWidth = (key:string, value:any) => {
+    const n=Math.max(80,Math.min(640,parseInt(String(value || ""),10)||80));
+    setSkuColumnWidthMode("manual");
+    setSkuColumnWidths((prev:any)=>({ ...prev, [key]:n }));
+  };
+  const fitSkuColumnsByContent = () => {
+    const next:any = {};
+    skuTableColumns.forEach((col:any)=>{ next[col.key]=getSkuContentWidthPx(col); });
+    setSkuColumnWidths((prev:any)=>({ ...prev, ...next }));
+    setSkuColumnWidthMode("content");
+  };
+  const makeSkuColumnsEqual = () => {
+    const next:any = {};
+    skuTableColumns.forEach((col:any)=>{ next[col.key]=180; });
+    setSkuColumnWidths((prev:any)=>({ ...prev, ...next }));
+    setSkuColumnWidthMode("equal");
+  };
+  const resetSkuColumnWidths = () => {
+    setSkuColumnWidths(DEFAULT_SKU_COLUMN_WIDTHS);
+    setSkuColumnWidthMode("manual");
   };
   const skuActionsColumnWidth = "104px";
-  const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuTableColumns.map((c:any)=>skuTableColumnWidth(c.key)).join(" ")} ${skuActionsColumnWidth}`;
-  const skuTableMinWidth = Math.max(1120,(skuTableEditMode?42:0)+104+(skuTableColumns.length*145));
+  const skuColumnWidthValues = skuTableColumns.map((c:any)=>getSkuColumnWidthPx(c));
+  const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuColumnWidthValues.map((w:number)=>`${w}px`).join(" ")} ${skuActionsColumnWidth}`;
+  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+104+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
 
   const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
   const normalizeSkuCellUrl = (url:any) => {
@@ -11927,8 +11991,27 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             )}
 
             {!isMobile&&skuTableEditMode&&(
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
-                <span style={{ fontSize:12,color:C.muted }}>Preview columns follow the pasted sheet format: Brand, SKU, Category, Tag, Product, SRP, Image Link. Use product row actions to edit, delete, or reorder rows.</span>
+              <div style={{ display:"flex",flexDirection:"column",gap:10,padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,marginBottom:12 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+                  <span style={{ fontSize:12,color:C.muted }}>Preview columns follow the pasted sheet format. Adjust column widths here, then click Done Editing to continue.</span>
+                  <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
+                    <button type="button" onClick={()=>setSkuColumnWidthMode("manual")} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="manual"?C.accent:C.border}`,background:skuColumnWidthMode==="manual"?C.accent:C.surface,color:skuColumnWidthMode==="manual"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Manual</button>
+                    <button type="button" onClick={fitSkuColumnsByContent} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="content"?C.accent:C.border}`,background:skuColumnWidthMode==="content"?C.accent:C.surface,color:skuColumnWidthMode==="content"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Fit by Content</button>
+                    <button type="button" onClick={makeSkuColumnsEqual} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="equal"?C.accent:C.border}`,background:skuColumnWidthMode==="equal"?C.accent:C.surface,color:skuColumnWidthMode==="equal"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Equal Widths</button>
+                    <button type="button" onClick={resetSkuColumnWidths} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,color:C.muted,fontSize:11,fontWeight:800,cursor:"pointer" }}>Reset</button>
+                  </div>
+                </div>
+                {skuColumnWidthMode==="manual"&&(
+                  <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8 }}>
+                    {skuTableColumns.map((col:any)=>(
+                      <label key={col.key} style={{ display:"flex",flexDirection:"column",gap:4,fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>
+                        {col.label}
+                        <input type="number" min={80} max={640} value={getSkuManualWidthPx(col.key)} onChange={e=>setSkuManualColumnWidth(col.key,e.target.value)}
+                          style={{ height:30,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${C.border}`,fontSize:12,color:C.text,outline:"none",background:C.surface }} />
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
