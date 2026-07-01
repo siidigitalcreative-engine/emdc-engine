@@ -3606,15 +3606,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const updateAiWorkspace = (tab:string, patch:any) => {
-    const current = group.aiWorkspace || {};
-    const next = {
-      ...current,
-      [tab]: {
-        ...(current[tab] || {}),
-        ...patch,
-      }
-    };
-    if(onUpdateGroup) onUpdateGroup({ aiWorkspace:next });
+    // Send only the changed tab patch to the parent.
+    // This prevents one Digital Creative update from overwriting another update
+    // that happened before React re-rendered this checklist group.
+    if(onUpdateGroup) onUpdateGroup({ aiWorkspacePatch:{ [tab]: patch } });
   };
 
   const getOverviewItems = () => {
@@ -7669,7 +7664,18 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const deleteSavedProductIntroDigitalOutput = (savedId:string) => {
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
-        updateAiWorkspace("digital",{ savedImageOutputs:saved.filter((entry:any)=>entry.id!==savedId) });
+        const target = saved.find((entry:any)=>entry.id===savedId);
+        const nextSaved = saved.filter((entry:any)=>entry.id!==savedId);
+        const currentRows = Array.isArray(digital.productIntroCreativeRows) ? digital.productIntroCreativeRows : [];
+        const nextRows = currentRows.map((row:any)=>{
+          const matches = target && (row.id===target.cardId || row.id===target.sourceRowId);
+          if(!matches) return row;
+          return { ...row, savedImageAt:"", savedImageUrl:"", driveFileId:"" };
+        });
+        updateAiWorkspace("digital",{
+          savedImageOutputs:nextSaved,
+          ...(currentRows.length ? { productIntroCreativeRows:nextRows } : {}),
+        });
         markActionDone(`delete-digital-saved-${savedId}`);
       };
       const defaultProductIntroDetailedPromptInstructions = "Create a highly executable product image prompt for AI image generation. Strictly preserve the product look from the provided product image links. Improve the user's own prompt without changing its core request. Include clear scene, composition, lighting, camera angle, product placement, styling, quality, and negative restrictions. Avoid text overlays unless the user specifically asks for text.";
@@ -10356,7 +10362,31 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     const typeChanged = !!patch?.launchType && currentGroup?.launchType !== patch.launchType;
 
     setGroups((p:any)=>{
-      const next=p.map((g:any)=>g.id===id?{...g,...patch}:g);
+      const next=p.map((g:any)=>{
+        if(g.id!==id) return g;
+
+        const { aiWorkspacePatch, ...plainPatch } = patch || {};
+        let mergedGroup:any = { ...g, ...plainPatch };
+
+        if (plainPatch.aiWorkspace) {
+          const currentWs = g.aiWorkspace || {};
+          const incomingWs = plainPatch.aiWorkspace || {};
+          mergedGroup.aiWorkspace = Object.keys(incomingWs).reduce((acc:any,tabKey:string)=>{
+            acc[tabKey] = { ...(currentWs[tabKey] || {}), ...(incomingWs[tabKey] || {}) };
+            return acc;
+          }, { ...currentWs });
+        }
+
+        if (aiWorkspacePatch) {
+          const currentWs = mergedGroup.aiWorkspace || g.aiWorkspace || {};
+          mergedGroup.aiWorkspace = Object.keys(aiWorkspacePatch).reduce((acc:any,tabKey:string)=>{
+            acc[tabKey] = { ...(acc[tabKey] || {}), ...(aiWorkspacePatch[tabKey] || {}) };
+            return acc;
+          }, { ...currentWs });
+        }
+
+        return mergedGroup;
+      });
       if(onStateChange) onStateChange({checklistGroups:next});
       return next;
     });
