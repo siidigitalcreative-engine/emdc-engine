@@ -10868,7 +10868,33 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 };
 
 // ─── SKU STORAGE ─────────────────────────────────────────────────────────────
-const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange }) => {
+const DEFAULT_GLOBAL_SKU_TABLE_COLUMNS = [
+  { key:"productName", label:"Product",    base:true },
+  { key:"sku",         label:"SKU",        base:true },
+  { key:"brand",       label:"Brand",      base:true },
+  { key:"inventory",   label:"Stock",      base:true },
+  { key:"status",      label:"Status",     base:true },
+];
+
+const sanitizeSkuTableColumns = (columns:any[] = []) => {
+  const used = new Set<string>();
+  const safe = (Array.isArray(columns) ? columns : [])
+    .filter((col:any)=>col && col.key && col.label)
+    .map((col:any)=>({
+      key:String(col.key),
+      label:String(col.label),
+      base:!!col.base,
+      custom:!!col.custom,
+    }))
+    .filter((col:any)=>{
+      if(used.has(col.key)) return false;
+      used.add(col.key);
+      return true;
+    });
+  return safe.length ? safe : DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
+};
+
+const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
   const { isMobile } = useBreakpoint();
   const [activeBrand,setActiveBrand]     = useState(null);
   const [skuModal,setSkuModal]           = useState(false);
@@ -10883,13 +10909,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
   const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""});
-  const DEFAULT_SKU_TABLE_COLUMNS = [
-    { key:"productName", label:"Product",    base:true },
-    { key:"sku",         label:"SKU",        base:true },
-    { key:"brand",       label:"Brand",      base:true },
-    { key:"inventory",   label:"Stock",      base:true },
-    { key:"status",      label:"Status",     base:true },
-  ];
+  const DEFAULT_SKU_TABLE_COLUMNS = DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
   const SKU_TABLE_BASE_COLUMN_ALIASES:any = {
     product:{ key:"productName", label:"Product", base:true },
     productname:{ key:"productName", label:"Product", base:true },
@@ -10906,7 +10926,9 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     tag:{ key:"tag", label:"Tag", base:true },
     tags:{ key:"tag", label:"Tag", base:true },
   };
-  const [skuTableColumns,setSkuTableColumns] = useState<any[]>(DEFAULT_SKU_TABLE_COLUMNS);
+  const [internalSkuTableColumns,setInternalSkuTableColumns] = useState<any[]>(DEFAULT_SKU_TABLE_COLUMNS);
+  const skuTableColumns = sanitizeSkuTableColumns(controlledSkuTableColumns || internalSkuTableColumns);
+  const setSkuTableColumns = controlledSetSkuTableColumns || setInternalSkuTableColumns;
   const [skuNewColumn,setSkuNewColumn] = useState("");
   const [skuColumnDragIndex,setSkuColumnDragIndex] = useState<number|null>(null);
   const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
@@ -11748,20 +11770,41 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     );
   };
 
+  const getFirstSkuCellUrl = (value:any) => {
+    const match = String(value || "").match(skuCellUrlRegex);
+    return match?.[0] || "";
+  };
+
+  const EditableSkuLinkInput = ({ value, onChange, placeholder="—" }: any) => {
+    const firstUrl = getFirstSkuCellUrl(value);
+    return (
+      <div style={{ display:"flex",alignItems:"center",gap:5,width:"100%",minWidth:0 }}>
+        <input value={value || ""} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+          style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none",minWidth:0 }} />
+        {firstUrl&&(
+          <button
+            type="button"
+            onClick={(e)=>{ e.stopPropagation(); window.open(normalizeSkuCellUrl(firstUrl),"_blank","noopener,noreferrer"); }}
+            title="Open link"
+            style={{ width:28,height:28,borderRadius:5,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.accent,fontSize:12,fontWeight:900,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center" }}
+          >↗</button>
+        )}
+      </div>
+    );
+  };
+
   const renderSkuDesktopCell = (s:any, col:any, brand:any, st:any) => {
     if(col.key==="productName") return renderClickableSkuCellText(s.productName,"—",{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 });
     if(col.key==="sku") return renderClickableSkuCellText(s.sku,"—",{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
     if(col.key==="brand") return <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} />{renderClickableSkuCellText(brand.name,"—",{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" })}</div>}</div>;
     if(col.key==="collection") return skuTableEditMode
-      ? <input value={s.collection||""} onChange={e=>setSkuCollectionValue(s.id,e.target.value)} placeholder="Uncategorized"
-          style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />
+      ? <EditableSkuLinkInput value={s.collection||""} onChange={(value:string)=>setSkuCollectionValue(s.id,value)} placeholder="Uncategorized" />
       : renderClickableSkuCellText(s.collection||"Uncategorized","Uncategorized",{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
     if(col.key==="inventory") return <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>;
     if(col.key==="status") return <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"3px 8px",borderRadius:5,border:`1px solid ${st.color}28`,display:"inline-block",whiteSpace:"nowrap" }}>{st.label}</span>;
     const extraValue = getSkuExtraValue(s,col);
     return skuTableEditMode
-      ? <input value={extraValue} onChange={e=>setSkuExtraValue(s.id,col,e.target.value)} placeholder="—"
-          style={{ width:"100%",height:28,padding:"4px 7px",fontSize:12,border:`1px solid ${C.border}`,borderRadius:5,background:C.surface,color:C.text,outline:"none" }} />
+      ? <EditableSkuLinkInput value={extraValue} onChange={(value:string)=>setSkuExtraValue(s.id,col,value)} placeholder="—" />
       : renderClickableSkuCellText(extraValue,"—",{ fontSize:12,color:extraValue?C.textSub:C.faint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" });
   };
 
@@ -15213,6 +15256,7 @@ export default function App({
   const [copyLinkStatus,setCopyLinkStatus] = useState("");
   const [brands,setBrands]     = useState<any[]>(initialData?.skuBrands ?? INITIAL_BRANDS);
   const [skuStorage,setSkuStorage] = useState<any[]>(initialData?.skuItems ?? []);
+  const [skuTableColumns,setSkuTableColumns] = useState<any[]>(sanitizeSkuTableColumns(initialData?.skuTableColumns || DEFAULT_GLOBAL_SKU_TABLE_COLUMNS));
   const [navigateToGroupId,setNavigateToGroupId]   = useState<any>(()=>initialRouteRef.current.groupId || null);
 
   // Lifted checklist state — owned by App so it survives switching away from and back to the Checklists tab
@@ -15444,6 +15488,7 @@ export default function App({
   const makeAppStatePayload = () => ({
     skuBrands: brands,
     skuItems: skuStorage,
+    skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
     checklistGroups,
     checklistItems: checklistAllItems,
     checklistStatuses,
@@ -15484,6 +15529,7 @@ export default function App({
     rememberLastGoodEmdcAppState(parsed);
     if (Array.isArray(parsed?.skuBrands)) setBrands(parsed.skuBrands);
     if (Array.isArray(parsed?.skuItems)) setSkuStorage(parsed.skuItems);
+    if (Array.isArray(parsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(parsed.skuTableColumns));
     if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(parsed.checklistGroups);
     if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(parsed.checklistItems);
     if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
@@ -15635,6 +15681,7 @@ export default function App({
     appStateHydrated,
     brands,
     skuStorage,
+    skuTableColumns,
     checklistGroups,
     checklistAllItems,
     checklistStatuses,
@@ -15656,6 +15703,7 @@ export default function App({
     localSyncTick,
     brands,
     skuStorage,
+    skuTableColumns,
     checklistGroups,
     checklistAllItems,
     checklistStatuses,
@@ -15666,6 +15714,7 @@ export default function App({
 
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
+  useEffect(() => { if (onStateChange) onStateChange({ skuTableColumns: sanitizeSkuTableColumns(skuTableColumns) }); }, [skuTableColumns]);
   useEffect(() => {
     setCalendarEventTypes((prev:any[])=>{
       const next = ensureRequiredCalendarTypes(prev);
@@ -15802,7 +15851,7 @@ export default function App({
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onStateChange={onStateChange} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={onStateChange} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
