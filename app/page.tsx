@@ -4958,25 +4958,46 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return Array.from(map.values());
   };
 
-  const getMarketingDcTransferRowsBackupKey = (transferType:string) => group?.id ? `emdc_marketing_dc_transfer_rows_v1_${group.id}_${transferType}` : "";
+  const getMarketingDcTransferRowsBackupKey = (transferType:string) => {
+    const groupKey = String(group?.id || group?.groupName || "").trim().replace(/[^a-z0-9_-]+/gi,"_");
+    return groupKey ? `emdc_marketing_dc_transfer_rows_v2_${groupKey}_${transferType}` : "";
+  };
+
+  const getLegacyMarketingDcTransferRowsBackupKey = (transferType:string) => group?.id ? `emdc_marketing_dc_transfer_rows_v1_${group.id}_${transferType}` : "";
+
+  const getMarketingDcDirectQueueKey = (transferType:string) => {
+    const groupKey = String(group?.id || group?.groupName || "").trim().replace(/[^a-z0-9_-]+/gi,"_");
+    return groupKey ? `emdc_marketing_dc_direct_queue_v1_${groupKey}_${transferType}` : "";
+  };
 
   const readMarketingDcTransferRowsBackup = (transferType:string) => {
     if (typeof window === "undefined") return [];
-    const key = getMarketingDcTransferRowsBackupKey(transferType);
-    if(!key) return [];
-    try {
-      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
-      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-    } catch { return []; }
+    const keys = [
+      getMarketingDcTransferRowsBackupKey(transferType),
+      getMarketingDcDirectQueueKey(transferType),
+      getLegacyMarketingDcTransferRowsBackupKey(transferType),
+    ].filter(Boolean);
+    const lists:any[] = [];
+    keys.forEach((key:string)=>{
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        if(Array.isArray(parsed)) lists.push(...parsed.filter(Boolean));
+      } catch {}
+    });
+    return mergeDigitalCreativeRows(lists);
   };
 
   const writeMarketingDcTransferRowsBackup = (transferType:string, rows:any[] = []) => {
     if (typeof window === "undefined") return;
-    const key = getMarketingDcTransferRowsBackupKey(transferType);
-    if(!key) return;
+    const keys = [
+      getMarketingDcTransferRowsBackupKey(transferType),
+      getMarketingDcDirectQueueKey(transferType),
+      getLegacyMarketingDcTransferRowsBackupKey(transferType),
+    ].filter(Boolean);
+    if(!keys.length) return;
     try {
       const cleanRows = normalizeTransferRowsForStorage(rows);
-      localStorage.setItem(key, JSON.stringify(cleanRows));
+      keys.forEach((key:string)=>localStorage.setItem(key, JSON.stringify(cleanRows)));
       markEmdcLocalStateUpdated();
       window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
@@ -4989,6 +5010,33 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       map.set(getTransferRowIdentity(normalized,idx), normalized);
     });
     return Array.from(map.values());
+  };
+
+  const persistMarketingDcTransferDirectly = (productIntroRows:any[] = [], campaignRows:any[] = []) => {
+    if (typeof window === "undefined" || !group?.id) return;
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = raw ? JSON.parse(raw) : {};
+      const groups = Array.isArray(parsed?.checklistGroups) ? parsed.checklistGroups : [];
+      const currentGroup = groups.find((item:any)=>item?.id===group.id) || group || {};
+      const currentWorkspace = (currentGroup.aiWorkspace || group.aiWorkspace || {}) as any;
+      const currentDigital = (currentWorkspace.digital || {}) as any;
+      const nextDigital = {
+        ...currentDigital,
+        productIntroCreativeRows:mergeDigitalCreativeRows(currentDigital.productIntroCreativeRows || [], productIntroRows),
+        campaignCreativeRows:mergeDigitalCreativeRows(currentDigital.campaignCreativeRows || [], campaignRows),
+        productIntroRowsCleared:false,
+        generatedAt:new Date().toISOString(),
+        lastMarketingDcTransferAt:new Date().toISOString(),
+      };
+      const nextWorkspace = { ...currentWorkspace, digital:nextDigital };
+      const nextGroup = { ...currentGroup, aiWorkspace:nextWorkspace };
+      const nextGroups = groups.some((item:any)=>item?.id===group.id) ? groups.map((item:any)=>item?.id===group.id ? nextGroup : item) : [...groups,nextGroup];
+      safeSetEmdcAppStateLocal({ ...parsed, checklistGroups:nextGroups });
+      writeEmdcGroupWorkspaceBackup(group.id,nextWorkspace);
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
   };
 
   const getProductIntroDigitalRows = () => {
@@ -7178,6 +7226,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             const campaignRows = mergeDigitalCreativeRows(existingCampaignRows,row);
             writeMarketingDcTransferRowsBackup("product_intro",productIntroRows);
             writeMarketingDcTransferRowsBackup("campaign",campaignRows);
+            persistMarketingDcTransferDirectly(productIntroRows,campaignRows);
             const visibleRows = isCampaignChecklist ? campaignRows : productIntroRows;
             const now = new Date().toISOString();
 
