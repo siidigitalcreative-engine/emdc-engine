@@ -662,7 +662,17 @@ const DateInput = ({ value, onChange, style={} }) => {
   const getModeFromValue = (v:any) => String(v || "").startsWith("monthly:") ? "monthly" : String(v || "").startsWith("yearly:") ? "yearly" : "date";
   const [mode,setMode]=useState(getModeFromValue(value));
   const dateInputRef = useRef<any>(null);
-  const yearlyDateValue = yearly ? `${today.getFullYear()}-${String(value).replace("yearly:","")}` : (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : `${today.getFullYear()}-01-01`);
+  const yearlyRaw = yearly ? String(value).replace("yearly:","") : (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(5) : `${pad(today.getMonth()+1)}-${pad(today.getDate())}`);
+  const yearlyParts = yearlyRaw.split("-");
+  const yearlyMonth = /^\d{2}$/.test(yearlyParts[0] || "") ? yearlyParts[0] : pad(today.getMonth()+1);
+  const yearlyDayMax = new Date(2024, Number(yearlyMonth), 0).getDate();
+  const yearlyDay = pad(Math.min(Math.max(Number(yearlyParts[1]) || 1, 1), yearlyDayMax));
+  const setYearlyPart = (nextMonth:any, nextDay:any) => {
+    const mm = pad(Number(nextMonth) || 1);
+    const max = new Date(2024, Number(mm), 0).getDate();
+    const dd = pad(Math.min(Math.max(Number(nextDay) || 1, 1), max));
+    onChange(`yearly:${mm}-${dd}`);
+  };
   const monthlyDays = recurring ? value.replace("monthly:","").split(",").filter(Boolean) : ["15","30"];
   const [customDay,setCustomDay] = useState("");
   useEffect(()=>{ if(typeof value==="string") setMode(getModeFromValue(value)); },[value]);
@@ -720,16 +730,13 @@ const DateInput = ({ value, onChange, style={} }) => {
         </div>
       )}
       {mode==="yearly" && (
-        <div style={{ flex:1,position:"relative",cursor:"pointer" }}>
-          <input
-            type="date"
-            value={yearlyDateValue}
-            onChange={e=>{
-              const selected = e.target.value;
-              if(/^\d{4}-\d{2}-\d{2}$/.test(selected)) onChange(`yearly:${selected.slice(5)}`);
-            }}
-            style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",colorScheme:"light",fontFamily:"inherit",boxSizing:"border-box",cursor:"pointer" }}
-          />
+        <div style={{ flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+          <Select value={yearlyMonth} onChange={(m:any)=>setYearlyPart(m, yearlyDay)} style={{height:38}}>
+            {MONTHS_SHORT.map((m,i)=><option key={m} value={pad(i+1)}>{m}</option>)}
+          </Select>
+          <Select value={yearlyDay} onChange={(d:any)=>setYearlyPart(yearlyMonth, d)} style={{height:38}}>
+            {Array.from({length:yearlyDayMax},(_,i)=>pad(i+1)).map(d=><option key={d} value={d}>{Number(d)}</option>)}
+          </Select>
         </div>
       )}
     </div>
