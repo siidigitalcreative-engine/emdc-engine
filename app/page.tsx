@@ -4970,6 +4970,60 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return groupKey ? `emdc_marketing_dc_direct_queue_v1_${groupKey}_${transferType}` : "";
   };
 
+  // Extra durable Marketing → Digital Creative queue.
+  // This prevents transferred Marketing ad outputs from disappearing when React state,
+  // cloud sync, or checklist-type detection is delayed. Digital Creative reads this
+  // queue directly using the current checklist group id/name.
+  const MARKETING_TO_DC_GLOBAL_QUEUE_KEY = "emdc_marketing_to_dc_outputs_v3";
+  const getMarketingDcGroupIdentity = () => ({
+    groupId:String(group?.id || "").trim(),
+    groupName:String(group?.groupName || group?.name || "").trim(),
+  });
+  const readMarketingDcGlobalQueue = (transferType:string) => {
+    if (typeof window === "undefined") return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MARKETING_TO_DC_GLOBAL_QUEUE_KEY) || "[]");
+      const list = Array.isArray(parsed) ? parsed : [];
+      const { groupId, groupName } = getMarketingDcGroupIdentity();
+      return list.filter((row:any)=>{
+        const rowType = String(row?._dcTransferType || row?.transferType || "");
+        const rowGroupId = String(row?._dcGroupId || row?.groupId || "").trim();
+        const rowGroupName = String(row?._dcGroupName || row?.groupName || "").trim();
+        const typeMatches = !transferType || rowType === transferType;
+        const groupMatches = (!!groupId && rowGroupId === groupId) || (!!groupName && rowGroupName === groupName);
+        return typeMatches && groupMatches;
+      });
+    } catch { return []; }
+  };
+  const writeMarketingDcGlobalQueue = (transferType:string, rows:any[] = []) => {
+    if (typeof window === "undefined") return;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MARKETING_TO_DC_GLOBAL_QUEUE_KEY) || "[]");
+      const current = Array.isArray(parsed) ? parsed : [];
+      const { groupId, groupName } = getMarketingDcGroupIdentity();
+      const remaining = current.filter((row:any)=>{
+        const rowType = String(row?._dcTransferType || row?.transferType || "");
+        const rowGroupId = String(row?._dcGroupId || row?.groupId || "").trim();
+        const rowGroupName = String(row?._dcGroupName || row?.groupName || "").trim();
+        const sameType = rowType === transferType;
+        const sameGroup = (!!groupId && rowGroupId === groupId) || (!!groupName && rowGroupName === groupName);
+        return !(sameType && sameGroup);
+      });
+      const stampedRows = normalizeTransferRowsForStorage(rows).map((row:any)=>({
+        ...row,
+        _dcTransferType:transferType,
+        _dcGroupId:groupId,
+        _dcGroupName:groupName,
+        transferType,
+        groupId,
+        groupName,
+        transferredFrom:"Marketing",
+        transferredAt:row?.transferredAt || new Date().toISOString(),
+      }));
+      localStorage.setItem(MARKETING_TO_DC_GLOBAL_QUEUE_KEY, JSON.stringify([...remaining, ...stampedRows]));
+    } catch {}
+  };
+
   const readMarketingDcTransferRowsBackup = (transferType:string) => {
     if (typeof window === "undefined") return [];
     const keys = [
@@ -4984,6 +5038,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         if(Array.isArray(parsed)) lists.push(...parsed.filter(Boolean));
       } catch {}
     });
+    lists.push(...readMarketingDcGlobalQueue(transferType));
     return mergeDigitalCreativeRows(lists);
   };
 
@@ -4998,6 +5053,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     try {
       const cleanRows = normalizeTransferRowsForStorage(rows);
       keys.forEach((key:string)=>localStorage.setItem(key, JSON.stringify(cleanRows)));
+      writeMarketingDcGlobalQueue(transferType, cleanRows);
       markEmdcLocalStateUpdated();
       window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
@@ -14737,7 +14793,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
           transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
         }}
       >
-        {done ? "✓ Sent" : children}
+        {done ? "✓ Added" : children}
       </Btn>
     );
   };
