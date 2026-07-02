@@ -4427,7 +4427,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
 
-  const renderMainPromotionCard = (promo:any, compact=false) => {
+  const renderMainPromotionCard = (promo:any, compact=false, label="Main Promotion") => {
     const promoInfo:any = getMainPromotionDisplay(promo);
     const hasPromo = !!promoInfo.formatted;
     if (!hasPromo && compact) return null;
@@ -4436,7 +4436,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap" }}>
           <div style={{ minWidth:0 }}>
             <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6 }}>
-              <span style={{ fontSize:11,fontWeight:900,color:hasPromo?"#047857":C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Main Promotion</span>
+              <span style={{ fontSize:11,fontWeight:900,color:hasPromo?"#047857":C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>{label}</span>
               <span style={{ fontSize:10.5,fontWeight:900,color:hasPromo?"#047857":C.faint,background:hasPromo?"#D1FAE5":C.surface,border:`1px solid ${hasPromo?"#A7F3D0":C.border}`,borderRadius:999,padding:"3px 8px" }}>{hasPromo?"Active":"Not set"}</span>
             </div>
             <div style={{ fontSize:22,fontWeight:950,color:hasPromo?"#064E3B":C.text,lineHeight:1.15,wordBreak:"break-word" }}>
@@ -7501,13 +7501,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     {isEditing ? (
                       renderLivestreamOfferInput(item,(patch:any)=>updateItem(item.id,patch),placeholder)
                     ) : (
-                      <div style={{ display:"grid",gap:8 }}>
-                        <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-                          <span style={{ fontSize:10.5,fontWeight:900,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 8px" }}>{itemInfo.typeLabel}</span>
-                          <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{itemInfo.valueLabel}</span>
-                        </div>
-                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35,whiteSpace:"pre-wrap",wordBreak:"break-word" }}>{display || "No details added"}</p>
-                      </div>
+                      renderMainPromotionCard(item,true,title === "Vouchers" ? "Voucher" : "Promotion")
                     )}
                     <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:10,flexWrap:"wrap" }}>
                       <Btn xs variant="outline" onClick={()=>updateLivestream({ [editingKey]:isEditing?"":item.id })}>{isEditing?"Save":"Edit"}</Btn>
