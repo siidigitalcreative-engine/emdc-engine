@@ -208,6 +208,33 @@ async function deleteEmdcCloudKeys(redis: Redis) {
   return { attempted: keys.size, deleted };
 }
 
+
+async function deleteAllCloudKeys(redis: Redis) {
+  const keys = new Set<string>();
+
+  // This is an emergency reset for this EMDC Redis database.
+  // It removes every key in the database so the normal-browser localStorage can republish a clean online copy.
+  try {
+    const allKeys = await (redis as any).keys("*");
+    for (const key of safeArray(allKeys)) {
+      const clean = String(key || "");
+      if (clean) keys.add(clean);
+    }
+  } catch {}
+
+  // Also include known EMDC ranges in case KEYS is limited.
+  keys.add(STATE_KEY);
+  keys.add(SKU_META_KEY);
+  keys.add(LOCAL_STORAGE_META_KEY);
+  keys.add(LAST_GOOD_KEY);
+  keys.add(HISTORY_INDEX_KEY);
+  for (let i = 0; i < MAX_SKU_CHUNKS; i++) keys.add(`${SKU_CHUNK_PREFIX}${i}`);
+  for (let i = 0; i < MAX_LOCAL_STORAGE_CHUNKS; i++) keys.add(`${LOCAL_STORAGE_CHUNK_PREFIX}${i}`);
+
+  const deleted = await batchDelete(redis, Array.from(keys));
+  return { attempted: keys.size, deleted };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const redis = getRedisClient();
@@ -239,6 +266,11 @@ export async function POST(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get("mode") || "";
     const body = await req.json().catch(() => ({}));
+
+    if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud") {
+      const result = await deleteAllCloudKeys(redis);
+      return NextResponse.json({ ok: true, mode: "cleanup-all-cloud", ...result });
+    }
 
     if (mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
       const result = await deleteEmdcCloudKeys(redis);
