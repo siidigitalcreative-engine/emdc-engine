@@ -6433,7 +6433,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
-    const rawData = (group.aiWorkspace || {})[tab] || {};
+    const persistedWorkspace = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}) as any);
+    const persistedTabData = (persistedWorkspace && typeof persistedWorkspace[tab] === "object" && persistedWorkspace[tab]) ? persistedWorkspace[tab] : {};
+    const groupTabData = (((group.aiWorkspace || {}) as any)[tab] && typeof ((group.aiWorkspace || {}) as any)[tab] === "object") ? ((group.aiWorkspace || {}) as any)[tab] : {};
+    const rawData = { ...persistedTabData, ...groupTabData };
     const data = tab === "ecommerce" ? getMergedEcommerceData(rawData) : rawData;
     if(!cfg) return null;
 
@@ -7002,14 +7005,29 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             const visibleRows = isCampaignChecklist ? campaignRows : productIntroRows;
             const now = new Date().toISOString();
 
-            updateAiWorkspace("digital",{
+            const digitalPatch = {
               productIntroCreativeRows:productIntroRows,
               productIntroRowsCleared:false,
               campaignCreativeRows:campaignRows,
               generatedText:visibleRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
               generatedAt:now,
               lastMarketingDcTransferAt:now,
-            });
+            };
+            updateAiWorkspace("digital",digitalPatch);
+            try {
+              const persistedGroup = getPersistedChecklistGroup() || group || {};
+              const nextWorkspace = {
+                ...((persistedGroup.aiWorkspace || group.aiWorkspace || {}) as any),
+                digital:{
+                  ...((((persistedGroup.aiWorkspace || group.aiWorkspace || {}) as any).digital) || {}),
+                  ...digitalPatch,
+                },
+              };
+              writeEmdcGroupWorkspaceBackup(group.id,nextWorkspace);
+              persistChecklistGroupPatchNow({ aiWorkspace:nextWorkspace });
+              markEmdcLocalStateUpdated();
+              window.dispatchEvent(new Event("emdc-local-sync"));
+            } catch {}
             markActionDone(`marketing-send-dc-${row.id}`);
                   }} />
         </div>
@@ -14344,8 +14362,13 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
         sm={sm}
         variant={done ? "primary" : "outline"}
         onClick={(e:any)=>{
-          if (typeof onClick === "function") onClick(e);
+          // Show feedback immediately and keep the user on the current Marketing view.
           markSendDone(id);
+          try {
+            if (typeof onClick === "function") onClick(e);
+          } catch (err) {
+            console.error("Send to DC failed", err);
+          }
         }}
         style={{
           ...(style || {}),
@@ -14358,6 +14381,35 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       </Btn>
     );
   };
+
+  const OverviewActionButton = ({ id, children="Add to Overview", onClick, xs=false, sm=false, style={}, ...props }: any) => {
+    const done = overviewAdded(id);
+    return (
+      <Btn
+        {...props}
+        xs={xs}
+        sm={sm}
+        variant={done ? "primary" : "outline"}
+        onClick={(e:any)=>{
+          markOverviewAdded(id);
+          try {
+            if (typeof onClick === "function") onClick(e);
+          } catch (err) {
+            console.error("Add to Overview failed", err);
+          }
+        }}
+        style={{
+          ...(style || {}),
+          transform:done ? "scale(1.04)" : "scale(1)",
+          boxShadow:done ? "0 0 0 3px rgba(34,197,94,.14)" : "none",
+          transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
+        }}
+      >
+        {done ? "✓ Sent" : children}
+      </Btn>
+    );
+  };
+
   const addMarketingOutputToOverview = (ad:any, key:any, overrideText?:string) => {
     if(!onAddToOverview) return;
     onAddToOverview({ ...ad, text: overrideText ?? ad?.text ?? ad?.imagePrompt ?? "" });
@@ -15625,7 +15677,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                                         <td style={{ padding:10,verticalAlign:"top",width:120 }}>
                                           <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
                                             <Btn xs variant="outline" onClick={()=>toggleGeneratedBatchGmvRowEdit(item.id,index)}>{rowEditing ? "Save" : "Edit"}</Btn>
-                                            {onAddToOverview&&<Btn xs variant="outline" onClick={()=>onAddToOverview({ ...item, text:[`Content Pillar: ${row.pillar || ""}`,`Featured Products: ${(row.products||[]).map((p:any)=>`${p.productName || p.product || "Product"} ${p.sku ? `(${p.sku})` : ""}`).join(", ")}`,`Creative Direction: ${row.creativeDirection || ""}`,`Caption Copy: ${row.caption || ""}`].join("\n") })}>Add to Overview</Btn>}
+                                            {onAddToOverview&&<OverviewActionButton xs id={`gmv-row-overview-${item.id}-${row?.id || rowIndex}`} onClick={()=>onAddToOverview({ ...item, text:[`Content Pillar: ${row.pillar || ""}`,`Featured Products: ${(row.products||[]).map((p:any)=>`${p.productName || p.product || "Product"} ${p.sku ? `(${p.sku})` : ""}`).join(", ")}`,`Creative Direction: ${row.creativeDirection || ""}`,`Caption Copy: ${row.caption || ""}`].join("\n") })}>Add to Overview</OverviewActionButton>}
                                             {onSendToDC&&<DcSendButton xs id={`gmv-row-send-dc-${item.id}-${row?.id || index}`} onClick={()=>sendGeneratedBatchGmvRowToDC(item,row,index)}>Send to DC</DcSendButton>}
                                             <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchGmvRow(item.id,index)}>Delete</Btn>
                                           </div>
@@ -15698,7 +15750,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                         <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
                           <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>{isEditingBatchOutput(item.id)?"Done Editing":"Edit"}</Btn>
                           <Btn xs variant="outline" onClick={()=>saveGeneratedBatchOutput(item)}>Save</Btn>
-                          {onAddToOverview&&<Btn xs variant={overviewAdded(`batch-${item.id}`)?"primary":"outline"} onClick={()=>addMarketingOutputToOverview(item,`batch-${item.id}`)}>{overviewAdded(`batch-${item.id}`)?"✓ Added":"Add to Overview"}</Btn>}
+                          {onAddToOverview&&<OverviewActionButton xs id={`batch-${item.id}`} onClick={()=>addMarketingOutputToOverview(item,`batch-${item.id}`)}>Add to Overview</OverviewActionButton>}
                           {onSendToDC&&<DcSendButton xs id={`batch-output-send-dc-${item.id}`} onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</DcSendButton>}
                           <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchOutput(item.id)}>Delete</Btn>
                         </div>
@@ -15735,7 +15787,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                       </div>
                       <div style={{ display:"flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
                         <button type="button" onClick={()=>copySavedAdTemplate(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Copy</button>
-                        {onAddToOverview&&<button type="button" onClick={()=>addMarketingOutputToOverview(item,`saved-${item.id}`)} style={{ border:`1px solid ${overviewAdded(`saved-${item.id}`)?C.accent:C.border}`,background:overviewAdded(`saved-${item.id}`)?C.accent:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:overviewAdded(`saved-${item.id}`)?"#fff":C.textSub,cursor:"pointer" }}>{overviewAdded(`saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>}
+                        {onAddToOverview&&<OverviewActionButton xs id={`saved-${item.id}`} onClick={()=>addMarketingOutputToOverview(item,`saved-${item.id}`)} style={{ padding:"5px 7px",fontSize:10 }}>Add to Overview</OverviewActionButton>}
                         {onSendToDC&&<DcSendButton xs id={`saved-ad-send-dc-${item.id}`} onClick={()=>sendSavedAdToDC(item)} style={{ padding:"5px 7px",fontSize:10 }}>Send to DC</DcSendButton>}
                         <button type="button" onClick={()=>deleteSavedAdTemplate(item.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
                       </div>
@@ -15761,7 +15813,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
             <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
               <Btn sm variant="outline" onClick={()=>openSavedAdTemplate(savedAdPreview)}>Load to Builder</Btn>
               <Btn sm variant="outline" onClick={()=>copySavedAdTemplate(savedAdPreview)}>Copy</Btn>
-              {onAddToOverview&&<Btn sm variant={overviewAdded(`preview-${savedAdPreview.id}`)?"primary":"outline"} onClick={()=>addMarketingOutputToOverview(savedAdPreview,`preview-${savedAdPreview.id}`)}>{overviewAdded(`preview-${savedAdPreview.id}`)?"✓ Added":"Add to Overview"}</Btn>}
+              {onAddToOverview&&<OverviewActionButton sm id={`preview-${savedAdPreview.id}`} onClick={()=>addMarketingOutputToOverview(savedAdPreview,`preview-${savedAdPreview.id}`)}>Add to Overview</OverviewActionButton>}
               {onSendToDC&&<DcSendButton sm id={`saved-ad-preview-send-dc-${savedAdPreview?.id || "preview"}`} onClick={()=>sendSavedAdToDC(savedAdPreview)}>Send to DC</DcSendButton>}
             </div>
           </div>
