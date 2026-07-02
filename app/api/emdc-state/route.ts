@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 const STATE_KEY = "emdc:app-state:v1";
 const SKU_CHUNK_PREFIX = "emdc:app-state:v1:sku-items:chunk:";
 const SKU_META_KEY = "emdc:app-state:v1:sku-items:meta";
+const LOCAL_STORAGE_CHUNK_PREFIX = "emdc:app-state:v1:local-storage:chunk:";
+const LOCAL_STORAGE_META_KEY = "emdc:app-state:v1:local-storage:meta";
 const LAST_GOOD_KEY = "emdc:app-state:v1:last-good";
 const HISTORY_INDEX_KEY = "emdc:app-state:v1:history";
 const HISTORY_PREFIX = "emdc:app-state:v1:backup:";
@@ -136,6 +138,52 @@ async function hydrateSkuChunks(redis: Redis, data: any) {
   };
 }
 
+
+async function hydrateLocalStorageChunks(redis: Redis, data: any) {
+  if (!isRecord(data)) return data;
+
+  const meta: any = (await redis.get(LOCAL_STORAGE_META_KEY)) || {};
+  const chunkCount = Number(meta.chunkCount || 0);
+  if (!Number.isFinite(chunkCount) || chunkCount <= 0 || chunkCount > 1000) return data;
+
+  const chunks = await Promise.all(
+    Array.from({ length: chunkCount }, (_, index) => redis.get(`${LOCAL_STORAGE_CHUNK_PREFIX}${index}`))
+  );
+
+  const rows = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
+  if (!rows.length) return data;
+
+  const partsByKey: Record<string, any[]> = {};
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const key = String(row.key || "");
+    if (!key.startsWith("emdc")) continue;
+    if (!partsByKey[key]) partsByKey[key] = [];
+    partsByKey[key].push(row);
+  }
+
+  const restored: Record<string, string> = {};
+  for (const [key, parts] of Object.entries(partsByKey)) {
+    const sorted = parts.sort((a: any, b: any) => Number(a.partIndex || 0) - Number(b.partIndex || 0));
+    const partCount = Number(sorted[0]?.partCount || sorted.length);
+    if (sorted.length < partCount) continue;
+    restored[key] = sorted.slice(0, partCount).map((part: any) => String(part.valuePart || "")).join("");
+  }
+
+  return {
+    ...data,
+    localStorage: {
+      ...(isRecord(data.localStorage) ? data.localStorage : {}),
+      ...restored,
+    },
+  };
+}
+
+async function hydrateCloudData(redis: Redis, data: any) {
+  const withSku = await hydrateSkuChunks(redis, data);
+  return hydrateLocalStorageChunks(redis, withSku);
+}
+
 async function saveBackup(redis: Redis, currentData: any, label = "auto") {
   if (!currentData || !isMeaningfulState(currentData)) return;
 
@@ -159,7 +207,7 @@ export async function GET(req: NextRequest) {
 
     if (mode === "last-good") {
       const data = await redis.get(LAST_GOOD_KEY);
-      return NextResponse.json({ ok: true, mode, data: data ? await hydrateSkuChunks(redis,data) : emptyState });
+      return NextResponse.json({ ok: true, mode, data: data ? await hydrateCloudData(redis,data) : emptyState });
     }
 
     if (mode === "history") {
@@ -173,7 +221,7 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await redis.get(STATE_KEY);
-    return NextResponse.json({ ok: true, mode: "current", data: data ? await hydrateSkuChunks(redis,data) : emptyState });
+    return NextResponse.json({ ok: true, mode: "current", data: data ? await hydrateCloudData(redis,data) : emptyState });
   } catch (error: any) {
     return NextResponse.json(
       {
@@ -213,6 +261,30 @@ export async function POST(req: NextRequest) {
       ]);
 
       return NextResponse.json({ ok:true, mode:"sku-chunk", index, total, count:rows.length });
+    }
+
+
+    if (mode === "local-storage-chunk" || body?.mode === "local-storage-chunk") {
+      const index = Number(body?.index);
+      const total = Number(body?.total);
+      const rows = safeArray(body?.rows);
+      if (!Number.isInteger(index) || !Number.isInteger(total) || index < 0 || total <= 0 || index >= total) {
+        return NextResponse.json({ ok:false, error:"Invalid local storage chunk index." }, { status:400 });
+      }
+
+      await Promise.all([
+        redis.set(`${LOCAL_STORAGE_CHUNK_PREFIX}${index}`, rows),
+        redis.set(LOCAL_STORAGE_META_KEY, {
+          version:1,
+          clientId:body?.clientId || "",
+          updatedAt:body?.updatedAt || new Date().toISOString(),
+          chunkCount:total,
+          totalKeys:Number(body?.totalKeys || 0),
+          totalRows:Number(body?.totalRows || 0),
+        }),
+      ]);
+
+      return NextResponse.json({ ok:true, mode:"local-storage-chunk", index, total, count:rows.length });
     }
 
     const currentData = await redis.get(STATE_KEY);
