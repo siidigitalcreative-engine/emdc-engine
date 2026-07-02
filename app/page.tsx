@@ -3633,6 +3633,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [skuPickDept,setSkuPickDept] = useState(null);
   const [productDetail,setProductDetail] = useState<any>(null);
   const [productEdit,setProductEdit] = useState<any>(null);
+  const [productTableEditOpen,setProductTableEditOpen] = useState(false);
+  const [productTableDraft,setProductTableDraft] = useState<any[]>([]);
   const [aiBusy,setAiBusy] = useState<any>({});
   const [aiError,setAiError] = useState<any>({});
   const [savedEcommercePreview,setSavedEcommercePreview] = useState<any>(null);
@@ -3810,30 +3812,84 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return pool[sameBefore % pool.length]?.item || candidateRows[0]?.item || null;
   };
 
+  const extractChecklistProductImageLinks = (item:any):string[] => {
+    if(!item) return [];
+    const directValues:any[] = [
+      item?.imageLink,
+      item?.imageUrl,
+      item?.imageURL,
+      item?.imageLinks,
+      item?.productImageLink,
+      item?.productImageUrl,
+      item?.referenceLink,
+      item?.referenceUrl,
+      item?.link,
+      item?.url,
+      item?.productLink,
+      item?.links,
+    ];
+    const extra = item?.extraFields && typeof item.extraFields === "object" ? item.extraFields : {};
+    Object.entries(extra).forEach(([key,value]:any)=>{
+      const cleanKey = String(key || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
+      if(cleanKey.includes("image") || cleanKey.includes("link") || cleanKey.includes("url") || cleanKey.includes("reference")) directValues.push(value);
+    });
+    Object.entries(item || {}).forEach(([key,value]:any)=>{
+      const cleanKey = String(key || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
+      if(cleanKey.includes("image") || cleanKey.includes("link") || cleanKey.includes("url") || cleanKey.includes("reference")) directValues.push(value);
+    });
+    const urls = directValues
+      .flatMap((value:any)=>Array.isArray(value) ? value : [value])
+      .flatMap((value:any)=>{
+        const raw = String(value || "");
+        const matches = raw.match(/https?:\/\/[^\s,"'<>]+/gi) || [];
+        return matches.map((url:string)=>url.trim().replace(/[)\].,;]+$/g,""));
+      })
+      .filter(Boolean);
+    return Array.from(new Set(urls));
+  };
+
+  const getChecklistProductImageLink = (...items:any[]) => {
+    return Array.from(new Set(items.flatMap((item:any)=>extractChecklistProductImageLinks(item)))).filter(Boolean)[0] || "";
+  };
+
   const getSkuInfo = (sku:any, index:number) => {
     const allSkus = group.skus || [];
     const storageItem = findLatestSkuStorageItem(sku,index,allSkus) || {};
 
     const storageBrand = brandNameFor(storageItem);
     const skuBrand = brandNameFor(sku);
-    const brandId = cleanValue(storageItem.brandId) || cleanValue(sku.brandId);
+    const hasLocalOverride = !!sku?.localProductOverride;
+    const brandId = hasLocalOverride ? (cleanValue(sku.brandId) || cleanValue(storageItem.brandId)) : (cleanValue(storageItem.brandId) || cleanValue(sku.brandId));
 
     const storageCollection = fieldCollection(storageItem);
     const skuCollection = fieldCollection(sku);
 
-    const product = cleanValue(storageItem.productName) || cleanValue(storageItem.name) || cleanValue(sku.productName) || cleanValue(sku.value) || cleanValue(storageItem.sku);
-    const skuCode = cleanValue(storageItem.sku) || cleanValue(sku.sku) || cleanValue(sku.value);
+    const storageProduct = cleanValue(storageItem.productName) || cleanValue(storageItem.name) || cleanValue(storageItem.value) || cleanValue(storageItem.sku);
+    const skuProduct = cleanValue(sku.productName) || cleanValue(sku.name) || cleanValue(sku.value) || cleanValue(sku.sku);
+    const storageSku = cleanValue(storageItem.sku) || cleanValue(storageItem.skuCode) || cleanValue(storageItem.value);
+    const localSku = cleanValue(sku.sku) || cleanValue(sku.skuCode) || cleanValue(sku.value);
+    const product = hasLocalOverride ? (skuProduct || storageProduct) : (storageProduct || skuProduct);
+    const skuCode = hasLocalOverride ? (localSku || storageSku) : (storageSku || localSku);
+    const imageLinks = Array.from(new Set([
+      ...(hasLocalOverride ? extractChecklistProductImageLinks(sku) : extractChecklistProductImageLinks(storageItem)),
+      ...(hasLocalOverride ? extractChecklistProductImageLinks(storageItem) : extractChecklistProductImageLinks(sku)),
+    ])).filter(Boolean);
+    const imageLink = imageLinks[0] || "";
 
     return {
       ...(sku||{}),
       ...(storageItem||{}),
+      ...(hasLocalOverride ? (sku||{}) : {}),
       originalSku:sku,
       index,
-      brand: storageBrand || skuBrand,
+      brand: hasLocalOverride ? (skuBrand || storageBrand) : (storageBrand || skuBrand),
       brandId,
-      collection: storageCollection || skuCollection,
+      collection: hasLocalOverride ? (skuCollection || storageCollection) : (storageCollection || skuCollection),
       product,
       skuCode,
+      imageLink,
+      imageLinks,
+      links:imageLinks,
       sourceId: storageItem?.id || sku?.sourceId || sku?.storageId || sku?.skuStorageId || sku?.id,
       isSyncedFromSkuStorage: !!storageItem?.id,
     };
@@ -3846,6 +3902,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     setProductEdit({
       productName:row.product || "",
       sku:row.skuCode || row.sku || "",
+      imageLink:row.imageLink || (row.imageLinks || row.links || [])[0] || getChecklistProductImageLink(row),
       collection:row.collection || row.category || "",
       brandId:row.brandId || "",
     });
@@ -3861,15 +3918,68 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       skuStorageId:sku.skuStorageId || sku.sourceId || sku.storageId || productDetail.skuStorageId || productDetail.sourceId || productDetail.storageId || productDetail.id,
       value:productEdit.sku || productEdit.productName || sku.value,
       sku:productEdit.sku,
+      skuCode:productEdit.sku,
       productName:productEdit.productName,
       collection:productEdit.collection,
       category:productEdit.collection,
       brandId:productEdit.brandId,
+      imageLink:productEdit.imageLink || "",
+      imageUrl:productEdit.imageLink || "",
+      imageLinks:productEdit.imageLink ? [productEdit.imageLink] : [],
+      links:productEdit.imageLink ? [productEdit.imageLink] : [],
+      extraFields:{ ...(sku.extraFields || {}), ...(productEdit.imageLink ? { "Image Link": productEdit.imageLink } : {}) },
       localProductOverride:true,
     } : sku);
     if(onUpdateGroup) onUpdateGroup({ skus:nextSkus });
     setProductDetail(null);
     setProductEdit(null);
+  };
+
+  const openProductTableEdit = () => {
+    setProductTableDraft(productRows.map((row:any)=>({
+      index:row.index,
+      brandId:row.brandId || "",
+      collection:row.collection || row.category || "",
+      productName:row.product || row.productName || "",
+      sku:row.skuCode || row.sku || "",
+      imageLink:row.imageLink || (row.imageLinks || row.links || [])[0] || getChecklistProductImageLink(row),
+    })));
+    setProductTableEditOpen(true);
+  };
+
+  const updateProductTableDraft = (idx:number, patch:any) => {
+    setProductTableDraft((prev:any[])=>prev.map((row:any,rowIndex:number)=>rowIndex===idx ? { ...row, ...patch } : row));
+  };
+
+  const saveProductTableEdit = () => {
+    const byIndex = new Map(productTableDraft.map((row:any)=>[row.index,row]));
+    const nextSkus = (group.skus || []).map((sku:any,idx:number)=>{
+      const draft:any = byIndex.get(idx);
+      if(!draft) return sku;
+      const imageLink = String(draft.imageLink || "").trim();
+      return {
+        ...sku,
+        id:sku.id || uid(),
+        sourceId:sku.sourceId || sku.storageId || sku.skuStorageId || draft.sourceId || sku.id,
+        storageId:sku.storageId || sku.sourceId || sku.skuStorageId || draft.storageId || sku.id,
+        skuStorageId:sku.skuStorageId || sku.sourceId || sku.storageId || draft.skuStorageId || sku.id,
+        value:draft.sku || draft.productName || sku.value,
+        sku:draft.sku || "",
+        skuCode:draft.sku || "",
+        productName:draft.productName || "",
+        collection:draft.collection || "",
+        category:draft.collection || "",
+        brandId:draft.brandId || "",
+        imageLink,
+        imageUrl:imageLink,
+        imageLinks:imageLink ? [imageLink] : [],
+        links:imageLink ? [imageLink] : [],
+        extraFields:{ ...(sku.extraFields || {}), ...(imageLink ? { "Image Link": imageLink } : {}) },
+        localProductOverride:true,
+      };
+    });
+    if(onUpdateGroup) onUpdateGroup({ skus:nextSkus });
+    setProductTableEditOpen(false);
   };
 
   const workspaceTabs:any[] = [
@@ -10556,22 +10666,36 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           <div style={{ marginTop:14,padding:"12px 14px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10 }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8 }}>
               <span style={{ fontSize:12,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Products</span>
-              <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{productRows.length} item{productRows.length!==1?"s":""}</span>
+              <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"2px 8px" }}>{productRows.length} item{productRows.length!==1?"s":""}</span>
+                <Btn xs variant="outline" onClick={openProductTableEdit}>Edit Products</Btn>
+              </div>
             </div>
             <div style={{ border:`1px solid ${C.border}`,borderRadius:9,overflow:"hidden",background:C.surface }}>
-              <div style={{ maxHeight:isMobile?168:138,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
-                {productRows.map((row:any,idx:number)=>(
-                  <button key={`${row.skuCode}-${idx}`} type="button" onClick={()=>openProductDetail(row)}
-                    style={{ width:"100%",maxWidth:"100%",display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(120px,.8fr) minmax(150px,1fr) minmax(180px,1.4fr)",gap:isMobile?2:10,padding:isMobile?"7px 10px":"8px 10px",background:idx%2?C.surface:C.surfaceAlt,border:"none",borderBottom:idx===productRows.length-1?"none":`1px solid ${C.border}`,textAlign:"left",cursor:"pointer",overflow:"hidden" }}>
-                    <div style={{ minWidth:0,fontSize:11,fontWeight:800,color:C.textSub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.brand || "No brand"}</div>
-                    <div style={{ minWidth:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.collection || "No collection/category"}</div>
-                    <div style={{ minWidth:0,fontSize:11,color:C.text,fontWeight:750,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product}{row.skuCode&&<span style={{ color:C.faint,fontWeight:600 }}> · {row.skuCode}</span>}</div>
-                  </button>
-                ))}
+              {!isMobile&&(<div style={{ display:"grid",gridTemplateColumns:"minmax(110px,.8fr) minmax(140px,1fr) minmax(210px,1.35fr) minmax(130px,.8fr) minmax(170px,1fr)",gap:10,padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>
+                <span>Brand</span><span>Category</span><span>Product</span><span>SKU</span><span>Image Link</span>
+              </div>)}
+              <div style={{ maxHeight:isMobile?220:154,overflowY:"auto",overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+                {productRows.map((row:any,idx:number)=>{
+                  const imageLink = row.imageLink || (row.imageLinks || row.links || [])[0] || "";
+                  return (
+                    <div key={`${row.skuCode}-${idx}`}
+                      onClick={()=>openProductDetail(row)}
+                      style={{ minWidth:isMobile?0:760,width:"100%",maxWidth:"100%",display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(110px,.8fr) minmax(140px,1fr) minmax(210px,1.35fr) minmax(130px,.8fr) minmax(170px,1fr)",gap:isMobile?3:10,padding:isMobile?"8px 10px":"8px 10px",background:idx%2?C.surface:C.surfaceAlt,borderBottom:idx===productRows.length-1?"none":`1px solid ${C.border}`,textAlign:"left",cursor:"pointer",overflow:"hidden",alignItems:"center" }}>
+                      <div style={{ minWidth:0,fontSize:11,fontWeight:800,color:C.textSub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{isMobile&&<span style={{ color:C.faint,fontWeight:900 }}>Brand: </span>}{row.brand || "No brand"}</div>
+                      <div style={{ minWidth:0,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{isMobile&&<span style={{ color:C.faint,fontWeight:900 }}>Category: </span>}{row.collection || "No collection/category"}</div>
+                      <div style={{ minWidth:0,fontSize:11,color:C.text,fontWeight:750,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{isMobile&&<span style={{ color:C.faint,fontWeight:900 }}>Product: </span>}{row.product || "No product"}</div>
+                      <div style={{ minWidth:0,fontSize:11,color:C.muted,fontFamily:"monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{isMobile&&<span style={{ color:C.faint,fontWeight:900,fontFamily:C.font }}>SKU: </span>}{row.skuCode || "—"}</div>
+                      <div style={{ minWidth:0,fontSize:11,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                        {imageLink ? <a href={imageLink} target="_blank" rel="noreferrer" onClick={(e:any)=>e.stopPropagation()} style={{ color:"#2563EB",fontWeight:750,textDecoration:"underline" }}>Open Link</a> : <span style={{ color:C.faint }}>No link</span>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               {productRows.length>3&&(
                 <div style={{ padding:"6px 10px",fontSize:10.5,color:C.faint,fontWeight:700,background:C.surface,borderTop:`1px solid ${C.border}` }}>
-                  Showing 3 at a time. Scroll for more. Tap a product to view or edit details.
+                  Scroll for more. Tap a product to view/edit one item, or click Edit Products to update all selected products.
                 </div>
               )}
             </div>
@@ -10639,6 +10763,38 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         renderAiWorkspace(activeGroupTab)
       )}
 
+      <Modal open={productTableEditOpen} onClose={()=>setProductTableEditOpen(false)} title="Edit Selected Products" width={980}>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5 }}>Edit the selected product rows for this checklist group. These changes apply to the selected products only and will save with this checklist type.</p>
+          <div style={{ border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.surface }}>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"150px 140px 190px 140px minmax(220px,1fr)",gap:8,padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>
+              <span>Brand</span><span>Category</span><span>Product</span><span>SKU</span><span>Image Link</span>
+            </div>
+            <div style={{ maxHeight:420,overflow:"auto",WebkitOverflowScrolling:"touch" }}>
+              {productTableDraft.map((row:any,idx:number)=>(
+                <div key={`${row.index}-${idx}`} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"150px 140px 190px 140px minmax(220px,1fr)",gap:8,padding:"8px 10px",borderBottom:idx===productTableDraft.length-1?"none":`1px solid ${C.border}`,alignItems:"center" }}>
+                  <Select value={row.brandId||""} onChange={(v:any)=>updateProductTableDraft(idx,{ brandId:v })}>
+                    <option value="">No brand</option>
+                    {(brands||[]).map((b:any)=><option key={b.id} value={b.id}>{b.name}</option>)}
+                  </Select>
+                  <TI value={row.collection||""} onChange={(v:any)=>updateProductTableDraft(idx,{ collection:v })} placeholder="Category" />
+                  <TI value={row.productName||""} onChange={(v:any)=>updateProductTableDraft(idx,{ productName:v })} placeholder="Product" />
+                  <TI value={row.sku||""} onChange={(v:any)=>updateProductTableDraft(idx,{ sku:v })} placeholder="SKU" />
+                  <div style={{ display:"flex",gap:6,alignItems:"center",minWidth:0 }}>
+                    <TI value={row.imageLink||""} onChange={(v:any)=>updateProductTableDraft(idx,{ imageLink:v })} placeholder="https://..." />
+                    {row.imageLink&&<a href={row.imageLink} target="_blank" rel="noreferrer" style={{ flexShrink:0,fontSize:11,fontWeight:800,color:"#2563EB",textDecoration:"underline" }}>Open</a>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+            <Btn variant="outline" onClick={()=>setProductTableEditOpen(false)}>Cancel</Btn>
+            <Btn onClick={saveProductTableEdit}>Save Products</Btn>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={!!productDetail} onClose={()=>{ setProductDetail(null); setProductEdit(null); }} title="Product Details" width={520}>
         {productDetail&&productEdit&&(
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
@@ -10660,6 +10816,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             </Field>
             <Field label="SKU">
               <TI value={productEdit.sku||""} onChange={(v:any)=>setProductEdit((p:any)=>({...p,sku:v}))} placeholder="SKU code" />
+            </Field>
+            <Field label="Image Link">
+              <TI value={productEdit.imageLink||""} onChange={(v:any)=>setProductEdit((p:any)=>({...p,imageLink:v}))} placeholder="https://..." />
             </Field>
             <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
               <Btn variant="outline" onClick={()=>{ setProductDetail(null); setProductEdit(null); }}>Cancel</Btn>
