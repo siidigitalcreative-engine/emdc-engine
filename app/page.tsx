@@ -5080,6 +5080,57 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     } catch {}
   };
 
+  const getMarketingDcGroupInboxKey = (transferType:string) => {
+    const groupKey = String(group?.id || group?.groupName || group?.name || "").trim().replace(/[^a-z0-9_-]+/gi,"_");
+    return groupKey ? `emdc_marketing_dc_group_inbox_v4_${groupKey}_${transferType}` : "";
+  };
+
+  const readMarketingDcGroupInbox = (transferType:string) => {
+    if (typeof window === "undefined") return [];
+    const key = getMarketingDcGroupInboxKey(transferType);
+    if(!key) return [];
+    const lists:any[] = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      if(Array.isArray(parsed)) lists.push(...parsed);
+    } catch {}
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(key) || "[]");
+      if(Array.isArray(parsed)) lists.push(...parsed);
+    } catch {}
+    try {
+      const w:any = window as any;
+      const mem = w.__emdcMarketingDcGroupInbox || {};
+      if(Array.isArray(mem[key])) lists.push(...mem[key]);
+    } catch {}
+    return normalizeTransferRowsForStorage(lists);
+  };
+
+  const writeMarketingDcGroupInbox = (transferType:string, rows:any[] = []) => {
+    if (typeof window === "undefined") return;
+    const key = getMarketingDcGroupInboxKey(transferType);
+    if(!key) return;
+    const stampedRows = stampMarketingDcDirectRows(transferType, rows);
+    try { localStorage.setItem(key, JSON.stringify(stampedRows)); } catch {}
+    try { sessionStorage.setItem(key, JSON.stringify(stampedRows)); } catch {}
+    try {
+      const w:any = window as any;
+      w.__emdcMarketingDcGroupInbox = w.__emdcMarketingDcGroupInbox || {};
+      w.__emdcMarketingDcGroupInbox[key] = stampedRows;
+    } catch {}
+    try {
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+      window.dispatchEvent(new Event("emdc-marketing-dc-transfer"));
+    } catch {}
+  };
+
+  const appendMarketingDcGroupInbox = (transferType:string, rows:any[] = []) => {
+    const existing = readMarketingDcGroupInbox(transferType);
+    const nextRows = mergeDigitalCreativeRows(existing, stampMarketingDcDirectRows(transferType, rows));
+    writeMarketingDcGroupInbox(transferType,nextRows);
+  };
+
   const readMarketingDcGlobalQueue = (transferType:string) => {
     if (typeof window === "undefined") return [];
     try {
@@ -5150,6 +5201,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     });
     lists.push(...readMarketingDcGlobalQueue(transferType));
     lists.push(...readMarketingDcDirectInbox(transferType));
+    lists.push(...readMarketingDcGroupInbox(transferType));
     return mergeDigitalCreativeRows(lists);
   };
 
@@ -5161,8 +5213,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       getLegacyMarketingDcTransferRowsBackupKey(transferType),
     ].filter(Boolean);
     const cleanRows = normalizeTransferRowsForStorage(rows);
-    // Save to the small direct inbox first so transfer works even if big localStorage writes fail.
+    // Save to multiple small inboxes first so transfer works even if big app-state writes fail.
     appendMarketingDcDirectInbox(transferType, cleanRows);
+    writeMarketingDcGroupInbox(transferType, cleanRows);
     try { writeMarketingDcGlobalQueue(transferType, cleanRows); } catch {}
     keys.forEach((key:string)=>{
       try { localStorage.setItem(key, JSON.stringify(cleanRows)); } catch {}
@@ -7380,6 +7433,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             // but Marketing → DC is skipped because the workspace/localStorage payload is too big.
             appendMarketingDcDirectInbox("product_intro", [row]);
             appendMarketingDcDirectInbox("campaign", [row]);
+            appendMarketingDcGroupInbox("product_intro", [row]);
+            appendMarketingDcGroupInbox("campaign", [row]);
 
             const persistedDigital = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).digital || {}) as any;
             const digitalData = {
