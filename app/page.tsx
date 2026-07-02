@@ -7111,8 +7111,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const productNames = products.map((p:any)=>p.product).filter(Boolean);
         const firstProduct = productNames[0] || "the featured product";
         const allProductsText = products.length ? products.map((p:any)=>`${p.index}. ${p.product}${p.sku ? ` · SKU: ${p.sku}` : ""}${p.brand ? ` · ${p.brand}` : ""}${p.category ? ` · ${p.category}` : ""}`).join("\n") : "No products selected yet.";
-        const promos = [livestreamData.mainPromotion, ...livestreamPromotions.map((p:any)=>p.text)].map((v:any)=>String(v||"").trim()).filter(Boolean);
-        const vouchers = livestreamVoucherCards.map((v:any)=>String(v?.text||"").trim()).filter(Boolean);
+        const promos = [livestreamData.mainPromotion, ...livestreamPromotions.map((p:any)=>formatMainPromotion(p))].map((v:any)=>String(v||"").trim()).filter(Boolean);
+        const vouchers = livestreamVoucherCards.map((v:any)=>formatMainPromotion(v)).map((v:any)=>String(v||"").trim()).filter(Boolean);
         const promoLine = promos.length ? promos.join("\n") : "No active promo added yet.";
         const voucherLine = vouchers.length ? vouchers.join("\n") : "No voucher card text added yet.";
         const instructions = livestreamData.topicInstructions || {};
@@ -7272,19 +7272,101 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         markActionDone("livestream-generate-script");
       };
       const addLivestreamPromotion = () => {
-        const text = String(livestreamData.promotionDraft || "").trim();
-        if(!text) return;
-        updateLivestream({ promotions:[...livestreamPromotions,{ id:uid(), text }], promotionDraft:"" });
+        const draft = normalizeLivestreamOfferDraft(livestreamData.promotionDraft);
+        if(!formatMainPromotion(draft)) return;
+        updateLivestream({ promotions:[...livestreamPromotions,{ id:uid(), ...draft }], promotionDraft:{ type:"text", value:"", text:"" } });
       };
       const updateLivestreamPromotion = (id:string,patch:any) => updateLivestream({ promotions:livestreamPromotions.map((item:any)=>item.id===id?{...item,...patch}:item) });
       const deleteLivestreamPromotion = (id:string) => updateLivestream({ promotions:livestreamPromotions.filter((item:any)=>item.id!==id), editingPromotionId:livestreamData.editingPromotionId===id?"":livestreamData.editingPromotionId });
       const addLivestreamVoucher = () => {
-        const text = String(livestreamData.voucherDraft || "").trim();
-        if(!text) return;
-        updateLivestream({ voucherCards:[...livestreamVoucherCards,{ id:uid(), text }], voucherDraft:"" });
+        const draft = normalizeLivestreamOfferDraft(livestreamData.voucherDraft);
+        if(!formatMainPromotion(draft)) return;
+        updateLivestream({ voucherCards:[...livestreamVoucherCards,{ id:uid(), ...draft }], voucherDraft:{ type:"text", value:"", text:"" } });
       };
       const updateLivestreamVoucher = (id:string,patch:any) => updateLivestream({ voucherCards:livestreamVoucherCards.map((item:any)=>item.id===id?{...item,...patch}:item) });
       const deleteLivestreamVoucher = (id:string) => updateLivestream({ voucherCards:livestreamVoucherCards.filter((item:any)=>item.id!==id), editingVoucherId:livestreamData.editingVoucherId===id?"":livestreamData.editingVoucherId });
+
+      const normalizeLivestreamOfferDraft = (value:any) => {
+        if (value && typeof value === "object") {
+          return {
+            type:value.type || "text",
+            value:String(value.value || ""),
+            text:String(value.text || ""),
+          };
+        }
+        return { type:"text", value:"", text:String(value || "") };
+      };
+      const updateLivestreamOfferDraft = (draftKey:string,patch:any) => {
+        updateLivestream({ [draftKey]:{ ...normalizeLivestreamOfferDraft(livestreamData[draftKey]), ...patch } });
+      };
+      const renderLivestreamOfferInput = (offer:any,onChange:any,placeholder:string) => {
+        const draft = normalizeLivestreamOfferDraft(offer);
+        return (
+          <div style={{ display:"grid",gap:10 }}>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"180px minmax(0,1fr)",gap:10 }}>
+              <Select value={draft.type || "text"} onChange={(v:string)=>onChange({ type:v })}>
+                <option value="text">Custom Text</option>
+                <option value="discount">Discount %</option>
+                <option value="php">PHP Value</option>
+              </Select>
+              <TI value={draft.value || ""} onChange={(v:string)=>onChange({ value:v })} placeholder="Value e.g. 20 or 100" />
+            </div>
+            <textarea
+              value={draft.text || ""}
+              onChange={(e:any)=>onChange({ text:e.target.value })}
+              placeholder={placeholder}
+              rows={3}
+              style={{ width:"100%",maxWidth:"100%",boxSizing:"border-box",minHeight:78,resize:"vertical",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,outline:"none",fontSize:13,lineHeight:1.5,color:C.text,background:C.surface }}
+            />
+          </div>
+        );
+      };
+      const renderLivestreamOfferListCard = ({ title, subtitle, draftKey, items, editingKey, addItem, updateItem, deleteItem, placeholder, emptyText }:any) => {
+        const draft = normalizeLivestreamOfferDraft(livestreamData[draftKey]);
+        const hasDraft = !!formatMainPromotion(draft);
+        return (
+          <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+              <div>
+                <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>{title}</p>
+                <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,lineHeight:1.4 }}>{subtitle}</p>
+              </div>
+              <Btn xs onClick={addItem} disabled={!hasDraft}>Add</Btn>
+            </div>
+
+            <div style={{ border:`1.5px solid ${hasDraft?"#A7F3D0":C.border}`,background:hasDraft?"#F0FDF4":C.bg,borderRadius:12,padding:12,display:"grid",gap:10,marginBottom:10 }}>
+              {renderLivestreamOfferInput(draft,(patch:any)=>updateLivestreamOfferDraft(draftKey,patch),placeholder)}
+            </div>
+
+            <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+              {items.length ? items.map((item:any,index:number)=>{
+                const display = formatMainPromotion(item);
+                const isEditing = livestreamData[editingKey] === item.id;
+                const itemInfo:any = getMainPromotionDisplay(item);
+                return (
+                  <div key={item.id || index} style={{ padding:12,borderRadius:10,background:display?"#F0FDF4":C.bg,border:`1.5px solid ${display?"#A7F3D0":C.border}` }}>
+                    {isEditing ? (
+                      renderLivestreamOfferInput(item,(patch:any)=>updateItem(item.id,patch),placeholder)
+                    ) : (
+                      <div style={{ display:"grid",gap:8 }}>
+                        <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                          <span style={{ fontSize:10.5,fontWeight:900,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 8px" }}>{itemInfo.typeLabel}</span>
+                          <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{itemInfo.valueLabel}</span>
+                        </div>
+                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text,lineHeight:1.35,whiteSpace:"pre-wrap",wordBreak:"break-word" }}>{display || "No details added"}</p>
+                      </div>
+                    )}
+                    <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:10,flexWrap:"wrap" }}>
+                      <Btn xs variant="outline" onClick={()=>updateLivestream({ [editingKey]:isEditing?"":item.id })}>{isEditing?"Save":"Edit"}</Btn>
+                      <Btn xs variant="danger" onClick={()=>deleteItem(item.id)}>Delete</Btn>
+                    </div>
+                  </div>
+                );
+              }) : <p style={{ margin:0,fontSize:12,color:C.muted }}>{emptyText}</p>}
+            </div>
+          </div>
+        );
+      };
 
       const LivestreamPlaceholder = ({ title }:any) => (
         <div style={{ minHeight:280,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
@@ -7471,57 +7553,31 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               )}
 
               <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
-                <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10 }}>
-                    <div>
-                      <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Promotions</p>
-                      <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Optional exclusive platform/live promo.</p>
-                    </div>
-                    <Btn xs onClick={addLivestreamPromotion}>Add</Btn>
-                  </div>
-                  <textarea value={livestreamData.promotionDraft || ""} onChange={(e:any)=>updateLivestream({ promotionDraft:e.target.value })} placeholder="Example: Live-only ₱100 OFF with free shipping tonight" rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none",marginBottom:10 }} />
-                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                    {livestreamPromotions.length ? livestreamPromotions.map((item:any)=>(
-                      <div key={item.id} style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}` }}>
-                        {livestreamData.editingPromotionId===item.id ? (
-                          <textarea value={item.text || ""} onChange={(e:any)=>updateLivestreamPromotion(item.id,{ text:e.target.value })} rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:8,padding:8,fontSize:12.5,outline:"none" }} />
-                        ) : (
-                          <p style={{ margin:0,fontSize:12.5,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{item.text}</p>
-                        )}
-                        <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:8 }}>
-                          <Btn xs variant="outline" onClick={()=>updateLivestream({ editingPromotionId:livestreamData.editingPromotionId===item.id?"":item.id })}>{livestreamData.editingPromotionId===item.id?"Save":"Edit"}</Btn>
-                          <Btn xs variant="danger" onClick={()=>deleteLivestreamPromotion(item.id)}>Delete</Btn>
-                        </div>
-                      </div>
-                    )) : <p style={{ margin:0,fontSize:12,color:C.muted }}>No promotions added yet.</p>}
-                  </div>
-                </div>
+                {renderLivestreamOfferListCard({
+                  title:"Promotions",
+                  subtitle:"Optional exclusive platform/live promo.",
+                  draftKey:"promotionDraft",
+                  items:livestreamPromotions,
+                  editingKey:"editingPromotionId",
+                  addItem:addLivestreamPromotion,
+                  updateItem:updateLivestreamPromotion,
+                  deleteItem:deleteLivestreamPromotion,
+                  placeholder:"Promotion details. Example: Live-only ₱100 OFF with free shipping tonight, 7.7 Rainy Deal, bundle offer, or TikTok Shop exclusive offer.",
+                  emptyText:"No promotions added yet.",
+                })}
 
-                <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10 }}>
-                    <div>
-                      <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>Voucher Card Text Input</p>
-                      <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Add short voucher card lines for the live.</p>
-                    </div>
-                    <Btn xs onClick={addLivestreamVoucher}>Add</Btn>
-                  </div>
-                  <textarea value={livestreamData.voucherDraft || ""} onChange={(e:any)=>updateLivestream({ voucherDraft:e.target.value })} placeholder="Example: CLAIM NOW: ₱50 OFF minimum ₱499" rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:9,background:C.bg,color:C.text,fontSize:12.5,lineHeight:1.45,padding:"9px 10px",outline:"none",marginBottom:10 }} />
-                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                    {livestreamVoucherCards.length ? livestreamVoucherCards.map((item:any)=>(
-                      <div key={item.id} style={{ padding:10,borderRadius:9,background:C.bg,border:`1px solid ${C.border}` }}>
-                        {livestreamData.editingVoucherId===item.id ? (
-                          <textarea value={item.text || ""} onChange={(e:any)=>updateLivestreamVoucher(item.id,{ text:e.target.value })} rows={3} style={{ width:"100%",boxSizing:"border-box",resize:"vertical",border:`1.5px solid ${C.border}`,borderRadius:8,padding:8,fontSize:12.5,outline:"none" }} />
-                        ) : (
-                          <p style={{ margin:0,fontSize:12.5,color:C.textSub,lineHeight:1.45,whiteSpace:"pre-wrap" }}>{item.text}</p>
-                        )}
-                        <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginTop:8 }}>
-                          <Btn xs variant="outline" onClick={()=>updateLivestream({ editingVoucherId:livestreamData.editingVoucherId===item.id?"":item.id })}>{livestreamData.editingVoucherId===item.id?"Save":"Edit"}</Btn>
-                          <Btn xs variant="danger" onClick={()=>deleteLivestreamVoucher(item.id)}>Delete</Btn>
-                        </div>
-                      </div>
-                    )) : <p style={{ margin:0,fontSize:12,color:C.muted }}>No voucher card text added yet.</p>}
-                  </div>
-                </div>
+                {renderLivestreamOfferListCard({
+                  title:"Vouchers",
+                  subtitle:"Add short voucher lines for the live.",
+                  draftKey:"voucherDraft",
+                  items:livestreamVoucherCards,
+                  editingKey:"editingVoucherId",
+                  addItem:addLivestreamVoucher,
+                  updateItem:updateLivestreamVoucher,
+                  deleteItem:deleteLivestreamVoucher,
+                  placeholder:"Voucher details. Example: CLAIM NOW: ₱50 OFF minimum ₱499, free shipping voucher, or live-only checkout code.",
+                  emptyText:"No vouchers added yet.",
+                })}
               </div>
 
               <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
