@@ -228,6 +228,35 @@ export async function POST(req: NextRequest) {
       localStorage: compactLocalStorage(body?.localStorage),
     };
 
+    // Server-side safety: never let a smaller/empty accidental save delete the SKU catalog
+    // already in Redis. Large catalogs may live in chunk keys, so compare hydrated counts.
+    const currentHydrated:any = currentData ? await hydrateSkuChunks(redis,currentData) : null;
+    const currentAppState:any = currentHydrated?.appState || currentData?.appState || {};
+    const currentRawAppState:any = currentData?.appState || {};
+    const currentSkuCount = Math.max(
+      safeArray(currentAppState?.skuItems).length,
+      Number(currentRawAppState?.skuItemsExternalCount || 0),
+      Number(currentRawAppState?.skuItemsCloudChunkCount || 0) > 0 ? Number(currentRawAppState?.skuItemsExternalCount || 0) : 0
+    );
+    const nextSkuCount = Math.max(
+      safeArray(payload.appState?.skuItems).length,
+      Number(payload.appState?.skuItemsExternalCount || 0),
+      Number(payload.appState?.skuItemsCloudChunkCount || 0) > 0 ? Number(payload.appState?.skuItemsExternalCount || 0) : 0
+    );
+
+    if (currentSkuCount > 0 && nextSkuCount === 0 && body?.allowEmptySkuSave !== true) {
+      payload.appState = {
+        ...payload.appState,
+        skuItems: safeArray(currentRawAppState?.skuItems),
+        skuItemsExternalCloud: currentRawAppState?.skuItemsExternalCloud,
+        skuItemsExternal: currentRawAppState?.skuItemsExternal,
+        skuItemsExternalCount: currentRawAppState?.skuItemsExternalCount || currentSkuCount,
+        skuItemsCloudChunkCount: currentRawAppState?.skuItemsCloudChunkCount,
+        skuItemsCloudUpdatedAt: currentRawAppState?.skuItemsCloudUpdatedAt,
+        skuItemsProtectedFromOverwrite:true,
+      };
+    }
+
     await redis.set(STATE_KEY, payload);
 
     // If the new save is also meaningful, mark it as the newest recoverable version.
