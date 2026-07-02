@@ -6433,10 +6433,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
+    const backupWorkspace = ((readEmdcGroupWorkspaceBackups()[String(group?.id || "")] || {}).aiWorkspace || {}) as any;
     const persistedWorkspace = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}) as any);
+    const backupTabData = (backupWorkspace && typeof backupWorkspace[tab] === "object" && backupWorkspace[tab]) ? backupWorkspace[tab] : {};
     const persistedTabData = (persistedWorkspace && typeof persistedWorkspace[tab] === "object" && persistedWorkspace[tab]) ? persistedWorkspace[tab] : {};
     const groupTabData = (((group.aiWorkspace || {}) as any)[tab] && typeof ((group.aiWorkspace || {}) as any)[tab] === "object") ? ((group.aiWorkspace || {}) as any)[tab] : {};
-    const rawData = { ...persistedTabData, ...groupTabData };
+    const rawData = { ...backupTabData, ...persistedTabData, ...groupTabData };
     const data = tab === "ecommerce" ? getMergedEcommerceData(rawData) : rawData;
     if(!cfg) return null;
 
@@ -6767,6 +6769,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const deleteProductIntroDigitalAssetRow = (rowId:string) => {
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
       };
+      const moveProductIntroDigitalAssetRow = (rowId:string, direction:number) => {
+        const currentIndex = productIntroDigitalAssetRows.findIndex((row:any)=>row.id===rowId);
+        const nextIndex = currentIndex + direction;
+        if(currentIndex < 0 || nextIndex < 0 || nextIndex >= productIntroDigitalAssetRows.length) return;
+        const nextRows = [...productIntroDigitalAssetRows];
+        const [movedRow] = nextRows.splice(currentIndex,1);
+        nextRows.splice(nextIndex,0,movedRow);
+        updateProductIntroDigitalAssetRows(nextRows);
+        markActionDone(`reorder-digital-asset-${rowId}`);
+      };
       const addProductIntroDigitalAssetTableToOverview = () => {
         const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
         addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table", { tab:"digital", type:"productIntroAssetLinks" });
@@ -6977,7 +6989,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               headline:ad?.formatName || "Generated Ad",
               subheadline:ad?.templateName || "",
               cta:"Shop Now",
-              title:ad?.isCarousel ? `${ad?.platformName || "Platform"} · ${ad?.formatName || "Carousel Ad"}` : "Campaign Product Row",
+              title:ad?.isCarousel ? `${ad?.platformName || "Platform"} · ${ad?.formatName || "Carousel Ad"}` : `${ad?.platformName || "Marketing"} · ${ad?.formatName || "Generated Ad"}`,
+              source:"Marketing Ad Output",
               imagePrompt:dcOutputText,
               products:dcProducts,
               carouselCards:Array.isArray(ad?.cards) ? ad.cards.map((card:any,index:number)=>({ ...card, id:card?.id || uid(), cardNumber:index+1 })) : [],
@@ -8811,7 +8824,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
 
     if(tab==="digital" && !isCampaignChecklist){
-      const digitalData = ((group.aiWorkspace || {}).digital || {}) as any;
+      const digitalBackupWorkspace = ((readEmdcGroupWorkspaceBackups()[String(group?.id || "")] || {}).aiWorkspace || {}) as any;
+      const persistedDigitalWorkspace = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).digital || {}) as any;
+      const digitalData = {
+        ...((digitalBackupWorkspace.digital && typeof digitalBackupWorkspace.digital === "object") ? digitalBackupWorkspace.digital : {}),
+        ...(persistedDigitalWorkspace || {}),
+        ...(((group.aiWorkspace || {}).digital || {}) as any),
+      } as any;
       const defaultProductIntroDigitalAssetRows = [
         { id:"product-image", name:"Product Image", link:"" },
         { id:"cem-banner", name:"CEM Banner", link:"" },
@@ -8835,6 +8854,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
       const deleteProductIntroDigitalAssetRow = (rowId:string) => {
         updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows.filter((row:any)=>row.id!==rowId));
+      };
+      const moveProductIntroDigitalAssetRow = (rowId:string, direction:number) => {
+        const currentIndex = productIntroDigitalAssetRows.findIndex((row:any)=>row.id===rowId);
+        const nextIndex = currentIndex + direction;
+        if(currentIndex < 0 || nextIndex < 0 || nextIndex >= productIntroDigitalAssetRows.length) return;
+        const nextRows = [...productIntroDigitalAssetRows];
+        const [movedRow] = nextRows.splice(currentIndex,1);
+        nextRows.splice(nextIndex,0,movedRow);
+        updateProductIntroDigitalAssetRows(nextRows);
+        markActionDone(`reorder-digital-asset-${rowId}`);
       };
       const addProductIntroDigitalAssetTableToOverview = () => {
         const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
@@ -9544,17 +9573,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
             </div>
             <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
-              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:isMobile?620:760 }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:isMobile?760:900 }}>
                 <thead>
                   <tr style={{ background:C.surfaceAlt }}>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:118 }}>Rearrange</th>
                     <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Asset Name</th>
                     <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Link</th>
-                    <th style={{ textAlign:"right",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:110 }}>Actions</th>
+                    <th style={{ textAlign:"right",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:130 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {productIntroDigitalAssetRows.map((row:any)=>(
+                  {productIntroDigitalAssetRows.map((row:any,index:number)=>(
                     <tr key={row.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",whiteSpace:"nowrap",width:118 }}>
+                        <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                          <Btn xs variant="outline" disabled={index===0} onClick={()=>moveProductIntroDigitalAssetRow(row.id,-1)}>↑</Btn>
+                          <Btn xs variant="outline" disabled={index===productIntroDigitalAssetRows.length-1} onClick={()=>moveProductIntroDigitalAssetRow(row.id,1)}>↓</Btn>
+                          <span style={{ fontSize:11,fontWeight:800,color:C.faint,minWidth:18,textAlign:"center" }}>{index+1}</span>
+                        </div>
+                      </td>
                       <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
                         <input
                           value={row.name || ""}
