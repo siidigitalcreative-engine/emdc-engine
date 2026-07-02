@@ -608,11 +608,14 @@ const TI = ({ value, onChange, placeholder, type="text", style={} }) => (
 
 const DateInput = ({ value, onChange, style={} }) => {
   const recurring = typeof value === "string" && value.startsWith("monthly:");
-  const [mode,setMode]=useState(recurring?"monthly":"date");
+  const yearly = typeof value === "string" && value.startsWith("yearly:");
+  const getModeFromValue = (v:any) => String(v || "").startsWith("monthly:") ? "monthly" : String(v || "").startsWith("yearly:") ? "yearly" : "date";
+  const [mode,setMode]=useState(getModeFromValue(value));
   const dateInputRef = useRef<any>(null);
+  const yearlyDateValue = yearly ? `${today.getFullYear()}-${String(value).replace("yearly:","")}` : (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : `${today.getFullYear()}-01-01`);
   const monthlyDays = recurring ? value.replace("monthly:","").split(",").filter(Boolean) : ["15","30"];
   const [customDay,setCustomDay] = useState("");
-  useEffect(()=>{ if(typeof value==="string") setMode(value.startsWith("monthly:")?"monthly":"date"); },[value]);
+  useEffect(()=>{ if(typeof value==="string") setMode(getModeFromValue(value)); },[value]);
 
   const openNativeDatePicker = () => {
     const el:any = dateInputRef.current;
@@ -640,8 +643,17 @@ const DateInput = ({ value, onChange, style={} }) => {
 
   return (<div style={{display:"flex",flexDirection:"column",gap:8,...style}}>
     <div style={{display:"flex",gap:8,alignItems:"center"}}>
-      <Select value={mode} onChange={v=>{setMode(v); onChange(v==="monthly"?`monthly:${monthlyDays.join(",")}`:"");}} style={{width:140,flexShrink:0}}>
+      <Select value={mode} onChange={v=>{
+        setMode(v);
+        if(v==="monthly") onChange(`monthly:${monthlyDays.join(",")}`);
+        else if(v==="yearly") {
+          const base = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(5) : yearly ? String(value).replace("yearly:","") : `${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+          onChange(`yearly:${base}`);
+        }
+        else onChange("");
+      }} style={{width:170,flexShrink:0}}>
         <option value="date">Specific date</option>
+        <option value="yearly">Recurring yearly</option>
         <option value="monthly">Recurring monthly</option>
       </Select>
       {mode==="date" && (
@@ -649,7 +661,7 @@ const DateInput = ({ value, onChange, style={} }) => {
           <input
             ref={dateInputRef}
             type="date"
-            value={recurring?"":(value||"")}
+            value={(recurring||yearly)?"":(value||"")}
             onClick={openNativeDatePicker}
             onFocus={openNativeDatePicker}
             onChange={e=>onChange(e.target.value)}
@@ -657,7 +669,21 @@ const DateInput = ({ value, onChange, style={} }) => {
           />
         </div>
       )}
+      {mode==="yearly" && (
+        <div style={{ flex:1,position:"relative",cursor:"pointer" }}>
+          <input
+            type="date"
+            value={yearlyDateValue}
+            onChange={e=>{
+              const selected = e.target.value;
+              if(/^\d{4}-\d{2}-\d{2}$/.test(selected)) onChange(`yearly:${selected.slice(5)}`);
+            }}
+            style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",colorScheme:"light",fontFamily:"inherit",boxSizing:"border-box",cursor:"pointer" }}
+          />
+        </div>
+      )}
     </div>
+    {mode==="yearly" && <span style={{fontSize:11,color:C.muted}}>Repeats every year on this same month and day.</span>}
     {mode==="monthly" && (
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -2058,6 +2084,12 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
   const parseDate = s => s ? new Date(s+"T00:00:00") : null;
   const formatDate = s => {
+    if (typeof s === "string" && s.startsWith("yearly:")) {
+      const parts = s.replace("yearly:","").split("-");
+      const monthIdx = Math.max(0, Math.min(11, Number(parts[0]) - 1));
+      const day = Number(parts[1] || 1);
+      return `Every year on ${MONTHS_SHORT[monthIdx]} ${day}`;
+    }
     if (typeof s === "string" && s.startsWith("monthly:")) {
       const labels = { first:"first day", last:"last day" };
       const tokens = s.replace("monthly:","").split(",").filter(Boolean)
@@ -2070,6 +2102,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const getMonthFromText = (value:any) => {
     const txt = String(value || "").toLowerCase();
     if (!txt) return null;
+    if (txt.includes("yearly")) return { index:14, label:"Yearly / Recurring", day:1 };
     if (txt.includes("monthly")) return { index:13, label:"Monthly / Recurring", day:1 };
     for (let i=0;i<12;i++){
       const full = MONTHS[i].toLowerCase();
@@ -2088,6 +2121,11 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       return { index:idx, label:MONTHS[idx], day:1 };
     }
     const rawDate = item.calDate || item.date;
+    if (typeof rawDate === "string" && rawDate.startsWith("yearly:")) {
+      const parts = rawDate.replace("yearly:","").split("-");
+      const idx = Math.max(0, Math.min(11, Number(parts[0]) - 1));
+      return { index:idx, label:MONTHS[idx], day:Number(parts[1] || 1) };
+    }
     if (typeof rawDate === "string" && rawDate.startsWith("monthly:")) {
       return { index:13, label:"Monthly / Recurring", day:1 };
     }
@@ -2103,6 +2141,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const yearListGroups = useMemo(()=>{
     const overlapsYear = (start:any,end:any) => {
       if (!start) return true;
+      if (typeof start === "string" && start.startsWith("yearly:")) return true;
       if (typeof start === "string" && start.startsWith("monthly:")) return true;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(start))) return true;
       const s = new Date(String(start)+"T00:00:00");
@@ -2413,6 +2452,11 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return allEvents.filter(ev => {
       // filter by type
       if (filter!=="all" && ev.type!==filter) return false;
+      // recurring yearly event (date like "yearly:01-01")
+      if (typeof ev.date === "string" && ev.date.startsWith("yearly:")) {
+        const [mm,dd] = ev.date.replace("yearly:","").split("-").map((n:any)=>Number(n));
+        return mm === month + 1 && dd === d;
+      }
       // recurring monthly event (date like "monthly:15,30" or "monthly:first,last")
       if (typeof ev.date === "string" && ev.date.startsWith("monthly:")) {
         const tokens = ev.date.replace("monthly:","").split(",").filter(Boolean);
@@ -3321,11 +3365,17 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       const idx = selectedMonths[0];
       return { index:idx, label:MONTHS[idx], day:1 };
     }
+    if (typeof ev.calDate === "string" && ev.calDate.startsWith("yearly:")) {
+      const parts = ev.calDate.replace("yearly:","").split("-");
+      const idx = Math.max(0, Math.min(11, Number(parts[0]) - 1));
+      return { index:idx, label:MONTHS[idx], day:Number(parts[1] || 1) };
+    }
     if (ev.calDate && /^\d{4}-\d{2}-\d{2}$/.test(String(ev.calDate))) {
       const d = new Date(ev.calDate+"T00:00:00");
       if (!Number.isNaN(d.getTime())) return { index:d.getMonth(), label:MONTHS[d.getMonth()], day:d.getDate() };
     }
     const txt = String(ev.date || "").toLowerCase();
+    if (txt.includes("yearly")) return { index:14, label:"Yearly / Recurring", day:1 };
     if (txt.includes("monthly")) return { index:13, label:"Monthly / Recurring", day:1 };
     for (let i=0;i<12;i++){
       const full = MONTHS[i].toLowerCase();
