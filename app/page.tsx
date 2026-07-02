@@ -189,6 +189,9 @@ const EMDC_SKU_ITEMS_STORAGE_KEY = "emdc_sku_items_v1";
 const EMDC_SKU_ITEMS_COUNT_KEY = "emdc_sku_items_count_v1";
 const EMDC_SKU_ITEMS_LAST_GOOD_KEY = "emdc_sku_items_last_good_v1";
 const EMDC_SKU_ITEMS_EMPTY_MARKER_KEY = "emdc_sku_items_explicit_empty_v1";
+const EMDC_CALENDAR_MANUAL_EVENTS_KEY = "emdc_calendar_manual_events_v1";
+const EMDC_SEASONAL_EVENTS_STORAGE_KEY = "emdc_seasonal_events_v1";
+const EMDC_CALENDAR_TYPES_STORAGE_KEY = "emdc_calendar_types_v1";
 const EMDC_LARGE_SKU_COUNT = 1000;
 const EMDC_CLOUD_SKU_CHUNK_SIZE = 250;
 const EMDC_CLOUD_LOCAL_STORAGE_CHUNK_SIZE = 260000;
@@ -249,6 +252,52 @@ const writeEmdcChecklistItemsBackup = (groupId:any, items:any) => {
       updatedAt:new Date().toISOString(),
       items,
     }));
+  } catch {}
+};
+
+const readEmdcArrayBackup = (key:string) => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed:any = parseEmdcJson(localStorage.getItem(key));
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.items)) return parsed.items;
+    if (Array.isArray(parsed?.events)) return parsed.events;
+    if (Array.isArray(parsed?.types)) return parsed.types;
+    return [];
+  } catch { return []; }
+};
+
+const writeEmdcArrayBackup = (key:string, value:any[], label:string) => {
+  if (typeof window === "undefined" || !Array.isArray(value)) return;
+  // Do not let a fresh/empty render created by a code update erase a useful event backup.
+  if (!value.length) {
+    const existing = readEmdcArrayBackup(key);
+    if (existing.length) return;
+  }
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      label,
+      updatedAt:new Date().toISOString(),
+      items:value,
+    }));
+  } catch {}
+};
+
+const protectedEmdcArray = (current:any, key:string) => {
+  const currentRows = Array.isArray(current) ? current : [];
+  const backupRows = readEmdcArrayBackup(key);
+  if (!currentRows.length && backupRows.length) return backupRows;
+  // If a TSX update or delayed state applies a partial event list, keep the fuller backup.
+  // Normal edits are also written back to this backup, so the backup follows real user changes.
+  if (backupRows.length > currentRows.length) return backupRows;
+  return currentRows;
+};
+
+const rememberCalendarEventBackups = (state:any = {}) => {
+  try {
+    if (Array.isArray(state?.calendarEvents)) writeEmdcArrayBackup(EMDC_CALENDAR_MANUAL_EVENTS_KEY, state.calendarEvents, "manual-calendar-events");
+    if (Array.isArray(state?.seasonalEvents)) writeEmdcArrayBackup(EMDC_SEASONAL_EVENTS_STORAGE_KEY, state.seasonalEvents, "events-and-seasons");
+    if (Array.isArray(state?.calendarTypes)) writeEmdcArrayBackup(EMDC_CALENDAR_TYPES_STORAGE_KEY, state.calendarTypes, "calendar-tag-types");
   } catch {}
 };
 
@@ -466,6 +515,7 @@ const rememberLastGoodEmdcAppState = (state:any) => {
 
   try {
     if (Array.isArray(state?.skuItems) && state.skuItems.length) rememberProtectedSkuItems(state.skuItems,"last-good-app-state");
+    rememberCalendarEventBackups(state);
     const storableState = makeLocalStorableEmdcAppState(state);
     const entry = { savedAt:new Date().toISOString(), appState:storableState };
     localStorage.setItem(EMDC_LAST_GOOD_APP_STATE_KEY, JSON.stringify(entry));
@@ -17451,6 +17501,9 @@ export default function App({
     "emdc_saved_ad_templates_v1",
     "emdc_checklist_launch_types_v1",
     "emdc_checklist_templates_v1",
+    "emdc_calendar_manual_events_v1",
+    "emdc_seasonal_events_v1",
+    "emdc_calendar_types_v1",
     "emdc_app_state_local_updated_at_v1",
     "emdc_app_state_last_good_v1",
     "emdc_app_state_history_v1",
@@ -17469,9 +17522,9 @@ export default function App({
     checklistGroups: mergeChecklistGroupsWithWorkspaceBackups(checklistGroups),
     checklistItems: mergeChecklistItemsWithLocalBackups(checklistAllItems),
     checklistStatuses,
-    calendarEvents: calendarManualEvents,
-    calendarTypes: calendarEventTypes,
-    seasonalEvents,
+    calendarEvents: protectedEmdcArray(calendarManualEvents, EMDC_CALENDAR_MANUAL_EVENTS_KEY),
+    calendarTypes: protectedEmdcArray(calendarEventTypes, EMDC_CALENDAR_TYPES_STORAGE_KEY),
+    seasonalEvents: protectedEmdcArray(seasonalEvents, EMDC_SEASONAL_EVENTS_STORAGE_KEY),
   });
 
   const isLargeCloudLocalStorageKey = (key:any, value:any) => {
@@ -17591,9 +17644,10 @@ export default function App({
     if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(mergeChecklistGroupsWithWorkspaceBackups(hydratedParsed.checklistGroups));
     if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") setChecklistAllItems(mergeChecklistItemsWithLocalBackups(hydratedParsed.checklistItems));
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
-    if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(hydratedParsed.calendarEvents);
-    if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(hydratedParsed.calendarTypes));
-    if (Array.isArray(hydratedParsed?.seasonalEvents)) setSeasonalEvents(hydratedParsed.seasonalEvents);
+    if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(protectedEmdcArray(hydratedParsed.calendarEvents, EMDC_CALENDAR_MANUAL_EVENTS_KEY));
+    if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(protectedEmdcArray(hydratedParsed.calendarTypes, EMDC_CALENDAR_TYPES_STORAGE_KEY)));
+    if (Array.isArray(hydratedParsed?.seasonalEvents)) setSeasonalEvents(protectedEmdcArray(hydratedParsed.seasonalEvents, EMDC_SEASONAL_EVENTS_STORAGE_KEY));
+    rememberCalendarEventBackups(hydratedParsed);
   };
 
   const applyCloudState = (cloud:any) => {
@@ -17838,6 +17892,12 @@ export default function App({
       } else if (parsed) {
         applyAppState(parsed);
       }
+      const backedManualEvents = readEmdcArrayBackup(EMDC_CALENDAR_MANUAL_EVENTS_KEY);
+      const backedSeasonalEvents = readEmdcArrayBackup(EMDC_SEASONAL_EVENTS_STORAGE_KEY);
+      const backedCalendarTypes = readEmdcArrayBackup(EMDC_CALENDAR_TYPES_STORAGE_KEY);
+      if (backedManualEvents.length) setCalendarManualEvents(backedManualEvents);
+      if (backedSeasonalEvents.length) setSeasonalEvents(backedSeasonalEvents);
+      if (backedCalendarTypes.length) setCalendarEventTypes(ensureRequiredCalendarTypes(backedCalendarTypes));
     } catch {}
 
     setAppStateHydrated(true);
@@ -17863,6 +17923,21 @@ export default function App({
     window.addEventListener("emdc-local-sync", fn);
     return () => window.removeEventListener("emdc-local-sync", fn);
   }, []);
+
+  useEffect(() => {
+    if (!appStateHydrated || cloudApplyingRef.current) return;
+    writeEmdcArrayBackup(EMDC_CALENDAR_MANUAL_EVENTS_KEY, calendarManualEvents, "manual-calendar-events");
+  }, [appStateHydrated, calendarManualEvents]);
+
+  useEffect(() => {
+    if (!appStateHydrated || cloudApplyingRef.current) return;
+    writeEmdcArrayBackup(EMDC_SEASONAL_EVENTS_STORAGE_KEY, seasonalEvents, "events-and-seasons");
+  }, [appStateHydrated, seasonalEvents]);
+
+  useEffect(() => {
+    if (!appStateHydrated || cloudApplyingRef.current) return;
+    writeEmdcArrayBackup(EMDC_CALENDAR_TYPES_STORAGE_KEY, calendarEventTypes, "calendar-tag-types");
+  }, [appStateHydrated, calendarEventTypes]);
 
   useEffect(() => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
