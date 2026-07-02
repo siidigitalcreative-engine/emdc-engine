@@ -4958,6 +4958,39 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return Array.from(map.values());
   };
 
+  const getMarketingDcTransferRowsBackupKey = (transferType:string) => group?.id ? `emdc_marketing_dc_transfer_rows_v1_${group.id}_${transferType}` : "";
+
+  const readMarketingDcTransferRowsBackup = (transferType:string) => {
+    if (typeof window === "undefined") return [];
+    const key = getMarketingDcTransferRowsBackupKey(transferType);
+    if(!key) return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch { return []; }
+  };
+
+  const writeMarketingDcTransferRowsBackup = (transferType:string, rows:any[] = []) => {
+    if (typeof window === "undefined") return;
+    const key = getMarketingDcTransferRowsBackupKey(transferType);
+    if(!key) return;
+    try {
+      const cleanRows = normalizeTransferRowsForStorage(rows);
+      localStorage.setItem(key, JSON.stringify(cleanRows));
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
+  };
+
+  const mergeDigitalCreativeRows = (...lists:any[][]) => {
+    const map = new Map<string,any>();
+    lists.flat().filter(Boolean).forEach((row:any,idx:number)=>{
+      const normalized = normalizeTransferRowsForStorage([row])[0] || row;
+      map.set(getTransferRowIdentity(normalized,idx), normalized);
+    });
+    return Array.from(map.values());
+  };
+
   const getProductIntroDigitalRows = () => {
     const digital = ((group.aiWorkspace || {}).digital || {}) as any;
     return Array.isArray(digital.productIntroCreativeRows) ? digital.productIntroCreativeRows : [];
@@ -7133,10 +7166,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             // changes or the current tab renders before parent state finishes updating.
             // Save the transferred ad into BOTH Digital Creative row stores; the active
             // Digital Creative tab will read the correct one for the current checklist type.
-            const existingProductIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
-            const existingCampaignRows = Array.isArray(digitalData.campaignCreativeRows) ? digitalData.campaignCreativeRows : [];
-            const productIntroRows = [...existingProductIntroRows,row];
-            const campaignRows = [...existingCampaignRows,row];
+            const existingProductIntroRows = mergeDigitalCreativeRows(
+              Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [],
+              readMarketingDcTransferRowsBackup("product_intro")
+            );
+            const existingCampaignRows = mergeDigitalCreativeRows(
+              Array.isArray(digitalData.campaignCreativeRows) ? digitalData.campaignCreativeRows : [],
+              readMarketingDcTransferRowsBackup("campaign")
+            );
+            const productIntroRows = mergeDigitalCreativeRows(existingProductIntroRows,row);
+            const campaignRows = mergeDigitalCreativeRows(existingCampaignRows,row);
+            writeMarketingDcTransferRowsBackup("product_intro",productIntroRows);
+            writeMarketingDcTransferRowsBackup("campaign",campaignRows);
             const visibleRows = isCampaignChecklist ? campaignRows : productIntroRows;
             const now = new Date().toISOString();
 
@@ -7998,7 +8039,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
     };
 
     if(tab==="digital" && isCampaignChecklist){
-      const campaignCreativeRows = Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [];
+      const campaignCreativeRows = mergeDigitalCreativeRows(
+        Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [],
+        readMarketingDcTransferRowsBackup("campaign")
+      );
 
       const getCampaignDigitalProductRows = (item:any) => {
         const baseProducts = Array.isArray(item.products) && item.products.length
@@ -8045,6 +8089,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         const nextRows = campaignCreativeRows.filter((item:any)=>item.id!==id);
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs.filter((img:any)=>img.sourceRowId!==id && img.cardId!==id) : [];
+        writeMarketingDcTransferRowsBackup("campaign",nextRows);
         updateAiWorkspace("digital",{
           campaignCreativeRows:nextRows,
           savedImageOutputs:saved,
@@ -8052,10 +8097,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           generatedAt:new Date().toISOString(),
         });
       };
-      const clearCampaignDigitalItems = () => updateAiWorkspace("digital",{ campaignCreativeRows:[], generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
+      const clearCampaignDigitalItems = () => {
+        writeMarketingDcTransferRowsBackup("campaign",[]);
+        updateAiWorkspace("digital",{ campaignCreativeRows:[], generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
+      };
 
       const updateCampaignDigitalItem = (id:string, patch:any) => {
         const nextRows = campaignCreativeRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
+        writeMarketingDcTransferRowsBackup("campaign",nextRows);
         updateAiWorkspace("digital",{
           campaignCreativeRows:nextRows,
           generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
@@ -8256,6 +8305,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((card:any,index:number)=>index===cardIndex ? { ...card, ...patch } : card);
           return { ...row, carouselCards };
         });
+        writeMarketingDcTransferRowsBackup("campaign",nextRows);
         updateAiWorkspace("digital",{
           campaignCreativeRows:nextRows,
           generatedText:nextRows.map((entry:any)=>formatCampaignDigitalCreativeItem(entry)).join("\n\n---\n\n"),
@@ -9017,7 +9067,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .filter(Boolean)
       ));
       const isDeletedProductIntroDcRow = (row:any) => productIntroDeletedRowIds.includes(String(row?.id || ""));
-      const rawProductIntroRows = Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [];
+      const rawProductIntroRows = mergeDigitalCreativeRows(
+        Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [],
+        readMarketingDcTransferRowsBackup("product_intro")
+      );
       const productIntroRows = rawProductIntroRows.filter((row:any)=>!isDeletedProductIntroDcRow(row));
       const productIntroRowsCleared = !!digitalData.productIntroRowsCleared;
       const makeProductIntroDcItem = (row:any) => ({
@@ -9074,6 +9127,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const updateProductIntroDigitalItem = (id:string, patch:any) => {
         const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
         const nextRows = baseRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
+        writeMarketingDcTransferRowsBackup("product_intro",nextRows);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
           productIntroRowsCleared:nextRows.length===0,
@@ -9111,6 +9165,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           };
           const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
           const nextRows = baseRows.map((row:any)=>row.id===item.id ? { ...row, savedImageAt:savedAt, savedImageUrl:driveUrl, driveFileId:uploaded?.driveFileId || "" } : row);
+          writeMarketingDcTransferRowsBackup("product_intro",nextRows);
           updateAiWorkspace("digital",{
             productIntroCreativeRows:nextRows,
             productIntroRowsCleared:nextRows.length===0,
@@ -9155,6 +9210,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ...productIntroDeletedRowIds,
           cleanId,
         ].filter(Boolean))).slice(-250);
+        writeMarketingDcTransferRowsBackup("product_intro",nextRows);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
           productIntroRowsCleared:nextRows.length===0,
@@ -9164,7 +9220,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           generatedAt:new Date().toISOString(),
         });
       };
-      const clearProductIntroDigitalItems = () => updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, deletedProductIntroDcRowIds:[], generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
+      const clearProductIntroDigitalItems = () => {
+        writeMarketingDcTransferRowsBackup("product_intro",[]);
+        updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, deletedProductIntroDcRowIds:[], generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
+      };
       const savedProductIntroDigitalOutputs = Array.isArray(digitalData.savedImageOutputs) ? digitalData.savedImageOutputs : [];
       const filterSavedProductIntroOutputsForItem = (saved:any[] = [], itemId:any, extraCardIds:any[] = []) => {
         const id = String(itemId || "");
@@ -9340,6 +9399,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((card:any,index:number)=>index===cardIndex ? { ...card, ...patch } : card);
           return { ...row, carouselCards };
         });
+        writeMarketingDcTransferRowsBackup("product_intro",nextRows);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
           productIntroRowsCleared:nextRows.length===0,
@@ -9366,6 +9426,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        writeMarketingDcTransferRowsBackup("product_intro",nextRows);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
           productIntroRowsCleared:nextRows.length===0,
