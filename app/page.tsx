@@ -187,6 +187,8 @@ const EMDC_GROUP_AI_WORKSPACE_PREFIX = "emdc_group_ai_workspace_v1_";
 const EMDC_CHECKLIST_ITEMS_PREFIX = "emdc_checklist_items_v1_";
 const EMDC_SKU_ITEMS_STORAGE_KEY = "emdc_sku_items_v1";
 const EMDC_SKU_ITEMS_COUNT_KEY = "emdc_sku_items_count_v1";
+const EMDC_SKU_ITEMS_LAST_GOOD_KEY = "emdc_sku_items_last_good_v1";
+const EMDC_SKU_ITEMS_EMPTY_MARKER_KEY = "emdc_sku_items_explicit_empty_v1";
 const EMDC_LARGE_SKU_COUNT = 1000;
 const EMDC_CLOUD_SKU_CHUNK_SIZE = 250;
 
@@ -309,9 +311,79 @@ const parseEmdcJson = (value:any) => {
   try { return typeof value === "string" ? JSON.parse(value) : value; } catch { return null; }
 };
 
+const getExplicitEmptySkuStorageAt = () => {
+  if (typeof window === "undefined") return "";
+  try {
+    const parsed:any = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_EMPTY_MARKER_KEY));
+    return String(parsed?.savedAt || "");
+  } catch { return ""; }
+};
+
+const markSkuStorageExplicitlyEmpty = (reason="user-cleared-sku-storage") => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(EMDC_SKU_ITEMS_EMPTY_MARKER_KEY, JSON.stringify({ savedAt:new Date().toISOString(), reason }));
+    localStorage.setItem(EMDC_SKU_ITEMS_STORAGE_KEY, JSON.stringify([]));
+    localStorage.setItem(EMDC_SKU_ITEMS_COUNT_KEY, "0");
+  } catch {}
+};
+
+const clearSkuStorageExplicitEmptyMarker = () => {
+  if (typeof window === "undefined") return;
+  try { localStorage.removeItem(EMDC_SKU_ITEMS_EMPTY_MARKER_KEY); } catch {}
+};
+
+const rememberProtectedSkuItems = (skuItems:any[] = [], reason="sku-storage-save") => {
+  if (typeof window === "undefined" || !Array.isArray(skuItems)) return;
+
+  if (!skuItems.length) {
+    markSkuStorageExplicitlyEmpty(reason);
+    return;
+  }
+
+  clearSkuStorageExplicitEmptyMarker();
+  try {
+    localStorage.setItem(EMDC_SKU_ITEMS_STORAGE_KEY, JSON.stringify(skuItems));
+    localStorage.setItem(EMDC_SKU_ITEMS_COUNT_KEY, String(skuItems.length));
+    localStorage.setItem(EMDC_SKU_ITEMS_LAST_GOOD_KEY, JSON.stringify({
+      savedAt:new Date().toISOString(),
+      reason,
+      count:skuItems.length,
+      skuItems,
+    }));
+  } catch {
+    // If storage is tight, keep the primary external SKU key first and avoid older duplicates.
+    clearHeavyEmdcLocalBackupKeys();
+    try {
+      localStorage.setItem(EMDC_SKU_ITEMS_STORAGE_KEY, JSON.stringify(skuItems));
+      localStorage.setItem(EMDC_SKU_ITEMS_COUNT_KEY, String(skuItems.length));
+    } catch {}
+  }
+};
+
+const readProtectedSkuItemsBackup = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const explicitEmptyAt = getExplicitEmptySkuStorageAt();
+    const direct = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_STORAGE_KEY));
+    if (Array.isArray(direct) && direct.length) return direct;
+
+    const lastGood:any = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_LAST_GOOD_KEY));
+    const lastGoodAt = String(lastGood?.savedAt || "");
+    if (explicitEmptyAt && (!lastGoodAt || !isIsoTimeNewer(lastGoodAt, explicitEmptyAt, 0))) return [];
+    if (Array.isArray(lastGood?.skuItems) && lastGood.skuItems.length) return lastGood.skuItems;
+
+    const appState:any = parseEmdcJson(localStorage.getItem("emdc_app_state_v1"));
+    if (Array.isArray(appState?.skuItems) && appState.skuItems.length) return appState.skuItems;
+  } catch {}
+  return [];
+};
+
 const readExternalSkuItemsFromLocal = () => {
   if (typeof window === "undefined") return [];
   try {
+    const protectedRows = readProtectedSkuItemsBackup();
+    if (protectedRows.length) return protectedRows;
     const parsed = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_STORAGE_KEY));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -340,20 +412,12 @@ const clearHeavyEmdcLocalBackupKeys = () => {
 const makeLocalStorableEmdcAppState = (state:any) => {
   if (!state || typeof state !== "object") return state;
   const skuItems = Array.isArray(state.skuItems) ? state.skuItems : [];
-  if (skuItems.length < EMDC_LARGE_SKU_COUNT) return state;
 
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(EMDC_SKU_ITEMS_STORAGE_KEY, JSON.stringify(skuItems));
-      localStorage.setItem(EMDC_SKU_ITEMS_COUNT_KEY, String(skuItems.length));
-    } catch {
-      clearHeavyEmdcLocalBackupKeys();
-      try {
-        localStorage.setItem(EMDC_SKU_ITEMS_STORAGE_KEY, JSON.stringify(skuItems));
-        localStorage.setItem(EMDC_SKU_ITEMS_COUNT_KEY, String(skuItems.length));
-      } catch {}
-    }
-  }
+  // Always keep SKU Storage in its own protected key too. This prevents code updates,
+  // partial cloud payloads, or delayed hydration from wiping user-entered SKU rows.
+  if (skuItems.length) rememberProtectedSkuItems(skuItems,"make-local-storable-app-state");
+
+  if (skuItems.length < EMDC_LARGE_SKU_COUNT) return state;
 
   return {
     ...state,
@@ -400,6 +464,7 @@ const rememberLastGoodEmdcAppState = (state:any) => {
   if (getEmdcAppStateWeight(state) <= 0) return;
 
   try {
+    if (Array.isArray(state?.skuItems) && state.skuItems.length) rememberProtectedSkuItems(state.skuItems,"last-good-app-state");
     const storableState = makeLocalStorableEmdcAppState(state);
     const entry = { savedAt:new Date().toISOString(), appState:storableState };
     localStorage.setItem(EMDC_LAST_GOOD_APP_STATE_KEY, JSON.stringify(entry));
@@ -12204,7 +12269,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
   const commitSkuStorage = (updater:any, immediate:boolean=false) => {
     setSkuStorage((prev:any[]) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
+      const nextRaw = typeof updater === "function" ? updater(prev) : updater;
+      const next = Array.isArray(nextRaw) ? nextRaw : [];
+
+      // Protect user-entered SKU Storage before any app/cloud save runs.
+      // This separate key survives page/code updates and is used as the local source of truth.
+      rememberProtectedSkuItems(next,"sku-storage-commit");
+
       if(onStateChange){
         if(immediate) {
           if(skuStorageSaveTimer.current) clearTimeout(skuStorageSaveTimer.current);
@@ -12213,6 +12284,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
           scheduleSkuStorageSave(next);
         }
       }
+      try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
       return next;
     });
   };
@@ -16961,16 +17033,31 @@ export default function App({
 
   const applyAppState = (parsed:any) => {
     if (!parsed || typeof parsed !== "object") return;
-    rememberLastGoodEmdcAppState(parsed);
-    if (Array.isArray(parsed?.skuBrands)) setBrands(parsed.skuBrands);
-    if (Array.isArray(parsed?.skuItems)) setSkuStorage(parsed.skuItems);
-    if (Array.isArray(parsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(parsed.skuTableColumns));
-    if (Array.isArray(parsed?.checklistGroups)) setChecklistGroups(mergeChecklistGroupsWithWorkspaceBackups(parsed.checklistGroups));
-    if (parsed?.checklistItems && typeof parsed.checklistItems === "object") setChecklistAllItems(mergeChecklistItemsWithLocalBackups(parsed.checklistItems));
-    if (Array.isArray(parsed?.checklistStatuses)) setChecklistStatuses(parsed.checklistStatuses);
-    if (Array.isArray(parsed?.calendarEvents)) setCalendarManualEvents(parsed.calendarEvents);
-    if (Array.isArray(parsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(parsed.calendarTypes));
-    if (Array.isArray(parsed?.seasonalEvents)) setSeasonalEvents(parsed.seasonalEvents);
+    const hydratedParsed = hydrateExternalSkuItems(parsed) || parsed;
+    rememberLastGoodEmdcAppState(hydratedParsed);
+    if (Array.isArray(hydratedParsed?.skuBrands)) setBrands(hydratedParsed.skuBrands);
+    if (Array.isArray(hydratedParsed?.skuItems)) {
+      const incomingSkuItems = hydratedParsed.skuItems;
+      setSkuStorage((prev:any[])=>{
+        const protectedRows = readProtectedSkuItemsBackup();
+        const bestLocal = (Array.isArray(prev) && prev.length >= protectedRows.length) ? prev : protectedRows;
+        const explicitEmptyAt = getExplicitEmptySkuStorageAt();
+
+        // Do not let an empty or partial app/cloud snapshot wipe a richer local SKU Storage.
+        // User actions still save through commitSkuStorage, which updates the protected key first.
+        if (!incomingSkuItems.length && bestLocal.length && !explicitEmptyAt) return bestLocal;
+        if (incomingSkuItems.length && bestLocal.length && incomingSkuItems.length < bestLocal.length && !explicitEmptyAt) return bestLocal;
+        if (incomingSkuItems.length) rememberProtectedSkuItems(incomingSkuItems,"apply-app-state");
+        return incomingSkuItems;
+      });
+    }
+    if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
+    if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(mergeChecklistGroupsWithWorkspaceBackups(hydratedParsed.checklistGroups));
+    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") setChecklistAllItems(mergeChecklistItemsWithLocalBackups(hydratedParsed.checklistItems));
+    if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
+    if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(hydratedParsed.calendarEvents);
+    if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(hydratedParsed.calendarTypes));
+    if (Array.isArray(hydratedParsed?.seasonalEvents)) setSeasonalEvents(hydratedParsed.seasonalEvents);
   };
 
   const applyCloudState = (cloud:any) => {
@@ -16987,6 +17074,18 @@ export default function App({
     if (cloudUpdatedAt && localUpdatedAt && isIsoTimeNewer(localUpdatedAt, cloudUpdatedAt)) {
       // Keep local edits/deletions from being resurrected by an older cloud snapshot after refresh.
       setCloudSyncStatus("Local pending sync");
+      return;
+    }
+
+    const hydratedCloudAppState = hydrateExternalSkuItems(cloudAppState) || cloudAppState;
+    const cloudSkuCount = Array.isArray(hydratedCloudAppState?.skuItems) ? hydratedCloudAppState.skuItems.length : getEmdcExternalSkuCount(hydratedCloudAppState);
+    const protectedSkuCount = Math.max((Array.isArray(skuStorage) ? skuStorage.length : 0), readProtectedSkuItemsBackup().length);
+    if (protectedSkuCount > 0 && cloudSkuCount > 0 && cloudSkuCount < protectedSkuCount) {
+      setCloudSyncStatus("Protected SKU Storage");
+      return;
+    }
+    if (protectedSkuCount > 0 && cloudSkuCount === 0 && !getExplicitEmptySkuStorageAt()) {
+      setCloudSyncStatus("Protected SKU Storage");
       return;
     }
 
@@ -17111,6 +17210,8 @@ export default function App({
 
       const raw = localStorage.getItem("emdc_app_state_v1");
       const parsed = raw ? hydrateExternalSkuItems(parseEmdcJson(raw)) : null;
+      const protectedSkuItems = readProtectedSkuItemsBackup();
+      if (protectedSkuItems.length) setSkuStorage(protectedSkuItems);
       if (parsed && shouldBlockEmptyEmdcState(parsed)) {
         const lastGoodEntry:any = readLastGoodEmdcAppState();
         const lastGood = lastGoodEntry?.appState || lastGoodEntry;
