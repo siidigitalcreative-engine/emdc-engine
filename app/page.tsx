@@ -112,9 +112,10 @@ const TEMPLATES = {
     digital:["Create campaign key visual direction and overall design treatment","Design campaign banners for marketplace, website, Meta, and TikTok placements","Create product image prompts, lifestyle prompts, and creative asset directions","Produce carousel, feed, story, and Reels/TikTok creative layouts","Prepare digital creative asset links table for product image, CEM banner, store banner, feed, story, and showcase video","Generate or upload final creative output links and add approved assets to Overview manually","Export all campaign assets in required sizes and platform-safe formats","QA all creative assets for readability, spacing, product accuracy, and brand consistency","Archive final campaign files with clear naming convention","Update source tabs when Overview cards are edited or finalized"],
   },
   reactivation:{
-    ecommerce:["Audit and update existing listings — refresh titles, descriptions, images","Review historical pricing and set competitive relaunch price points","Reassess inventory levels and restock allocation per channel","Update product categorization and search keyword tags","Re-enable listings that were paused or delisted","Set up relaunch bundle or value-add promotional offer","Check and resolve any previous platform flags, reviews, or disputes","Sync updated product data via Ginee across all active channels","Configure flash deal or voucher mechanic for relaunch window","QA all updated listings before go-live"],
-    marketing:["Define relaunch narrative — what has changed or improved","Develop new and improved or back by demand campaign angle","Plan content rollout to address previous customer pain points","Brief influencer or affiliate partners on updated product story","Schedule re-engagement email to past purchasers via Klaviyo","Set up retargeting campaign targeting previous product page visitors","Coordinate platform relaunch mechanics (featured listing, flash deal)","Draft announcement copy for social channels","Align relaunch timing with payday cycle or platform campaign window","Track relaunch uplift vs. previous performance baseline"],
-    digital:["Produce updated product photography reflecting changes or new packaging","Redesign listing infographics to highlight product improvements","Create before vs after visual comparison asset","Develop refreshed social media content set (feed + Stories + Reels)","Produce short-form video communicating the relaunch story","Update Meta Ads creative set with revised messaging","Revise Shopify product page visuals and featured banner","Deliver updated Klaviyo email design for re-engagement send","Ensure all assets are consistent with updated product positioning","Archive revised files and deprecate outdated creative assets"],
+    // Keep Product Reactivation using the exact same operational template/settings as Product Introduction.
+    ecommerce:["Create and activate product listings on Shopee, Lazada, and TikTok Shop","Upload complete product photography (main, variant, lifestyle, infographic)","Write and optimize product title, description, and bullet points","Set up pricing tiers (regular, sale, bundle) across all platforms","Configure inventory allocation per channel via Ginee","Set up platform vouchers and launch-day promotional mechanics","Submit product for platform-level featuring or spotlight badge","Enable Shopify product page and confirm cross-channel sync","Configure shipping class, weight, and fulfillment rules","QA all listings: images, specs, pricing, variants, and stock display"],
+    marketing:["Brief campaign concept and messaging direction for launch","Define target audience segments and key messaging pillars","Plan launch campaign timeline with content milestones","Coordinate with KOLs or brand partners for launch seeding","Draft and schedule announcement copy for IG, TikTok, and Facebook","Set up Meta Ads launch campaign (awareness + conversion objectives)","Create paid media brief and allocate launch budget per channel","Plan and schedule TikTok LIVE session for launch day","Write email campaign copy for Klaviyo launch broadcast","Monitor launch-day performance and prepare day-1 report"],
+    digital:["Produce primary product photography or CGI renders","Create platform-compliant listing infographics (Shopee, Lazada, TikTok)","Design IG Feed posts, Reels cover, and Stories assets","Produce TikTok launch video (hook, demo, CTA format)","Design Meta Ads creatives (static, carousel, and Story units)","Build product highlight reel or unboxing-style short video","Export all assets in platform-required specs and file formats","Update Shopify product page layout and featured imagery","Deliver Klaviyo email header and banner design","Archive final production files to shared drive with naming convention"],
   },
   phaseout:{
     ecommerce:["Flag SKU(s) internally as phase-out status — notify all stakeholders","Reduce inventory allocation to minimum across channels","Set clearance pricing to accelerate sell-through","Add bundle or bundle-with-replacement offer to redirect demand","Schedule listing deactivation date post-stock depletion","Disable replenishment and purchasing orders for this SKU","Update product title or description to reflect final stock status if needed","Coordinate with warehouse on remaining inventory disposition","Ensure replacement or successor product is ready before full delisting","Document final sales data and channel performance for records"],
@@ -149,6 +150,15 @@ const mergeChecklistTemplatesWithDefaults = (saved:any) => {
       }
     });
   });
+
+  // Product Reactivation must always mirror Product Introduction settings/tasks.
+  // This also migrates older browsers that still have the previous relaunch template saved.
+  merged.reactivation = {
+    ecommerce:[...(merged.introduction?.ecommerce || [])],
+    marketing:[...(merged.introduction?.marketing || [])],
+    digital:[...(merged.introduction?.digital || [])],
+  };
+
   return merged;
 };
 
@@ -4907,7 +4917,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const isProductIntroEcommerceChecklist = () => {
     const raw = `${group?.launchType || ""} ${lt?.label || ""} ${lt?.tag || ""}`.toLowerCase();
-    return raw.includes("introduction") || raw.includes("new launch") || raw.includes("product intro");
+    return raw.includes("introduction") || raw.includes("new launch") || raw.includes("product intro") || raw.includes("reactivation") || raw.includes("relaunch");
   };
 
   const hasProductNameSection = (sections:any[] = []) => (sections || [])
@@ -6520,7 +6530,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     const workspaceTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
     const isCampaignChecklist = workspaceTypeLabel.includes("campaign");
-    const isProductIntroductionChecklist = workspaceTypeLabel.includes("product introduction");
+    const isProductIntroductionChecklist = workspaceTypeLabel.includes("product introduction") || workspaceTypeLabel.includes("product reactivation") || workspaceTypeLabel.includes("reactivation") || workspaceTypeLabel.includes("relaunch");
 
     if(tab==="marketing" && (isCampaignChecklist || isProductIntroductionChecklist)){
       const productIntroMarketingRows = isProductIntroductionChecklist
@@ -11191,7 +11201,8 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     updateList(next);
   };
   const resetToDefault = () => {
-    updateList([...(TEMPLATES[launchType]?.[dept] || [])]);
+    const defaultLaunchType = launchType === "reactivation" ? "introduction" : launchType;
+    updateList([...(TEMPLATES[defaultLaunchType]?.[dept] || [])]);
     setEditIdx(null);
   };
 
