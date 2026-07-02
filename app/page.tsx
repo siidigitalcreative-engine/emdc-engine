@@ -8233,108 +8233,161 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
     const getSkuStorageRowByProduct = (product:any) => {
       const safeProduct:any = product || {};
-      const skuCandidates = [
-        safeProduct.sku,
-        safeProduct.skuCode,
-        safeProduct.value,
-        safeProduct.id,
-        safeProduct.sourceId,
-      ].map((value:any)=>String(value || "").trim()).filter(Boolean);
-      const productCandidates = [
-        safeProduct.product,
-        safeProduct.productName,
-        safeProduct.name,
-        safeProduct.title,
-      ].map((value:any)=>String(value || "").trim()).filter(Boolean);
+      const rows = Array.isArray(skuStorage) ? skuStorage : [];
+      if(!rows.length || !safeProduct) return null;
 
-      const skuKeys = skuCandidates.map(normalizeDcMatchKey).filter(Boolean);
-      const productKeys = productCandidates.map(normalizeDcMatchKey).filter(Boolean);
-      const matchesPartialKey = (left:string,right:string) => {
-        if(!left || !right || left.length<4 || right.length<4) return false;
-        return left===right || left.includes(right) || right.includes(left);
+      const normalizeKey = normalizeDcMatchKey;
+      const productText = String(safeProduct.productName || safeProduct.product || safeProduct.name || safeProduct.title || "").trim();
+      const brandText = String(safeProduct.brand || safeProduct.brandName || "").trim();
+      const categoryText = String(safeProduct.category || safeProduct.collection || safeProduct.productCategory || "").trim();
+      const sourceIds = [safeProduct.sourceId,safeProduct.storageId,safeProduct.skuStorageId]
+        .map((value:any)=>String(value || "").trim())
+        .filter(Boolean);
+
+      const skuCandidates = [safeProduct.sku,safeProduct.skuCode,safeProduct.sku_code]
+        .map((value:any)=>String(value || "").trim())
+        .filter(Boolean);
+      const skuKeys = Array.from(new Set(skuCandidates.map(normalizeKey).filter(Boolean)));
+
+      const productKeys = Array.from(new Set([productText,safeProduct.product,safeProduct.productName,safeProduct.name,safeProduct.title]
+        .map((value:any)=>normalizeKey(value))
+        .filter(Boolean)));
+
+      const getRowSkuKeys = (row:any) => [row?.sku,row?.skuCode,row?.sku_code,row?.value]
+        .map((value:any)=>String(value || "").trim())
+        .filter(Boolean)
+        .map(normalizeKey)
+        .filter(Boolean);
+
+      const getRowProductText = (row:any) => String(row?.productName || row?.product || row?.name || row?.title || "").trim();
+      const getRowProductKeys = (row:any) => [row?.productName,row?.product,row?.name,row?.title]
+        .map((value:any)=>normalizeKey(value))
+        .filter(Boolean);
+
+      const sizeTokens = (value:any) => {
+        const raw = String(value || "").toLowerCase();
+        const matches = raw.match(/\d+(?:\.\d+)?\s*(?:ml|l|ltr|liter|litre|cm|mm|kg|g|pcs?|pc)\b/g) || [];
+        return Array.from(new Set(matches.map((item:string)=>item.replace(/\s+/g,""))));
       };
 
-      return (skuStorage || []).find((sku:any)=>{
-        const rowSkuCandidates = [sku.sku, sku.skuCode, sku.value, sku.id, sku.sourceId]
-          .map((value:any)=>String(value || "").trim())
-          .filter(Boolean);
-        const rowProductCandidates = [sku.productName, sku.product, sku.name, sku.title]
-          .map((value:any)=>String(value || "").trim())
-          .filter(Boolean);
-        const rowAllCandidates = [
-          ...Object.values(sku || {}).filter((value:any)=>typeof value!=="object"),
-          ...Object.values(sku?.extraFields || {}),
-        ].map((value:any)=>String(value || "").trim()).filter(Boolean);
-        const rowSkuKeys = rowSkuCandidates.map(normalizeDcMatchKey).filter(Boolean);
-        const rowProductKeys = rowProductCandidates.map(normalizeDcMatchKey).filter(Boolean);
-        const rowAllKeys = rowAllCandidates.map(normalizeDcMatchKey).filter(Boolean);
+      const productSizeTokens = sizeTokens([productText,safeProduct.sku,safeProduct.skuCode,safeProduct.value].filter(Boolean).join(" "));
+      const hasSizeConflict = (row:any) => {
+        if(!productSizeTokens.length) return false;
+        const rowSizeTokens = sizeTokens([getRowProductText(row),row?.sku,row?.skuCode,row?.value].filter(Boolean).join(" "));
+        if(!rowSizeTokens.length) return false;
+        return !productSizeTokens.some((token:string)=>rowSizeTokens.includes(token));
+      };
 
-        const skuMatch = skuKeys.some((key:string)=>rowSkuKeys.includes(key));
-        if(skuMatch) return true;
+      // 1) Strongest rule: exact SKU Storage row reference.
+      if(sourceIds.length){
+        const sourceMatch = rows.find((row:any)=>sourceIds.includes(String(row?.id || "").trim()));
+        if(sourceMatch) return sourceMatch;
+      }
 
-        const productMatch = productKeys.some((key:string)=>rowProductKeys.includes(key));
-        if(productMatch) return true;
+      // 2) Exact SKU must win over product-name fallback.
+      if(skuKeys.length){
+        const exactSkuMatch = rows.find((row:any)=>getRowSkuKeys(row).some((key:string)=>skuKeys.includes(key)));
+        if(exactSkuMatch) return exactSkuMatch;
+      }
 
-        // Fallback for transferred/generated rows where product names are shortened.
-        // Example: "Oval Bake Dish 2000ml" should match "CRYSALIS Oval Bake Dish 2000ml" in SKU Storage.
-        const productPartialMatch = productKeys.some((key:string)=>rowProductKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
-        if(productPartialMatch) return true;
+      if(!productKeys.length) return null;
 
-        const skuPartialMatch = skuKeys.some((key:string)=>rowAllKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
-        if(skuPartialMatch) return true;
+      const targetBrandKey = normalizeKey(brandText);
+      const targetCategoryKey = normalizeKey(categoryText);
+      const targetTokens = productTokens(productText).filter((token:string)=>token.length>=2);
 
-        const broadProductMatch = productKeys.some((key:string)=>rowAllKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
-        if(broadProductMatch) return true;
+      const scored = rows.map((row:any)=>{
+        const rowProductText = getRowProductText(row);
+        const rowProductKeys = getRowProductKeys(row);
+        const rowBrandKey = normalizeKey(brandNameFor(row));
+        const rowCategoryKey = normalizeKey(fieldCollection(row));
+        const rowTokens = productTokens(rowProductText).filter((token:string)=>token.length>=2);
+        const rowSizeTokens = sizeTokens([rowProductText,row?.sku,row?.skuCode,row?.value].filter(Boolean).join(" "));
+        const sizeConflict = hasSizeConflict(row);
+        let score = 0;
 
-        // Last fallback for pasted/generated rows where the product text contains the SKU or vice versa.
-        return skuKeys.some((key:string)=>rowProductKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey))) ||
-          productKeys.some((key:string)=>rowSkuKeys.some((rowKey:string)=>matchesPartialKey(key,rowKey)));
-      });
+        if(sizeConflict) score -= 120;
+        if(productSizeTokens.length && rowSizeTokens.some((token:string)=>productSizeTokens.includes(token))) score += 35;
+        if(targetBrandKey && rowBrandKey && targetBrandKey===rowBrandKey) score += 12;
+        if(targetCategoryKey && rowCategoryKey && targetCategoryKey===rowCategoryKey) score += 8;
+
+        productKeys.forEach((key:string)=>{
+          rowProductKeys.forEach((rowKey:string)=>{
+            if(key && rowKey && key===rowKey) score += 100;
+            else if(key.length>=8 && rowKey.length>=8 && (rowKey.includes(key) || key.includes(rowKey))) score += 28;
+          });
+        });
+
+        const matchedTokenCount = targetTokens.filter((token:string)=>rowTokens.includes(token)).length;
+        if(targetTokens.length) score += matchedTokenCount * 8;
+        if(targetTokens.length && matchedTokenCount===targetTokens.length) score += 20;
+
+        return { row, score };
+      }).filter((item:any)=>item.score>0)
+        .sort((a:any,b:any)=>b.score-a.score);
+
+      const best = scored[0];
+      // Require a reasonably strong match so similar products like 5L and 50L do not borrow each other's image link.
+      return best && best.score >= 45 ? best.row : null;
     };
 
     const getDcProductLinks = (product:any) => {
       // Digital Creative product references must come from the matched SKU Storage row only.
-      // This prevents old transferred rows or item-level imageLinks from mixing multiple products together.
-      // Return a maximum of one image/reference link per product.
+      // Use one primary image/reference link per selected product, with exact SKU matching first.
       const skuRow:any = getSkuStorageRowByProduct(product || {}) || {};
       if(!skuRow || !Object.keys(skuRow).length) return [];
 
-      const skuExtraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
-      const skuAllValues = Object.values(skuRow || {}).filter((value:any)=>typeof value!=="object");
-      const skuLinkArrays = [
-        skuRow.links,
-        skuRow.imageLinks,
-        skuRow.referenceLinks,
-        skuRow.productImageLinks,
-      ].flatMap((value:any)=>Array.isArray(value) ? value : []);
-
-      const skuLinkSources = [
+      const normalizeFieldKey = (key:any) => String(key || "").toLowerCase().replace(/[^a-z0-9]+/g,"");
+      const extra = skuRow.extraFields && typeof skuRow.extraFields === "object" ? skuRow.extraFields : {};
+      const directPriorityValues:any[] = [
         skuRow.imageLink,
         skuRow.imageUrl,
         skuRow.imageURL,
-        skuRow.productImage,
-        skuRow.productImageUrl,
         skuRow.productImageLink,
-        skuRow.reference,
-        skuRow.referenceLink,
-        skuRow.referenceImage,
-        skuRow.referenceImageUrl,
+        skuRow.productImageUrl,
         skuRow.referenceImageLink,
-        skuRow.link,
-        skuRow.url,
-        ...skuLinkArrays,
-        ...skuExtraValues,
-        ...skuAllValues,
+        skuRow.referenceImageUrl,
+        skuRow.referenceLink,
+        Array.isArray(skuRow.imageLinks) ? skuRow.imageLinks[0] : "",
+        Array.isArray(skuRow.productImageLinks) ? skuRow.productImageLinks[0] : "",
+        Array.isArray(skuRow.referenceLinks) ? skuRow.referenceLinks[0] : "",
       ];
 
-      const links = Array.from(new Set(
-        skuLinkSources
-          .flatMap((source:any)=>extractDcLinks(source))
-          .map(normalizeDcUrl)
-          .filter(Boolean)
-      ));
+      const exactExtraKeys = [
+        "imagelink",
+        "imageurl",
+        "image",
+        "productimagelink",
+        "productimageurl",
+        "referenceimagelink",
+        "referenceimageurl",
+        "referencelink",
+      ];
 
-      return links.slice(0,1);
+      exactExtraKeys.forEach((wanted:string)=>{
+        const foundKey = Object.keys(extra).find((key:string)=>normalizeFieldKey(key)===wanted);
+        if(foundKey) directPriorityValues.push(extra[foundKey]);
+      });
+
+      // Fallback only to clearly named image/reference URL fields from SKU Storage.
+      Object.entries(extra).forEach(([key,value]:any)=>{
+        const clean = normalizeFieldKey(key);
+        const looksImageField = (clean.includes("image") || clean.includes("reference")) && (clean.includes("link") || clean.includes("url") || clean.includes("image"));
+        if(looksImageField) directPriorityValues.push(value);
+      });
+      Object.entries(skuRow || {}).forEach(([key,value]:any)=>{
+        const clean = normalizeFieldKey(key);
+        const looksImageField = (clean.includes("image") || clean.includes("reference")) && (clean.includes("link") || clean.includes("url") || clean.includes("image"));
+        if(looksImageField) directPriorityValues.push(value);
+      });
+
+      const firstLink = directPriorityValues
+        .flatMap((source:any)=>Array.isArray(source) ? source : [source])
+        .flatMap((source:any)=>extractDcLinks(source))
+        .map(normalizeDcUrl)
+        .find(Boolean);
+
+      return firstLink ? [firstLink] : [];
     };
 
     if(tab==="digital" && isCampaignChecklist){
