@@ -85,7 +85,7 @@ const DEPTS = {
 };
 const LAUNCH_TYPES = {
   introduction:{ label:"Product Introduction", tag:"New Launch", color:"#111827" },
-  campaign:    { label:"Campaign Checklist",    tag:"Campaign",   color:"#F59E0B" },
+  campaign:    { label:"Campaign",              tag:"Promo Plan",  color:"#F59E0B" },
   reactivation:{ label:"Product Reactivation",  tag:"Relaunch",   color:"#374151" },
   phaseout:    { label:"Product Phase-Out",      tag:"Closeout",   color:"#9CA3AF" },
 };
@@ -126,7 +126,16 @@ const TEMPLATES = {
 const mergeChecklistLaunchTypesWithDefaults = (saved:any) => {
   const base = { ...LAUNCH_TYPES };
   const safeSaved = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
-  return { ...base, ...safeSaved, campaign: safeSaved.campaign || base.campaign };
+  return {
+    ...base,
+    ...safeSaved,
+    campaign: {
+      ...base.campaign,
+      ...(safeSaved.campaign || {}),
+      label: base.campaign.label,
+      tag: base.campaign.tag,
+    },
+  };
 };
 
 const mergeChecklistTemplatesWithDefaults = (saved:any) => {
