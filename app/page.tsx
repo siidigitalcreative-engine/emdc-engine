@@ -7305,16 +7305,38 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
 
       const defaultProductIntroDigitalAssetRows = [
-        { id:"product-image", name:"Product Image", link:"" },
+        { id:"main-google-drive-folder", name:"Main Google Drive Folder", link:"" },
+        { id:"product-images", name:"Product Images", link:"" },
         { id:"cem-banner", name:"CEM Banner", link:"" },
         { id:"store-banner", name:"Store Banner", link:"" },
         { id:"feed", name:"Feed", link:"" },
         { id:"story", name:"Story", link:"" },
         { id:"showcase-video", name:"Showcase Video", link:"" },
+        { id:"a4-signage", name:"A4 Signage", link:"" },
+        { id:"sampling-poster", name:"Sampling Poster", link:"" },
       ];
-      const productIntroDigitalAssetRows = Array.isArray(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks) && ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks.length
-        ? ((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks
-        : defaultProductIntroDigitalAssetRows;
+      const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
+        const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+        const normalizeAssetKey = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+        const oldDefaultKeys = new Set(["product-image","cem-banner","store-banner","feed","story","showcase-video"]);
+        const looksLikeOldDefaults = sourceRows.length > 0 && sourceRows.length <= oldDefaultKeys.size && sourceRows.every((row:any)=>{
+          const keys = [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean);
+          return keys.some((key:string)=>oldDefaultKeys.has(key));
+        });
+        if (sourceRows.length && !looksLikeOldDefaults) return sourceRows;
+        const sourceByKey = new Map<string,any>();
+        sourceRows.forEach((row:any)=>{
+          [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean).forEach((key:string)=>{
+            if (!sourceByKey.has(key)) sourceByKey.set(key,row);
+          });
+        });
+        if (sourceByKey.has("product-image") && !sourceByKey.has("product-images")) sourceByKey.set("product-images",sourceByKey.get("product-image"));
+        return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
+          const match = sourceByKey.get(normalizeAssetKey(defaultRow.id)) || sourceByKey.get(normalizeAssetKey(defaultRow.name));
+          return match ? { ...defaultRow, link:match.link || match.url || match.outputLink || "" } : defaultRow;
+        });
+      };
+      const productIntroDigitalAssetRows = normalizeProductIntroDigitalAssetRows(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks);
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
         const cleanRows = Array.isArray(rows) ? rows : [];
         updateAiWorkspace("digital",{ productIntroAssetLinks:cleanRows, productIntroAssetLinksSavedAt:new Date().toISOString() });
@@ -9537,16 +9559,38 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         ...(((group.aiWorkspace || {}).digital || {}) as any),
       } as any;
       const defaultProductIntroDigitalAssetRows = [
-        { id:"product-image", name:"Product Image", link:"" },
+        { id:"main-google-drive-folder", name:"Main Google Drive Folder", link:"" },
+        { id:"product-images", name:"Product Images", link:"" },
         { id:"cem-banner", name:"CEM Banner", link:"" },
         { id:"store-banner", name:"Store Banner", link:"" },
         { id:"feed", name:"Feed", link:"" },
         { id:"story", name:"Story", link:"" },
         { id:"showcase-video", name:"Showcase Video", link:"" },
+        { id:"a4-signage", name:"A4 Signage", link:"" },
+        { id:"sampling-poster", name:"Sampling Poster", link:"" },
       ];
-      const productIntroDigitalAssetRows = Array.isArray(digitalData.productIntroAssetLinks) && digitalData.productIntroAssetLinks.length
-        ? digitalData.productIntroAssetLinks
-        : defaultProductIntroDigitalAssetRows;
+      const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
+        const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+        const normalizeAssetKey = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+        const oldDefaultKeys = new Set(["product-image","cem-banner","store-banner","feed","story","showcase-video"]);
+        const looksLikeOldDefaults = sourceRows.length > 0 && sourceRows.length <= oldDefaultKeys.size && sourceRows.every((row:any)=>{
+          const keys = [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean);
+          return keys.some((key:string)=>oldDefaultKeys.has(key));
+        });
+        if (sourceRows.length && !looksLikeOldDefaults) return sourceRows;
+        const sourceByKey = new Map<string,any>();
+        sourceRows.forEach((row:any)=>{
+          [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean).forEach((key:string)=>{
+            if (!sourceByKey.has(key)) sourceByKey.set(key,row);
+          });
+        });
+        if (sourceByKey.has("product-image") && !sourceByKey.has("product-images")) sourceByKey.set("product-images",sourceByKey.get("product-image"));
+        return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
+          const match = sourceByKey.get(normalizeAssetKey(defaultRow.id)) || sourceByKey.get(normalizeAssetKey(defaultRow.name));
+          return match ? { ...defaultRow, link:match.link || match.url || match.outputLink || "" } : defaultRow;
+        });
+      };
+      const productIntroDigitalAssetRows = normalizeProductIntroDigitalAssetRows(digitalData.productIntroAssetLinks);
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
         const cleanRows = Array.isArray(rows) ? rows : [];
         updateAiWorkspace("digital",{ productIntroAssetLinks:cleanRows, productIntroAssetLinksSavedAt:new Date().toISOString() });
