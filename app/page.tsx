@@ -17362,13 +17362,20 @@ export default function App({
 
     const cloudUpdatedAt = String(cloud.updatedAt || "");
     const localUpdatedAt = getEmdcLocalStateUpdatedAt();
-    if (cloudUpdatedAt && localUpdatedAt && isIsoTimeNewer(localUpdatedAt, cloudUpdatedAt)) {
-      // Keep local edits/deletions from being resurrected by an older cloud snapshot after refresh.
+    const hydratedCloudAppState = hydrateExternalSkuItems(cloudAppState) || cloudAppState;
+    const cloudWeight = getEmdcAppStateWeight(hydratedCloudAppState);
+    const localWeight = Math.max(
+      getEmdcAppStateWeight(readStoredEmdcAppState()),
+      getEmdcAppStateWeight(readLastGoodEmdcAppState()?.appState || readLastGoodEmdcAppState())
+    );
+
+    if (cloudUpdatedAt && localUpdatedAt && isIsoTimeNewer(localUpdatedAt, cloudUpdatedAt) && localWeight >= cloudWeight && localWeight > 0) {
+      // Keep true local edits/deletions from being resurrected by an older cloud snapshot after refresh.
+      // But on a fresh/incognito browser, do not let a newly-created empty local timestamp block a richer cloud state.
       setCloudSyncStatus("Local pending sync");
       return;
     }
 
-    const hydratedCloudAppState = hydrateExternalSkuItems(cloudAppState) || cloudAppState;
     const cloudSkuCount = Array.isArray(hydratedCloudAppState?.skuItems) ? hydratedCloudAppState.skuItems.length : getEmdcExternalSkuCount(hydratedCloudAppState);
     const protectedSkuCount = Math.max((Array.isArray(skuStorage) ? skuStorage.length : 0), readProtectedSkuItemsBackup().length);
     if (protectedSkuCount > 0 && cloudSkuCount > 0 && cloudSkuCount < protectedSkuCount) {
@@ -17521,6 +17528,10 @@ export default function App({
 
     const updatedAt = new Date().toISOString();
     const appStateForCloud = await makeCloudAppStatePayload(updatedAt);
+    if (getEmdcAppStateWeight(appStateForCloud) <= 0) {
+      setCloudSyncStatus("Cloud save skipped: no local data");
+      return;
+    }
     const onlineLocalSnapshot = readLocalSnapshot("cloud");
     const onlineLocalMeta = await saveCloudLocalStorageChunked(onlineLocalSnapshot, updatedAt);
     const payload = {
@@ -17609,7 +17620,7 @@ export default function App({
   }, []);
 
   useEffect(() => {
-    if (!appStateHydrated) return;
+    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
     try {
       const nextAppState = makeAppStatePayload();
       if (shouldBlockEmptyEmdcState(nextAppState)) return;
