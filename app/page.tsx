@@ -5253,6 +5253,15 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const nextRows = readAllMarketingDcBridgeRows().filter((row:any)=>String(row?.id || row?.sourceRowId || "") !== cleanId);
     writeAllMarketingDcBridgeRows(nextRows);
   };
+  const updateMarketingDcBridgeRow = (id:any, patch:any = {}) => {
+    const cleanId = String(id || "");
+    if(!cleanId) return;
+    const nextRows = readAllMarketingDcBridgeRows().map((row:any)=>{
+      const rowIds = [row?.id,row?.sourceRowId,row?.cardId].map((value:any)=>String(value || "")).filter(Boolean);
+      return rowIds.includes(cleanId) ? { ...row, ...patch } : row;
+    });
+    writeAllMarketingDcBridgeRows(nextRows);
+  };
   const clearMarketingDcBridgeRowsForCurrentGroup = () => {
     const nextRows = readAllMarketingDcBridgeRows().filter((row:any)=>!bridgeRowMatchesCurrentGroup(row));
     writeAllMarketingDcBridgeRows(nextRows);
@@ -8421,6 +8430,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const updateCampaignDigitalItem = (id:string, patch:any) => {
         const nextRows = campaignCreativeRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
+        updateMarketingDcBridgeRow(id,patch);
         writeMarketingDcTransferRowsBackup("campaign",nextRows);
         updateAiWorkspace("digital",{
           campaignCreativeRows:nextRows,
@@ -8622,6 +8632,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((card:any,index:number)=>index===cardIndex ? { ...card, ...patch } : card);
           return { ...row, carouselCards };
         });
+        const patchedRow = nextRows.find((row:any)=>row.id===itemId);
+        if(patchedRow) updateMarketingDcBridgeRow(itemId,patchedRow);
         writeMarketingDcTransferRowsBackup("campaign",nextRows);
         updateAiWorkspace("digital",{
           campaignCreativeRows:nextRows,
@@ -9445,6 +9457,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const updateProductIntroDigitalItem = (id:string, patch:any) => {
         const baseRows = productIntroRows.length ? productIntroRows : sourceRows;
         const nextRows = baseRows.map((row:any)=>row.id===id ? { ...row, ...patch } : row);
+        updateMarketingDcBridgeRow(id,patch);
         writeMarketingDcTransferRowsBackup("product_intro",nextRows);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
@@ -9510,6 +9523,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         } : row);
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
+        updateMarketingDcBridgeRow(item.id,{
+          generatedImageUrl:"",
+          generatedImagePrompt:"",
+          generatedImageAt:"",
+          generatedImageError:"",
+          savedImageAt:"",
+          savedImageUrl:"",
+          imageLinks:item.imageLinks || [],
+        });
+        writeMarketingDcTransferRowsBackup("product_intro",nextRows);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
           productIntroRowsCleared:nextRows.length===0,
@@ -9719,6 +9742,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const carouselCards = (Array.isArray(row.carouselCards) ? row.carouselCards : []).map((card:any,index:number)=>index===cardIndex ? { ...card, ...patch } : card);
           return { ...row, carouselCards };
         });
+        const patchedRow = nextRows.find((row:any)=>row.id===itemId);
+        if(patchedRow) updateMarketingDcBridgeRow(itemId,patchedRow);
         writeMarketingDcTransferRowsBackup("product_intro",nextRows);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
@@ -9747,6 +9772,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs : [];
         writeMarketingDcTransferRowsBackup("product_intro",nextRows);
+        const patchedRow = nextRows.find((row:any)=>row.id===item.id);
+        if(patchedRow) updateMarketingDcBridgeRow(item.id,patchedRow);
         updateAiWorkspace("digital",{
           productIntroCreativeRows:nextRows,
           productIntroRowsCleared:nextRows.length===0,
