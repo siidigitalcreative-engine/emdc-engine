@@ -6977,6 +6977,62 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               links:getDcProductLinks(product),
               productLink:product?.productLink || product?.link || product?.url || "",
             }));
+            const extractMarketingAdField = (text:any, labels:string[]) => {
+              const lines = String(text || "").split(/\r?\n/);
+              const normalizedLabels = labels.map((label:string)=>label.toLowerCase().replace(/[^a-z0-9]+/g,""));
+              for(let i=0;i<lines.length;i++){
+                const line = String(lines[i] || "");
+                const compact = line.toLowerCase().replace(/[^a-z0-9]+/g,"");
+                const match = normalizedLabels.find((label:string)=>compact.startsWith(label));
+                if(!match) continue;
+                const inline = line.replace(/^\s*[^:]{2,40}:\s*/i,"").trim();
+                const collected:string[] = [];
+                if(inline && inline !== line.trim()) collected.push(inline);
+                for(let j=i+1;j<lines.length;j++){
+                  const nextLine = String(lines[j] || "");
+                  const nextCompact = nextLine.toLowerCase().replace(/[^a-z0-9]+/g,"");
+                  const hitsKnownLabel = ["hook","primarytext","copy","creativedirection","visual","visualdirection","headline","cta","caption","products"].some((known:string)=>nextCompact.startsWith(known));
+                  if(hitsKnownLabel) break;
+                  if(nextLine.trim()) collected.push(nextLine.trim());
+                }
+                return collected.join("\n").trim();
+              }
+              return "";
+            };
+            const buildMarketingDcOutputCards = () => {
+              const existingCards = Array.isArray(ad?.cards) ? ad.cards.filter(Boolean) : [];
+              if(existingCards.length){
+                return existingCards.map((card:any,index:number)=>({
+                  ...card,
+                  id:card?.id || uid(),
+                  cardNumber:card?.cardNumber || index+1,
+                  mediaType:card?.mediaType || recommendedCarouselMediaType(index),
+                  headline:card?.headline || `Card ${index+1}`,
+                  copy:card?.copy || "",
+                  visual:card?.visual || card?.visualDirection || card?.imagePrompt || "",
+                  cta:card?.cta || "Shop Now",
+                  products:Array.isArray(card?.products) && card.products.length ? card.products : dcProducts,
+                  outputLink:card?.outputLink || card?.link || "",
+                }));
+              }
+              const hook = extractMarketingAdField(adText,["Hook","Headline"]);
+              const primaryText = extractMarketingAdField(adText,["Primary Text","Copy","Caption"]);
+              const creativeDirection = extractMarketingAdField(adText,["Creative Direction","Visual Direction","Visual","Image Direction"]);
+              const cta = extractMarketingAdField(adText,["CTA","Call to Action"]) || "Shop Now";
+              return [{
+                id:uid(),
+                cardNumber:1,
+                mediaType:"image",
+                headline:hook || ad?.formatName || ad?.title || "Marketing Ad Output",
+                copy:primaryText || adText,
+                visual:creativeDirection || ad?.imagePrompt || adText,
+                cta,
+                products:dcProducts,
+                outputLink:"",
+                rawOutput:adText,
+              }];
+            };
+            const marketingDcOutputCards = buildMarketingDcOutputCards();
             const joinUnique = (values:any[]) => Array.from(new Set(values.map((value:any)=>String(value || "").trim()).filter(Boolean))).join(", ");
             const row = {
               id:uid(),
@@ -6993,8 +7049,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               source:"Marketing Ad Output",
               imagePrompt:dcOutputText,
               products:dcProducts,
-              carouselCards:Array.isArray(ad?.cards) ? ad.cards.map((card:any,index:number)=>({ ...card, id:card?.id || uid(), cardNumber:index+1 })) : [],
-              isCarousel:!!ad?.isCarousel,
+              carouselCards:marketingDcOutputCards,
+              isCarousel:marketingDcOutputCards.length>0,
+              isMarketingAdOutput:true,
               isProductGmvMax:!!ad?.isProductGmvMax,
               isProductGmvMaxTable:!!ad?.isProductGmvMaxTable,
               gmvRows:Array.isArray(ad?.gmvRows) ? ad.gmvRows.map((gmvRow:any,index:number)=>({ ...gmvRow, id:gmvRow?.id || uid(), rowNumber:index+1, products:Array.isArray(gmvRow?.products) && gmvRow.products.length ? gmvRow.products : dcProducts })) : [],
@@ -7910,6 +7967,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const addCampaignDigitalItemToOverview = (item:any) => {
         addToOverview("Digital Creative","Campaign Digital Creative",formatCampaignDigitalCreativeItem(item),item.linkedEventContext || "Campaign Digital Creative", { tab:"digital", type:"campaignDigitalItem", id:item?.id || "" });
       };
+      const formatDigitalCreativeCardOverview = (item:any, card:any, cardIndex:number) => [
+        `Source: ${item?.title || item?.source || "Marketing Ad Output"}`,
+        `Card ${cardIndex+1}`,
+        `Media Type: ${card?.mediaType || recommendedCarouselMediaType(cardIndex)}`,
+        card?.headline ? `Headline: ${card.headline}` : "",
+        card?.copy ? `Copy:\n${card.copy}` : "",
+        card?.visual ? `Visual Direction:\n${card.visual}` : "",
+        card?.cta ? `CTA: ${card.cta}` : "",
+        card?.outputLink ? `Final Link: ${card.outputLink}` : "",
+        card?.generatedImageUrl ? `Generated Image: ${card.generatedImageUrl}` : "",
+      ].filter(Boolean).join("\n\n");
+      const addCampaignDigitalCardToOverview = (item:any, card:any, cardIndex:number) => {
+        addToOverview("Digital Creative", `${item?.title || "Marketing Ad Output"} · Card ${cardIndex+1}`, formatDigitalCreativeCardOverview(item,card,cardIndex), card?.outputLink || item?.linkedEventContext || "Digital Creative Card", { tab:"digital", type:"campaignDigitalCard", id:item?.id || "", cardIndex });
+        markActionDone(`overview-campaign-dc-card-${item?.id}-${cardIndex}`);
+      };
       const deleteCampaignDigitalItem = (id:string) => {
         const nextRows = campaignCreativeRows.filter((item:any)=>item.id!==id);
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
@@ -8753,10 +8825,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                     <p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p>
                                     <p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card.cta || "Shop Now"}</p>
                                   </div>
-                                  <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
-                                    <Btn xs onClick={()=>generateCampaignDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                    {card.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveCampaignDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>}
-                                    {card.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteCampaignDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
+                                  <div style={{ display:"grid",gap:6,marginTop:"auto" }}>
+                                    <input
+                                      value={card.outputLink || ""}
+                                      onChange={(e:any)=>updateCampaignDigitalCarouselCard(item.id,cardIndex,{ outputLink:e.target.value })}
+                                      placeholder="Paste final output link here"
+                                      style={{ width:"100%",height:30,border:`1px solid ${C.border}`,borderRadius:7,padding:"5px 8px",fontSize:10.5,color:C.textSub,background:C.surface }}
+                                    />
+                                    <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2 }}>
+                                      <Btn xs variant={actionDone(`overview-campaign-dc-card-${item?.id}-${cardIndex}`)?"primary":"outline"} onClick={()=>addCampaignDigitalCardToOverview(item,card,cardIndex)}>{actionDone(`overview-campaign-dc-card-${item?.id}-${cardIndex}`)?"✓ Added":"Add to Overview"}</Btn>
+                                      <Btn xs onClick={()=>generateCampaignDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
+                                      {card.generatedImageUrl&&<Btn xs variant="outline" onClick={()=>saveCampaignDcCarouselImageOutput(item,card,cardIndex)}>Save</Btn>}
+                                      {card.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteCampaignDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -9128,6 +9209,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         addToOverview("Digital Creative", saved?.title || "Saved Digital Creative Output", content, saved?.kind || "Saved Output", { tab:"digital", type:"savedImageOutput", id:saved?.id || "", cardId:saved?.cardId || "", sourceRowId:saved?.sourceRowId || "" });
         markActionDone(`overview-digital-saved-${saved?.id}`);
       };
+      const formatProductIntroDigitalCardOverview = (item:any, card:any, cardIndex:number) => [
+        `Source: ${item?.title || item?.source || "Marketing Ad Output"}`,
+        `Card ${cardIndex+1}`,
+        `Media Type: ${card?.mediaType || recommendedCarouselMediaType(cardIndex)}`,
+        card?.headline ? `Headline: ${card.headline}` : "",
+        card?.copy ? `Copy:\n${card.copy}` : "",
+        card?.visual ? `Visual Direction:\n${card.visual}` : "",
+        card?.cta ? `CTA: ${card.cta}` : "",
+        card?.outputLink ? `Final Link: ${card.outputLink}` : "",
+        card?.generatedImageUrl ? `Generated Image: ${card.generatedImageUrl}` : "",
+      ].filter(Boolean).join("\n\n");
+      const addProductIntroDigitalCardToOverview = (item:any, card:any, cardIndex:number) => {
+        addToOverview("Digital Creative", `${item?.title || "Marketing Ad Output"} · Card ${cardIndex+1}`, formatProductIntroDigitalCardOverview(item,card,cardIndex), card?.outputLink || item?.linkedEventContext || "Digital Creative Card", { tab:"digital", type:"productIntroDigitalCard", id:item?.id || "", cardIndex });
+        markActionDone(`overview-product-intro-dc-card-${item?.id}-${cardIndex}`);
+      };
       const generateProductIntroDcImage = async (item:any) => {
         const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
         const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
@@ -9397,7 +9493,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card?.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -9524,7 +9620,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const res = await fetch("/api/ai/generate-image", {
             method:"POST",
             headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ prompt, size:"2K", aspectRatio:row.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
+            body:JSON.stringify({ prompt, size:"2K", aspectRatio:card?.imageRatio || item.imageRatio || "1:1", watermark:false, referenceImages:uploadedReferenceImages, referenceImageUrls:links, productImageLinks:links, outputCount:1, optimizeForSite:true, avoidBase64:true, maxOutputBytes:900000 }),
           });
           const raw = await res.text();
           let result:any = {};
@@ -9696,10 +9792,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Copy</p><p style={{ margin:0 }}>{card?.copy || ""}</p></div>
                                   <div style={{ padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}` }}><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>{normalizedMediaType==="video"?"Video Direction":"Image Direction"}</p><p style={{ margin:0 }}>{card?.visual || ""}</p></div>
                                   <div><p style={{ margin:"0 0 2px",fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>CTA</p><p style={{ margin:0,fontWeight:900,color:C.text }}>CTA: {card?.cta || "Shop Now"}</p></div>
-                                  <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap",paddingTop:2,marginTop:"auto" }}>
-                                    <Btn xs onClick={()=>generateProductIntroDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
-                                    {card?.generatedImageUrl&&<Btn xs variant={card?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcCarouselImageOutput(item,card,cardIndex)}>{card?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
-                                    {card?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
+                                  <div style={{ display:"grid",gap:6,paddingTop:2,marginTop:"auto" }}>
+                                    <input
+                                      value={card?.outputLink || ""}
+                                      onChange={(e:any)=>updateProductIntroDigitalCarouselCard(item.id,cardIndex,{ outputLink:e.target.value })}
+                                      placeholder="Paste final output link here"
+                                      style={{ width:"100%",height:30,border:`1px solid ${C.border}`,borderRadius:7,padding:"5px 8px",fontSize:10.5,color:C.textSub,background:C.surface }}
+                                    />
+                                    <div style={{ display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                                      <Btn xs variant={actionDone(`overview-product-intro-dc-card-${item?.id}-${cardIndex}`)?"primary":"outline"} onClick={()=>addProductIntroDigitalCardToOverview(item,card,cardIndex)}>{actionDone(`overview-product-intro-dc-card-${item?.id}-${cardIndex}`)?"✓ Added":"Add to Overview"}</Btn>
+                                      <Btn xs onClick={()=>generateProductIntroDcCarouselImage(item,card,cardIndex)} disabled={campaignDcGeneratingImageId===generatingKey}>{campaignDcGeneratingImageId===generatingKey?"Generating...":"Generate Image"}</Btn>
+                                      {card?.generatedImageUrl&&<Btn xs variant={card?.savedImageAt ? "primary" : "outline"} onClick={()=>saveProductIntroDcCarouselImageOutput(item,card,cardIndex)}>{card?.savedImageAt ? "Saved ✓" : "Save"}</Btn>}
+                                      {card?.generatedImageUrl&&<Btn xs variant="danger" onClick={()=>deleteProductIntroDcCarouselImageOutput(item,cardIndex)}>Delete Image</Btn>}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
