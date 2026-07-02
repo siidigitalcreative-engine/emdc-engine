@@ -7468,14 +7468,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const addLivestreamPromotion = () => {
         const draft = normalizeLivestreamOfferDraft(livestreamData.promotionDraft);
         if(!formatMainPromotion(draft)) return;
-        updateLivestream({ promotions:[...livestreamPromotions,{ id:uid(), ...draft }], promotionDraft:{ type:"text", value:"", text:"" } });
+        updateLivestream({ promotions:[...livestreamPromotions,{ id:uid(), ...draft }], promotionDraft:{ type:"text", value:"", text:"" }, showPromotionDraft:false });
       };
       const updateLivestreamPromotion = (id:string,patch:any) => updateLivestream({ promotions:livestreamPromotions.map((item:any)=>item.id===id?{...item,...patch}:item) });
       const deleteLivestreamPromotion = (id:string) => updateLivestream({ promotions:livestreamPromotions.filter((item:any)=>item.id!==id), editingPromotionId:livestreamData.editingPromotionId===id?"":livestreamData.editingPromotionId });
       const addLivestreamVoucher = () => {
         const draft = normalizeLivestreamOfferDraft(livestreamData.voucherDraft);
         if(!formatMainPromotion(draft)) return;
-        updateLivestream({ voucherCards:[...livestreamVoucherCards,{ id:uid(), ...draft }], voucherDraft:{ type:"text", value:"", text:"" } });
+        updateLivestream({ voucherCards:[...livestreamVoucherCards,{ id:uid(), ...draft }], voucherDraft:{ type:"text", value:"", text:"" }, showVoucherDraft:false });
       };
       const updateLivestreamVoucher = (id:string,patch:any) => updateLivestream({ voucherCards:livestreamVoucherCards.map((item:any)=>item.id===id?{...item,...patch}:item) });
       const deleteLivestreamVoucher = (id:string) => updateLivestream({ voucherCards:livestreamVoucherCards.filter((item:any)=>item.id!==id), editingVoucherId:livestreamData.editingVoucherId===id?"":livestreamData.editingVoucherId });
@@ -7518,19 +7518,33 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const renderLivestreamOfferListCard = ({ title, subtitle, draftKey, items, editingKey, addItem, updateItem, deleteItem, placeholder, emptyText }:any) => {
         const draft = normalizeLivestreamOfferDraft(livestreamData[draftKey]);
         const hasDraft = !!formatMainPromotion(draft);
+        const showDraftKey = draftKey === "voucherDraft" ? "showVoucherDraft" : "showPromotionDraft";
+        const showDraft = !!livestreamData[showDraftKey];
+        const handleDraftButton = () => {
+          if (!showDraft) {
+            updateLivestream({ [showDraftKey]:true });
+            return;
+          }
+          addItem();
+        };
         return (
           <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:showDraft?10:0,flexWrap:"wrap" }}>
               <div>
                 <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>{title}</p>
                 <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted,lineHeight:1.4 }}>{subtitle}</p>
               </div>
-              <Btn xs onClick={addItem} disabled={!hasDraft}>Add</Btn>
+              <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+                {showDraft&&<Btn xs variant="outline" onClick={()=>updateLivestream({ [showDraftKey]:false })}>Cancel</Btn>}
+                <Btn xs onClick={handleDraftButton} disabled={showDraft&&!hasDraft}>{showDraft?"Save":"Add"}</Btn>
+              </div>
             </div>
 
-            <div style={{ border:`1.5px solid ${hasDraft?"#A7F3D0":C.border}`,background:hasDraft?"#F0FDF4":C.bg,borderRadius:12,padding:12,display:"grid",gap:10,marginBottom:10 }}>
-              {renderLivestreamOfferInput(draft,(patch:any)=>updateLivestreamOfferDraft(draftKey,patch),placeholder)}
-            </div>
+            {showDraft&&(
+              <div style={{ border:`1.5px solid ${hasDraft?"#A7F3D0":C.border}`,background:hasDraft?"#F0FDF4":C.bg,borderRadius:12,padding:12,display:"grid",gap:10,marginBottom:10 }}>
+                {renderLivestreamOfferInput(draft,(patch:any)=>updateLivestreamOfferDraft(draftKey,patch),placeholder)}
+              </div>
+            )}
 
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
               {items.length ? items.map((item:any,index:number)=>{
