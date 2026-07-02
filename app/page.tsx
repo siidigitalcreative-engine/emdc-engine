@@ -3636,6 +3636,27 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     window.setTimeout(()=>setActionDoneIds((prev:string[])=>prev.filter((item:string)=>item!==key)),1600);
   };
   const actionDone = (id:any) => actionDoneIds.includes(String(id || ""));
+  const TransferBtn = ({ id, children, onClick, variant="outline", style={}, ...props }: any) => {
+    const done = actionDone(id);
+    return (
+      <Btn
+        {...props}
+        variant={done ? "primary" : variant}
+        onClick={(e:any)=>{
+          if (typeof onClick === "function") onClick(e);
+          markActionDone(id);
+        }}
+        style={{
+          ...(style || {}),
+          transform:done ? "scale(1.04)" : "scale(1)",
+          boxShadow:done ? "0 0 0 3px rgba(34,197,94,.14)" : "none",
+          transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
+        }}
+      >
+        {done ? "✓ Sent" : children}
+      </Btn>
+    );
+  };
   const [campaignDigitalSentIds,setCampaignDigitalSentIds] = useState<string[]>([]);
   const [campaignMarketingSentIds,setCampaignMarketingSentIds] = useState<string[]>([]);
   const [campaignDcGeneratingImageId,setCampaignDcGeneratingImageId] = useState("");
@@ -5093,14 +5114,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if (!rowsToSend.length) return;
     const existingRows = getProductIntroMarketingRows();
     saveProductIntroMarketingRows([...existingRows, ...rowsToSend]);
-    setActiveGroupTab("marketing");
   };
 
   const sendProductIntroEcommerceOutputToDigital = (sourceData:any) => {
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
     saveProductIntroDigitalRows(rowsToSend);
-    setActiveGroupTab("digital");
   };
 
   const sendProductIntroEcommerceOutputToLivestream = (sourceData:any) => {
@@ -5108,7 +5127,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if (!rowsToSend.length) return;
     const existingRows = getProductIntroLivestreamRows();
     saveProductIntroLivestreamRows([...existingRows, ...rowsToSend]);
-    setActiveGroupTab("livestream");
   };
 
   const setEcommercePromptForProducts = (rows:any[]) => {
@@ -6159,7 +6177,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       placedProductKeys:livestreamProducts.map((item:any,idx:number)=>`${item.sku || item.product || "livestream-product"}__${idx}`),
       selectedProductKeys:livestreamProducts.map((item:any,idx:number)=>`${item.sku || item.product || "livestream-product"}__${idx}`),
     });
-    setActiveGroupTab("livestream");
   };
 
   const buildCampaignDigitalCreativeItem = (row:any) => {
@@ -6865,8 +6882,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               lastMarketingDcTransferAt:now,
             });
             markActionDone(`marketing-send-dc-${row.id}`);
-            setActiveGroupTab("digital");
-          }} />
+                  }} />
         </div>
       );
     }
@@ -9723,9 +9739,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         </div>
                         <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                           <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:true, mainPromotionDraft:data.mainPromotionDraft || (typeof data.mainPromotion === "object" ? data.mainPromotion : { type:"text", value:"", text:String(data.mainPromotion || "") }) })}>Edit</Btn>
-                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
-                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion }); markActionDone("promo-digital"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-digital")?"✓ Sent":"Send to DC"}</Btn>
-                          <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
+                          <TransferBtn xs id="promo-marketing" onClick={()=>updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion })} disabled={!formatMainPromotion(data.mainPromotion)}>Send to Marketing</TransferBtn>
+                          <TransferBtn xs id="promo-digital" onClick={()=>updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion })} disabled={!formatMainPromotion(data.mainPromotion)}>Send to DC</TransferBtn>
+                          <TransferBtn xs id="promo-livestream" onClick={()=>updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion })} disabled={!formatMainPromotion(data.mainPromotion)}>Send to Livestream</TransferBtn>
                           <Btn xs variant="danger" onClick={clearMainPromotionAcrossTabs} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-clear")?"✓ Removed":"Remove"}</Btn>
                         </div>
                       </div>
@@ -10001,9 +10017,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           <Btn sm variant="outline" onClick={copyGeneratedEcommerce} disabled={!data.generatedText}>Copy</Btn>
                           <Btn sm variant="outline" onClick={saveEcommerceOutput} disabled={!data.generatedText}>Save</Btn>
                           <Btn sm variant={actionDone("overview-ecommerce-product-rows")?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(data,"overview-ecommerce-product-rows")} disabled={!data.generatedText}>{actionDone("overview-ecommerce-product-rows")?"✓ Added":"Add to Overview"}</Btn>
-                          <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Marketing</Btn>
-                          <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to DC</Btn>
-                          <Btn sm variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Livestream</Btn>
+                          <TransferBtn sm id="product-intro-ecommerce-send-marketing-current" onClick={()=>sendProductIntroEcommerceOutputToMarketing(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Marketing</TransferBtn>
+                          <TransferBtn sm id="product-intro-ecommerce-send-dc-current" onClick={()=>sendProductIntroEcommerceOutputToDigital(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to DC</TransferBtn>
+                          <TransferBtn sm id="product-intro-ecommerce-send-livestream-current" onClick={()=>sendProductIntroEcommerceOutputToLivestream(data)} disabled={!data.generatedText || !getEcommerceGeneratedProductRows(data).length}>Send to Livestream</TransferBtn>
                           <Btn sm variant="danger" onClick={deleteGeneratedEcommerceOutput} disabled={!data.generatedText}>Delete</Btn>
                         </div>
                       </div>
@@ -10056,9 +10072,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                           <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                             <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
-                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</Btn>
-                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</Btn>
-                            <Btn variant="outline" onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</Btn>
+                            <TransferBtn id={`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-dc-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</TransferBtn>
                             <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(savedEcommercePreview,`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
                           </div>
@@ -10100,9 +10116,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   </div>
                   <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                     <Btn xs variant="outline" onClick={()=>updateAiWorkspace(tab,{ mainPromotionEditing:true, mainPromotionDraft:data.mainPromotionDraft || (typeof data.mainPromotion === "object" ? data.mainPromotion : { type:"text", value:"", text:String(data.mainPromotion || "") }) })}>Edit</Btn>
-                    <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion }); markActionDone("promo-marketing"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-marketing")?"✓ Sent":"Send to Marketing"}</Btn>
-                    <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion }); markActionDone("promo-digital"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-digital")?"✓ Sent":"Send to DC"}</Btn>
-                    <Btn xs variant="outline" onClick={()=>{ updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion }); markActionDone("promo-livestream"); }} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-livestream")?"✓ Sent":"Send to Livestream"}</Btn>
+                    <TransferBtn xs id="promo-marketing" onClick={()=>updateAiWorkspace("marketing",{ mainPromotion:data.mainPromotion })} disabled={!formatMainPromotion(data.mainPromotion)}>Send to Marketing</TransferBtn>
+                    <TransferBtn xs id="promo-digital" onClick={()=>updateAiWorkspace("digital",{ mainPromotion:data.mainPromotion })} disabled={!formatMainPromotion(data.mainPromotion)}>Send to DC</TransferBtn>
+                    <TransferBtn xs id="promo-livestream" onClick={()=>updateAiWorkspace("livestream",{ mainPromotion:data.mainPromotion })} disabled={!formatMainPromotion(data.mainPromotion)}>Send to Livestream</TransferBtn>
                     <Btn xs variant="danger" onClick={clearMainPromotionAcrossTabs} disabled={!formatMainPromotion(data.mainPromotion)}>{actionDone("promo-clear")?"✓ Removed":"Remove"}</Btn>
                   </div>
                 </div>
@@ -10243,9 +10259,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                                             <Btn xs onClick={()=>saveEcommerceCampaignRowOutput(row)}>Save Output</Btn>
                                             <Btn xs variant="outline" onClick={()=>copyEcommerceCampaignRowOutput(row)}>Copy</Btn>
-                                            <Btn xs variant={campaignMarketingSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToMarketing(row)}>{campaignMarketingSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent Marketing ✓":"Send to Marketing"}</Btn>
-                                            <Btn xs variant={campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>sendEcommerceCampaignRowToDigitalCreative(row)}>{campaignDigitalSentIds.includes(String(row.id || row.productKey || row.product || ""))?"Sent DC ✓":"Send to DC"}</Btn>
-                                            <Btn xs variant="outline" onClick={()=>sendEcommerceCampaignRowToLivestream(row)}>Send to Livestream</Btn>
+                                            <TransferBtn xs id={`campaign-row-send-marketing-${row.id || row.productKey || row.product || "row"}`} onClick={()=>sendEcommerceCampaignRowToMarketing(row)}>Send to Marketing</TransferBtn>
+                                            <TransferBtn xs id={`campaign-row-send-dc-${row.id || row.productKey || row.product || "row"}`} onClick={()=>sendEcommerceCampaignRowToDigitalCreative(row)}>Send to DC</TransferBtn>
+                                            <TransferBtn xs id={`campaign-row-send-livestream-${row.id || row.productKey || row.product || "row"}`} onClick={()=>sendEcommerceCampaignRowToLivestream(row)}>Send to Livestream</TransferBtn>
                                             <Btn xs variant={campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>addEcommerceCampaignRowToOverview(row)}>{campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"Added ✓":"Add to Overview"}</Btn>
                                           </div>
                                         )}
@@ -14077,6 +14093,36 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     window.setTimeout(()=>setOverviewAddedKeys((prev:string[])=>prev.filter((item:string)=>item!==clean)),1800);
   };
   const overviewAdded = (key:any) => overviewAddedKeys.includes(String(key || ""));
+  const [sendDoneKeys,setSendDoneKeys] = useState<string[]>([]);
+  const markSendDone = (key:any) => {
+    const clean = String(key || uid());
+    setSendDoneKeys((prev:string[])=>Array.from(new Set([...prev,clean])));
+    window.setTimeout(()=>setSendDoneKeys((prev:string[])=>prev.filter((item:string)=>item!==clean)),1800);
+  };
+  const sendDone = (key:any) => sendDoneKeys.includes(String(key || ""));
+  const DcSendButton = ({ id, children="Send to DC", onClick, xs=false, sm=false, style={}, ...props }: any) => {
+    const done = sendDone(id);
+    return (
+      <Btn
+        {...props}
+        xs={xs}
+        sm={sm}
+        variant={done ? "primary" : "outline"}
+        onClick={(e:any)=>{
+          if (typeof onClick === "function") onClick(e);
+          markSendDone(id);
+        }}
+        style={{
+          ...(style || {}),
+          transform:done ? "scale(1.04)" : "scale(1)",
+          boxShadow:done ? "0 0 0 3px rgba(34,197,94,.14)" : "none",
+          transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
+        }}
+      >
+        {done ? "✓ Sent" : children}
+      </Btn>
+    );
+  };
   const addMarketingOutputToOverview = (ad:any, key:any, overrideText?:string) => {
     if(!onAddToOverview) return;
     onAddToOverview({ ...ad, text: overrideText ?? ad?.text ?? ad?.imagePrompt ?? "" });
@@ -15345,7 +15391,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                                           <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
                                             <Btn xs variant="outline" onClick={()=>toggleGeneratedBatchGmvRowEdit(item.id,index)}>{rowEditing ? "Save" : "Edit"}</Btn>
                                             {onAddToOverview&&<Btn xs variant="outline" onClick={()=>onAddToOverview({ ...item, text:[`Content Pillar: ${row.pillar || ""}`,`Featured Products: ${(row.products||[]).map((p:any)=>`${p.productName || p.product || "Product"} ${p.sku ? `(${p.sku})` : ""}`).join(", ")}`,`Creative Direction: ${row.creativeDirection || ""}`,`Caption Copy: ${row.caption || ""}`].join("\n") })}>Add to Overview</Btn>}
-                                            {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchGmvRowToDC(item,row,index)}>Send to DC</Btn>}
+                                            {onSendToDC&&<DcSendButton xs id={`gmv-row-send-dc-${item.id}-${row?.id || index}`} onClick={()=>sendGeneratedBatchGmvRowToDC(item,row,index)}>Send to DC</DcSendButton>}
                                             <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchGmvRow(item.id,index)}>Delete</Btn>
                                           </div>
                                         </td>
@@ -15418,7 +15464,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                           <Btn xs variant="outline" onClick={()=>editGeneratedBatchOutput(item.id)}>{isEditingBatchOutput(item.id)?"Done Editing":"Edit"}</Btn>
                           <Btn xs variant="outline" onClick={()=>saveGeneratedBatchOutput(item)}>Save</Btn>
                           {onAddToOverview&&<Btn xs variant={overviewAdded(`batch-${item.id}`)?"primary":"outline"} onClick={()=>addMarketingOutputToOverview(item,`batch-${item.id}`)}>{overviewAdded(`batch-${item.id}`)?"✓ Added":"Add to Overview"}</Btn>}
-                          {onSendToDC&&<Btn xs onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</Btn>}
+                          {onSendToDC&&<DcSendButton xs id={`batch-output-send-dc-${item.id}`} onClick={()=>sendGeneratedBatchOutputToDC(item)}>Send to DC</DcSendButton>}
                           <Btn xs variant="danger" onClick={()=>deleteGeneratedBatchOutput(item.id)}>Delete</Btn>
                         </div>
                       </div>
@@ -15455,7 +15501,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                       <div style={{ display:"flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
                         <button type="button" onClick={()=>copySavedAdTemplate(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Copy</button>
                         {onAddToOverview&&<button type="button" onClick={()=>addMarketingOutputToOverview(item,`saved-${item.id}`)} style={{ border:`1px solid ${overviewAdded(`saved-${item.id}`)?C.accent:C.border}`,background:overviewAdded(`saved-${item.id}`)?C.accent:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:overviewAdded(`saved-${item.id}`)?"#fff":C.textSub,cursor:"pointer" }}>{overviewAdded(`saved-${item.id}`)?"✓ Added":"Add to Overview"}</button>}
-                        {onSendToDC&&<button type="button" onClick={()=>sendSavedAdToDC(item)} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Send to DC</button>}
+                        {onSendToDC&&<DcSendButton xs id={`saved-ad-send-dc-${item.id}`} onClick={()=>sendSavedAdToDC(item)} style={{ padding:"5px 7px",fontSize:10 }}>Send to DC</DcSendButton>}
                         <button type="button" onClick={()=>deleteSavedAdTemplate(item.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
                       </div>
                     </div>
@@ -15481,7 +15527,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
               <Btn sm variant="outline" onClick={()=>openSavedAdTemplate(savedAdPreview)}>Load to Builder</Btn>
               <Btn sm variant="outline" onClick={()=>copySavedAdTemplate(savedAdPreview)}>Copy</Btn>
               {onAddToOverview&&<Btn sm variant={overviewAdded(`preview-${savedAdPreview.id}`)?"primary":"outline"} onClick={()=>addMarketingOutputToOverview(savedAdPreview,`preview-${savedAdPreview.id}`)}>{overviewAdded(`preview-${savedAdPreview.id}`)?"✓ Added":"Add to Overview"}</Btn>}
-              {onSendToDC&&<Btn sm onClick={()=>sendSavedAdToDC(savedAdPreview)}>Send to DC</Btn>}
+              {onSendToDC&&<DcSendButton sm id={`saved-ad-preview-send-dc-${savedAdPreview?.id || "preview"}`} onClick={()=>sendSavedAdToDC(savedAdPreview)}>Send to DC</DcSendButton>}
             </div>
           </div>
         )}
