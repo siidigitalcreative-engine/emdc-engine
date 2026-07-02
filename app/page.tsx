@@ -191,6 +191,7 @@ const EMDC_SKU_ITEMS_LAST_GOOD_KEY = "emdc_sku_items_last_good_v1";
 const EMDC_SKU_ITEMS_EMPTY_MARKER_KEY = "emdc_sku_items_explicit_empty_v1";
 const EMDC_LARGE_SKU_COUNT = 1000;
 const EMDC_CLOUD_SKU_CHUNK_SIZE = 250;
+const EMDC_CLOUD_LOCAL_STORAGE_CHUNK_SIZE = 260000;
 
 const getEmdcGroupWorkspaceBackupKey = (groupId:any) => `${EMDC_GROUP_AI_WORKSPACE_PREFIX}${String(groupId || "")}`;
 const getEmdcChecklistItemsBackupKey = (groupId:any) => `${EMDC_CHECKLIST_ITEMS_PREFIX}${String(groupId || "")}`;
@@ -17242,14 +17243,10 @@ export default function App({
     if (k.includes("history")) return true;
     if (k.includes("last_good")) return true;
 
-    // Generated outputs and reference images can contain very large text/base64 data.
-    // Keep them in the browser, but do not include them in the shared cloud payload.
-    if (k.includes("generated_batch_outputs")) return true;
-    if (k.includes("saved_outputs")) return true;
-    if (k.includes("ai_saved_outputs")) return true;
-
-    // Final safety limit per key for cloud sync.
-    return size > 120000;
+    // Saved outputs, generated outputs, transfer queues, and other EMDC inputs are now
+    // synced online through chunked localStorage saves, so do not omit them here.
+    // Only backup/history/app-state/SKU mirror keys are excluded to avoid duplicate giant data.
+    return false;
   };
 
   const readLocalSnapshot = (mode:"full"|"cloud"="full") => {
@@ -17438,6 +17435,71 @@ export default function App({
     }
   };
 
+
+  const splitCloudLocalStorageRows = (snapshot:any = {}) => {
+    const rows:any[] = [];
+    Object.entries(snapshot || {}).forEach(([key,value]:any)=>{
+      const stringValue = typeof value === "string" ? value : JSON.stringify(value ?? "");
+      const partSize = Math.max(50000, EMDC_CLOUD_LOCAL_STORAGE_CHUNK_SIZE - 12000);
+      const partCount = Math.max(1, Math.ceil(stringValue.length / partSize));
+      for (let partIndex=0; partIndex<partCount; partIndex++) {
+        rows.push({
+          key,
+          partIndex,
+          partCount,
+          valuePart:stringValue.slice(partIndex * partSize, (partIndex + 1) * partSize),
+        });
+      }
+    });
+    return rows;
+  };
+
+  const chunkCloudLocalStorageRows = (rows:any[] = []) => {
+    const chunks:any[][] = [];
+    let current:any[] = [];
+    let currentSize = 2;
+
+    rows.forEach((row:any)=>{
+      const rowSize = JSON.stringify(row).length + 2;
+      if (current.length && currentSize + rowSize > EMDC_CLOUD_LOCAL_STORAGE_CHUNK_SIZE) {
+        chunks.push(current);
+        current = [];
+        currentSize = 2;
+      }
+      current.push(row);
+      currentSize += rowSize;
+    });
+
+    if (current.length) chunks.push(current);
+    return chunks;
+  };
+
+  const saveCloudLocalStorageChunked = async (snapshot:any = {}, updatedAt:string) => {
+    const rows = splitCloudLocalStorageRows(snapshot);
+    const chunks = chunkCloudLocalStorageRows(rows);
+    if (!chunks.length) return { totalKeys:0, totalRows:0, chunkCount:0 };
+
+    for (let index=0; index<chunks.length; index++) {
+      const res = await fetch("/api/emdc-state?mode=local-storage-chunk", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"local-storage-chunk",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          index,
+          total:chunks.length,
+          totalKeys:Object.keys(snapshot || {}).length,
+          totalRows:rows.length,
+          rows:chunks[index],
+        }),
+      });
+      if (!res.ok) throw new Error("Local input chunk save failed");
+    }
+
+    return { totalKeys:Object.keys(snapshot || {}).length, totalRows:rows.length, chunkCount:chunks.length };
+  };
+
   const makeCloudAppStatePayload = async (updatedAt:string) => {
     const fullAppState = makeAppStatePayload();
     const skuItems = Array.isArray(fullAppState.skuItems) ? fullAppState.skuItems : [];
@@ -17459,14 +17521,21 @@ export default function App({
 
     const updatedAt = new Date().toISOString();
     const appStateForCloud = await makeCloudAppStatePayload(updatedAt);
+    const onlineLocalSnapshot = readLocalSnapshot("cloud");
+    const onlineLocalMeta = await saveCloudLocalStorageChunked(onlineLocalSnapshot, updatedAt);
     const payload = {
       version: 1,
       clientId: cloudClientIdRef.current,
       updatedAt,
       appState: appStateForCloud,
-      // Keep the shared sync payload compact. The full local browser backup remains local.
-      // Large SKU catalogs are saved to Redis in chunks before this main state save.
-      localStorage: readLocalSnapshot("cloud"),
+      // Full EMDC browser inputs are saved online in Upstash chunks.
+      // Keep only a small marker in the main state payload to avoid Vercel/Redis payload limits.
+      localStorage: {
+        emdc_online_local_storage_chunked_v1: JSON.stringify({
+          updatedAt,
+          ...onlineLocalMeta,
+        }),
+      },
     };
 
     if (shouldBlockEmptyEmdcState(payload.appState)) {
