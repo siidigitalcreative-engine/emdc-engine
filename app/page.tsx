@@ -7576,6 +7576,34 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             renderMainPromotionCard(livestreamData.mainPromotion, true)
           )}
 
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
+            {renderLivestreamOfferListCard({
+              title:"Promotions",
+              subtitle:"Optional exclusive platform/live promo.",
+              draftKey:"promotionDraft",
+              items:livestreamPromotions,
+              editingKey:"editingPromotionId",
+              addItem:addLivestreamPromotion,
+              updateItem:updateLivestreamPromotion,
+              deleteItem:deleteLivestreamPromotion,
+              placeholder:"Promotion details. Example: Live-only ₱100 OFF with free shipping tonight, 7.7 Rainy Deal, bundle offer, or TikTok Shop exclusive offer.",
+              emptyText:"No promotions added yet.",
+            })}
+
+            {renderLivestreamOfferListCard({
+              title:"Vouchers",
+              subtitle:"Add short voucher lines for the live.",
+              draftKey:"voucherDraft",
+              items:livestreamVoucherCards,
+              editingKey:"editingVoucherId",
+              addItem:addLivestreamVoucher,
+              updateItem:updateLivestreamVoucher,
+              deleteItem:deleteLivestreamVoucher,
+              placeholder:"Voucher details. Example: CLAIM NOW: ₱50 OFF minimum ₱499, free shipping voucher, or live-only checkout code.",
+              emptyText:"No vouchers added yet.",
+            })}
+          </div>
+
           {((isProductIntroductionChecklist&&productIntroLivestreamRows.length>0) || (isCampaignChecklist&&campaignLivestreamRows.length>0))&&(
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
               <div style={{ padding:"10px 12px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
@@ -7739,34 +7767,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 )}
               </div>
               )}
-
-              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
-                {renderLivestreamOfferListCard({
-                  title:"Promotions",
-                  subtitle:"Optional exclusive platform/live promo.",
-                  draftKey:"promotionDraft",
-                  items:livestreamPromotions,
-                  editingKey:"editingPromotionId",
-                  addItem:addLivestreamPromotion,
-                  updateItem:updateLivestreamPromotion,
-                  deleteItem:deleteLivestreamPromotion,
-                  placeholder:"Promotion details. Example: Live-only ₱100 OFF with free shipping tonight, 7.7 Rainy Deal, bundle offer, or TikTok Shop exclusive offer.",
-                  emptyText:"No promotions added yet.",
-                })}
-
-                {renderLivestreamOfferListCard({
-                  title:"Vouchers",
-                  subtitle:"Add short voucher lines for the live.",
-                  draftKey:"voucherDraft",
-                  items:livestreamVoucherCards,
-                  editingKey:"editingVoucherId",
-                  addItem:addLivestreamVoucher,
-                  updateItem:updateLivestreamVoucher,
-                  deleteItem:deleteLivestreamVoucher,
-                  placeholder:"Voucher details. Example: CLAIM NOW: ₱50 OFF minimum ₱499, free shipping voucher, or live-only checkout code.",
-                  emptyText:"No vouchers added yet.",
-                })}
-              </div>
 
               <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10 }}>
