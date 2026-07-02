@@ -8293,47 +8293,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
     };
 
     const getDcProductLinks = (product:any) => {
-      const safeProduct:any = product || {};
-      const skuRow:any = getSkuStorageRowByProduct(safeProduct) || {};
-      const safeExtraValues = safeProduct.extraFields && typeof safeProduct.extraFields==="object" ? Object.values(safeProduct.extraFields) : [];
+      // Digital Creative product references must come from the matched SKU Storage row only.
+      // This prevents old transferred rows or item-level imageLinks from mixing multiple products together.
+      // Return a maximum of one image/reference link per product.
+      const skuRow:any = getSkuStorageRowByProduct(product || {}) || {};
+      if(!skuRow || !Object.keys(skuRow).length) return [];
+
       const skuExtraValues = skuRow.extraFields && typeof skuRow.extraFields==="object" ? Object.values(skuRow.extraFields) : [];
-      const safeAllValues = Object.values(safeProduct || {}).filter((value:any)=>typeof value!=="object");
       const skuAllValues = Object.values(skuRow || {}).filter((value:any)=>typeof value!=="object");
-      const linkArrays = [
-        safeProduct.links,
-        safeProduct.imageLinks,
-        safeProduct.referenceLinks,
-        safeProduct.productImageLinks,
+      const skuLinkArrays = [
         skuRow.links,
         skuRow.imageLinks,
         skuRow.referenceLinks,
         skuRow.productImageLinks,
       ].flatMap((value:any)=>Array.isArray(value) ? value : []);
-      const linkSources = [
-        // Direct links carried by E-commerce/Marketing transfer rows
-        safeProduct.link,
-        safeProduct.url,
-        safeProduct.image,
-        safeProduct.imageUrl,
-        safeProduct.imageURL,
-        safeProduct.imageLink,
-        safeProduct.productLink,
-        safeProduct.productImage,
-        safeProduct.productImageUrl,
-        safeProduct.productImageLink,
-        safeProduct.reference,
-        safeProduct.referenceLink,
-        safeProduct.referenceImage,
-        safeProduct.referenceImageUrl,
-        safeProduct.referenceImageLink,
-        // Links from the matched SKU Storage row
-        skuRow.link,
-        skuRow.url,
-        skuRow.image,
+
+      const skuLinkSources = [
+        skuRow.imageLink,
         skuRow.imageUrl,
         skuRow.imageURL,
-        skuRow.imageLink,
-        skuRow.productLink,
         skuRow.productImage,
         skuRow.productImageUrl,
         skuRow.productImageLink,
@@ -8342,24 +8320,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         skuRow.referenceImage,
         skuRow.referenceImageUrl,
         skuRow.referenceImageLink,
-        // Keep these as fallback because some pasted rows hide the link inside text/extra fields
-        safeProduct.product,
-        safeProduct.productName,
-        safeProduct.sku,
-        safeProduct.skuCode,
-        safeProduct.brand,
-        safeProduct.collection,
-        skuRow.productName,
-        skuRow.sku,
-        skuRow.collection,
-        skuRow.category,
-        ...linkArrays,
-        ...safeExtraValues,
+        skuRow.link,
+        skuRow.url,
+        ...skuLinkArrays,
         ...skuExtraValues,
-        ...safeAllValues,
         ...skuAllValues,
       ];
-      return Array.from(new Set(linkSources.flatMap((source:any)=>extractDcLinks(source)).map(normalizeDcUrl).filter(Boolean)));
+
+      const links = Array.from(new Set(
+        skuLinkSources
+          .flatMap((source:any)=>extractDcLinks(source))
+          .map(normalizeDcUrl)
+          .filter(Boolean)
+      ));
+
+      return links.slice(0,1);
     };
 
     if(tab==="digital" && isCampaignChecklist){
@@ -8491,7 +8466,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const getCampaignDetailedPromptInstructions = () => String(data.campaignDetailedPromptInstructions || data.detailedPromptInstructions || defaultCampaignDetailedPromptInstructions);
       const buildCampaignDetailedPrompt = (item:any) => {
         const productRows = getCampaignDigitalProductRows(item);
-        const imageLinks = Array.from(new Set([...(productRows.flatMap((row:any)=>row.links || [])), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const imageLinks = productRows.flatMap((row:any)=>Array.isArray(row?.links) ? row.links : []).map(normalizeDcUrl).filter(Boolean);
         const ownPrompt = String(item.ownPrompt || "").trim();
         const productLines = productRows.map((row:any,index:number)=>`${index+1}. ${[row.brand,row.category,row.product,row.sku].filter(Boolean).join(" · ")}`).join("\n");
         return [
@@ -8567,7 +8542,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const generateCampaignDcImage = async (item:any) => {
         const productRows = getCampaignDigitalProductRows(item);
-        const imageLinks = Array.from(new Set([...(productRows.flatMap((row:any)=>row.links || [])), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const imageLinks = productRows.flatMap((row:any)=>Array.isArray(row?.links) ? row.links : []).map(normalizeDcUrl).filter(Boolean);
         const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
         const prompt = [
           "Create a premium ecommerce campaign image based on this campaign row.",
@@ -8728,7 +8703,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const getCarouselCardReferenceLinks = (cardProducts:any[]=[], item:any={}) => Array.from(new Set([
         ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : (row?.link ? [row.link] : getDcProductLinks(row)))),
-        ...((Array.isArray(item?.imageLinks) ? item.imageLinks : [])),
+        // Item-level imageLinks are intentionally excluded here; keep one SKU Storage link per product only.
       ])).map(normalizeDcUrl).filter(Boolean);
 
       const updateCampaignDigitalCarouselProductRefs = (itemId:string, cardIndex:number, nextRefs:any[]) => {
@@ -9053,7 +9028,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     </div>
                   );
                 }
-                const allLinks = Array.from(new Set(productRows.flatMap((row:any)=>Array.isArray(row?.links) ? row.links : [])));
+                const allLinks = productRows.flatMap((row:any)=>Array.isArray(row?.links) ? row.links.slice(0,1) : []).filter(Boolean);
                 const mergeCopyCells = productRows.length>1 && productRows.every((row:any)=>String(row.headline||"")===String(productRows[0]?.headline||"") && String(row.subheadline||"")===String(productRows[0]?.subheadline||"") && String(row.cta||"")===String(productRows[0]?.cta||""));
                 return (
                 <div key={item.id} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -9587,7 +9562,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const getProductIntroDetailedPromptInstructions = () => String(digitalData.detailedPromptInstructions || defaultProductIntroDetailedPromptInstructions);
       const buildProductIntroDetailedPrompt = (item:any) => {
         const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
-        const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const links = cardProducts.flatMap((product:any)=>getDcProductLinks(product)).map(normalizeDcUrl).filter(Boolean);
         const ownPrompt = String(item.ownPrompt || "").trim();
         const productLines = cardProducts.map((product:any,index:number)=>{
           const name = product?.product || product?.productName || product?.name || item.product || `Product ${index+1}`;
@@ -9687,7 +9662,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
       const generateProductIntroDcImage = async (item:any) => {
         const cardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection }];
-        const links = Array.from(new Set([...(cardProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const links = cardProducts.flatMap((product:any)=>getDcProductLinks(product)).map(normalizeDcUrl).filter(Boolean);
         const uploadedReferenceImages = Array.isArray(item.referenceImages) ? item.referenceImages : [];
         const prompt = [
           "Create a premium ecommerce product introduction image based on this product row.",
@@ -9873,10 +9848,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         return normalizeIntroCarouselProductRefRows(chosen);
       };
 
-      const getIntroCarouselCardReferenceLinks = (cardProducts:any[]=[], item:any={}) => Array.from(new Set([
-        ...((Array.isArray(cardProducts) ? cardProducts : []).flatMap((row:any)=>Array.isArray(row?.links) ? row.links : (row?.link ? [row.link] : getDcProductLinks(row)))),
-        ...((Array.isArray(item?.imageLinks) ? item.imageLinks : [])),
-      ])).map(normalizeDcUrl).filter(Boolean);
+      const getIntroCarouselCardReferenceLinks = (cardProducts:any[]=[], item:any={}) => (Array.isArray(cardProducts) ? cardProducts : [])
+        .flatMap((row:any)=>getDcProductLinks(row))
+        .map(normalizeDcUrl)
+        .filter(Boolean);
 
       const updateProductIntroDigitalCarouselProductRefs = (itemId:string, cardIndex:number, nextRefs:any[]) => {
         updateProductIntroDigitalCarouselCard(itemId,cardIndex,{ productRefs:normalizeIntroCarouselProductRefRows(nextRefs) });
@@ -10065,8 +10040,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const generateProductIntroDcGmvImage = async (item:any, row:any, rowIndex:number) => {
-        const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : (Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }]);
-        const links = Array.from(new Set([...(rowProducts.flatMap((product:any)=>getDcProductLinks(product))), ...((item.imageLinks || []))])).map(normalizeDcUrl).filter(Boolean);
+        const rowProducts = Array.isArray(row?.products) && row.products.length ? row.products : (Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:[] }]);
+        const links = rowProducts.flatMap((product:any)=>getDcProductLinks(product)).map(normalizeDcUrl).filter(Boolean);
         const uploadedReferenceImages = Array.isArray(row?.referenceImages) ? row.referenceImages : (Array.isArray(item.referenceImages) ? item.referenceImages : []);
         const prompt = [
           "Create one Digital Creative image for this TikTok Product GMV Max content pillar.",
@@ -10203,7 +10178,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   cta:item.cta || "",
                   links:getDcProductLinks(product),
                 }));
-                const links = Array.from(new Set(tableProducts.flatMap((row:any)=>row.links || [])));
+                const links = tableProducts.flatMap((row:any)=>Array.isArray(row?.links) ? row.links.slice(0,1) : []).filter(Boolean);
                 const mergeCopyCells = tableProducts.length>1 && tableProducts.every((row:any)=>String(row.headline||"")===String(tableProducts[0]?.headline||"") && String(row.subheadline||"")===String(tableProducts[0]?.subheadline||"") && String(row.cta||"")===String(tableProducts[0]?.cta||""));
                 const carouselCards = Array.isArray(item.carouselCards) ? item.carouselCards : [];
                 const isCarouselDcOutput = !!item.isCarousel && carouselCards.length>0;
@@ -10236,7 +10211,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             const normalizedMediaType = String(mediaType || "image").toLowerCase().includes("video") ? "video" : "image";
                             const tint = normalizedMediaType === "video" ? "#FEF2F2" : "#EFF6FF";
                             const accentColor = normalizedMediaType === "video" ? "#EF4444" : "#111827";
-                            const allCardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:item.imageLinks || [] }];
+                            const allCardProducts = Array.isArray(item.products) && item.products.length ? item.products : [{ product:item.product, sku:item.sku, brand:item.brand, collection:item.category || item.collection, links:[] }];
                             const cardProductRows = getIntroCarouselCardProductReferences(card,cardIndex,allCardProducts);
                             const cardReferenceLinks = getIntroCarouselCardReferenceLinks(cardProductRows,item);
                             return (
