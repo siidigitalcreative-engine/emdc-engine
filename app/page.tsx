@@ -11627,12 +11627,12 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
           {groups.map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; return (
-            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s" }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
-              <div style={{ padding:"16px" }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
-                  <p style={{ margin:0,fontSize:14,fontWeight:700,color:C.text,flex:1,marginRight:8 }}>{g.groupName}</p>
-                  <div style={{ display:"flex",gap:4,flexShrink:0 }}>
-                    <button onClick={e=>{e.stopPropagation();setEditingGroup(g);}} style={{ padding:"3px 8px",borderRadius:5,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
+            <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
+              <div style={{ padding:"16px",minWidth:0 }}>
+                <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",alignItems:"flex-start",gap:8,marginBottom:10,minWidth:0 }}>
+                  <p style={{ margin:0,fontSize:14,fontWeight:700,color:C.text,minWidth:0,lineHeight:1.25,overflowWrap:"anywhere",wordBreak:"break-word" }}>{g.groupName}</p>
+                  <div style={{ display:"flex",gap:4,flexShrink:0,alignItems:"center",justifyContent:"flex-end" }}>
+                    <button onClick={e=>{e.stopPropagation();setEditingGroup(g);}} style={{ padding:"3px 8px",borderRadius:5,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600,whiteSpace:"nowrap" }}>Edit</button>
                     <button onClick={e=>{e.stopPropagation();deleteGroup(g.id);}} style={{ width:24,height:24,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0 }}>&#215;</button>
                   </div>
                 </div>
