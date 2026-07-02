@@ -2008,9 +2008,30 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
   const saveEventTypes = (types: any[]) => {
-    if(setEventTypes) setEventTypes(types);
-    if(filter!=="all" && !types.some((t:any)=>t.id===filter)) setFilter("all");
-    if(onStateChange) onStateChange({calendarTypes:types});
+    const nextTypes = ensureRequiredCalendarTypes(types || []).map((t:any)=>({
+      ...t,
+      color:t.color || "#9CA3AF",
+      useColor:!!t.useColor,
+    }));
+
+    const tagColorMap:any = {};
+    nextTypes.forEach((t:any)=>{
+      if (t.useColor && t.id) tagColorMap[t.id] = t.color || "#9CA3AF";
+    });
+
+    const applyTagColor = (ev:any) => {
+      const matchedColor = tagColorMap[ev?.type];
+      return matchedColor ? { ...ev, color:matchedColor } : ev;
+    };
+
+    const nextManualEvents = (Array.isArray(manualEvents) ? manualEvents : []).map(applyTagColor);
+    const nextSeasonalEvents = (Array.isArray(seasonalEvents) ? seasonalEvents : []).map(applyTagColor);
+
+    if(setEventTypes) setEventTypes(nextTypes);
+    if(setManualEvents) setManualEvents(nextManualEvents);
+    if(setSeasonalEvents) setSeasonalEvents(nextSeasonalEvents);
+    if(filter!=="all" && !nextTypes.some((t:any)=>t.id===filter)) setFilter("all");
+    if(onStateChange) onStateChange({calendarTypes:nextTypes, calendarEvents:nextManualEvents, seasonalEvents:nextSeasonalEvents});
   };
   const [filter,setFilter]       = useState("all");
   const [addModal,setAddModal]   = useState(false);
@@ -2078,7 +2099,18 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       }));
   },[seasonalEvents,year,month,calendarFilterTypes]);
 
-  const allEvents = useMemo(()=>[...(Array.isArray(manualEvents)?manualEvents:[]),...(Array.isArray(extraEvents)?extraEvents:[]),...(Array.isArray(monthOnlyCalendarEvents)?monthOnlyCalendarEvents:[])],[manualEvents,extraEvents,monthOnlyCalendarEvents]);
+  const allEvents = useMemo(()=>{
+    const colorizeByTag = (ev:any) => ({
+      ...ev,
+      color:typeColor(ev?.type || "task", ev?.color || "#9CA3AF"),
+    });
+
+    return [
+      ...(Array.isArray(manualEvents) ? manualEvents.map(colorizeByTag) : []),
+      ...(Array.isArray(extraEvents) ? extraEvents.map(colorizeByTag) : []),
+      ...(Array.isArray(monthOnlyCalendarEvents) ? monthOnlyCalendarEvents.map(colorizeByTag) : []),
+    ];
+  },[manualEvents,extraEvents,monthOnlyCalendarEvents,calendarFilterTypes]);
 
   // Date helpers must be defined before yearly list memo uses them during prerender.
   const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
@@ -2490,7 +2522,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       isRange:true,
       isStart: isStart || isRowStart,
       isEnd:   isEnd   || isRowEnd,
-      color: ev.color,
+      color: typeColor(ev.type, ev.color || "#9CA3AF"),
     };
   };
 
@@ -3349,9 +3381,28 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   };
   const eventTypeLabel = (id:any) => eventTypeMeta(id)?.label || normalizeTagLabel(id);
   const saveEventTypesLocal = (types:any[]) => {
-    if(setEventTypes) setEventTypes(types);
-    if(onStateChange) onStateChange({calendarTypes:types});
-    if(filter!=="all" && !types.some((t:any)=>t.id===filter)) setFilter("all");
+    const nextTypes = ensureRequiredCalendarTypes(types || []).map((t:any)=>({
+      ...t,
+      color:t.color || "#6B7280",
+      useColor:!!t.useColor,
+    }));
+
+    const tagColorMap:any = {};
+    nextTypes.forEach((t:any)=>{
+      if (t.useColor && t.id) tagColorMap[t.id] = t.color || "#6B7280";
+    });
+
+    const applyTagColor = (ev:any) => {
+      const matchedColor = tagColorMap[ev?.type];
+      return matchedColor ? { ...ev, color:matchedColor } : ev;
+    };
+
+    const nextEvents = (Array.isArray(events) ? events : []).map(applyTagColor);
+
+    if(setEventTypes) setEventTypes(nextTypes);
+    if(setEvents) setEvents(nextEvents);
+    if(onStateChange) onStateChange({calendarTypes:nextTypes, seasonalEvents:nextEvents});
+    if(filter!=="all" && !nextTypes.some((t:any)=>t.id===filter)) setFilter("all");
   };
   const filtered = filter==="all" ? events : events.filter((e:any)=>e.type===filter);
 
