@@ -5080,57 +5080,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     } catch {}
   };
 
-  const getMarketingDcGroupInboxKey = (transferType:string) => {
-    const groupKey = String(group?.id || group?.groupName || group?.name || "").trim().replace(/[^a-z0-9_-]+/gi,"_");
-    return groupKey ? `emdc_marketing_dc_group_inbox_v4_${groupKey}_${transferType}` : "";
-  };
-
-  const readMarketingDcGroupInbox = (transferType:string) => {
-    if (typeof window === "undefined") return [];
-    const key = getMarketingDcGroupInboxKey(transferType);
-    if(!key) return [];
-    const lists:any[] = [];
-    try {
-      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
-      if(Array.isArray(parsed)) lists.push(...parsed);
-    } catch {}
-    try {
-      const parsed = JSON.parse(sessionStorage.getItem(key) || "[]");
-      if(Array.isArray(parsed)) lists.push(...parsed);
-    } catch {}
-    try {
-      const w:any = window as any;
-      const mem = w.__emdcMarketingDcGroupInbox || {};
-      if(Array.isArray(mem[key])) lists.push(...mem[key]);
-    } catch {}
-    return normalizeTransferRowsForStorage(lists);
-  };
-
-  const writeMarketingDcGroupInbox = (transferType:string, rows:any[] = []) => {
-    if (typeof window === "undefined") return;
-    const key = getMarketingDcGroupInboxKey(transferType);
-    if(!key) return;
-    const stampedRows = stampMarketingDcDirectRows(transferType, rows);
-    try { localStorage.setItem(key, JSON.stringify(stampedRows)); } catch {}
-    try { sessionStorage.setItem(key, JSON.stringify(stampedRows)); } catch {}
-    try {
-      const w:any = window as any;
-      w.__emdcMarketingDcGroupInbox = w.__emdcMarketingDcGroupInbox || {};
-      w.__emdcMarketingDcGroupInbox[key] = stampedRows;
-    } catch {}
-    try {
-      markEmdcLocalStateUpdated();
-      window.dispatchEvent(new Event("emdc-local-sync"));
-      window.dispatchEvent(new Event("emdc-marketing-dc-transfer"));
-    } catch {}
-  };
-
-  const appendMarketingDcGroupInbox = (transferType:string, rows:any[] = []) => {
-    const existing = readMarketingDcGroupInbox(transferType);
-    const nextRows = mergeDigitalCreativeRows(existing, stampMarketingDcDirectRows(transferType, rows));
-    writeMarketingDcGroupInbox(transferType,nextRows);
-  };
-
   const readMarketingDcGlobalQueue = (transferType:string) => {
     if (typeof window === "undefined") return [];
     try {
@@ -5201,7 +5150,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     });
     lists.push(...readMarketingDcGlobalQueue(transferType));
     lists.push(...readMarketingDcDirectInbox(transferType));
-    lists.push(...readMarketingDcGroupInbox(transferType));
     return mergeDigitalCreativeRows(lists);
   };
 
@@ -5213,9 +5161,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       getLegacyMarketingDcTransferRowsBackupKey(transferType),
     ].filter(Boolean);
     const cleanRows = normalizeTransferRowsForStorage(rows);
-    // Save to multiple small inboxes first so transfer works even if big app-state writes fail.
+    // Save to the small direct inbox first so transfer works even if big localStorage writes fail.
     appendMarketingDcDirectInbox(transferType, cleanRows);
-    writeMarketingDcGroupInbox(transferType, cleanRows);
     try { writeMarketingDcGlobalQueue(transferType, cleanRows); } catch {}
     keys.forEach((key:string)=>{
       try { localStorage.setItem(key, JSON.stringify(cleanRows)); } catch {}
@@ -5234,6 +5181,81 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       map.set(getTransferRowIdentity(normalized,idx), normalized);
     });
     return Array.from(map.values());
+  };
+
+
+  // Final reliable bridge for Marketing → Digital Creative.
+  // This store is intentionally separate from the heavy app-state/cloud sync so every
+  // Marketing ad output can appear in Digital Creative immediately and after refresh.
+  const MARKETING_DC_BRIDGE_KEY = "emdc_marketing_dc_bridge_rows_v1";
+  const getMarketingDcBridgeGroupKey = () => String(group?.id || group?.groupName || group?.name || "current").trim().replace(/[^a-z0-9_-]+/gi,"_");
+  const getMarketingDcBridgeIdentity = () => ({
+    groupKey:getMarketingDcBridgeGroupKey(),
+    groupId:String(group?.id || "").trim(),
+    groupName:String(group?.groupName || group?.name || "").trim(),
+  });
+  const stampMarketingDcBridgeRows = (rows:any[] = []) => {
+    const meta = getMarketingDcBridgeIdentity();
+    return normalizeTransferRowsForStorage(rows).map((row:any)=>({
+      ...row,
+      id:row?.id || uid(),
+      _marketingDcBridge:true,
+      _marketingDcBridgeGroupKey:meta.groupKey,
+      _dcGroupId:meta.groupId,
+      _dcGroupName:meta.groupName,
+      groupId:meta.groupId,
+      groupName:meta.groupName,
+      transferredFrom:"Marketing",
+      transferredAt:row?.transferredAt || new Date().toISOString(),
+    }));
+  };
+  const bridgeRowMatchesCurrentGroup = (row:any) => {
+    const meta = getMarketingDcBridgeIdentity();
+    const rowGroupKey = String(row?._marketingDcBridgeGroupKey || row?.groupKey || "").trim();
+    const rowGroupId = String(row?._dcGroupId || row?.groupId || "").trim();
+    const rowGroupName = String(row?._dcGroupName || row?.groupName || "").trim();
+    return (!!meta.groupKey && rowGroupKey === meta.groupKey) || (!!meta.groupId && rowGroupId === meta.groupId) || (!!meta.groupName && rowGroupName === meta.groupName);
+  };
+  const readAllMarketingDcBridgeRows = () => {
+    if (typeof window === "undefined") return [];
+    const lists:any[] = [];
+    try { const parsed = JSON.parse(localStorage.getItem(MARKETING_DC_BRIDGE_KEY) || "[]"); if(Array.isArray(parsed)) lists.push(...parsed); } catch {}
+    try { const parsed = JSON.parse(sessionStorage.getItem(MARKETING_DC_BRIDGE_KEY) || "[]"); if(Array.isArray(parsed)) lists.push(...parsed); } catch {}
+    try { const mem = (window as any).__emdcMarketingDcBridgeRows; if(Array.isArray(mem)) lists.push(...mem); } catch {}
+    return lists.filter(Boolean);
+  };
+  const readMarketingDcBridgeRows = () => {
+    // reference this state so the Digital Creative tab re-renders when Send to DC is clicked
+    void marketingDcTransferTick;
+    return mergeDigitalCreativeRows(readAllMarketingDcBridgeRows().filter(bridgeRowMatchesCurrentGroup));
+  };
+  const writeAllMarketingDcBridgeRows = (rows:any[] = []) => {
+    if (typeof window === "undefined") return;
+    const cleanRows = mergeDigitalCreativeRows(Array.isArray(rows) ? rows : []).slice(-160);
+    try { localStorage.setItem(MARKETING_DC_BRIDGE_KEY, JSON.stringify(cleanRows)); } catch {}
+    try { sessionStorage.setItem(MARKETING_DC_BRIDGE_KEY, JSON.stringify(cleanRows)); } catch {}
+    try { (window as any).__emdcMarketingDcBridgeRows = cleanRows; } catch {}
+    try {
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+      window.dispatchEvent(new Event("emdc-marketing-dc-transfer"));
+    } catch {}
+    try { setMarketingDcTransferTick((value:number)=>value+1); } catch {}
+  };
+  const appendMarketingDcBridgeRows = (rows:any[] = []) => {
+    const stamped = stampMarketingDcBridgeRows(rows);
+    if(!stamped.length) return;
+    writeAllMarketingDcBridgeRows(mergeDigitalCreativeRows(readAllMarketingDcBridgeRows(),stamped));
+  };
+  const deleteMarketingDcBridgeRow = (id:any) => {
+    const cleanId = String(id || "");
+    if(!cleanId) return;
+    const nextRows = readAllMarketingDcBridgeRows().filter((row:any)=>String(row?.id || row?.sourceRowId || "") !== cleanId);
+    writeAllMarketingDcBridgeRows(nextRows);
+  };
+  const clearMarketingDcBridgeRowsForCurrentGroup = () => {
+    const nextRows = readAllMarketingDcBridgeRows().filter((row:any)=>!bridgeRowMatchesCurrentGroup(row));
+    writeAllMarketingDcBridgeRows(nextRows);
   };
 
   const persistMarketingDcTransferDirectly = (productIntroRows:any[] = [], campaignRows:any[] = []) => {
@@ -7428,13 +7450,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               linkedEventContext:group.groupName || "Marketing",
               createdAt:new Date().toISOString(),
             };
-            // Immediate small transfer write. Digital Creative reads this inbox directly.
-            // This avoids the common failure where the large app-state save succeeds for Overview
-            // but Marketing → DC is skipped because the workspace/localStorage payload is too big.
+            // Immediate small transfer write. Digital Creative reads this bridge/inbox directly.
+            // This is the most reliable path and is independent from heavy app-state/cloud sync.
+            appendMarketingDcBridgeRows([row]);
             appendMarketingDcDirectInbox("product_intro", [row]);
             appendMarketingDcDirectInbox("campaign", [row]);
-            appendMarketingDcGroupInbox("product_intro", [row]);
-            appendMarketingDcGroupInbox("campaign", [row]);
 
             const persistedDigital = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).digital || {}) as any;
             const digitalData = {
@@ -8335,6 +8355,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = mergeDigitalCreativeRows(
+        readMarketingDcBridgeRows(),
         Array.isArray(data.campaignCreativeRows) ? data.campaignCreativeRows : [],
         readMarketingDcTransferRowsBackup("campaign")
       );
@@ -8381,6 +8402,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         markActionDone(`overview-campaign-dc-card-${item?.id}-${cardIndex}`);
       };
       const deleteCampaignDigitalItem = (id:string) => {
+        deleteMarketingDcBridgeRow(id);
         const nextRows = campaignCreativeRows.filter((item:any)=>item.id!==id);
         const digital = ((group.aiWorkspace || {}).digital || {}) as any;
         const saved = Array.isArray(digital.savedImageOutputs) ? digital.savedImageOutputs.filter((img:any)=>img.sourceRowId!==id && img.cardId!==id) : [];
@@ -9363,6 +9385,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       ));
       const isDeletedProductIntroDcRow = (row:any) => productIntroDeletedRowIds.includes(String(row?.id || ""));
       const rawProductIntroRows = mergeDigitalCreativeRows(
+        readMarketingDcBridgeRows(),
         Array.isArray(digitalData.productIntroCreativeRows) ? digitalData.productIntroCreativeRows : [],
         readMarketingDcTransferRowsBackup("product_intro")
       );
@@ -9496,6 +9519,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
       const deleteProductIntroDigitalItem = (id:string) => {
+        deleteMarketingDcBridgeRow(id);
         const cleanId = String(id || "");
         const baseRows = rawProductIntroRows.length ? rawProductIntroRows : sourceRows;
         const nextRows = baseRows.filter((row:any)=>String(row.id || "")!==cleanId);
@@ -9516,6 +9540,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
       const clearProductIntroDigitalItems = () => {
+        clearMarketingDcBridgeRowsForCurrentGroup();
         writeMarketingDcTransferRowsBackup("product_intro",[]);
         updateAiWorkspace("digital",{ productIntroCreativeRows:[], productIntroRowsCleared:true, deletedProductIntroDcRowIds:[], generatedText:"", generatedAt:"", savedImageOutputs:[], dcImagePrompt:"" });
       };
