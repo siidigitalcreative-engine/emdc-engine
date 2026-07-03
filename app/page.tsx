@@ -581,7 +581,7 @@ const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) 
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
 const PERF_IDLE_SAVE_DELAY = 450;
-const PERF_CLOUD_SAVE_DELAY = 1600;
+const PERF_CLOUD_SAVE_DELAY = 250;
 const PERF_CLOUD_POLL_INTERVAL = 12000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
@@ -17927,18 +17927,18 @@ export default function App({
       return;
     }
     const onlineLocalSnapshot = readLocalSnapshot("cloud");
-    const onlineLocalMeta = await saveCloudLocalStorageChunked(onlineLocalSnapshot, updatedAt);
+    // Save the core app state first so checklist/SKU/calendar edits are online immediately.
+    // Large browser localStorage inputs are chunked after the main save; they must not delay
+    // or block the visible app state from persisting before a refresh.
     const payload = {
       version: 1,
       clientId: cloudClientIdRef.current,
       updatedAt,
       appState: appStateForCloud,
-      // Full EMDC browser inputs are saved online in Upstash chunks.
-      // Keep only a small marker in the main state payload to avoid Vercel/Redis payload limits.
       localStorage: {
         emdc_online_local_storage_chunked_v1: JSON.stringify({
           updatedAt,
-          ...onlineLocalMeta,
+          status:"main-state-saved-before-background-local-storage-chunks",
         }),
       },
     };
@@ -17962,6 +17962,10 @@ export default function App({
       cloudLastUpdatedAtRef.current = data?.data?.updatedAt || updatedAt;
       markEmdcLocalStateUpdated(cloudLastUpdatedAtRef.current);
       setCloudSyncStatus("Synced");
+
+      // Background-only: keep non-core EMDC local inputs online without making users wait.
+      // If this fails, the main app data is already safely saved above.
+      saveCloudLocalStorageChunked(onlineLocalSnapshot, updatedAt).catch(()=>{});
     } catch {
       setCloudSyncStatus("Sync save failed");
     }
@@ -18012,6 +18016,21 @@ export default function App({
     const timer = setInterval(()=>fetchCloudState("poll"), PERF_CLOUD_POLL_INTERVAL);
     return () => clearInterval(timer);
   }, [cloudHydrated]);
+
+  useEffect(() => {
+    if (!appStateHydrated || !cloudHydrated) return;
+    const flushOnline = () => {
+      if (cloudApplyingRef.current) return;
+      if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
+      saveCloudState();
+    };
+    window.addEventListener("pagehide", flushOnline);
+    window.addEventListener("beforeunload", flushOnline);
+    return () => {
+      window.removeEventListener("pagehide", flushOnline);
+      window.removeEventListener("beforeunload", flushOnline);
+    };
+  }, [appStateHydrated, cloudHydrated, brands, skuStorage, skuTableColumns, checklistGroups, checklistAllItems, checklistStatuses, calendarManualEvents, calendarEventTypes, seasonalEvents]);
 
   useEffect(() => {
     const fn = () => setLocalSyncTick(v=>v+1);
