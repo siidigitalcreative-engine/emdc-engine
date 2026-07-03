@@ -12995,6 +12995,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       // Protect user-entered SKU Storage before any app/cloud save runs.
       // This separate key survives page/code updates and is used as the local source of truth.
       rememberProtectedSkuItems(next,"sku-storage-commit");
+      try { (window as any).__EMDC_LAST_SKU_STORAGE__ = next; } catch {}
 
       if(onSkuStorageDirectSave) onSkuStorageDirectSave(next);
 
@@ -18019,7 +18020,7 @@ export default function App({
   };
 
   const saveChecklistItemsDirect = async (nextItems:any) => {
-    if (!cloudHydrated || cloudApplyingRef.current) return;
+    if (cloudApplyingRef.current) return;
     try {
       setCloudSyncStatus("Saving checklist...");
       const updatedAt = new Date().toISOString();
@@ -18150,6 +18151,16 @@ export default function App({
   },[]);
 
   useEffect(() => { if (onStateChange) onStateChange({ seasonalEvents }); }, [seasonalEvents]);
+
+  const setSkuStorageAndSave = (updater:any) => {
+    setSkuStorage((prev:any[]) => {
+      const nextRaw = typeof updater === "function" ? updater(prev) : updater;
+      const next = Array.isArray(nextRaw) ? nextRaw : [];
+      rememberProtectedSkuItems(next,"root-sku-storage-direct-set");
+      saveSkuStorageDirect(next);
+      return next;
+    });
+  };
 
   const applyRoute = (next:any={}) => {
     const nextTab = safeRouteTab(next.tab ?? tab);
@@ -18287,7 +18298,7 @@ export default function App({
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={onStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={onStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
