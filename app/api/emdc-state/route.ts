@@ -8,6 +8,7 @@ const STATE_PATH = "emdc-state/current.json";
 const LAST_GOOD_PATH = "emdc-state/last-good.json";
 const SKU_ALL_PATH = "emdc-state/sku-items/all.json";
 const CHECKLIST_ITEMS_PATH = "emdc-state/checklist-items/all.json";
+const CHECKLIST_GROUPS_PATH = "emdc-state/checklist-groups/all.json";
 const SKU_META_PATH = "emdc-state/sku-items/meta.json";
 const SKU_CHUNK_PREFIX = "emdc-state/sku-items/chunk-";
 
@@ -130,6 +131,16 @@ async function hydrateSkuData(data: any) {
   };
 }
 
+
+async function hydrateChecklistGroupsData(data: any) {
+  if (!isRecord(data) || !isRecord(data.appState)) return data;
+  const savedChecklistGroups = await readJsonBlob(CHECKLIST_GROUPS_PATH);
+  if (Array.isArray(savedChecklistGroups)) {
+    return { ...data, appState: { ...data.appState, checklistGroups: savedChecklistGroups } };
+  }
+  return data;
+}
+
 async function hydrateChecklistItemsData(data: any) {
   if (!isRecord(data) || !isRecord(data.appState)) return data;
 
@@ -150,7 +161,8 @@ async function hydrateChecklistItemsData(data: any) {
 
 async function hydrateCloudData(data: any) {
   const withSku = await hydrateSkuData(data);
-  return hydrateChecklistItemsData(withSku);
+  const withGroups = await hydrateChecklistGroupsData(withSku);
+  return hydrateChecklistItemsData(withGroups);
 }
 
 function hasMeaningfulAppState(appState: any) {
@@ -198,7 +210,7 @@ export async function POST(req: NextRequest) {
 
     if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud" || mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
       await Promise.all([
-        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, CHECKLIST_ITEMS_PATH] as any).catch(() => {}),
+        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, CHECKLIST_ITEMS_PATH, CHECKLIST_GROUPS_PATH] as any).catch(() => {}),
         deleteBlobPrefix(SKU_CHUNK_PREFIX),
       ]);
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
@@ -239,6 +251,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length });
     }
 
+    if (mode === "app-patch" || body?.mode === "app-patch") {
+      const existingRaw:any = await readJsonBlob(STATE_PATH);
+      const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const patch = isRecord(body?.patch) ? body.patch : {};
+      const existingAppState:any = isRecord(existing?.appState) ? existing.appState : {};
+      let nextAppState:any = { ...existingAppState, ...patch };
+
+      if (Array.isArray((patch as any).skuItems)) {
+        const nextSkus = safeArray((patch as any).skuItems);
+        await writeJsonBlob(SKU_ALL_PATH, nextSkus);
+        nextAppState = { ...nextAppState, skuItems: [], skuItemsExternalBlob: true, skuItemsExternalCount: nextSkus.length };
+      }
+
+      if (Array.isArray((patch as any).checklistGroups)) {
+        const nextGroups = safeArray((patch as any).checklistGroups);
+        await writeJsonBlob(CHECKLIST_GROUPS_PATH, nextGroups);
+        nextAppState = { ...nextAppState, checklistGroups: nextGroups, checklistGroupsExternalBlob: true };
+      }
+
+      if (isRecord((patch as any).checklistItems)) {
+        await writeJsonBlob(CHECKLIST_ITEMS_PATH, (patch as any).checklistItems);
+        nextAppState = { ...nextAppState, checklistItems: (patch as any).checklistItems, checklistItemsExternalBlob: true };
+      }
+
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        appState: nextAppState,
+        localStorage: {},
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({ ok: true, mode: "app-patch", data: payload });
+    }
+
     if (mode === "sku-items" || body?.mode === "sku-items") {
       const existingRaw:any = await readJsonBlob(STATE_PATH);
       const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
@@ -269,6 +326,37 @@ export async function POST(req: NextRequest) {
       await writeJsonBlob(LAST_GOOD_PATH, payload);
 
       return NextResponse.json({ ok: true, mode: "sku-items", count: nextSkus.length, data: payload });
+    }
+
+    if (mode === "checklist-groups" || body?.mode === "checklist-groups") {
+      const existingRaw:any = await readJsonBlob(STATE_PATH);
+      const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const nextGroups = safeArray(body?.checklistGroups);
+      await writeJsonBlob(CHECKLIST_GROUPS_PATH, nextGroups);
+
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        appState: {
+          ...(isRecord(existing?.appState) ? existing.appState : {}),
+          checklistGroups: nextGroups,
+          checklistGroupsExternalBlob: true,
+        },
+        localStorage: {},
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({ ok: true, mode: "checklist-groups", count: nextGroups.length, data: payload });
     }
 
     if (mode === "checklist-items" || body?.mode === "checklist-items") {
