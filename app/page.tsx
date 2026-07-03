@@ -15979,12 +15979,41 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     ].join("\n")).join("\n\n---\n\n");
   };
 
-  const buildFallbackProductGmvMaxOutputs = () => PRODUCT_GMV_MAX_PILLARS.map((pillar:any)=>({
+  const buildFallbackProductGmvMaxOutputs = (products:any[] = effectiveAdSkus) => PRODUCT_GMV_MAX_PILLARS.map((pillar:any)=>({
     pillar:pillar.name,
-    contentTheme:`${pillar.name} concept for ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "the selected product"}`,
+    contentTheme:`${pillar.name} concept for ${products[0]?.productName || products[0]?.product || "the selected product"}`,
     creativeDirection:`Use the ${pillar.name} framework: ${pillar.guide}. Base the visuals on the selected product information, features, benefits, and target audience.`,
-    captionCopy:limitMarketingCaption100(`Discover ${effectiveAdSkus[0]?.productName || effectiveAdSkus[0]?.product || "this product"}. Shop now.`),
+    captionCopy:limitMarketingCaption100(`Discover ${products[0]?.productName || products[0]?.product || "this product"}. Shop now.`),
   }));
+
+  const getProductGmvProductName = (product:any) => String(product?.productName || product?.product || product?.name || product?.sku || "Product").trim();
+
+  const expandProductGmvRowsPerProduct = (pillarRows:any[] = [], products:any[] = []) => {
+    const cleanProducts = Array.isArray(products) && products.length ? products : [{}];
+    const cleanPillars = Array.isArray(pillarRows) && pillarRows.length ? pillarRows : buildFallbackProductGmvMaxOutputs(cleanProducts);
+
+    return cleanProducts.flatMap((product:any,productIndex:number)=>{
+      const productName = getProductGmvProductName(product);
+      return cleanPillars.map((row:any,pillarIndex:number)=>({
+        ...row,
+        id:`${product?.id || product?.sku || productIndex}-${row?.pillar || pillarIndex}`,
+        productIndex,
+        pillarIndex,
+        products:[product],
+        contentTheme:String(row?.contentTheme || `${row?.pillar || "Content"} idea for ${productName}`).includes(productName)
+          ? String(row?.contentTheme || "")
+          : `${productName}: ${row?.contentTheme || `${row?.pillar || "Content"} idea`}`,
+        creativeDirection:String(row?.creativeDirection || "").includes(productName)
+          ? String(row?.creativeDirection || "")
+          : `${productName}: ${row?.creativeDirection || `Create a product-focused visual using the ${row?.pillar || "content"} framework.`}`,
+        captionCopy:limitMarketingCaption100(
+          String(row?.captionCopy || "").includes(productName)
+            ? row?.captionCopy
+            : `${productName}: ${row?.captionCopy || "Shop now."}`
+        ),
+      }));
+    });
+  };
 
   const generateProductGmvMaxOutputs = async (entry:any) => {
     const activePlatform = entry?.platform || selectedPlatform;
@@ -15996,7 +16025,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       : "No products selected from SKU Storage. Use the campaign brief only.";
 
     const instruction = [
-      "For the Product GMV Max Ad, generate exactly 5 separate marketing content outputs based on the selected product and the provided Content Pillar Templates.",
+      "For the Product GMV Max Ad, generate 5 content pillar ideas that can be applied to EACH selected product/product row. The app will expand these into one Product GMV Max row per product per pillar.",
       productInstruction,
       adBrief.trim() ? `Campaign / product notes:\n${adBrief.trim()}` : "",
       "Use the product information, features, benefits, and target audience of the selected product. Do not invent unsupported technical specs.",
@@ -16028,10 +16057,8 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
       try { data = raw ? JSON.parse(raw) : {}; } catch { data = { text: raw }; }
       if(!res.ok) throw new Error(data?.error || data?.message || "Product GMV Max generation failed.");
 
-      const pillarOutputs = parseProductGmvMaxPillarOutputs(data?.text || raw).map((output:any)=>({
-        ...output,
-        products:[...effectiveAdSkus],
-      }));
+      const basePillarOutputs = parseProductGmvMaxPillarOutputs(data?.text || raw);
+      const pillarOutputs = expandProductGmvRowsPerProduct(basePillarOutputs,[...effectiveAdSkus]);
       return [{
         id:uid(),
         name:`TikTok Product GMV Max Ads - ${new Date().toLocaleDateString()}`,
@@ -16053,10 +16080,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
         createdAt:new Date().toISOString(),
       }];
     } catch (err:any) {
-      const fallback = buildFallbackProductGmvMaxOutputs().map((output:any)=>({
-        ...output,
-        products:[...effectiveAdSkus],
-      }));
+      const fallback = expandProductGmvRowsPerProduct(buildFallbackProductGmvMaxOutputs([...effectiveAdSkus]),[...effectiveAdSkus]);
       return [{
         id:uid(),
         name:`TikTok Product GMV Max Ads - ${new Date().toLocaleDateString()}`,
@@ -16594,9 +16618,9 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
                               <div>
                                 <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Product GMV Max Ads Table</p>
-                                <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>TikTok content pillars with featured products, creative direction, and captions.</p>
+                                <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>One Product GMV Max row per selected product and content pillar.</p>
                               </div>
-                              <Tag sm>{item.gmvRows.length} pillars</Tag>
+                              <Tag sm>{item.gmvRows.length} rows</Tag>
                             </div>
                             <div style={{ overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:10,background:C.surface }}>
                               <table style={{ width:"100%",borderCollapse:"collapse",minWidth:920,fontSize:11.5,color:C.textSub }}>
