@@ -338,6 +338,21 @@ const countEmdcChecklistItems = (items:any) => {
   },0);
 };
 
+
+const dedupeChecklistItemsById = (items:any[] = []) => {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set<string>();
+  const out:any[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item:any = items[i];
+    const key = String(item?.id || item?.text || item?.label || i);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.unshift(item);
+  }
+  return out;
+};
+
 const getEmdcExternalSkuCount = (state:any) => {
   const direct = Number(state?.skuItemsExternalCount || 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
@@ -3920,10 +3935,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
   },[initialGroupTab]);
 
-  const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onItemsChange) onItemsChange(next); return next; });
-  const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onItemsChange) onItemsChange(next); return next; });
-  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
-  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(next); return next; }); setSkuPickDept(null); };
+  const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; });
+  const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; });
+  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
+  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
   const groupColor = group.calendarColor || lt?.color || C.accent;
@@ -12454,7 +12469,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
   const updateGroupItems = (groupId:string, items:any) => {
     setAllGroupItems((p:any)=>{
-      const next={...(p||{}),[groupId]:items};
+      const next={...(p||{}),[groupId]:Array.isArray(items)?dedupeChecklistItemsById(items):items};
       writeEmdcChecklistItemsBackup(groupId,items);
       persistChecklistItemsNow(next);
       if(onStateChange) onStateChange({checklistItems:next});
@@ -17633,7 +17648,13 @@ export default function App({
     if (Array.isArray(hydratedParsed?.skuItems)) setSkuStorage(hydratedParsed.skuItems);
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
     if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
-    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") setChecklistAllItems(hydratedParsed.checklistItems);
+    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") {
+      const cleanItems:any = {};
+      Object.entries(hydratedParsed.checklistItems).forEach(([gid,rows]:any)=>{
+        cleanItems[gid] = Array.isArray(rows) ? dedupeChecklistItemsById(rows) : rows;
+      });
+      setChecklistAllItems(cleanItems);
+    }
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
     if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(hydratedParsed.calendarEvents);
     if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(hydratedParsed.calendarTypes));
