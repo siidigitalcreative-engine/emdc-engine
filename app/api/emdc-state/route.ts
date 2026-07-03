@@ -1,36 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
+import { del, head, list, put } from "@vercel/blob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const STATE_KEY = "emdc:app-state:v1";
-const SKU_CHUNK_PREFIX = "emdc:app-state:v1:sku-items:chunk:";
-const SKU_META_KEY = "emdc:app-state:v1:sku-items:meta";
-const LOCAL_STORAGE_CHUNK_PREFIX = "emdc:app-state:v1:local-storage:chunk:";
-const LOCAL_STORAGE_META_KEY = "emdc:app-state:v1:local-storage:meta";
-const LAST_GOOD_KEY = "emdc:app-state:v1:last-good";
-const HISTORY_INDEX_KEY = "emdc:app-state:v1:history";
-const HISTORY_PREFIX = "emdc:app-state:v1:backup:";
+const STATE_PATH = "emdc-state/current.json";
+const LAST_GOOD_PATH = "emdc-state/last-good.json";
+const SKU_META_PATH = "emdc-state/sku-items/meta.json";
+const SKU_CHUNK_PREFIX = "emdc-state/sku-items/chunk-";
 
-const MAX_LOCAL_STORAGE_VALUE_LENGTH = 80_000;
 const MAX_SKU_CHUNKS = 2000;
-const MAX_LOCAL_STORAGE_CHUNKS = 4000;
-
-function getRedisClient() {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "";
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "";
-
-  if (!url || !token) {
-    throw new Error("Missing Redis REST environment variables.");
-  }
-
-  if (!url.startsWith("http")) {
-    throw new Error("Redis URL must be the REST URL that starts with https://, not the rediss:// URL.");
-  }
-
-  return new Redis({ url, token });
-}
 
 const emptyState = {
   version: 1,
@@ -47,36 +26,40 @@ function safeArray(value: any) {
   return Array.isArray(value) ? value : [];
 }
 
-function compactLocalStorage(localStorageValue: any) {
-  if (!isRecord(localStorageValue)) return {};
-
-  const result: Record<string, string> = {};
-
-  for (const [key, rawValue] of Object.entries(localStorageValue)) {
-    const lowerKey = key.toLowerCase();
-    if (!key.startsWith("emdc")) continue;
-
-    // Never mirror backups/history back to Upstash; they are what filled the DB.
-    if (lowerKey.includes("backup")) continue;
-    if (lowerKey.includes("history")) continue;
-    if (lowerKey.includes("last_good")) continue;
-    if (lowerKey.includes("last-good")) continue;
-
-    // Avoid duplicating huge caches in the main state. The dedicated chunk endpoints handle needed data.
-    if (lowerKey.includes("generated_batch_outputs")) continue;
-    if (lowerKey.includes("ai_saved_outputs")) continue;
-    if (lowerKey.includes("text_saved_outputs")) continue;
-    if (lowerKey.includes("protected_sku")) continue;
-
-    const value = typeof rawValue === "string" ? rawValue : JSON.stringify(rawValue ?? "");
-    if (value.length > MAX_LOCAL_STORAGE_VALUE_LENGTH) continue;
-    result[key] = value;
+async function readJsonBlob(pathname: string) {
+  try {
+    const info: any = await head(pathname);
+    if (!info?.url) return null;
+    const res = await fetch(info.url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
   }
-
-  return result;
 }
 
-async function hydrateSkuChunks(redis: Redis, data: any) {
+async function writeJsonBlob(pathname: string, value: any) {
+  return put(pathname, JSON.stringify(value), {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+  } as any);
+}
+
+async function deleteBlobPrefix(prefix: string) {
+  try {
+    let cursor: string | undefined = undefined;
+    do {
+      const result: any = await list({ prefix, cursor, limit: 1000 });
+      const urls = safeArray(result?.blobs).map((blob: any) => blob?.url).filter(Boolean);
+      if (urls.length) await del(urls);
+      cursor = result?.cursor;
+    } while (cursor);
+  } catch {}
+}
+
+async function hydrateSkuChunks(data: any) {
   if (!isRecord(data) || !isRecord(data.appState)) return data;
 
   const appState = data.appState;
@@ -87,12 +70,12 @@ async function hydrateSkuChunks(redis: Redis, data: any) {
 
   if (!needsSkuHydration) return data;
 
-  const meta: any = (await redis.get(SKU_META_KEY)) || {};
+  const meta: any = (await readJsonBlob(SKU_META_PATH)) || {};
   const chunkCount = Number(meta.chunkCount || appState.skuItemsCloudChunkCount || 0);
   if (!Number.isFinite(chunkCount) || chunkCount <= 0 || chunkCount > MAX_SKU_CHUNKS) return data;
 
   const chunks = await Promise.all(
-    Array.from({ length: chunkCount }, (_, index) => redis.get(`${SKU_CHUNK_PREFIX}${index}`))
+    Array.from({ length: chunkCount }, (_, index) => readJsonBlob(`${SKU_CHUNK_PREFIX}${index}.json`))
   );
 
   const skuItems = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
@@ -107,137 +90,25 @@ async function hydrateSkuChunks(redis: Redis, data: any) {
   };
 }
 
-async function hydrateLocalStorageChunks(redis: Redis, data: any) {
-  if (!isRecord(data)) return data;
+async function hydrateCloudData(data: any) {
+  return hydrateSkuChunks(data);
+}
 
-  const meta: any = (await redis.get(LOCAL_STORAGE_META_KEY)) || {};
-  const chunkCount = Number(meta.chunkCount || 0);
-  if (!Number.isFinite(chunkCount) || chunkCount <= 0 || chunkCount > MAX_LOCAL_STORAGE_CHUNKS) return data;
-
-  const chunks = await Promise.all(
-    Array.from({ length: chunkCount }, (_, index) => redis.get(`${LOCAL_STORAGE_CHUNK_PREFIX}${index}`))
+function hasMeaningfulAppState(appState: any) {
+  if (!isRecord(appState)) return false;
+  return (
+    safeArray(appState.skuItems).length > 0 ||
+    safeArray(appState.checklistGroups).length > 0 ||
+    Object.keys(isRecord(appState.checklistItems) ? appState.checklistItems : {}).length > 0 ||
+    safeArray(appState.calendarEvents).length > 0 ||
+    safeArray(appState.seasonalEvents).length > 0 ||
+    Number(appState.skuItemsExternalCount || 0) > 0 ||
+    Number(appState.skuItemsCloudChunkCount || 0) > 0
   );
-
-  const rows = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
-  if (!rows.length) return data;
-
-  const partsByKey: Record<string, any[]> = {};
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const key = String(row.key || "");
-    if (!key.startsWith("emdc")) continue;
-    if (!partsByKey[key]) partsByKey[key] = [];
-    partsByKey[key].push(row);
-  }
-
-  const restored: Record<string, string> = {};
-  for (const [key, parts] of Object.entries(partsByKey)) {
-    const sorted = parts.sort((a: any, b: any) => Number(a.partIndex || 0) - Number(b.partIndex || 0));
-    const partCount = Number(sorted[0]?.partCount || sorted.length);
-    if (sorted.length < partCount) continue;
-    restored[key] = sorted.slice(0, partCount).map((part: any) => String(part.valuePart || "")).join("");
-  }
-
-  return {
-    ...data,
-    localStorage: {
-      ...(isRecord(data.localStorage) ? data.localStorage : {}),
-      ...restored,
-    },
-  };
-}
-
-async function hydrateCloudData(redis: Redis, data: any) {
-  const withSku = await hydrateSkuChunks(redis, data);
-  return hydrateLocalStorageChunks(redis, withSku);
-}
-
-async function batchDelete(redis: Redis, keys: string[]) {
-  const unique = Array.from(new Set(keys.filter(Boolean)));
-  let deleted = 0;
-  for (let i = 0; i < unique.length; i += 100) {
-    const batch = unique.slice(i, i + 100);
-    if (!batch.length) continue;
-    try {
-      const result = await (redis as any).del(...batch);
-      deleted += Number(result || 0);
-    } catch {
-      for (const key of batch) {
-        try {
-          const result = await redis.del(key);
-          deleted += Number(result || 0);
-        } catch {}
-      }
-    }
-  }
-  return deleted;
-}
-
-async function deleteEmdcCloudKeys(redis: Redis) {
-  const keys = new Set<string>([
-    STATE_KEY,
-    SKU_META_KEY,
-    LOCAL_STORAGE_META_KEY,
-    LAST_GOOD_KEY,
-    HISTORY_INDEX_KEY,
-  ]);
-
-  // Delete exact known chunk ranges. This avoids needing Redis SCAN/KEYS support.
-  for (let i = 0; i < MAX_SKU_CHUNKS; i++) keys.add(`${SKU_CHUNK_PREFIX}${i}`);
-  for (let i = 0; i < MAX_LOCAL_STORAGE_CHUNKS; i++) keys.add(`${LOCAL_STORAGE_CHUNK_PREFIX}${i}`);
-
-  // Delete known history backup keys if the index still exists.
-  try {
-    const historyKeys = await redis.lrange(HISTORY_INDEX_KEY, 0, 500);
-    for (const key of safeArray(historyKeys)) {
-      const clean = String(key || "");
-      if (clean.startsWith(HISTORY_PREFIX)) keys.add(clean);
-    }
-  } catch {}
-
-  // If Upstash supports KEYS on this database, remove any other old EMDC backup/chunk keys too.
-  try {
-    const patternKeys = await (redis as any).keys("emdc:app-state:v1*");
-    for (const key of safeArray(patternKeys)) {
-      const clean = String(key || "");
-      if (clean.startsWith("emdc:app-state:v1")) keys.add(clean);
-    }
-  } catch {}
-
-  const deleted = await batchDelete(redis, Array.from(keys));
-  return { attempted: keys.size, deleted };
-}
-
-
-async function deleteAllCloudKeys(redis: Redis) {
-  const keys = new Set<string>();
-
-  // This is an emergency reset for this EMDC Redis database.
-  // It removes every key in the database so the normal-browser localStorage can republish a clean online copy.
-  try {
-    const allKeys = await (redis as any).keys("*");
-    for (const key of safeArray(allKeys)) {
-      const clean = String(key || "");
-      if (clean) keys.add(clean);
-    }
-  } catch {}
-
-  // Also include known EMDC ranges in case KEYS is limited.
-  keys.add(STATE_KEY);
-  keys.add(SKU_META_KEY);
-  keys.add(LOCAL_STORAGE_META_KEY);
-  keys.add(LAST_GOOD_KEY);
-  keys.add(HISTORY_INDEX_KEY);
-  for (let i = 0; i < MAX_SKU_CHUNKS; i++) keys.add(`${SKU_CHUNK_PREFIX}${i}`);
-  for (let i = 0; i < MAX_LOCAL_STORAGE_CHUNKS; i++) keys.add(`${LOCAL_STORAGE_CHUNK_PREFIX}${i}`);
-
-  const deleted = await batchDelete(redis, Array.from(keys));
-  return { attempted: keys.size, deleted };
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const redis = getRedisClient();
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get("mode") || "current";
 
@@ -246,15 +117,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (mode === "last-good") {
-      const data = await redis.get(LAST_GOOD_KEY);
-      return NextResponse.json({ ok: true, mode, data: data ? await hydrateCloudData(redis, data) : emptyState });
+      const data = await readJsonBlob(LAST_GOOD_PATH);
+      return NextResponse.json({ ok: true, mode, data: data ? await hydrateCloudData(data) : emptyState });
     }
 
-    const data = await redis.get(STATE_KEY);
-    return NextResponse.json({ ok: true, mode: "current", data: data ? await hydrateCloudData(redis, data) : emptyState });
+    const data = await readJsonBlob(STATE_PATH);
+    return NextResponse.json({ ok: true, mode: "current", data: data ? await hydrateCloudData(data) : emptyState });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Unable to read EMDC state from Redis.", data: emptyState },
+      { ok: false, error: error?.message || "Unable to read EMDC state from Vercel Blob.", data: emptyState },
       { status: 500 }
     );
   }
@@ -262,38 +133,34 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const redis = getRedisClient();
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get("mode") || "";
     const body = await req.json().catch(() => ({}));
 
-    if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud") {
-      const result = await deleteAllCloudKeys(redis);
-      return NextResponse.json({ ok: true, mode: "cleanup-all-cloud", ...result });
-    }
-
-    if (mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
-      const result = await deleteEmdcCloudKeys(redis);
-      return NextResponse.json({ ok: true, mode: "cleanup-cloud", ...result });
+    if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud" || mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
+      await Promise.all([
+        del([STATE_PATH, LAST_GOOD_PATH, SKU_META_PATH]).catch(() => {}),
+        deleteBlobPrefix(SKU_CHUNK_PREFIX),
+      ]);
+      return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
     }
 
     if (mode === "sku-chunk" || body?.mode === "sku-chunk") {
       const index = Number(body?.index);
       const total = Number(body?.total);
       const rows = safeArray(body?.rows);
+
       if (!Number.isInteger(index) || !Number.isInteger(total) || index < 0 || total <= 0 || index >= total || total > MAX_SKU_CHUNKS) {
         return NextResponse.json({ ok: false, error: "Invalid SKU chunk index." }, { status: 400 });
       }
 
-      // When a new upload begins, clear stale SKU chunks so counts do not drift.
       if (index === 0) {
-        const staleKeys = Array.from({ length: MAX_SKU_CHUNKS }, (_, i) => `${SKU_CHUNK_PREFIX}${i}`);
-        await batchDelete(redis, staleKeys);
+        await deleteBlobPrefix(SKU_CHUNK_PREFIX);
       }
 
       await Promise.all([
-        redis.set(`${SKU_CHUNK_PREFIX}${index}`, rows),
-        redis.set(SKU_META_KEY, {
+        writeJsonBlob(`${SKU_CHUNK_PREFIX}${index}.json`, rows),
+        writeJsonBlob(SKU_META_PATH, {
           version: 1,
           clientId: body?.clientId || "",
           updatedAt: body?.updatedAt || new Date().toISOString(),
@@ -310,18 +177,10 @@ export async function POST(req: NextRequest) {
     }
 
     const incomingAppState = isRecord(body?.appState) ? body.appState : {};
-    const incomingHasData =
-      safeArray((incomingAppState as any).skuItems).length > 0 ||
-      safeArray((incomingAppState as any).checklistGroups).length > 0 ||
-      Object.keys(isRecord((incomingAppState as any).checklistItems) ? (incomingAppState as any).checklistItems : {}).length > 0 ||
-      safeArray((incomingAppState as any).calendarEvents).length > 0 ||
-      safeArray((incomingAppState as any).seasonalEvents).length > 0 ||
-      Number((incomingAppState as any).skuItemsExternalCount || 0) > 0 ||
-      Number((incomingAppState as any).skuItemsCloudChunkCount || 0) > 0;
 
-    if (!incomingHasData) {
-      const existing = await redis.get(STATE_KEY);
-      if (existing) {
+    if (!hasMeaningfulAppState(incomingAppState)) {
+      const existing = await readJsonBlob(STATE_PATH);
+      if (existing && hasMeaningfulAppState(existing?.appState)) {
         return NextResponse.json(
           { ok: false, blocked: true, error: "Blocked empty state overwrite.", data: existing },
           { status: 409 }
@@ -337,15 +196,13 @@ export async function POST(req: NextRequest) {
       localStorage: {},
     };
 
-    await redis.set(STATE_KEY, payload);
-
-    // Keep one small recoverable pointer only. Do not create history backups on the free Redis quota.
-    await redis.set(LAST_GOOD_KEY, payload);
+    await writeJsonBlob(STATE_PATH, payload);
+    await writeJsonBlob(LAST_GOOD_PATH, payload);
 
     return NextResponse.json({ ok: true, data: payload });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Unable to save EMDC state to Redis." },
+      { ok: false, error: error?.message || "Unable to save EMDC state to Vercel Blob." },
       { status: 500 }
     );
   }
