@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 const STATE_PATH = "emdc-state/current.json";
 const LAST_GOOD_PATH = "emdc-state/last-good.json";
+const SKU_ALL_PATH = "emdc-state/sku-items/all.json";
 const SKU_META_PATH = "emdc-state/sku-items/meta.json";
 const SKU_CHUNK_PREFIX = "emdc-state/sku-items/chunk-";
 
@@ -74,16 +75,33 @@ async function deleteBlobPrefix(prefix: string) {
   } catch {}
 }
 
-async function hydrateSkuChunks(data: any) {
+async function hydrateSkuData(data: any) {
   if (!isRecord(data) || !isRecord(data.appState)) return data;
 
   const appState = data.appState;
-  const needsSkuHydration =
+
+  // Preferred Blob SKU source: one dedicated private JSON file.
+  const allSkuItems = await readJsonBlob(SKU_ALL_PATH);
+  if (Array.isArray(allSkuItems) && allSkuItems.length) {
+    return {
+      ...data,
+      appState: {
+        ...appState,
+        skuItems: allSkuItems,
+        skuItemsExternalCloud: false,
+        skuItemsExternalBlob: true,
+        skuItemsExternalCount: allSkuItems.length,
+      },
+    };
+  }
+
+  // Backward compatibility for older chunked saves.
+  const needsChunkHydration =
     !!appState.skuItemsExternalCloud ||
     Number(appState.skuItemsCloudChunkCount || 0) > 0 ||
     (safeArray(appState.skuItems).length === 0 && Number(appState.skuItemsExternalCount || 0) > 0);
 
-  if (!needsSkuHydration) return data;
+  if (!needsChunkHydration) return data;
 
   const meta: any = (await readJsonBlob(SKU_META_PATH)) || {};
   const chunkCount = Number(meta.chunkCount || appState.skuItemsCloudChunkCount || 0);
@@ -96,17 +114,23 @@ async function hydrateSkuChunks(data: any) {
   const skuItems = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
   if (!skuItems.length) return data;
 
+  // Migrate old chunks into the stable all.json file.
+  await writeJsonBlob(SKU_ALL_PATH, skuItems).catch(() => {});
+
   return {
     ...data,
     appState: {
       ...appState,
       skuItems,
+      skuItemsExternalCloud: false,
+      skuItemsExternalBlob: true,
+      skuItemsExternalCount: skuItems.length,
     },
   };
 }
 
 async function hydrateCloudData(data: any) {
-  return hydrateSkuChunks(data);
+  return hydrateSkuData(data);
 }
 
 function hasMeaningfulAppState(appState: any) {
@@ -154,7 +178,7 @@ export async function POST(req: NextRequest) {
 
     if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud" || mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
       await Promise.all([
-        del([STATE_PATH, LAST_GOOD_PATH, SKU_META_PATH] as any).catch(() => {}),
+        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH] as any).catch(() => {}),
         deleteBlobPrefix(SKU_CHUNK_PREFIX),
       ]);
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
@@ -169,20 +193,28 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "Invalid SKU chunk index." }, { status: 400 });
       }
 
-      if (index === 0) {
-        await deleteBlobPrefix(SKU_CHUNK_PREFIX);
-      }
+      // Keep supporting the old chunk calls from page.tsx, but also consolidate into all.json
+      // after the final chunk so newly added SKUs do not disappear on refresh/poll.
+      await writeJsonBlob(`${SKU_CHUNK_PREFIX}${index}.json`, rows);
 
-      await Promise.all([
-        writeJsonBlob(`${SKU_CHUNK_PREFIX}${index}.json`, rows),
-        writeJsonBlob(SKU_META_PATH, {
-          version: 1,
-          clientId: body?.clientId || "",
-          updatedAt: body?.updatedAt || new Date().toISOString(),
-          chunkCount: total,
-          totalItems: Number(body?.totalItems || 0),
-        }),
-      ]);
+      const meta = {
+        version: 1,
+        clientId: body?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        chunkCount: total,
+        totalItems: Number(body?.totalItems || 0),
+      };
+      await writeJsonBlob(SKU_META_PATH, meta);
+
+      if (index === total - 1) {
+        const chunks = await Promise.all(
+          Array.from({ length: total }, (_, i) => readJsonBlob(`${SKU_CHUNK_PREFIX}${i}.json`))
+        );
+        const allRows = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
+        if (allRows.length) {
+          await writeJsonBlob(SKU_ALL_PATH, allRows);
+        }
+      }
 
       return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length });
     }
@@ -192,8 +224,22 @@ export async function POST(req: NextRequest) {
     }
 
     const incomingAppState = isRecord(body?.appState) ? body.appState : {};
+    const incomingSkuItems = safeArray((incomingAppState as any).skuItems);
 
-    if (!hasMeaningfulAppState(incomingAppState)) {
+    // Any POST that includes SKU rows becomes the authoritative SKU Blob file.
+    // This covers adding 88 SKUs, editing SKUs, and importing backup files.
+    let appStateForSave: any = incomingAppState;
+    if (incomingSkuItems.length > 0) {
+      await writeJsonBlob(SKU_ALL_PATH, incomingSkuItems);
+      appStateForSave = {
+        ...incomingAppState,
+        skuItems: [],
+        skuItemsExternalBlob: true,
+        skuItemsExternalCount: incomingSkuItems.length,
+      };
+    }
+
+    if (!hasMeaningfulAppState(appStateForSave)) {
       const existing = await readJsonBlob(STATE_PATH);
       if (existing && hasMeaningfulAppState(existing?.appState)) {
         return NextResponse.json(
@@ -207,7 +253,7 @@ export async function POST(req: NextRequest) {
       version: 1,
       clientId: body?.clientId || "",
       updatedAt: body?.updatedAt || new Date().toISOString(),
-      appState: incomingAppState,
+      appState: appStateForSave,
       localStorage: {},
     };
 
