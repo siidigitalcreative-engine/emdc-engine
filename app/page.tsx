@@ -593,7 +593,7 @@ const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) 
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
 const PERF_IDLE_SAVE_DELAY = 450;
-const PERF_CLOUD_SAVE_DELAY = 600;
+const PERF_CLOUD_SAVE_DELAY = 150;
 const PERF_CLOUD_POLL_INTERVAL = 60000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
@@ -3972,6 +3972,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const nextDeptItems = prevDeptItems.map((i:any)=>String(i?.id)===String(item?.id)?{...i,...item}:i);
     const next={...p,[dept]:dedupeChecklistItemsById(nextDeptItems)};
     if(onItemsChange) onItemsChange(next);
+    try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
     return next;
   });
   const del    = (dept:string,id:string) => setItems((p:any)=>{
@@ -12200,6 +12201,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
   const [typeColor,setTypeColor]   = useState("#111827");
   const [draftTasks,setDraftTasks] = useState<any[]>([]);
   const [tasksDirty,setTasksDirty] = useState(false);
+  const [syncFlash,setSyncFlash] = useState(false);
 
   const typeKeys = Object.keys(launchTypes||LAUNCH_TYPES);
 
@@ -12252,6 +12254,8 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
       ...prev,
       [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: next },
     }), launchType);
+    setSyncFlash(true);
+    setTimeout(()=>setSyncFlash(false),900);
   };
 
   const saveDefaultTasksChanges = () => {
@@ -12261,6 +12265,8 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     }), launchType);
     setTasksDirty(false);
     setEditIdx(null);
+    setSyncFlash(true);
+    setTimeout(()=>setSyncFlash(false),1400);
   };
 
   const saveChecklistType = () => {
@@ -12482,7 +12488,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
           </span>
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
             <Btn sm variant="outline" onClick={resetToDefault}>Reset Tasks to Default</Btn>
-            <Btn sm onClick={saveDefaultTasksChanges}>Sync Now</Btn>
+            <Btn sm onClick={saveDefaultTasksChanges} style={{ transition:"all .2s", transform:syncFlash?"scale(1.03)":"scale(1)" }}>{syncFlash ? "✓ Synced" : "Sync Now"}</Btn>
           </div>
         </div>
       </div>
@@ -12530,6 +12536,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       writeEmdcChecklistItemsBackup(groupId,items);
       persistChecklistItemsNow(next);
       if(onStateChange) onStateChange({checklistItems:next});
+      try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
       return next;
     });
   };
