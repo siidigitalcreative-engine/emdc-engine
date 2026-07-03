@@ -17624,6 +17624,8 @@ export default function App({
   const cloudSavingRef = useRef(false);
   const cloudSaveTimerRef = useRef<any>(null);
   const cloudClientIdRef = useRef("");
+  const lastDirectSkuSaveSignatureRef = useRef("");
+  const skuDirectSaveTimerRef = useRef<any>(null);
 
   const EMDC_SYNC_LOCAL_KEYS = [
     "emdc_app_state_v1",
@@ -17712,7 +17714,15 @@ export default function App({
     const hydratedParsed = parsed;
 
     if (Array.isArray(hydratedParsed?.skuBrands)) setBrands(hydratedParsed.skuBrands);
-    if (Array.isArray(hydratedParsed?.skuItems)) setSkuStorage(hydratedParsed.skuItems);
+    if (Array.isArray(hydratedParsed?.skuItems)) {
+      setSkuStorage(hydratedParsed.skuItems);
+      const loadedSkus:any[] = hydratedParsed.skuItems;
+      const count = loadedSkus.length;
+      const first = count ? String(loadedSkus[0]?.id || loadedSkus[0]?.sku || "") : "";
+      const last = count ? String(loadedSkus[count-1]?.id || loadedSkus[count-1]?.sku || "") : "";
+      const checksum = loadedSkus.reduce((sum:any,row:any)=>sum + String(row?.sku||"").length + String(row?.productName||"").length + String(row?.imageLink||"").length + String(row?.srp||"").length, 0);
+      lastDirectSkuSaveSignatureRef.current = `${count}:${first}:${last}:${checksum}`;
+    }
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
     if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
     if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") {
@@ -18055,6 +18065,29 @@ export default function App({
       setCloudSyncStatus("SKU save failed");
     }
   };
+
+  useEffect(() => {
+    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
+    if (!Array.isArray(skuStorage)) return;
+
+    const count = skuStorage.length;
+    const first = count ? String(skuStorage[0]?.id || skuStorage[0]?.sku || "") : "";
+    const last = count ? String(skuStorage[count-1]?.id || skuStorage[count-1]?.sku || "") : "";
+    const checksum = skuStorage.reduce((sum:any,row:any)=>sum + String(row?.sku||"").length + String(row?.productName||"").length + String(row?.imageLink||"").length + String(row?.srp||"").length, 0);
+    const signature = `${count}:${first}:${last}:${checksum}`;
+
+    if (signature === lastDirectSkuSaveSignatureRef.current) return;
+    lastDirectSkuSaveSignatureRef.current = signature;
+
+    if (skuDirectSaveTimerRef.current) clearTimeout(skuDirectSaveTimerRef.current);
+    skuDirectSaveTimerRef.current = setTimeout(() => {
+      saveSkuStorageDirect(skuStorage);
+    }, 350);
+
+    return () => {
+      if (skuDirectSaveTimerRef.current) clearTimeout(skuDirectSaveTimerRef.current);
+    };
+  }, [appStateHydrated, cloudHydrated, skuStorage]);
 
   useEffect(() => {
     cloudClientIdRef.current = uid();
