@@ -546,7 +546,7 @@ const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) 
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
 const PERF_IDLE_SAVE_DELAY = 450;
-const PERF_CLOUD_SAVE_DELAY = 150;
+const PERF_CLOUD_SAVE_DELAY = 600;
 const PERF_CLOUD_POLL_INTERVAL = 12000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
@@ -12684,7 +12684,6 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         window.dispatchEvent(new Event("emdc-local-sync"));
       } catch {}
       if(onStateChange) onStateChange({checklistGroups:next});
-      try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
       return next;
     });
 
@@ -17817,6 +17816,77 @@ export default function App({
     }
   };
 
+  const exportFullBackup = async () => {
+    try {
+      setCloudSyncStatus("Preparing backup...");
+      const updatedAt = new Date().toISOString();
+      const appStateForBackup = await makeCloudAppStatePayload(updatedAt);
+      const payload = {
+        version: 1,
+        source: "emdc-engine",
+        exportedAt: updatedAt,
+        appState: appStateForBackup,
+      };
+
+      const blob = new Blob([JSON.stringify(payload,null,2)], { type:"application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `emdc-full-backup-${updatedAt.replace(/[:.]/g,"-")}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setCloudSyncStatus("Backup exported");
+      setTimeout(()=>setCloudSyncStatus("Synced"),1200);
+    } catch {
+      setCloudSyncStatus("Backup export failed");
+    }
+  };
+
+  const importFullBackup = async (file:any) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const appState = parsed?.appState || parsed;
+      if (!appState || typeof appState !== "object" || getEmdcAppStateWeight(appState) <= 0) {
+        alert("Invalid backup file or backup has no app data.");
+        return;
+      }
+
+      const confirmed = window.confirm("Import this backup and replace the current EMDC data?");
+      if (!confirmed) return;
+
+      setCloudSyncStatus("Importing backup...");
+      cloudApplyingRef.current = true;
+      applyAppState(appState);
+      setTimeout(()=>{ cloudApplyingRef.current = false; },0);
+
+      const updatedAt = new Date().toISOString();
+      const payload = {
+        version: 1,
+        clientId: cloudClientIdRef.current,
+        updatedAt,
+        appState,
+        localStorage: {},
+      };
+
+      const res = await fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Import save failed");
+      cloudLastUpdatedAtRef.current = updatedAt;
+      setCloudSyncStatus("Imported and synced");
+      setTimeout(()=>setCloudSyncStatus("Synced"),1200);
+    } catch {
+      alert("Import failed. Please check that the file is a valid EMDC backup JSON.");
+      setCloudSyncStatus("Backup import failed");
+    }
+  };
+
   useEffect(() => {
     cloudClientIdRef.current = uid();
     setCloudSyncStatus("Loading cloud...");
@@ -17998,9 +18068,19 @@ export default function App({
               {tab==="skus"       && "Product catalog by brand, SKU, inventory, and status."}
               {tab==="ai"         && "AI tools, prompt builders, generators, and workflow automations."}
             </p>
-            <p style={{ margin:"6px 0 0",fontSize:11,color:cloudSyncStatus==="Sync save failed" ? "#DC2626" : C.faint }}>
-              Shared Sync: {cloudSyncStatus}
-            </p>
+            <div style={{ marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+              <span style={{ fontSize:11,color:cloudSyncStatus==="Sync save failed" || cloudSyncStatus==="Backup export failed" || cloudSyncStatus==="Backup import failed" ? "#DC2626" : C.faint }}>
+                Shared Sync: {cloudSyncStatus}
+              </span>
+              <button type="button" onClick={exportFullBackup}
+                style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:7,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
+                Export Full Backup
+              </button>
+              <label style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:7,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
+                Import Backup
+                <input type="file" accept="application/json,.json" style={{ display:"none" }} onChange={(e:any)=>{ importFullBackup(e.target.files?.[0]); e.target.value=""; }} />
+              </label>
+            </div>
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
