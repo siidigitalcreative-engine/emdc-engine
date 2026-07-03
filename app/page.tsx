@@ -15992,26 +15992,29 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
     const cleanProducts = Array.isArray(products) && products.length ? products : [{}];
     const cleanPillars = Array.isArray(pillarRows) && pillarRows.length ? pillarRows : buildFallbackProductGmvMaxOutputs(cleanProducts);
 
-    return cleanProducts.flatMap((product:any,productIndex:number)=>{
-      const productName = getProductGmvProductName(product);
-      return cleanPillars.map((row:any,pillarIndex:number)=>({
-        ...row,
-        id:`${product?.id || product?.sku || productIndex}-${row?.pillar || pillarIndex}`,
-        productIndex,
-        pillarIndex,
-        products:[product],
-        contentTheme:String(row?.contentTheme || `${row?.pillar || "Content"} idea for ${productName}`).includes(productName)
-          ? String(row?.contentTheme || "")
-          : `${productName}: ${row?.contentTheme || `${row?.pillar || "Content"} idea`}`,
-        creativeDirection:String(row?.creativeDirection || "").includes(productName)
-          ? String(row?.creativeDirection || "")
-          : `${productName}: ${row?.creativeDirection || `Create a product-focused visual using the ${row?.pillar || "content"} framework.`}`,
-        captionCopy:limitMarketingCaption100(
-          String(row?.captionCopy || "").includes(productName)
-            ? row?.captionCopy
-            : `${productName}: ${row?.captionCopy || "Shop now."}`
-        ),
-      }));
+    // Group by content pillar first, then list all selected products under each pillar.
+    return cleanPillars.flatMap((row:any,pillarIndex:number)=>{
+      return cleanProducts.map((product:any,productIndex:number)=>{
+        const productName = getProductGmvProductName(product);
+        return {
+          ...row,
+          id:`${row?.pillar || pillarIndex}-${product?.id || product?.sku || productIndex}`,
+          productIndex,
+          pillarIndex,
+          products:[product],
+          contentTheme:String(row?.contentTheme || `${row?.pillar || "Content"} idea for ${productName}`).includes(productName)
+            ? String(row?.contentTheme || "")
+            : `${productName}: ${row?.contentTheme || `${row?.pillar || "Content"} idea`}`,
+          creativeDirection:String(row?.creativeDirection || "").includes(productName)
+            ? String(row?.creativeDirection || "")
+            : `${productName}: ${row?.creativeDirection || `Create a product-focused visual using the ${row?.pillar || "content"} framework.`}`,
+          captionCopy:limitMarketingCaption100(
+            String(row?.captionCopy || "").includes(productName)
+              ? row?.captionCopy
+              : `${productName}: ${row?.captionCopy || "Shop now."}`
+          ),
+        };
+      });
     });
   };
 
@@ -16618,7 +16621,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
                               <div>
                                 <p style={{ margin:0,fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em" }}>Product GMV Max Ads Table</p>
-                                <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>One Product GMV Max row per selected product and content pillar.</p>
+                                <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>Grouped by content pillar, with selected products listed under each pillar.</p>
                               </div>
                               <Tag sm>{item.gmvRows.length} rows</Tag>
                             </div>
