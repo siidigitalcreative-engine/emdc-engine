@@ -185,6 +185,7 @@ const EMDC_PRE_WRITE_HISTORY_KEY = "emdc_app_state_before_last_write_history_v1"
 const EMDC_LOCAL_KEY_PREFIX = "emdc";
 const EMDC_GROUP_AI_WORKSPACE_PREFIX = "emdc_group_ai_workspace_v1_";
 const EMDC_CHECKLIST_ITEMS_PREFIX = "emdc_checklist_items_v1_";
+const EMDC_CHECKLIST_GROUPS_STORAGE_KEY = "emdc_checklist_groups_v1";
 const EMDC_SKU_ITEMS_STORAGE_KEY = "emdc_sku_items_v1";
 const EMDC_SKU_ITEMS_COUNT_KEY = "emdc_sku_items_count_v1";
 const EMDC_SKU_ITEMS_LAST_GOOD_KEY = "emdc_sku_items_last_good_v1";
@@ -253,6 +254,62 @@ const writeEmdcChecklistItemsBackup = (groupId:any, items:any) => {
       items,
     }));
   } catch {}
+};
+
+const readEmdcChecklistGroupsBackup = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed:any = parseEmdcJson(localStorage.getItem(EMDC_CHECKLIST_GROUPS_STORAGE_KEY));
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.groups)) return parsed.groups;
+    if (Array.isArray(parsed?.items)) return parsed.items;
+  } catch {}
+  return [];
+};
+
+const writeEmdcChecklistGroupsBackup = (groups:any[] = []) => {
+  if (typeof window === "undefined" || !Array.isArray(groups)) return;
+  try {
+    localStorage.setItem(EMDC_CHECKLIST_GROUPS_STORAGE_KEY, JSON.stringify({
+      updatedAt:new Date().toISOString(),
+      groups,
+    }));
+  } catch {}
+};
+
+const recoverChecklistGroupsFromItems = (groups:any[] = [], items:any = {}) => {
+  const baseGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
+  const map = new Map<string,any>();
+  baseGroups.forEach((group:any)=>{
+    const id = String(group?.id || "");
+    if (id) map.set(id, group);
+  });
+
+  const savedGroups = readEmdcChecklistGroupsBackup();
+  savedGroups.forEach((group:any)=>{
+    const id = String(group?.id || "");
+    if (id && !map.has(id)) map.set(id, group);
+  });
+
+  const safeItems = items && typeof items === "object" && !Array.isArray(items) ? items : {};
+  Object.keys(safeItems).forEach((groupId:string,idx:number)=>{
+    if (!groupId || map.has(groupId)) return;
+    map.set(groupId, {
+      id:groupId,
+      groupName:`Recovered Checklist ${idx + 1}`,
+      launchType:"introduction",
+      skus:[],
+      deadline:"",
+      deadlineEnd:"",
+      dateMode:"specific",
+      monthOnlyMonths:[],
+      calendarType:"deadline",
+      calendarColor:"#8B5CF6",
+      recovered:true,
+    });
+  });
+
+  return Array.from(map.values());
 };
 
 const readEmdcArrayBackup = (key:string) => {
@@ -516,6 +573,7 @@ const rememberLastGoodEmdcAppState = (state:any) => {
   try {
     if (Array.isArray(state?.skuItems) && state.skuItems.length) rememberProtectedSkuItems(state.skuItems,"last-good-app-state");
     rememberCalendarEventBackups(state);
+    if (Array.isArray(state?.checklistGroups)) writeEmdcChecklistGroupsBackup(state.checklistGroups);
     const storableState = makeLocalStorableEmdcAppState(state);
     const entry = { savedAt:new Date().toISOString(), appState:storableState };
     localStorage.setItem(EMDC_LAST_GOOD_APP_STATE_KEY, JSON.stringify(entry));
@@ -12632,7 +12690,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     const g={id:uid(),...cfg};
     const initialItems = buildChecklistItemsFromTemplates(g.launchType,templates,null);
 
-    setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; });
+    setGroups((p:any)=>{ const next=[...p,g]; writeEmdcChecklistGroupsBackup(next); try { const raw=localStorage.getItem("emdc_app_state_v1"); const parsed=raw?parseEmdcJson(raw):{}; safeSetEmdcAppStateLocal({ ...(parsed||{}), checklistGroups:next }); markEmdcLocalStateUpdated(); window.dispatchEvent(new Event("emdc-local-sync")); } catch {} if(onStateChange) onStateChange({checklistGroups:next}); return next; });
     setAllGroupItems((p:any)=>{ const next={...p,[g.id]:initialItems}; writeEmdcChecklistItemsBackup(g.id,initialItems); persistChecklistItemsNow(next); if(onStateChange) onStateChange({checklistItems:next}); return next; });
 
     if(onGroupCreated) onGroupCreated(g);
@@ -12646,6 +12704,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
     setGroups((p:any)=>{
       const next=p.filter((g:any)=>g.id!==id);
+      writeEmdcChecklistGroupsBackup(next);
       if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]});
       return next;
     });
@@ -12672,6 +12731,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
     setGroups((p:any)=>{
       const next=p.map((g:any)=>g.id===id?{...g,...patch}:g);
+      writeEmdcChecklistGroupsBackup(next);
       if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(id,patch.aiWorkspace);
       try {
         const raw = localStorage.getItem("emdc_app_state_v1");
@@ -17559,6 +17619,7 @@ export default function App({
     "emdc_app_state_last_good_v1",
     "emdc_app_state_history_v1",
     "emdc_checklist_items_v1_",
+    EMDC_CHECKLIST_GROUPS_STORAGE_KEY,
   ];
 
   const isEmdcSyncLocalKey = (key:any) => {
@@ -17570,7 +17631,7 @@ export default function App({
     skuBrands: brands,
     skuItems: skuStorage,
     skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
-    checklistGroups: mergeChecklistGroupsWithWorkspaceBackups(checklistGroups),
+    checklistGroups: recoverChecklistGroupsFromItems(mergeChecklistGroupsWithWorkspaceBackups(checklistGroups), checklistAllItems),
     checklistItems: mergeChecklistItemsWithLocalBackups(checklistAllItems),
     checklistStatuses,
     calendarEvents: protectedEmdcArray(calendarManualEvents, EMDC_CALENDAR_MANUAL_EVENTS_KEY),
@@ -17692,8 +17753,13 @@ export default function App({
       });
     }
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
-    if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(mergeChecklistGroupsWithWorkspaceBackups(hydratedParsed.checklistGroups));
-    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") setChecklistAllItems(mergeChecklistItemsWithLocalBackups(hydratedParsed.checklistItems));
+    const incomingChecklistItems = hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object" ? mergeChecklistItemsWithLocalBackups(hydratedParsed.checklistItems) : checklistAllItems;
+    if (Array.isArray(hydratedParsed?.checklistGroups)) {
+      const recoveredGroups = recoverChecklistGroupsFromItems(mergeChecklistGroupsWithWorkspaceBackups(hydratedParsed.checklistGroups), incomingChecklistItems);
+      setChecklistGroups(recoveredGroups);
+      if (recoveredGroups.length) writeEmdcChecklistGroupsBackup(recoveredGroups);
+    }
+    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") setChecklistAllItems(incomingChecklistItems);
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
     if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(protectedEmdcArray(hydratedParsed.calendarEvents, EMDC_CALENDAR_MANUAL_EVENTS_KEY));
     if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(protectedEmdcArray(hydratedParsed.calendarTypes, EMDC_CALENDAR_TYPES_STORAGE_KEY)));
@@ -17943,6 +18009,8 @@ export default function App({
       } else if (parsed) {
         applyAppState(parsed);
       }
+      const backedChecklistGroups = readEmdcChecklistGroupsBackup();
+      if (backedChecklistGroups.length) setChecklistGroups((prev:any[])=>recoverChecklistGroupsFromItems(prev?.length ? prev : backedChecklistGroups, checklistAllItems));
       const backedManualEvents = readEmdcArrayBackup(EMDC_CALENDAR_MANUAL_EVENTS_KEY);
       const backedSeasonalEvents = readEmdcArrayBackup(EMDC_SEASONAL_EVENTS_STORAGE_KEY);
       const backedCalendarTypes = readEmdcArrayBackup(EMDC_CALENDAR_TYPES_STORAGE_KEY);
