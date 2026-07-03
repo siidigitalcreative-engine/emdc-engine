@@ -17753,6 +17753,15 @@ export default function App({
     cloudApplyingRef.current = true;
     try {
       applyAppState(cloudAppState);
+      if (cloud?.localStorage && typeof cloud.localStorage === "object") {
+        try {
+          Object.entries(cloud.localStorage).forEach(([key,value]:any)=>{
+            if (String(key || "").startsWith("emdc") && typeof value === "string") {
+              localStorage.setItem(key,value);
+            }
+          });
+        } catch {}
+      }
       cloudLastUpdatedAtRef.current = String(cloud.updatedAt || "");
       setCloudSyncStatus("Synced");
     } finally {
@@ -17866,6 +17875,38 @@ export default function App({
 
     return { totalKeys:Object.keys(snapshot || {}).length, totalRows:rows.length, chunkCount:chunks.length };
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const w:any = window as any;
+
+    const trigger = () => scheduleLocalSnapshotSave();
+
+    if (!w.__emdcLocalStoragePatchedForBlob) {
+      w.__emdcLocalStoragePatchedForBlob = true;
+      const originalSetItem = localStorage.setItem.bind(localStorage);
+      const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+
+      localStorage.setItem = (key:string, value:string) => {
+        originalSetItem(key,value);
+        if (String(key || "").startsWith("emdc")) {
+          try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
+        }
+      };
+
+      localStorage.removeItem = (key:string) => {
+        originalRemoveItem(key);
+        if (String(key || "").startsWith("emdc")) {
+          try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
+        }
+      };
+    }
+
+    window.addEventListener("emdc-local-sync", trigger);
+    trigger();
+
+    return () => window.removeEventListener("emdc-local-sync", trigger);
+  }, [cloudHydrated]);
 
   const makeCloudAppStatePayload = async (updatedAt:string) => {
     const fullAppState = makeAppStatePayload();
@@ -18089,6 +18130,62 @@ export default function App({
     if (!patch || typeof patch !== "object") return;
     if (onStateChange) onStateChange(patch);
     saveAppPatchDirect(patch);
+  };
+
+  const readCurrentLocalSnapshot = () => {
+    const snapshot:any = {};
+    if (typeof window === "undefined") return snapshot;
+    try {
+      for (let i=0; i<localStorage.length; i++) {
+        const key = localStorage.key(i) || "";
+        if (!key.startsWith("emdc")) continue;
+
+        // Skip giant duplicate safety/history keys. These already have dedicated Blob files.
+        if (key === "emdc_app_state_v1") continue;
+        if (key === "emdc_app_state_last_good_v1") continue;
+        if (key === "emdc_app_state_history_v1") continue;
+        if (key === "emdc_sku_items_v1") continue;
+        if (key === "emdc_sku_items_last_good_v1") continue;
+        if (key.includes("history")) continue;
+        if (key.includes("last_good")) continue;
+
+        const value = localStorage.getItem(key);
+        if (value == null) continue;
+        snapshot[key] = value;
+      }
+    } catch {}
+    return snapshot;
+  };
+
+  const saveLocalSnapshotDirect = async () => {
+    if (cloudApplyingRef.current) return;
+    try {
+      const snapshot = readCurrentLocalSnapshot();
+      const updatedAt = new Date().toISOString();
+      const res = await fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"local-snapshot",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          localStorage:snapshot,
+        }),
+      });
+      if (!res.ok) throw new Error("Local snapshot save failed");
+      cloudLastUpdatedAtRef.current = updatedAt;
+      setCloudSyncStatus("Synced");
+    } catch {
+      setCloudSyncStatus("Save failed");
+    }
+  };
+
+  const scheduleLocalSnapshotSave = () => {
+    if (typeof window === "undefined" || cloudApplyingRef.current) return;
+    try {
+      if ((window as any).__emdcLocalSnapshotTimer) clearTimeout((window as any).__emdcLocalSnapshotTimer);
+      (window as any).__emdcLocalSnapshotTimer = setTimeout(()=>saveLocalSnapshotDirect(), 300);
+    } catch {}
   };
 
 
