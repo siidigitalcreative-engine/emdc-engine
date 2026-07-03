@@ -219,6 +219,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length });
     }
 
+    if (mode === "checklist-items" || body?.mode === "checklist-items") {
+      const existingRaw:any = await readJsonBlob(STATE_PATH);
+      const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const nextItems = isRecord(body?.checklistItems) ? body.checklistItems : {};
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        appState: {
+          ...(isRecord(existing?.appState) ? existing.appState : {}),
+          checklistItems: nextItems,
+        },
+        localStorage: {},
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({ ok: true, mode: "checklist-items", data: payload });
+    }
+
     if (mode === "local-storage-chunk" || body?.mode === "local-storage-chunk") {
       return NextResponse.json({ ok: true, mode: "local-storage-chunk", disabled: true, count: 0 });
     }
