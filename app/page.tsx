@@ -353,6 +353,15 @@ const dedupeChecklistItemsById = (items:any[] = []) => {
   return out;
 };
 
+const dedupeChecklistItemsObject = (items:any = {}) => {
+  if (!items || typeof items !== "object" || Array.isArray(items)) return {};
+  const next:any = {};
+  Object.entries(items).forEach(([dept,rows]:any)=>{
+    next[dept] = Array.isArray(rows) ? dedupeChecklistItemsById(rows) : rows;
+  });
+  return next;
+};
+
 const getEmdcExternalSkuCount = (state:any) => {
   const direct = Number(state?.skuItemsExternalCount || 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
@@ -562,7 +571,7 @@ const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
 const PERF_IDLE_SAVE_DELAY = 450;
 const PERF_CLOUD_SAVE_DELAY = 600;
-const PERF_CLOUD_POLL_INTERVAL = 12000;
+const PERF_CLOUD_POLL_INTERVAL = 60000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
   if (typeof window === "undefined") return setTimeout(cb, 0);
@@ -3928,17 +3937,35 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   useEffect(()=>{
     if(!initialItems) return;
-    setItems(initialItems);
+    setItems(dedupeChecklistItemsObject(initialItems));
   },[initialItems]);
 
   useEffect(()=>{
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
   },[initialGroupTab]);
 
-  const upd    = (dept:string,item:any) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].map((i:any)=>i.id===item.id?item:i)}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; });
-  const del    = (dept:string,id:string) => setItems((p:any)=>{ const next={...p,[dept]:p[dept].filter((i:any)=>i.id!==id)}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; });
-  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; }); setNewText((p:any)=>({...p,[dept]:""})); };
-  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{ const next={...p,[dept]:[...p[dept],{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}]}; if(onItemsChange) onItemsChange(Array.isArray(next)?dedupeChecklistItemsById(next):next); return next; }); setSkuPickDept(null); };
+  const upd    = (dept:string,item:any) => setItems((p:any)=>{
+    const prevDeptItems = Array.isArray(p?.[dept]) ? p[dept] : [];
+    const nextDeptItems = prevDeptItems.map((i:any)=>String(i?.id)===String(item?.id)?{...i,...item}:i);
+    const next={...p,[dept]:dedupeChecklistItemsById(nextDeptItems)};
+    if(onItemsChange) onItemsChange(next);
+    return next;
+  });
+  const del    = (dept:string,id:string) => setItems((p:any)=>{
+    const next={...p,[dept]:dedupeChecklistItemsById((p?.[dept]||[]).filter((i:any)=>String(i?.id)!==String(id)))};
+    if(onItemsChange) onItemsChange(next);
+    return next;
+  });
+  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{
+    const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
+    if(onItemsChange) onItemsChange(next);
+    return next;
+  }); setNewText((p:any)=>({...p,[dept]:""})); };
+  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
+    const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
+    if(onItemsChange) onItemsChange(next);
+    return next;
+  }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
   const groupColor = group.calendarColor || lt?.color || C.accent;
@@ -12469,7 +12496,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
   const updateGroupItems = (groupId:string, items:any) => {
     setAllGroupItems((p:any)=>{
-      const next={...(p||{}),[groupId]:Array.isArray(items)?dedupeChecklistItemsById(items):items};
+      const next={...(p||{}),[groupId]:dedupeChecklistItemsObject(items)};
       writeEmdcChecklistItemsBackup(groupId,items);
       persistChecklistItemsNow(next);
       if(onStateChange) onStateChange({checklistItems:next});
@@ -17555,6 +17582,7 @@ export default function App({
   const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
   const cloudApplyingRef = useRef(false);
+  const cloudSavingRef = useRef(false);
   const cloudSaveTimerRef = useRef<any>(null);
   const cloudClientIdRef = useRef("");
 
@@ -17649,11 +17677,11 @@ export default function App({
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
     if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
     if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") {
-      const cleanItems:any = {};
-      Object.entries(hydratedParsed.checklistItems).forEach(([gid,rows]:any)=>{
-        cleanItems[gid] = Array.isArray(rows) ? dedupeChecklistItemsById(rows) : rows;
+      const cleanAllItems:any = {};
+      Object.entries(hydratedParsed.checklistItems).forEach(([groupId,groupItems]:any)=>{
+        cleanAllItems[groupId] = dedupeChecklistItemsObject(groupItems);
       });
-      setChecklistAllItems(cleanItems);
+      setChecklistAllItems(cleanAllItems);
     }
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
     if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(hydratedParsed.calendarEvents);
@@ -17681,6 +17709,7 @@ export default function App({
   };
 
   const fetchCloudState = async (mode:"initial"|"poll"="poll") => {
+    if (mode==="poll" && (cloudSavingRef.current || cloudApplyingRef.current)) return null;
     try {
       const res = await fetch("/api/emdc-state", { cache:"no-store" });
       if (!res.ok) throw new Error("Cloud sync unavailable");
@@ -17803,8 +17832,9 @@ export default function App({
   };
 
   const saveCloudState = async () => {
-    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
+    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current || cloudSavingRef.current) return;
 
+    cloudSavingRef.current = true;
     const updatedAt = new Date().toISOString();
     const appStateForCloud = await makeCloudAppStatePayload(updatedAt);
 
@@ -17834,6 +17864,8 @@ export default function App({
       setCloudSyncStatus("Synced");
     } catch {
       setCloudSyncStatus("Sync save failed");
+    } finally {
+      cloudSavingRef.current = false;
     }
   };
 
