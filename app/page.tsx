@@ -17894,12 +17894,24 @@ export default function App({
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Import save failed");
+
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const errorJson = await res.json();
+          detail = errorJson?.error || errorJson?.message || JSON.stringify(errorJson);
+        } catch {
+          detail = await res.text().catch(()=>"");
+        }
+        throw new Error(detail || `Import save failed with status ${res.status}`);
+      }
+
       cloudLastUpdatedAtRef.current = updatedAt;
       setCloudSyncStatus("Imported and synced");
       setTimeout(()=>setCloudSyncStatus("Synced"),1200);
-    } catch {
-      alert("Import failed. Please check that the file is a valid EMDC backup JSON.");
+    } catch (error:any) {
+      const message = error?.message || "Unknown import error.";
+      alert("Import failed: " + message);
       setCloudSyncStatus("Backup import failed");
     }
   };
