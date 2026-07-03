@@ -362,6 +362,29 @@ const dedupeChecklistItemsObject = (items:any = {}) => {
   return next;
 };
 
+
+const orderChecklistItemsByTemplate = (rows:any[] = [], templateList:any[] = []) => {
+  const list = Array.isArray(rows) ? dedupeChecklistItemsById(rows) : [];
+  const templates = Array.isArray(templateList) ? templateList.map((t:any)=>String(t||"").trim()) : [];
+  if (!templates.length) return list;
+
+  const order = new Map<string,number>();
+  templates.forEach((text:string,idx:number)=>{
+    const key = text.toLowerCase();
+    if (key && !order.has(key)) order.set(key,idx);
+  });
+
+  return [...list].sort((a:any,b:any)=>{
+    const ak = String(a?.text||"").trim().toLowerCase();
+    const bk = String(b?.text||"").trim().toLowerCase();
+    const ai = order.has(ak) ? order.get(ak) as number : 100000;
+    const bi = order.has(bk) ? order.get(bk) as number : 100000;
+    if (ai !== bi) return ai - bi;
+    if (!!a?.custom !== !!b?.custom) return a?.custom ? 1 : -1;
+    return 0;
+  });
+};
+
 const getEmdcExternalSkuCount = (state:any) => {
   const direct = Number(state?.skuItemsExternalCount || 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
@@ -11687,7 +11710,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       <div style={{ display:"grid",gridTemplateColumns:activeDept==="all"?"repeat(auto-fill,minmax(min(100%,320px),1fr))":"1fr",gap:16 }}>
         {depts.map(dept=>{
-          const di=items[dept], done=di.filter(i=>i.done).length, pct=di.length?Math.round(done/di.length*100):0, dc=DEPTS[dept].color;
+          const di=orderChecklistItemsByTemplate(items[dept], templates?.[group.launchType]?.[dept] || []), done=di.filter(i=>i.done).length, pct=di.length?Math.round(done/di.length*100):0, dc=DEPTS[dept].color;
           return (
             <div key={dept} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
               <div style={{ padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:`linear-gradient(135deg,${dc}08,${dc}04)`,borderTop:`3px solid ${dc}` }}>
