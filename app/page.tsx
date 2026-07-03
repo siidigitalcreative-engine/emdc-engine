@@ -17585,6 +17585,8 @@ export default function App({
   const cloudLastUpdatedAtRef = useRef("");
   const cloudApplyingRef = useRef(false);
   const cloudSaveTimerRef = useRef<any>(null);
+  const cloudSaveInFlightRef = useRef(false);
+  const cloudSaveQueuedRef = useRef(false);
   const cloudClientIdRef = useRef("");
 
   const EMDC_SYNC_LOCAL_KEYS = [
@@ -17614,12 +17616,14 @@ export default function App({
     skuBrands: brands,
     skuItems: skuStorage,
     skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
-    checklistGroups: mergeChecklistGroupsWithWorkspaceBackups(checklistGroups),
-    checklistItems: mergeChecklistItemsWithLocalBackups(checklistAllItems),
+    // Online-first: save exactly what the UI currently shows. Do not merge localStorage
+    // backups here because stale browser backups can resurrect ghost checklists.
+    checklistGroups: Array.isArray(checklistGroups) ? checklistGroups : [],
+    checklistItems: (checklistAllItems && typeof checklistAllItems === "object") ? checklistAllItems : {},
     checklistStatuses,
-    calendarEvents: protectedEmdcArray(calendarManualEvents, EMDC_CALENDAR_MANUAL_EVENTS_KEY),
-    calendarTypes: protectedEmdcArray(calendarEventTypes, EMDC_CALENDAR_TYPES_STORAGE_KEY),
-    seasonalEvents: protectedEmdcArray(seasonalEvents, EMDC_SEASONAL_EVENTS_STORAGE_KEY),
+    calendarEvents: Array.isArray(calendarManualEvents) ? calendarManualEvents : [],
+    calendarTypes: ensureRequiredCalendarTypes(Array.isArray(calendarEventTypes) ? calendarEventTypes : []),
+    seasonalEvents: Array.isArray(seasonalEvents) ? seasonalEvents : [],
   });
 
   const isLargeCloudLocalStorageKey = (key:any, value:any) => {
@@ -17754,21 +17758,14 @@ export default function App({
       return;
     }
 
-    const cloudUpdatedAt = String(cloud.updatedAt || "");
-    const localUpdatedAt = getEmdcLocalStateUpdatedAt();
-    const hydratedCloudAppState = hydrateExternalSkuItems(cloudAppState) || cloudAppState;
-    const cloudWeight = getEmdcAppStateWeight(hydratedCloudAppState);
-    const localWeight = Math.max(
-      getEmdcAppStateWeight(readStoredEmdcAppState()),
-      getEmdcAppStateWeight(readLastGoodEmdcAppState()?.appState || readLastGoodEmdcAppState())
-    );
-
-    if (cloudUpdatedAt && localUpdatedAt && isIsoTimeNewer(localUpdatedAt, cloudUpdatedAt) && localWeight >= cloudWeight && localWeight > 0) {
-      // Keep true local edits/deletions from being resurrected by an older cloud snapshot after refresh.
-      // But on a fresh/incognito browser, do not let a newly-created empty local timestamp block a richer cloud state.
-      setCloudSyncStatus("Local pending sync");
+    if (cloudSaveInFlightRef.current || cloudSaveQueuedRef.current || cloudSaveTimerRef.current) {
+      setCloudSyncStatus("Saving...");
       return;
     }
+
+    const cloudUpdatedAt = String(cloud.updatedAt || "");
+    const hydratedCloudAppState = hydrateExternalSkuItems(cloudAppState) || cloudAppState;
+    const cloudWeight = getEmdcAppStateWeight(hydratedCloudAppState);
 
     const cloudSkuCount = Array.isArray(hydratedCloudAppState?.skuItems) ? hydratedCloudAppState.skuItems.length : getEmdcExternalSkuCount(hydratedCloudAppState);
     const protectedSkuCount = Math.max((Array.isArray(skuStorage) ? skuStorage.length : 0), readProtectedSkuItemsBackup().length);
@@ -17783,7 +17780,8 @@ export default function App({
 
     cloudApplyingRef.current = true;
     try {
-      writeLocalSnapshot(cloud.localStorage || {});
+      // Online-first: cloud appState is the source of truth. Do not write old
+      // cloud localStorage chunks back into the browser.
       applyAppState(cloud.appState || cloud);
       if (cloud.updatedAt) {
         cloudLastUpdatedAtRef.current = cloud.updatedAt;
@@ -17920,38 +17918,47 @@ export default function App({
   const saveCloudState = async () => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
 
+    if (cloudSaveInFlightRef.current) {
+      cloudSaveQueuedRef.current = true;
+      return;
+    }
+
+    cloudSaveInFlightRef.current = true;
     const updatedAt = new Date().toISOString();
-    const appStateForCloud = await makeCloudAppStatePayload(updatedAt);
-    if (getEmdcAppStateWeight(appStateForCloud) <= 0) {
-      setCloudSyncStatus("Cloud save skipped: no local data");
-      return;
-    }
-    const onlineLocalSnapshot = readLocalSnapshot("cloud");
-    // Save the core app state first so checklist/SKU/calendar edits are online immediately.
-    // Large browser localStorage inputs are chunked after the main save; they must not delay
-    // or block the visible app state from persisting before a refresh.
-    const payload = {
-      version: 1,
-      clientId: cloudClientIdRef.current,
-      updatedAt,
-      appState: appStateForCloud,
-      localStorage: {
-        emdc_online_local_storage_chunked_v1: JSON.stringify({
-          updatedAt,
-          status:"main-state-saved-before-background-local-storage-chunks",
-        }),
-      },
-    };
-
-    if (shouldBlockEmptyEmdcState(payload.appState)) {
-      setCloudSyncStatus("Save blocked: empty state");
-      return;
-    }
-
-    rememberLastGoodEmdcAppState(payload.appState);
 
     try {
-      setCloudSyncStatus("Saving...");
+      const appStateForCloud = await makeCloudAppStatePayload(updatedAt);
+      const checklistGroupCount = Array.isArray(appStateForCloud.checklistGroups) ? appStateForCloud.checklistGroups.length : 0;
+      const checklistItemGroupCount = appStateForCloud.checklistItems && typeof appStateForCloud.checklistItems === "object"
+        ? Object.keys(appStateForCloud.checklistItems).length
+        : 0;
+
+      if (getEmdcAppStateWeight(appStateForCloud) <= 0) {
+        setCloudSyncStatus("Save skipped: no online data");
+        return;
+      }
+
+      if (checklistGroupCount === 0 && checklistItemGroupCount > 0) {
+        setCloudSyncStatus("Save blocked: checklist groups missing");
+        return;
+      }
+
+      const payload = {
+        version: 1,
+        clientId: cloudClientIdRef.current,
+        updatedAt,
+        appState: appStateForCloud,
+        // Keep Upstash small: current state + one last-good copy only.
+        // No localStorage chunks; those caused quota and ghost recovery issues.
+        localStorage: {},
+      };
+
+      if (shouldBlockEmptyEmdcState(payload.appState)) {
+        setCloudSyncStatus("Save blocked: empty state");
+        return;
+      }
+
+      setCloudSyncStatus("Saving online...");
       const res = await fetch("/api/emdc-state", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -17962,12 +17969,14 @@ export default function App({
       cloudLastUpdatedAtRef.current = data?.data?.updatedAt || updatedAt;
       markEmdcLocalStateUpdated(cloudLastUpdatedAtRef.current);
       setCloudSyncStatus("Synced");
-
-      // Background-only: keep non-core EMDC local inputs online without making users wait.
-      // If this fails, the main app data is already safely saved above.
-      saveCloudLocalStorageChunked(onlineLocalSnapshot, updatedAt).catch(()=>{});
     } catch {
       setCloudSyncStatus("Sync save failed");
+    } finally {
+      cloudSaveInFlightRef.current = false;
+      if (cloudSaveQueuedRef.current) {
+        cloudSaveQueuedRef.current = false;
+        setTimeout(()=>saveCloudState(), 50);
+      }
     }
   };
 
@@ -17979,26 +17988,11 @@ export default function App({
         localStorage.setItem("emdc_cloud_client_id", clientId);
       }
       cloudClientIdRef.current = clientId;
-
-      const raw = localStorage.getItem("emdc_app_state_v1");
-      const parsed = raw ? hydrateExternalSkuItems(parseEmdcJson(raw)) : null;
-      const protectedSkuItems = readProtectedSkuItemsBackup();
-      if (protectedSkuItems.length) setSkuStorage(protectedSkuItems);
-      if (parsed && shouldBlockEmptyEmdcState(parsed)) {
-        const lastGoodEntry:any = readLastGoodEmdcAppState();
-        const lastGood = lastGoodEntry?.appState || lastGoodEntry;
-        if (lastGood && getEmdcAppStateWeight(lastGood) > 0) applyAppState(lastGood);
-      } else if (parsed) {
-        applyAppState(parsed);
-      }
-      const backedManualEvents = readEmdcArrayBackup(EMDC_CALENDAR_MANUAL_EVENTS_KEY);
-      const backedSeasonalEvents = readEmdcArrayBackup(EMDC_SEASONAL_EVENTS_STORAGE_KEY);
-      const backedCalendarTypes = readEmdcArrayBackup(EMDC_CALENDAR_TYPES_STORAGE_KEY);
-      if (backedManualEvents.length) setCalendarManualEvents(backedManualEvents);
-      if (backedSeasonalEvents.length) setSeasonalEvents(backedSeasonalEvents);
-      if (backedCalendarTypes.length) setCalendarEventTypes(ensureRequiredCalendarTypes(backedCalendarTypes));
     } catch {}
 
+    // Online-first: do not hydrate the visible app from localStorage.
+    // The first cloud fetch below applies the current Upstash state so the same
+    // data appears in normal tabs, incognito, and other devices.
     setAppStateHydrated(true);
   }, []);
 
@@ -18054,16 +18048,9 @@ export default function App({
   }, [appStateHydrated, calendarEventTypes]);
 
   useEffect(() => {
-    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
-    try {
-      const nextAppState = makeAppStatePayload();
-      if (shouldBlockEmptyEmdcState(nextAppState)) return;
-      rememberPreWriteLocalStateBackup("before-auto-local-save");
-      rememberLastGoodEmdcAppState(nextAppState);
-      const saved = safeSetEmdcAppStateLocal(nextAppState);
-      if (saved) markEmdcLocalStateUpdated();
-      else setCloudSyncStatus("Local save failed: storage full");
-    } catch {}
+    // Online-first: localStorage is no longer the master copy.
+    // Avoid writing the full app state locally to prevent quota errors and stale data
+    // from overriding the online state after refresh.
   }, [
     appStateHydrated,
     brands,
