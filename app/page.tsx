@@ -17614,12 +17614,12 @@ export default function App({
     skuBrands: brands,
     skuItems: skuStorage,
     skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
-    checklistGroups: mergeChecklistGroupsWithWorkspaceBackups(checklistGroups),
-    checklistItems: mergeChecklistItemsWithLocalBackups(checklistAllItems),
+    checklistGroups: checklistGroups,
+    checklistItems: checklistAllItems,
     checklistStatuses,
-    calendarEvents: protectedEmdcArray(calendarManualEvents, EMDC_CALENDAR_MANUAL_EVENTS_KEY),
-    calendarTypes: protectedEmdcArray(calendarEventTypes, EMDC_CALENDAR_TYPES_STORAGE_KEY),
-    seasonalEvents: protectedEmdcArray(seasonalEvents, EMDC_SEASONAL_EVENTS_STORAGE_KEY),
+    calendarEvents: calendarManualEvents,
+    calendarTypes: calendarEventTypes,
+    seasonalEvents: seasonalEvents,
   });
 
   const isLargeCloudLocalStorageKey = (key:any, value:any) => {
@@ -17736,8 +17736,8 @@ export default function App({
       });
     }
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
-    if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(mergeChecklistGroupsWithWorkspaceBackups(hydratedParsed.checklistGroups));
-    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") setChecklistAllItems(mergeChecklistItemsWithLocalBackups(hydratedParsed.checklistItems));
+    if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
+    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") setChecklistAllItems(hydratedParsed.checklistItems);
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
     if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(protectedEmdcArray(hydratedParsed.calendarEvents, EMDC_CALENDAR_MANUAL_EVENTS_KEY));
     if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(protectedEmdcArray(hydratedParsed.calendarTypes, EMDC_CALENDAR_TYPES_STORAGE_KEY)));
@@ -17783,7 +17783,6 @@ export default function App({
 
     cloudApplyingRef.current = true;
     try {
-      writeLocalSnapshot(cloud.localStorage || {});
       applyAppState(cloud.appState || cloud);
       if (cloud.updatedAt) {
         cloudLastUpdatedAtRef.current = cloud.updatedAt;
@@ -17876,29 +17875,9 @@ export default function App({
   };
 
   const saveCloudLocalStorageChunked = async (snapshot:any = {}, updatedAt:string) => {
-    const rows = splitCloudLocalStorageRows(snapshot);
-    const chunks = chunkCloudLocalStorageRows(rows);
-    if (!chunks.length) return { totalKeys:0, totalRows:0, chunkCount:0 };
-
-    for (let index=0; index<chunks.length; index++) {
-      const res = await fetch("/api/emdc-state?mode=local-storage-chunk", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({
-          mode:"local-storage-chunk",
-          clientId:cloudClientIdRef.current,
-          updatedAt,
-          index,
-          total:chunks.length,
-          totalKeys:Object.keys(snapshot || {}).length,
-          totalRows:rows.length,
-          rows:chunks[index],
-        }),
-      });
-      if (!res.ok) throw new Error("Local input chunk save failed");
-    }
-
-    return { totalKeys:Object.keys(snapshot || {}).length, totalRows:rows.length, chunkCount:chunks.length };
+    // Online-first mode: do not upload browser localStorage chunks to Upstash.
+    // Core app data is saved in appState only to keep Redis small and avoid quota issues.
+    return { totalKeys:0, totalRows:0, chunkCount:0 };
   };
 
   const makeCloudAppStatePayload = async (updatedAt:string) => {
@@ -17980,23 +17959,8 @@ export default function App({
       }
       cloudClientIdRef.current = clientId;
 
-      const raw = localStorage.getItem("emdc_app_state_v1");
-      const parsed = raw ? hydrateExternalSkuItems(parseEmdcJson(raw)) : null;
-      const protectedSkuItems = readProtectedSkuItemsBackup();
-      if (protectedSkuItems.length) setSkuStorage(protectedSkuItems);
-      if (parsed && shouldBlockEmptyEmdcState(parsed)) {
-        const lastGoodEntry:any = readLastGoodEmdcAppState();
-        const lastGood = lastGoodEntry?.appState || lastGoodEntry;
-        if (lastGood && getEmdcAppStateWeight(lastGood) > 0) applyAppState(lastGood);
-      } else if (parsed) {
-        applyAppState(parsed);
-      }
-      const backedManualEvents = readEmdcArrayBackup(EMDC_CALENDAR_MANUAL_EVENTS_KEY);
-      const backedSeasonalEvents = readEmdcArrayBackup(EMDC_SEASONAL_EVENTS_STORAGE_KEY);
-      const backedCalendarTypes = readEmdcArrayBackup(EMDC_CALENDAR_TYPES_STORAGE_KEY);
-      if (backedManualEvents.length) setCalendarManualEvents(backedManualEvents);
-      if (backedSeasonalEvents.length) setSeasonalEvents(backedSeasonalEvents);
-      if (backedCalendarTypes.length) setCalendarEventTypes(ensureRequiredCalendarTypes(backedCalendarTypes));
+      // Online-first mode: do not hydrate from browser localStorage.
+      // The cloud API is the source of truth, so the same data appears in normal, incognito, and other devices.
     } catch {}
 
     setAppStateHydrated(true);
@@ -18055,15 +18019,7 @@ export default function App({
 
   useEffect(() => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
-    try {
-      const nextAppState = makeAppStatePayload();
-      if (shouldBlockEmptyEmdcState(nextAppState)) return;
-      rememberPreWriteLocalStateBackup("before-auto-local-save");
-      rememberLastGoodEmdcAppState(nextAppState);
-      const saved = safeSetEmdcAppStateLocal(nextAppState);
-      if (saved) markEmdcLocalStateUpdated();
-      else setCloudSyncStatus("Local save failed: storage full");
-    } catch {}
+    // Online-first mode: skip full browser localStorage saves to avoid quota errors and stale local data.
   }, [
     appStateHydrated,
     brands,
