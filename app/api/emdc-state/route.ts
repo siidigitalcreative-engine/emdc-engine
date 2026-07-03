@@ -219,6 +219,82 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length });
     }
 
+    if (mode === "app-patch" || body?.mode === "app-patch") {
+      const existingRaw:any = await readJsonBlob(STATE_PATH);
+      const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const patch = isRecord(body?.patch) ? body.patch : {};
+      const existingAppState:any = isRecord(existing?.appState) ? existing.appState : {};
+      let nextAppState:any = {
+        ...existingAppState,
+        ...patch,
+      };
+
+      // If a patch includes SKU rows, save them to the dedicated SKU Blob file
+      // and keep only metadata in the main app state.
+      if (Array.isArray((patch as any).skuItems)) {
+        const nextSkus = safeArray((patch as any).skuItems);
+        await writeJsonBlob(SKU_ALL_PATH, nextSkus);
+        nextAppState = {
+          ...nextAppState,
+          skuItems: [],
+          skuItemsExternalBlob: true,
+          skuItemsExternalCount: nextSkus.length,
+        };
+      }
+
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        appState: nextAppState,
+        localStorage: {},
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({ ok: true, mode: "app-patch", data: payload });
+    }
+
+    if (mode === "sku-items" || body?.mode === "sku-items") {
+      const existingRaw:any = await readJsonBlob(STATE_PATH);
+      const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const nextSkus = safeArray(body?.skuItems);
+      await writeJsonBlob(SKU_ALL_PATH, nextSkus);
+
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        appState: {
+          ...(isRecord(existing?.appState) ? existing.appState : {}),
+          skuItems: [],
+          skuItemsExternalBlob: true,
+          skuItemsExternalCount: nextSkus.length,
+        },
+        localStorage: {},
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({ ok: true, mode: "sku-items", count: nextSkus.length, data: payload });
+    }
+
     if (mode === "checklist-items" || body?.mode === "checklist-items") {
       const existingRaw:any = await readJsonBlob(STATE_PATH);
       const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
