@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 const STATE_PATH = "emdc-state/current.json";
 const LAST_GOOD_PATH = "emdc-state/last-good.json";
 const SKU_ALL_PATH = "emdc-state/sku-items/all.json";
+const CHECKLIST_ITEMS_PATH = "emdc-state/checklist-items/all.json";
 const SKU_META_PATH = "emdc-state/sku-items/meta.json";
 const SKU_CHUNK_PREFIX = "emdc-state/sku-items/chunk-";
 
@@ -129,8 +130,27 @@ async function hydrateSkuData(data: any) {
   };
 }
 
+async function hydrateChecklistItemsData(data: any) {
+  if (!isRecord(data) || !isRecord(data.appState)) return data;
+
+  const savedChecklistItems = await readJsonBlob(CHECKLIST_ITEMS_PATH);
+  if (savedChecklistItems && isRecord(savedChecklistItems)) {
+    return {
+      ...data,
+      appState: {
+        ...data.appState,
+        checklistItems: savedChecklistItems,
+      },
+    };
+  }
+
+  return data;
+}
+
+
 async function hydrateCloudData(data: any) {
-  return hydrateSkuData(data);
+  const withSku = await hydrateSkuData(data);
+  return hydrateChecklistItemsData(withSku);
 }
 
 function hasMeaningfulAppState(appState: any) {
@@ -178,7 +198,7 @@ export async function POST(req: NextRequest) {
 
     if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud" || mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
       await Promise.all([
-        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH] as any).catch(() => {}),
+        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, CHECKLIST_ITEMS_PATH] as any).catch(() => {}),
         deleteBlobPrefix(SKU_CHUNK_PREFIX),
       ]);
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
@@ -261,6 +281,8 @@ export async function POST(req: NextRequest) {
       };
 
       const nextItems = isRecord(body?.checklistItems) ? body.checklistItems : {};
+      await writeJsonBlob(CHECKLIST_ITEMS_PATH, nextItems);
+
       const payload = {
         ...existing,
         version: 1,
@@ -269,6 +291,7 @@ export async function POST(req: NextRequest) {
         appState: {
           ...(isRecord(existing?.appState) ? existing.appState : {}),
           checklistItems: nextItems,
+          checklistItemsExternalBlob: true,
         },
         localStorage: {},
       };
