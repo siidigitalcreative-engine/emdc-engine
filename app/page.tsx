@@ -17864,11 +17864,28 @@ export default function App({
       setTimeout(()=>{ cloudApplyingRef.current = false; },0);
 
       const updatedAt = new Date().toISOString();
+
+      // Large SKU backups must be uploaded through the existing SKU chunk endpoint.
+      // This prevents the import POST from failing when the backup has thousands of SKUs.
+      const skuItems = Array.isArray(appState.skuItems) ? appState.skuItems : [];
+      let appStateForImport = appState;
+      if (skuItems.length >= EMDC_LARGE_SKU_COUNT) {
+        await saveCloudSkuItemsChunked(skuItems, updatedAt);
+        appStateForImport = {
+          ...appState,
+          skuItems: [],
+          skuItemsExternalCloud: true,
+          skuItemsExternalCount: skuItems.length,
+          skuItemsCloudChunkCount: Math.ceil(skuItems.length / EMDC_CLOUD_SKU_CHUNK_SIZE),
+          skuItemsCloudUpdatedAt: updatedAt,
+        };
+      }
+
       const payload = {
         version: 1,
         clientId: cloudClientIdRef.current,
         updatedAt,
-        appState,
+        appState: appStateForImport,
         localStorage: {},
       };
 
