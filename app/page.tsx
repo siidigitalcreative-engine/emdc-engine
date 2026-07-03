@@ -12864,7 +12864,7 @@ const DEFAULT_GLOBAL_SKU_TABLE_COLUMNS = [
 // This intentionally ignores any previously saved column arrangement that may have broken the UI.
 const sanitizeSkuTableColumns = (columns:any[] = []) => DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
 
-const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
+const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, onSkuStorageDirectSave, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
   const { isMobile } = useBreakpoint();
   const [activeBrand,setActiveBrand]     = useState(null);
   const [skuModal,setSkuModal]           = useState(false);
@@ -12995,6 +12995,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       // Protect user-entered SKU Storage before any app/cloud save runs.
       // This separate key survives page/code updates and is used as the local source of truth.
       rememberProtectedSkuItems(next,"sku-storage-commit");
+
+      if(onSkuStorageDirectSave) onSkuStorageDirectSave(next);
 
       if(onStateChange){
         if(immediate) {
@@ -18030,6 +18032,30 @@ export default function App({
     }
   };
 
+  const saveSkuStorageDirect = async (nextSkus:any[]) => {
+    if (!cloudHydrated || cloudApplyingRef.current) return;
+    try {
+      setCloudSyncStatus("Saving SKUs...");
+      const updatedAt = new Date().toISOString();
+      const res = await fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"sku-items",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          skuItems:Array.isArray(nextSkus) ? nextSkus : [],
+        }),
+      });
+
+      if (!res.ok) throw new Error("SKU save failed");
+      cloudLastUpdatedAtRef.current = updatedAt;
+      setCloudSyncStatus("Synced");
+    } catch {
+      setCloudSyncStatus("SKU save failed");
+    }
+  };
+
   useEffect(() => {
     cloudClientIdRef.current = uid();
     setCloudSyncStatus("Loading cloud...");
@@ -18228,7 +18254,7 @@ export default function App({
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={onStateChange} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={onStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
