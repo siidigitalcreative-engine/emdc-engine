@@ -47,38 +47,6 @@ function safeArray(value: any) {
   return Array.isArray(value) ? value : [];
 }
 
-function countChecklistItems(items: any) {
-  if (!isRecord(items)) return 0;
-  return Object.values(items).reduce((sum: number, value: any) => {
-    if (Array.isArray(value)) return sum + value.length;
-    if (isRecord(value)) {
-      return sum + Object.values(value).reduce((inner: number, rows: any) => inner + (Array.isArray(rows) ? rows.length : 0), 0);
-    }
-    return sum;
-  }, 0);
-}
-
-function getAppStateWeight(appState: any) {
-  if (!isRecord(appState)) return 0;
-  const skuCount = safeArray(appState.skuItems).length || Number(appState.skuItemsExternalCount || 0) || 0;
-  const groupCount = safeArray(appState.checklistGroups).length;
-  const itemCount = countChecklistItems(appState.checklistItems);
-  const calendarCount = safeArray(appState.calendarEvents).length + safeArray(appState.seasonalEvents).length;
-  return skuCount + groupCount + itemCount + calendarCount;
-}
-
-function wouldOverwriteChecklistGroupsWithBadState(existingAppState: any, nextAppState: any) {
-  const existingGroupCount = safeArray(existingAppState?.checklistGroups).length;
-  const nextGroupCount = safeArray(nextAppState?.checklistGroups).length;
-  const nextChecklistItemGroups = isRecord(nextAppState?.checklistItems) ? Object.keys(nextAppState.checklistItems).length : 0;
-
-  // This is the exact destructive shape that caused the issue:
-  // checklist items still exist, but the parent checklistGroups array is empty.
-  if (existingGroupCount > 0 && nextGroupCount === 0 && nextChecklistItemGroups > 0) return true;
-
-  return false;
-}
-
 function compactLocalStorage(localStorageValue: any) {
   if (!isRecord(localStorageValue)) return {};
 
@@ -378,32 +346,10 @@ export async function POST(req: NextRequest) {
       localStorage: compactLocalStorage(body?.localStorage),
     };
 
-    const existing: any = (await redis.get(STATE_KEY)) || null;
-    const existingAppState = isRecord(existing?.appState) ? existing.appState : {};
-    const existingWeight = getAppStateWeight(existingAppState);
-    const nextWeight = getAppStateWeight(payload.appState);
-
-    if (existingWeight > 0 && nextWeight <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "Refusing to overwrite existing EMDC data with an empty state." },
-        { status: 409 }
-      );
-    }
-
-    if (wouldOverwriteChecklistGroupsWithBadState(existingAppState, payload.appState)) {
-      return NextResponse.json(
-        { ok: false, error: "Refusing to save checklist items without their checklist groups." },
-        { status: 409 }
-      );
-    }
-
     await redis.set(STATE_KEY, payload);
 
     // Keep one small recoverable pointer only. Do not create history backups on the free Redis quota.
-    // Do not replace last-good with a much smaller/destructive state.
-    if (nextWeight >= existingWeight || existingWeight <= 0) {
-      await redis.set(LAST_GOOD_KEY, payload);
-    }
+    await redis.set(LAST_GOOD_KEY, payload);
 
     return NextResponse.json({ ok: true, data: payload });
   } catch (error: any) {
