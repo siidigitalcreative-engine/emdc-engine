@@ -12452,23 +12452,6 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     } catch {}
   };
 
-  const persistChecklistGroupsNow = (nextGroups:any[], nextItems:any=null) => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = localStorage.getItem("emdc_app_state_v1");
-      const parsed = raw ? parseEmdcJson(raw) : {};
-      const payload:any = {
-        ...(parsed || {}),
-        checklistGroups:mergeChecklistGroupsWithWorkspaceBackups(nextGroups),
-      };
-      if (nextItems && typeof nextItems === "object") payload.checklistItems = mergeChecklistItemsWithLocalBackups(nextItems);
-      rememberLastGoodEmdcAppState(payload);
-      safeSetEmdcAppStateLocal(payload);
-      markEmdcLocalStateUpdated();
-      window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch {}
-  };
-
   const updateGroupItems = (groupId:string, items:any) => {
     setAllGroupItems((p:any)=>{
       const next={...(p||{}),[groupId]:items};
@@ -12649,21 +12632,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     const g={id:uid(),...cfg};
     const initialItems = buildChecklistItemsFromTemplates(g.launchType,templates,null);
 
-    setGroups((p:any)=>{
-      const next=[...p,g];
-      const nextItems={...(allGroupItems||{}),[g.id]:initialItems};
-      writeEmdcChecklistItemsBackup(g.id,initialItems);
-      persistChecklistGroupsNow(next,nextItems);
-      if(onStateChange) onStateChange({checklistGroups:next,checklistItems:nextItems});
-      return next;
-    });
-    setAllGroupItems((p:any)=>{
-      const next={...(p||{}),[g.id]:initialItems};
-      writeEmdcChecklistItemsBackup(g.id,initialItems);
-      persistChecklistGroupsNow([...(groups||[]),g],next);
-      if(onStateChange) onStateChange({checklistItems:next});
-      return next;
-    });
+    setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); return next; });
+    setAllGroupItems((p:any)=>{ const next={...p,[g.id]:initialItems}; writeEmdcChecklistItemsBackup(g.id,initialItems); persistChecklistItemsNow(next); if(onStateChange) onStateChange({checklistItems:next}); return next; });
 
     if(onGroupCreated) onGroupCreated(g);
     setActive(g.id);
