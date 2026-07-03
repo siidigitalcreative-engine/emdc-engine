@@ -9,6 +9,7 @@ const LAST_GOOD_PATH = "emdc-state/last-good.json";
 const SKU_ALL_PATH = "emdc-state/sku-items/all.json";
 const CHECKLIST_ITEMS_PATH = "emdc-state/checklist-items/all.json";
 const CHECKLIST_GROUPS_PATH = "emdc-state/checklist-groups/all.json";
+const LOCAL_SNAPSHOT_PATH = "emdc-state/local-snapshot/all.json";
 const SKU_META_PATH = "emdc-state/sku-items/meta.json";
 const SKU_CHUNK_PREFIX = "emdc-state/sku-items/chunk-";
 
@@ -159,10 +160,24 @@ async function hydrateChecklistItemsData(data: any) {
 }
 
 
+
+async function hydrateLocalSnapshotData(data: any) {
+  if (!isRecord(data)) return data;
+  const savedLocalSnapshot = await readJsonBlob(LOCAL_SNAPSHOT_PATH);
+  if (savedLocalSnapshot && isRecord(savedLocalSnapshot)) {
+    return {
+      ...data,
+      localStorage: savedLocalSnapshot,
+    };
+  }
+  return data;
+}
+
 async function hydrateCloudData(data: any) {
   const withSku = await hydrateSkuData(data);
   const withGroups = await hydrateChecklistGroupsData(withSku);
-  return hydrateChecklistItemsData(withGroups);
+  const withItems = await hydrateChecklistItemsData(withGroups);
+  return hydrateLocalSnapshotData(withItems);
 }
 
 function hasMeaningfulAppState(appState: any) {
@@ -210,7 +225,7 @@ export async function POST(req: NextRequest) {
 
     if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud" || mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
       await Promise.all([
-        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, CHECKLIST_ITEMS_PATH, CHECKLIST_GROUPS_PATH] as any).catch(() => {}),
+        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, CHECKLIST_ITEMS_PATH, CHECKLIST_GROUPS_PATH, LOCAL_SNAPSHOT_PATH] as any).catch(() => {}),
         deleteBlobPrefix(SKU_CHUNK_PREFIX),
       ]);
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
@@ -388,6 +403,32 @@ export async function POST(req: NextRequest) {
       await writeJsonBlob(LAST_GOOD_PATH, payload);
 
       return NextResponse.json({ ok: true, mode: "checklist-items", data: payload });
+    }
+
+    if (mode === "local-snapshot" || body?.mode === "local-snapshot") {
+      const existingRaw:any = await readJsonBlob(STATE_PATH);
+      const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const snapshot = isRecord(body?.localStorage) ? body.localStorage : {};
+      await writeJsonBlob(LOCAL_SNAPSHOT_PATH, snapshot);
+
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        localStorage: snapshot,
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({ ok: true, mode: "local-snapshot", totalKeys: Object.keys(snapshot).length, data: payload });
     }
 
     if (mode === "local-storage-chunk" || body?.mode === "local-storage-chunk") {
