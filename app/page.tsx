@@ -12221,7 +12221,14 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 
   const updateList = next => {
     setDraftTasks(next);
-    setTasksDirty(true);
+    setTasksDirty(false);
+
+    // Auto-save default task order immediately so existing checklist task views
+    // follow the exact arrangement shown here.
+    onChange((prev:any) => ({
+      ...prev,
+      [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: next },
+    }), launchType);
   };
 
   const saveDefaultTasksChanges = () => {
@@ -12448,11 +12455,11 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
         <Divider />
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
           <span style={{ fontSize:11,color:tasksDirty?"#B45309":C.faint,fontWeight:tasksDirty?700:400 }}>
-            {tasksDirty ? "Default task changes are pending. Click Save Changes to update existing checklist groups too." : "Default tasks are saved and synced to current checklist groups."}
+            {"Default tasks autosave and sync to current checklist groups."}
           </span>
           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
             <Btn sm variant="outline" onClick={resetToDefault}>Reset Tasks to Default</Btn>
-            <Btn sm onClick={saveDefaultTasksChanges} disabled={!tasksDirty}>Save Changes</Btn>
+            <Btn sm onClick={saveDefaultTasksChanges}>Sync Now</Btn>
           </div>
         </div>
       </div>
@@ -12547,8 +12554,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
       out[deptKey] = templateList.map((text:string,idx:number)=>{
         const sameText = oldTemplateItems.find((item:any)=>String(item.text||"").trim()===String(text||"").trim());
-        const sameIndex = oldTemplateItems[idx];
-        const source = sameText || sameIndex || {};
+        const source = sameText || {};
 
         return {
           id: source.id || uid(),
