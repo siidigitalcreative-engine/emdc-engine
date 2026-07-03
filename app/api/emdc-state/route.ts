@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { del, head, list, put } from "@vercel/blob";
+import { del, get, list, put } from "@vercel/blob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,13 +26,28 @@ function safeArray(value: any) {
   return Array.isArray(value) ? value : [];
 }
 
+async function streamToText(stream: any) {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let result = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    result += decoder.decode(value, { stream: true });
+  }
+
+  result += decoder.decode();
+  return result;
+}
+
 async function readJsonBlob(pathname: string) {
   try {
-    const info: any = await head(pathname);
-    if (!info?.url) return null;
-    const res = await fetch(info.url, { cache: "no-store" });
-    if (!res.ok) return null;
-    return await res.json();
+    const result: any = await get(pathname, { access: "private" } as any);
+    const text = await streamToText(result?.stream);
+    if (!text) return null;
+    return JSON.parse(text);
   } catch {
     return null;
   }
@@ -40,7 +55,7 @@ async function readJsonBlob(pathname: string) {
 
 async function writeJsonBlob(pathname: string, value: any) {
   return put(pathname, JSON.stringify(value), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json",
@@ -51,9 +66,9 @@ async function deleteBlobPrefix(prefix: string) {
   try {
     let cursor: string | undefined = undefined;
     do {
-      const result: any = await list({ prefix, cursor, limit: 1000 });
-      const urls = safeArray(result?.blobs).map((blob: any) => blob?.url).filter(Boolean);
-      if (urls.length) await del(urls);
+      const result: any = await list({ prefix, cursor, limit: 1000 } as any);
+      const urls = safeArray(result?.blobs).map((blob: any) => blob?.url || blob?.pathname).filter(Boolean);
+      if (urls.length) await del(urls as any);
       cursor = result?.cursor;
     } while (cursor);
   } catch {}
@@ -139,7 +154,7 @@ export async function POST(req: NextRequest) {
 
     if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud" || mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
       await Promise.all([
-        del([STATE_PATH, LAST_GOOD_PATH, SKU_META_PATH]).catch(() => {}),
+        del([STATE_PATH, LAST_GOOD_PATH, SKU_META_PATH] as any).catch(() => {}),
         deleteBlobPrefix(SKU_CHUNK_PREFIX),
       ]);
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
