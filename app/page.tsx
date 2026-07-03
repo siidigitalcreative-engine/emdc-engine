@@ -7486,18 +7486,42 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           onClick={(e:any)=>{
                             e.preventDefault();
                             e.stopPropagation();
+
+                            const nextCards = marketingTransferCards
+                              .filter((_:any,idx:number)=>idx!==transferIndex)
+                              .map((card:any)=>({
+                                ...card,
+                                isProductListCard:true,
+                                transferGroupId:card.transferGroupId || card.id || uid(),
+                              }));
+
+                            const removedKeys = new Set(transferProductKeys || []);
+                            const nextSelectedKeys = selectedMarketingProductKeys.filter((key:string)=>!removedKeys.has(key));
+                            const nextPlacedKeys = placedMarketingProductKeys.filter((key:string)=>!removedKeys.has(key));
+
                             if (isProductIntroductionChecklist) {
-                              deleteProductIntroMarketingTransferAtIndex(transferIndex);
-                            } else {
-                              const nextRows = getCampaignMarketingRowsWithBackup().filter((_:any,idx:number)=>idx!==transferIndex);
-                              writeEcommerceTransferRowsBackup("marketing","campaign",nextRows);
+                              const cleanRows = normalizeTransferRowsForStorage(nextCards);
+                              writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
                               updateAiWorkspace("marketing",{
-                                campaignMarketingRows:nextRows,
-                                selectedMarketingProductKeys:[],
-                                placedMarketingProductKeys:[],
+                                productIntroMarketingRows:cleanRows,
+                                productIntroMarketingRowsCleared:cleanRows.length===0,
+                                selectedMarketingProductKeys:nextSelectedKeys,
+                                placedMarketingProductKeys:nextPlacedKeys,
+                                generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+                                generatedAt:new Date().toISOString(),
+                              });
+                            } else {
+                              const cleanRows = normalizeTransferRowsForStorage(nextCards);
+                              writeEcommerceTransferRowsBackup("marketing","campaign",cleanRows);
+                              updateAiWorkspace("marketing",{
+                                campaignMarketingRows:cleanRows,
+                                selectedMarketingProductKeys:nextSelectedKeys,
+                                placedMarketingProductKeys:nextPlacedKeys,
                                 generatedAt:new Date().toISOString(),
                               });
                             }
+
+                            try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
                           }}
                           style={{ border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}
                         >
