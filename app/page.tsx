@@ -593,8 +593,8 @@ const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) 
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
 const PERF_IDLE_SAVE_DELAY = 450;
-const PERF_CLOUD_SAVE_DELAY = 350;
-const PERF_CLOUD_POLL_INTERVAL = 3000;
+const PERF_CLOUD_SAVE_DELAY = 150;
+const PERF_CLOUD_POLL_INTERVAL = 60000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
   if (typeof window === "undefined") return setTimeout(cb, 0);
@@ -18056,40 +18056,6 @@ export default function App({
     }
   };
 
-  const saveAppPatchDirect = async (patch:any) => {
-    if (!cloudHydrated || cloudApplyingRef.current || !patch || typeof patch !== "object") return;
-    try {
-      setCloudSyncStatus("Saving...");
-      const updatedAt = new Date().toISOString();
-      const res = await fetch("/api/emdc-state", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({
-          mode:"app-patch",
-          clientId:cloudClientIdRef.current,
-          updatedAt,
-          patch,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Save failed");
-      cloudLastUpdatedAtRef.current = updatedAt;
-      setCloudSyncStatus("Synced");
-    } catch {
-      setCloudSyncStatus("Save failed");
-    }
-  };
-
-  const handleAppStateChange = (patch:any) => {
-    if (!patch || typeof patch !== "object") return;
-    if (onStateChange) onStateChange(patch);
-
-    // Save every page/action patch immediately to Blob.
-    // SKU and checklist direct paths remain, but this covers calendar, events,
-    // templates, statuses, table columns, brands, group edits, add/delete, etc.
-    saveAppPatchDirect(patch);
-  };
-
   useEffect(() => {
     cloudClientIdRef.current = uid();
     setCloudSyncStatus("Loading cloud...");
@@ -18139,9 +18105,9 @@ export default function App({
     seasonalEvents,
   ]);
 
-  useEffect(() => { handleAppStateChange({ skuBrands: brands }); }, [brands]);
-  useEffect(() => { handleAppStateChange({ skuItems: skuStorage }); }, [skuStorage]);
-  useEffect(() => { handleAppStateChange({ skuTableColumns: sanitizeSkuTableColumns(skuTableColumns) }); }, [skuTableColumns]);
+  useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
+  useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
+  useEffect(() => { if (onStateChange) onStateChange({ skuTableColumns: sanitizeSkuTableColumns(skuTableColumns) }); }, [skuTableColumns]);
   useEffect(() => {
     setCalendarEventTypes((prev:any[])=>{
       const next = ensureRequiredCalendarTypes(prev);
@@ -18150,7 +18116,7 @@ export default function App({
     });
   },[]);
 
-  useEffect(() => { handleAppStateChange({ seasonalEvents }); }, [seasonalEvents]);
+  useEffect(() => { if (onStateChange) onStateChange({ seasonalEvents }); }, [seasonalEvents]);
 
   const applyRoute = (next:any={}) => {
     const nextTab = safeRouteTab(next.tab ?? tab);
@@ -18285,10 +18251,10 @@ export default function App({
               </label>
             </div>
           </div>
-          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleAppStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={handleAppStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleAppStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleAppStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
+          {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
+          {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={onStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
