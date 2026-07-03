@@ -12497,7 +12497,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onRouteChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onChecklistItemsDirectSave, onRouteChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
@@ -12536,6 +12536,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       writeEmdcChecklistItemsBackup(groupId,items);
       persistChecklistItemsNow(next);
       if(onStateChange) onStateChange({checklistItems:next});
+      if(onChecklistItemsDirectSave) onChecklistItemsDirectSave(next);
       try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
       return next;
     });
@@ -18005,6 +18006,30 @@ export default function App({
     }
   };
 
+  const saveChecklistItemsDirect = async (nextItems:any) => {
+    if (!cloudHydrated || cloudApplyingRef.current) return;
+    try {
+      setCloudSyncStatus("Saving checklist...");
+      const updatedAt = new Date().toISOString();
+      const res = await fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"checklist-items",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          checklistItems:nextItems,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Checklist save failed");
+      cloudLastUpdatedAtRef.current = updatedAt;
+      setCloudSyncStatus("Synced");
+    } catch {
+      setCloudSyncStatus("Checklist save failed");
+    }
+  };
+
   useEffect(() => {
     cloudClientIdRef.current = uid();
     setCloudSyncStatus("Loading cloud...");
@@ -18202,7 +18227,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={onStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={onStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={onStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={onStateChange} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
