@@ -12536,7 +12536,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       writeEmdcChecklistItemsBackup(groupId,items);
       persistChecklistItemsNow(next);
       if(onStateChange) onStateChange({checklistItems:next});
-      if(onChecklistItemsDirectSave) onChecklistItemsDirectSave(next);
+      if(onChecklistItemsDirectSave) onChecklistItemsDirectSave(JSON.parse(JSON.stringify(next)));
       try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
       return next;
     });
