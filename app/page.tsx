@@ -16639,15 +16639,17 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                                     const rowEditing = isEditingBatchOutput(item.id) || editingCarouselCardKeys.includes(gmvRowEditKey(item.id,index));
                                     const rowProducts = Array.isArray(row.products) && row.products.length ? row.products : (Array.isArray(item.products) ? item.products : []);
                                     const inputStyle:any = { width:"100%",boxSizing:"border-box",border:`1.5px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11.5,lineHeight:1.4,padding:"7px 8px",outline:"none" };
+                                    const previousRow = index > 0 ? item.gmvRows[index - 1] : null;
+                                    const showPillarTitle = !previousRow || String(previousRow?.pillar || "") !== String(row?.pillar || "");
                                     return (
-                                      <tr key={row.id || row.pillar || index} style={{ borderBottom:`1px solid ${C.border}` }}>
-                                        <td style={{ padding:10,verticalAlign:"top",width:150 }}>
-                                          {rowEditing ? (
+                                      <tr key={row.id || row.pillar || index} style={{ borderBottom:`1px solid ${C.border}`,background:showPillarTitle ? C.surface : C.bg }}>
+                                        <td style={{ padding:10,verticalAlign:"top",width:150,borderTop:showPillarTitle ? `2px solid ${C.borderStrong}` : "none" }}>
+                                          {showPillarTitle ? (rowEditing ? (
                                             <Select value={row.pillar || "Storytelling"} onChange={(v:string)=>updateGeneratedBatchGmvRow(item.id,index,{ pillar:v })} style={{ height:34,fontSize:12,borderRadius:8 }}>
                                               {PRODUCT_GMV_MAX_PILLARS.map((pillar:any)=><option key={pillar.id} value={pillar.name}>{pillar.name}</option>)}
                                             </Select>
-                                          ) : <strong style={{ color:C.text }}>{row.pillar || ""}</strong>}
-                                          <p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint }}>{row.contentTheme || ""}</p>
+                                          ) : <strong style={{ color:C.text }}>{row.pillar || ""}</strong>) : <span style={{ display:"block",height:1 }} />}
+                                          {showPillarTitle&&<p style={{ margin:"6px 0 0",fontSize:10.5,color:C.faint }}>{row.contentTheme || ""}</p>}
                                         </td>
                                         <td style={{ padding:10,verticalAlign:"top",width:230 }}>
                                           {rowProducts.length ? rowProducts.map((product:any,idx:number)=>(
