@@ -17878,6 +17878,13 @@ export default function App({
 
   const [appStateHydrated,setAppStateHydrated] = useState(false);
   const [cloudHydrated,setCloudHydrated] = useState(false);
+  useEffect(()=>{
+    const emdcCloudHydrationSafetyTimer = setTimeout(()=>{
+      setCloudHydrated(true);
+      setCloudSyncStatus(prev=>prev==="Loading cloud..." ? "Cloud load timed out" : prev);
+    }, 12000);
+    return ()=>clearTimeout(emdcCloudHydrationSafetyTimer);
+  },[]);
   const [cloudSyncStatus,setCloudSyncStatus] = useState("Loading cloud...");
   const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
@@ -18641,23 +18648,21 @@ export default function App({
   const pageMaxWidth = !isMobile && tab==="calendar" ? 1760 : 1280;
   const pagePadding = isMobile ? "16px 16px 90px" : tab==="calendar" ? "28px 32px" : "28px 28px";
 
-  if (!cloudHydrated) {
-    return (
-      <div style={{ minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",padding:24 }}>
-        <div style={{ width:"min(420px,100%)",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:16,padding:20,textAlign:"center",boxShadow:"0 12px 40px rgba(15,23,42,.08)" }}>
-          <div style={{ width:44,height:44,borderRadius:12,background:C.accent,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,marginBottom:12 }}>EMDC</div>
-          <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:900,color:C.text }}>Loading current synced data…</h2>
-          <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.45 }}>Please wait. Old local/default data is hidden until the latest cloud data is ready.</p>
-        </div>
-      </div>
-    );
-  }
-
 
   return (
     <>
       <GlobalStyles />
       <div style={{ minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.text,width:"100%",maxWidth:"100%",overflowX:"hidden" }}>
+      {!cloudHydrated&&(
+        <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(249,250,251,.96)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,pointerEvents:"auto" }}>
+          <div style={{ width:"min(420px,100%)",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:16,padding:20,textAlign:"center",boxShadow:"0 12px 40px rgba(15,23,42,.08)" }}>
+            <div style={{ width:44,height:44,borderRadius:12,background:C.accent,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,marginBottom:12 }}>EMDC</div>
+            <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:900,color:C.text }}>Loading current synced data…</h2>
+            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.45 }}>Please wait. Latest cloud data is loading.</p>
+          </div>
+        </div>
+      )}
+
         {/* ── Top nav ─────────────────────────────────────────────────────── */}
         <div style={{ background:C.surface,borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:100 }}>
           <div style={{ maxWidth:1280,margin:"0 auto",padding:isMobile?"0 12px":"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52,width:"100%",minWidth:0 }}>
