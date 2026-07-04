@@ -17879,13 +17879,6 @@ export default function App({
   const [appStateHydrated,setAppStateHydrated] = useState(false);
   const [cloudHydrated,setCloudHydrated] = useState(false);
   const [cloudSyncStatus,setCloudSyncStatus] = useState("Loading cloud...");
-  useEffect(()=>{
-    const emdcCloudHydrationSafetyTimer = setTimeout(()=>{
-      setCloudHydrated(true);
-      setCloudSyncStatus(prev=>prev==="Loading cloud..." ? "Cloud load timed out" : prev);
-    }, 12000);
-    return ()=>clearTimeout(emdcCloudHydrationSafetyTimer);
-  },[]);
   const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
   const cloudApplyingRef = useRef(false);
@@ -18647,7 +18640,6 @@ export default function App({
   const allCalExtra = useMemo(()=>[...seasonalCalEvents,...checklistCalEvents],[seasonalCalEvents,checklistCalEvents]);
   const pageMaxWidth = !isMobile && tab==="calendar" ? 1760 : 1280;
   const pagePadding = isMobile ? "16px 16px 90px" : tab==="calendar" ? "28px 32px" : "28px 28px";
-
 
   return (
     <>
