@@ -2031,25 +2031,40 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
 
   const saveEdit  = () => {
     if (!editLabel.trim()) return;
-    onChange(eventTypes.map((t:any) => t.id===editId ? {...t, label:editLabel.trim(), color:editColor, useColor:editUseColor} : t));
+    onChange(eventTypes.map((t:any,idx:number) => t.id===editId ? {...t, label:editLabel.trim(), color:editColor, useColor:editUseColor, order:Number.isFinite(Number(t.order))?Number(t.order):idx} : {...t, order:Number.isFinite(Number(t.order))?Number(t.order):idx}));
     setEditId(null);
   };
 
   const addType = () => {
     if (!newLabel.trim()) return;
-    onChange([...eventTypes, { id:uid(), label:newLabel.trim(), color:newColor, useColor:newUseColor }]);
+    onChange([...eventTypes.map((t:any,idx:number)=>({...t,order:Number.isFinite(Number(t.order))?Number(t.order):idx})), { id:uid(), label:newLabel.trim(), color:newColor, useColor:newUseColor, order:eventTypes.length }]);
     setNewLabel("");
     setNewColor("#3B82F6");
     setNewUseColor(false);
   };
 
-  const removeType = (id:any) => onChange(eventTypes.filter((t:any) => t.id!==id));
+  const orderedEventTypes = [...(eventTypes || [])]
+    .map((t:any,idx:number)=>({...t,order:Number.isFinite(Number(t.order))?Number(t.order):idx}))
+    .sort((a:any,b:any)=>(Number(a.order)||0)-(Number(b.order)||0));
+
+  const removeType = (id:any) => onChange(orderedEventTypes.filter((t:any) => t.id!==id).map((t:any,idx:number)=>({...t,order:idx})));
+
+  const moveType = (id:any, direction:number) => {
+    const index = orderedEventTypes.findIndex((t:any)=>t.id===id);
+    const nextIndex = index + direction;
+    if(index < 0 || nextIndex < 0 || nextIndex >= orderedEventTypes.length) return;
+    const next = [...orderedEventTypes];
+    const [item] = next.splice(index,1);
+    next.splice(nextIndex,0,item);
+    onChange(next.map((t:any,idx:number)=>({...t,order:idx})));
+  };
 
   return (
     <Modal open={open} onClose={()=>{onClose();setEditId(null);}} title="Manage Calendar Tags" width={460}>
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
         <p style={{ margin:"0 0 4px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Current Types</p>
-        {eventTypes.map((t:any) => (
+        <p style={{ margin:"-4px 0 4px",fontSize:11,color:C.muted }}>Use Up / Down to rearrange how events appear inside the month calendar.</p>
+        {orderedEventTypes.map((t:any,idx:number) => (
           <div key={t.id}>
             {editId===t.id ? (
               <div style={{ padding:14,background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}` }}>
@@ -2076,6 +2091,8 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
                 <span style={{ flex:1,fontSize:13,fontWeight:600,color:C.text }}>{t.label}</span>
                 {t.useColor&&<span style={{ padding:"2px 8px",borderRadius:4,background:t.color+"18",color:t.color,border:`1px solid ${t.color}28`,fontSize:11,fontWeight:700 }}>{t.label}</span>}
                 {!t.useColor&&<span style={{ padding:"2px 8px",borderRadius:4,background:C.surface,border:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>No tag color</span>}
+                <button onClick={()=>moveType(t.id,-1)} disabled={idx===0} style={{ background:C.surface,border:`1px solid ${C.border}`,cursor:idx===0?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5,opacity:idx===0?.45:1 }}>Up</button>
+                <button onClick={()=>moveType(t.id,1)} disabled={idx===orderedEventTypes.length-1} style={{ background:C.surface,border:`1px solid ${C.border}`,cursor:idx===orderedEventTypes.length-1?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5,opacity:idx===orderedEventTypes.length-1?.45:1 }}>Down</button>
                 <button onClick={()=>startEdit(t)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"4px 8px",borderRadius:5 }}>Edit</button>
                 <button onClick={()=>removeType(t.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>
               </div>
@@ -2112,11 +2129,12 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
   const saveEventTypes = (types: any[]) => {
-    const nextTypes = ensureRequiredCalendarTypes(types || []).map((t:any)=>({
+    const nextTypes = ensureRequiredCalendarTypes(types || []).map((t:any,orderIndex:number)=>({
       ...t,
       color:t.color || "#9CA3AF",
       useColor:!!t.useColor,
-    }));
+      order:Number.isFinite(Number(t.order)) ? Number(t.order) : orderIndex,
+    })).sort((a:any,b:any)=>(Number(a.order)||0)-(Number(b.order)||0));
 
     const tagColorMap:any = {};
     nextTypes.forEach((t:any)=>{
@@ -2161,12 +2179,13 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const calendarFilterTypes = useMemo(()=>{
     // Manage Tags is the source of truth.
     // If a tag is deleted there, it must disappear from the top calendar filters.
-    return ensureRequiredCalendarTypes(eventTypes?.length ? eventTypes : DEFAULT_EVENT_TYPES).map((t:any)=>({
+    return ensureRequiredCalendarTypes(eventTypes?.length ? eventTypes : DEFAULT_EVENT_TYPES).map((t:any,orderIndex:number)=>({
       ...t,
       label:t.label || normalizeTagLabel(t.id),
       color:t.color || "#9CA3AF",
       useColor:!!t.useColor,
-    }));
+      order:Number.isFinite(Number(t.order)) ? Number(t.order) : orderIndex,
+    })).sort((a:any,b:any)=>(Number(a.order)||0)-(Number(b.order)||0));
   },[eventTypes]);
 
   // Helper: Manage Tags controls display color only when "Use tag color" is checked.
@@ -2177,6 +2196,31 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return found?.useColor ? found.color : (fallback || found?.color || "#9CA3AF");
   };
   const typeLabel = (id:any) => typeMeta(id)?.label || normalizeTagLabel(id);
+
+  const typeOrder = (id:any) => {
+    const found = typeMeta(id);
+    return Number.isFinite(Number(found?.order)) ? Number(found.order) : 999;
+  };
+
+  const sortCalendarEventsForDisplay = (items:any[] = []) => {
+    return [...(items || [])].sort((a:any,b:any)=>
+      (typeOrder(a?.type) - typeOrder(b?.type)) ||
+      String(a?.title || a?.name || "").localeCompare(String(b?.title || b?.name || ""))
+    );
+  };
+
+  const calendarPlannerMeta = (ev:any) => {
+    const parts:string[] = [];
+    const productCount = Array.isArray(ev?.products) ? ev.products.length : Number(ev?.skuCount || ev?.productCount || 0);
+    const taskCount = Number(ev?.taskCount || ev?.tasksCount || 0);
+    const dueCount = Number(ev?.dueCount || ev?.deadlineCount || 0);
+    const progress = Number(ev?.progress || ev?.completion || ev?.percent || 0);
+    if (Number.isFinite(productCount) && productCount > 0) parts.push(`${productCount} Products`);
+    if (Number.isFinite(taskCount) && taskCount > 0) parts.push(`${taskCount} Tasks`);
+    if (Number.isFinite(dueCount) && dueCount > 0) parts.push(`${dueCount} Due`);
+    if (Number.isFinite(progress) && progress > 0) parts.push(`${Math.round(progress)}%`);
+    return parts.slice(0,2).join(" · ");
+  };
 
   const monthOnlyCalendarEvents = useMemo(()=>{
     const monthStart = `${year}-${pad(month+1)}-01`;
@@ -2804,14 +2848,14 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   );
 
   // Cell layout constants — mobile stays compact; desktop uses more available space
-  const BAND_H  = isMobile ? 14 : 18;   // unified height for ALL event rows (bands + chips same)
+  const BAND_H  = isMobile ? 10 : 12;   // thin planner bars
   const CHIP_H  = BAND_H;               // same as BAND_H — all events identical height
   const GAP     = 1;                    // px gap between rows
   const DATE_H  = isMobile ? 22 : 28;   // date number row
-  const DAY_MIN_H = isMobile ? DATE_H + 24 : "clamp(78px, 10.5vh, 104px)";
+  const DAY_MIN_H = isMobile ? DATE_H + 42 : "clamp(92px, 12vh, 140px)";
   const DAY_NUM_SIZE = isMobile ? 18 : 22;
   const DAY_FONT = isMobile ? 9 : 11;
-  const EVENT_FONT = isMobile ? 8 : 10;
+  const EVENT_FONT = isMobile ? 7.5 : 9;
   const dayLabels = isMobile ? DAYS_SHORT : DAYS_FULL;
   const calendarEventTitle = (ev:any) => String(ev?.title || ev?.name || ev?.groupName || ev?.label || ev?.type || "Event").trim();
 
@@ -2879,7 +2923,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           {Array.from({length:days}).map((_,i)=>{
             const d=i+1;
             const isToday=year===today.getFullYear()&&month===today.getMonth()&&d===today.getDate();
-            const col=(firstDay+i)%7, dateStr=dateKey(year,month,d), dayEv=eventsFor(d);
+            const col=(firstDay+i)%7, dateStr=dateKey(year,month,d), dayEv=sortCalendarEventsForDisplay(eventsFor(d));
 
             const rangeEvs = dayEv.filter(ev=>ev.dateEnd);
             const pointEvs = dayEv.filter(ev=>!ev.dateEnd);
@@ -2890,9 +2934,10 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                   minHeight:DAY_MIN_H, minWidth:0, padding:0,
                   borderRight:col<6?`1px solid ${C.border}`:"none",
                   borderBottom:`1px solid ${C.border}`,
-                  background:isToday?"#F5FFF7":C.surface,
+                  background:isToday?"#ECFDF5":([0,6].includes(col)?"#F9FAFB":C.surface),
                   cursor:"pointer",
                   display:"flex", flexDirection:"column",
+                  boxShadow:isToday?`inset 0 0 0 2px ${C.accent}`:"none",
                 }}
                 onClick={()=>setDayView({ date:dateStr, label:d })}>
 
@@ -2925,7 +2970,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
                       {rs.isRealStart&&(
-                        <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle ? calendarEventTitle(ev) : ev.title}</span>
+                        <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle ? calendarEventTitle(ev) : ev.title}{calendarPlannerMeta(ev) ? ` · ${calendarPlannerMeta(ev)}` : ""}</span>
                       )}
                     </div>
                   );
@@ -2948,12 +2993,12 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         borderRadius: "0",
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
-                      <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle ? calendarEventTitle(ev) : ev.title}</span>
+                      <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle ? calendarEventTitle(ev) : ev.title}{calendarPlannerMeta(ev) ? ` · ${calendarPlannerMeta(ev)}` : ""}</span>
                     </div>
                   );
                 })}
 
-                <div style={{ height:6,flexShrink:0 }} />
+                <div style={{ height:3,flexShrink:0 }} />
               </div>
             );
           })}
