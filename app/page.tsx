@@ -83,7 +83,24 @@ const GlobalStyles = () => {
         box-shadow:0 -8px 24px rgba(15,23,42,.08)!important;
       }
       @media(max-width:759px){
-        .emdc-main-content{padding-bottom:calc(150px + env(safe-area-inset-bottom))!important;}
+        .emdc-main-content{padding-bottom:calc(170px + env(safe-area-inset-bottom))!important;}
+      }
+
+      .emdc-scroll-fix{
+        -webkit-overflow-scrolling:touch;
+        overscroll-behavior:contain;
+        touch-action:pan-y;
+      }
+      @media(max-width:759px){
+        .emdc-modal-body{
+          max-height:calc(100dvh - 140px)!important;
+          overflow-y:auto!important;
+          -webkit-overflow-scrolling:touch!important;
+          padding-bottom:calc(120px + env(safe-area-inset-bottom))!important;
+        }
+        .emdc-main-content{
+          padding-bottom:calc(170px + env(safe-area-inset-bottom))!important;
+        }
       }
 `;
     document.head.appendChild(s);
@@ -2872,6 +2889,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       date:selectedMonths.length ? formatMonthOnlyLabel(selectedMonths) : (seasonalEditForm.date || ""),
       calDate:selectedMonths.length ? null : (seasonalEditForm.calDate || null),
       calDateEnd:selectedMonths.length ? null : (seasonalEditForm.calDateEnd || null),
+      color:seasonalEditForm.color || typeMeta(seasonalEditForm.type)?.color || "#9CA3AF",
     };
 
     setSeasonalEvents((prev:any[])=>{
@@ -2891,6 +2909,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     setSeasonalEvents((prev:any[])=>{
       const next = prev.filter((ev:any)=>ev.id!==seasonalEditForm.id);
       if(onStateChange) onStateChange({seasonalEvents:next});
+      try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
       return next;
     });
     setSeasonalEditForm(null);
@@ -2944,7 +2963,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   );
 
   const renderSeasonalEditForm = () => seasonalEditForm && (
-    <div style={{ display:"flex",flexDirection:"column",gap:14,width:"100%",maxWidth:"100%",overflow:"hidden" }}>
+    <div className="emdc-scroll-fix" style={{ display:"flex",flexDirection:"column",gap:14,width:"100%",maxWidth:"100%",overflow:"visible",paddingBottom:isMobile?"calc(90px + env(safe-area-inset-bottom))":0 }}>
       <Field label="Event / Season Name">
         <TI value={seasonalEditForm.name||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,name:v}))} placeholder="e.g. Back to School" />
       </Field>
@@ -2972,13 +2991,13 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       <Field label="Tag / Filter Type">
         <Select value={seasonalEditForm.type||"campaign"} onChange={v=>{
           const selectedType = calendarFilterTypes.find((t:any)=>t.id===v);
-          setSeasonalEditForm((f:any)=>({...f,type:v,color:selectedType?.useColor ? selectedType.color : f.color}));
+          setSeasonalEditForm((f:any)=>({...f,type:v,color:f.color || selectedType?.color || "#9CA3AF"}));
         }}>
           {calendarFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
       </Field>
       <Field label="Color">
-        <ColorPicker value={typeColor(seasonalEditForm.type, seasonalEditForm.color || "#374151")} onChange={v=>setSeasonalEditForm((f:any)=>({...f,color:v}))} palette={EVENT_COLORS} />
+        <ColorPicker value={seasonalEditForm.color || typeMeta(seasonalEditForm.type)?.color || "#374151"} onChange={v=>setSeasonalEditForm((f:any)=>({...f,color:v}))} palette={EVENT_COLORS} />
       </Field>
       <Field label="Description" hint="optional">
         <TI value={seasonalEditForm.desc||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,desc:v}))} placeholder="Short description" />
