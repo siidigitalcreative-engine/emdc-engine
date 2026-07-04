@@ -2969,8 +2969,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         borderRadius:rs.isStart&&rs.isEnd?"3px":rs.isStart?"3px 0 0 3px":rs.isEnd?"0 3px 3px 0":"0",
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
-                      {rs.isRealStart&&(
-                        <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle ? calendarEventTitle(ev) : ev.title}{calendarPlannerMeta(ev) ? ` · ${calendarPlannerMeta(ev)}` : ""}</span>
+                      {rs.isStart&&(
+                        <span style={{ fontSize:EVENT_FONT,fontWeight:800,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle ? calendarEventTitle(ev) : ev.title}{calendarPlannerMeta(ev) ? ` · ${calendarPlannerMeta(ev)}` : ""}</span>
                       )}
                     </div>
                   );
