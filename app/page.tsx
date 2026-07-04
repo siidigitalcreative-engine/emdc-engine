@@ -2256,9 +2256,10 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return [
       ...(Array.isArray(manualEvents) ? manualEvents.map(colorizeByTag) : []),
       ...(Array.isArray(extraEvents) ? extraEvents.map(colorizeByTag) : []),
-      ...(Array.isArray(monthOnlyCalendarEvents) ? monthOnlyCalendarEvents.map(colorizeByTag) : []),
+      // Month-only events are shown only in the top Month-only Events panel.
+      // They should not render as long strips inside the month grid.
     ];
-  },[manualEvents,extraEvents,monthOnlyCalendarEvents,calendarFilterTypes]);
+  },[manualEvents,extraEvents,calendarFilterTypes]);
 
   // Date helpers must be defined before yearly list memo uses them during prerender.
   const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
@@ -16928,7 +16929,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   <div key={template.id} style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:12,background:C.bg,display:"flex",flexDirection:"column",gap:10 }}>
                     <Field label="Template Name">
                       <input value={template.name} onChange={e=>updateTemplate(template.id, { name:e.target.value })} placeholder="Template name"
-                        style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }} />
+                        style={{ width:"100%",height:40,padding:"0 12px",fontSize:14,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box" }} />
                     </Field>
                     <Field label="Instructions">
                       <textarea value={template.body} onChange={e=>updateTemplate(template.id, { body:e.target.value })} placeholder="Write strict instructions for this ad format. The generator will follow these instructions." rows={7}
