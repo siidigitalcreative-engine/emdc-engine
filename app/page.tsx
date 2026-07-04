@@ -2231,13 +2231,69 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return parts.slice(0,2).join(" · ");
   };
 
+  const monthOnlyCalendarEvents = useMemo(()=>{
+    const monthStart = `${year}-${pad(month+1)}-01`;
+    const monthEnd = `${year}-${pad(month+1)}-${pad(getDaysInMonth(year,month))}`;
+
+    return (seasonalEvents||[])
+      .filter((ev:any)=>{
+        const selectedMonths = monthOnlyValues(ev.months);
+        const hasSpecificDate = !!ev.calDate || !!ev.calDateEnd;
+        return selectedMonths.includes(month) && !hasSpecificDate;
+      })
+      .map((ev:any)=>({
+        id:`month-only-${ev.id}-${year}-${month}`,
+        title:ev.name,
+        type:ev.type || "seasonal",
+        color:typeColor(ev.type || "seasonal", ev.color || "#14B8A6"),
+        date:monthStart,
+        dateEnd:monthEnd,
+        fromSeasonal:true,
+        seasonalType:ev.type || "seasonal",
+        sourceEventId:ev.id,
+        monthOnly:true,
+        phaseoutCount:(ev.products||[]).filter(isPhaseoutProduct).length,
+      }));
+  },[seasonalEvents,year,month,calendarFilterTypes]);
+
+  const allEvents = useMemo(()=>{
+    const colorizeByTag = (ev:any) => ({
+      ...ev,
+      color:typeColor(ev?.type || "task", ev?.color || "#9CA3AF"),
+    });
+
+    return [
+      ...(Array.isArray(manualEvents) ? manualEvents.map(colorizeByTag) : []),
+      ...(Array.isArray(extraEvents) ? extraEvents.map(colorizeByTag) : []),
+      // Month-only events are shown only in the top Month-only Events panel.
+      // They should not render as long strips inside the month grid.
+    ];
+  },[manualEvents,extraEvents,calendarFilterTypes]);
+
   const monthlyPlannerSummary = useMemo(()=>{
     const monthlyEvents:any[] = [];
-    for (let day=1; day<=days; day++) {
-      sortCalendarEventsForDisplay(eventsFor(day)).forEach((ev:any)=>{
-        if (!monthlyEvents.some((item:any)=>String(item.id)===String(ev.id))) monthlyEvents.push(ev);
-      });
-    }
+
+    (allEvents || []).forEach((ev:any)=>{
+      if (!ev) return;
+      const rawStart = String(ev.date || "");
+      const rawEnd = String(ev.dateEnd || "");
+      const startIsYearly = rawStart.startsWith("yearly:");
+      const endIsYearly = rawEnd.startsWith("yearly:");
+      let include = false;
+
+      if (startIsYearly) {
+        const [mm] = rawStart.replace("yearly:","").split("-").map((n:any)=>Number(n));
+        include = mm === month + 1;
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+        const s = new Date(rawStart + "T00:00:00");
+        const e = /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) ? new Date(rawEnd + "T00:00:00") : s;
+        const monthStart = new Date(year,month,1);
+        const monthEnd = new Date(year,month,getDaysInMonth(year,month));
+        include = s <= monthEnd && e >= monthStart;
+      }
+
+      if (include && !monthlyEvents.some((item:any)=>String(item.id)===String(ev.id))) monthlyEvents.push(ev);
+    });
 
     const monthOnly = monthOnlyCalendarEvents.filter((ev:any)=>filter==="all" || ev.type===filter);
     const allMonthItems = [...monthlyEvents, ...monthOnly];
@@ -2281,44 +2337,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return summary;
   },[year,month,filter,allEvents,monthOnlyCalendarEvents,calendarFilterTypes]);
 
-  const monthOnlyCalendarEvents = useMemo(()=>{
-    const monthStart = `${year}-${pad(month+1)}-01`;
-    const monthEnd = `${year}-${pad(month+1)}-${pad(getDaysInMonth(year,month))}`;
-
-    return (seasonalEvents||[])
-      .filter((ev:any)=>{
-        const selectedMonths = monthOnlyValues(ev.months);
-        const hasSpecificDate = !!ev.calDate || !!ev.calDateEnd;
-        return selectedMonths.includes(month) && !hasSpecificDate;
-      })
-      .map((ev:any)=>({
-        id:`month-only-${ev.id}-${year}-${month}`,
-        title:ev.name,
-        type:ev.type || "seasonal",
-        color:typeColor(ev.type || "seasonal", ev.color || "#14B8A6"),
-        date:monthStart,
-        dateEnd:monthEnd,
-        fromSeasonal:true,
-        seasonalType:ev.type || "seasonal",
-        sourceEventId:ev.id,
-        monthOnly:true,
-        phaseoutCount:(ev.products||[]).filter(isPhaseoutProduct).length,
-      }));
-  },[seasonalEvents,year,month,calendarFilterTypes]);
-
-  const allEvents = useMemo(()=>{
-    const colorizeByTag = (ev:any) => ({
-      ...ev,
-      color:typeColor(ev?.type || "task", ev?.color || "#9CA3AF"),
-    });
-
-    return [
-      ...(Array.isArray(manualEvents) ? manualEvents.map(colorizeByTag) : []),
-      ...(Array.isArray(extraEvents) ? extraEvents.map(colorizeByTag) : []),
-      // Month-only events are shown only in the top Month-only Events panel.
-      // They should not render as long strips inside the month grid.
-    ];
-  },[manualEvents,extraEvents,calendarFilterTypes]);
 
   // Date helpers must be defined before yearly list memo uses them during prerender.
   const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
