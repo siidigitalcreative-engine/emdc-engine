@@ -2209,18 +2209,77 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     );
   };
 
+  const getCalendarProjectMetrics = (ev:any) => {
+    const products = Array.isArray(ev?.products) ? ev.products : [];
+    const productCount = products.length || Number(ev?.skuCount || ev?.productCount || 0) || 0;
+    const phaseoutCount = Number(ev?.phaseoutCount || products.filter?.(isPhaseoutProduct)?.length || 0) || 0;
+    const taskCount = Number(ev?.taskCount || ev?.tasksCount || ev?.totalTasks || 0) || 0;
+    const completedTasks = Number(ev?.completedTasks || ev?.doneTasks || 0) || 0;
+    const dueCount = Number(ev?.dueCount || ev?.deadlineCount || 0) || (String(ev?.type || "").toLowerCase().includes("deadline") ? 1 : 0);
+    const rawProgress = Number(ev?.progress || ev?.completion || ev?.percent || 0);
+    const progress = rawProgress > 0 ? Math.round(rawProgress) : (taskCount > 0 ? Math.round((completedTasks / taskCount) * 100) : 0);
+    return { productCount, phaseoutCount, taskCount, completedTasks, dueCount, progress };
+  };
+
   const calendarPlannerMeta = (ev:any) => {
+    const metrics = getCalendarProjectMetrics(ev);
     const parts:string[] = [];
-    const productCount = Array.isArray(ev?.products) ? ev.products.length : Number(ev?.skuCount || ev?.productCount || 0);
-    const taskCount = Number(ev?.taskCount || ev?.tasksCount || 0);
-    const dueCount = Number(ev?.dueCount || ev?.deadlineCount || 0);
-    const progress = Number(ev?.progress || ev?.completion || ev?.percent || 0);
-    if (Number.isFinite(productCount) && productCount > 0) parts.push(`${productCount} Products`);
-    if (Number.isFinite(taskCount) && taskCount > 0) parts.push(`${taskCount} Tasks`);
-    if (Number.isFinite(dueCount) && dueCount > 0) parts.push(`${dueCount} Due`);
-    if (Number.isFinite(progress) && progress > 0) parts.push(`${Math.round(progress)}%`);
+    if (metrics.productCount > 0) parts.push(`${metrics.productCount} Products`);
+    if (metrics.taskCount > 0) parts.push(`${metrics.completedTasks}/${metrics.taskCount} Tasks`);
+    if (metrics.dueCount > 0) parts.push(`${metrics.dueCount} Due`);
+    if (metrics.progress > 0) parts.push(`${metrics.progress}%`);
     return parts.slice(0,2).join(" · ");
   };
+
+  const monthlyPlannerSummary = useMemo(()=>{
+    const monthlyEvents:any[] = [];
+    for (let day=1; day<=days; day++) {
+      sortCalendarEventsForDisplay(eventsFor(day)).forEach((ev:any)=>{
+        if (!monthlyEvents.some((item:any)=>String(item.id)===String(ev.id))) monthlyEvents.push(ev);
+      });
+    }
+
+    const monthOnly = monthOnlyCalendarEvents.filter((ev:any)=>filter==="all" || ev.type===filter);
+    const allMonthItems = [...monthlyEvents, ...monthOnly];
+
+    const summary:any = {
+      campaigns:0,
+      launches:0,
+      deadlines:0,
+      meetings:0,
+      tasks:0,
+      seasonals:monthOnly.length,
+      products:0,
+      phaseout:0,
+      checklistTasks:0,
+      checklistCompleted:0,
+      progressTotal:0,
+      progressCount:0,
+    };
+
+    allMonthItems.forEach((ev:any)=>{
+      const type = String(ev?.type || "").toLowerCase();
+      if (type.includes("campaign")) summary.campaigns += 1;
+      if (type.includes("launch")) summary.launches += 1;
+      if (type.includes("deadline")) summary.deadlines += 1;
+      if (type.includes("meeting")) summary.meetings += 1;
+      if (type.includes("task")) summary.tasks += 1;
+
+      const metrics = getCalendarProjectMetrics(ev);
+      summary.products += metrics.productCount;
+      summary.phaseout += metrics.phaseoutCount;
+      summary.checklistTasks += metrics.taskCount;
+      summary.checklistCompleted += metrics.completedTasks;
+      if (metrics.progress > 0) {
+        summary.progressTotal += metrics.progress;
+        summary.progressCount += 1;
+      }
+    });
+
+    summary.avgProgress = summary.progressCount ? Math.round(summary.progressTotal / summary.progressCount) : (summary.checklistTasks ? Math.round((summary.checklistCompleted / summary.checklistTasks) * 100) : 0);
+    summary.totalEvents = allMonthItems.length;
+    return summary;
+  },[year,month,filter,allEvents,monthOnlyCalendarEvents,calendarFilterTypes]);
 
   const monthOnlyCalendarEvents = useMemo(()=>{
     const monthStart = `${year}-${pad(month+1)}-01`;
@@ -2932,6 +2991,34 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         </div>
       )}
 
+      {/* Phase 2: Monthly Project Planner Summary */}
+      <div style={{ margin:"10px 0 12px",padding:isMobile?10:12,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surface }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:10 }}>
+          <div>
+            <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{MONTHS[month]} Project Summary</p>
+            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Planner snapshot from events, products, and checklist-linked dates.</p>
+          </div>
+          <span style={{ fontSize:11,fontWeight:900,color:C.text,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 9px" }}>{monthlyPlannerSummary.totalEvents} items</span>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8 }}>
+          {[
+            ["Campaigns",monthlyPlannerSummary.campaigns],
+            ["Launches",monthlyPlannerSummary.launches],
+            ["Deadlines",monthlyPlannerSummary.deadlines],
+            ["Products",monthlyPlannerSummary.products],
+            ["Tasks",monthlyPlannerSummary.checklistTasks],
+            ["Completed",monthlyPlannerSummary.checklistCompleted],
+            ["Progress",monthlyPlannerSummary.avgProgress?`${monthlyPlannerSummary.avgProgress}%`:"—"],
+            ["Phase-out",monthlyPlannerSummary.phaseout],
+          ].map(([label,value]:any)=>(
+            <div key={label} style={{ padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:9,background:C.bg }}>
+              <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>{label}</p>
+              <p style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Grid */}
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
@@ -3394,10 +3481,36 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           const dayEv = sortCalendarEventsForDisplay(eventsFor(parseInt(dayView.label)));
           return (
             <div>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
                 <span style={{ fontSize:13,color:C.muted }}>{dayEv.length} event{dayEv.length!==1?"s":""}</span>
                 <Btn sm onClick={()=>{ setAddForm(f=>({...f,date:dayView.date})); setDayView(null); setAddModal(true); }}>+ Add to this day</Btn>
               </div>
+              {dayEv.length>0&&(()=>{
+                const dayMetrics = dayEv.reduce((acc:any,ev:any)=>{
+                  const m = getCalendarProjectMetrics(ev);
+                  acc.products += m.productCount;
+                  acc.tasks += m.taskCount;
+                  acc.completed += m.completedTasks;
+                  acc.due += m.dueCount;
+                  acc.phaseout += m.phaseoutCount;
+                  return acc;
+                },{ products:0,tasks:0,completed:0,due:0,phaseout:0 });
+                return (
+                  <div style={{ display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:12 }}>
+                    {[
+                      ["Products",dayMetrics.products],
+                      ["Tasks",dayMetrics.tasks],
+                      ["Done",dayMetrics.completed],
+                      ["Due",dayMetrics.due],
+                    ].map(([label,value]:any)=>(
+                      <div key={label} style={{ padding:"7px 8px",border:`1px solid ${C.border}`,borderRadius:8,background:C.bg }}>
+                        <p style={{ margin:"0 0 2px",fontSize:9,fontWeight:900,color:C.faint,textTransform:"uppercase" }}>{label}</p>
+                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{value || "—"}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               {dayEv.length===0&&(
                 <div style={{ textAlign:"center",padding:"28px 0",color:C.faint,fontSize:13 }}>No events on this day.</div>
               )}
@@ -3417,6 +3530,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                             {ev.dateEnd&&<span style={{ fontSize:10,color:C.muted }}>{ev.date} → {ev.dateEnd}</span>}
                             {isSeasonal&&<Tag color={typeColor(ev.type || "seasonal", "#14B8A6")} sm>{typeLabel(ev.type || "seasonal")}</Tag>}
                             {isChecklist&&<Tag color="#8B5CF6" sm>Checklist</Tag>}
+                            {calendarPlannerMeta(ev)&&<span style={{ fontSize:10,fontWeight:800,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"1px 6px" }}>{calendarPlannerMeta(ev)}</span>}
                           </div>
                         </div>
                         <span style={{ fontSize:12,color:C.faint,flexShrink:0 }}>&#8250;</span>
@@ -18325,7 +18439,7 @@ export default function App({
   };
 
   const scheduleLocalSnapshotSave = () => {
-    if (typeof window === "undefined" || cloudApplyingRef.current) return;
+    if (typeof window === "undefined" || cloudApplyingRef.current || !cloudHydrated) return;
     try {
       if ((window as any).__emdcLocalSnapshotTimer) clearTimeout((window as any).__emdcLocalSnapshotTimer);
       (window as any).__emdcLocalSnapshotTimer = setTimeout(()=>saveLocalSnapshotDirect(), 300);
@@ -18526,6 +18640,19 @@ export default function App({
   const allCalExtra = useMemo(()=>[...seasonalCalEvents,...checklistCalEvents],[seasonalCalEvents,checklistCalEvents]);
   const pageMaxWidth = !isMobile && tab==="calendar" ? 1760 : 1280;
   const pagePadding = isMobile ? "16px 16px 90px" : tab==="calendar" ? "28px 32px" : "28px 28px";
+
+  if (!cloudHydrated) {
+    return (
+      <div style={{ minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",padding:24 }}>
+        <div style={{ width:"min(420px,100%)",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:16,padding:20,textAlign:"center",boxShadow:"0 12px 40px rgba(15,23,42,.08)" }}>
+          <div style={{ width:44,height:44,borderRadius:12,background:C.accent,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,marginBottom:12 }}>EMDC</div>
+          <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:900,color:C.text }}>Loading current synced data…</h2>
+          <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.45 }}>Please wait. Old local/default data is hidden until the latest cloud data is ready.</p>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <>
