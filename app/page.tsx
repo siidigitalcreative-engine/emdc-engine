@@ -2779,15 +2779,17 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   );
 
   // Cell layout constants — mobile stays compact; desktop uses more available space
-  const BAND_H  = isMobile ? 14 : 18;   // unified height for ALL event rows (bands + chips same)
+  const BAND_H  = isMobile ? 17 : 18;   // unified height for ALL event rows (bands + chips same)
   const CHIP_H  = BAND_H;               // same as BAND_H — all events identical height
   const GAP     = 1;                    // px gap between rows
   const DATE_H  = isMobile ? 22 : 28;   // date number row
-  const DAY_MIN_H = isMobile ? DATE_H + 24 : "clamp(78px, 10.5vh, 104px)";
+  const DAY_MIN_H = isMobile ? DATE_H + 34 : "clamp(78px, 10.5vh, 104px)";
   const DAY_NUM_SIZE = isMobile ? 18 : 22;
   const DAY_FONT = isMobile ? 9 : 11;
-  const EVENT_FONT = isMobile ? 8 : 10;
+  const EVENT_FONT = isMobile ? 9 : 10;
   const dayLabels = isMobile ? DAYS_SHORT : DAYS_FULL;
+  const calendarEventTitle = (ev:any) => String(ev?.title || ev?.name || ev?.groupName || ev?.label || ev?.type || "Event").trim();
+
 
   return (
     <div>
@@ -2897,9 +2899,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         borderRadius:rs.isStart&&rs.isEnd?"3px":rs.isStart?"3px 0 0 3px":rs.isEnd?"0 3px 3px 0":"0",
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
-                      {rs.isStart&&(
-                        <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{ev.title}</span>
-                      )}
+                      <span style={{ fontSize:EVENT_FONT,fontWeight:800,color:C.text,paddingLeft:isMobile?3:5,paddingRight:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,lineHeight:1.1 }}>
+                        {ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle(ev)}
+                      </span>
                     </div>
                   );
                 })}
@@ -2921,7 +2923,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         borderRadius: "0",
                         overflow:"hidden", display:"flex", alignItems:"center",
                       }}>
-                      <span style={{ fontSize:EVENT_FONT,fontWeight:700,color:ec,paddingLeft:isMobile?3:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{ev.phaseoutCount>0?"⚑ ":""}{ev.title}</span>
+                      <span style={{ fontSize:EVENT_FONT,fontWeight:800,color:C.text,paddingLeft:isMobile?3:5,paddingRight:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,lineHeight:1.1 }}>{ev.phaseoutCount>0?"⚑ ":""}{calendarEventTitle(ev)}</span>
                     </div>
                   );
                 })}
