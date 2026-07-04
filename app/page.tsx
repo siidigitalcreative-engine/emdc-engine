@@ -17878,6 +17878,7 @@ export default function App({
 
   const [appStateHydrated,setAppStateHydrated] = useState(false);
   const [cloudHydrated,setCloudHydrated] = useState(false);
+  const [cloudSyncStatus,setCloudSyncStatus] = useState("Loading cloud...");
   useEffect(()=>{
     const emdcCloudHydrationSafetyTimer = setTimeout(()=>{
       setCloudHydrated(true);
@@ -17885,7 +17886,6 @@ export default function App({
     }, 12000);
     return ()=>clearTimeout(emdcCloudHydrationSafetyTimer);
   },[]);
-  const [cloudSyncStatus,setCloudSyncStatus] = useState("Loading cloud...");
   const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
   const cloudApplyingRef = useRef(false);
