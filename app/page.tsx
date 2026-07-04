@@ -2162,6 +2162,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const [detailEv,setDetailEv]   = useState(null);
   const [editForm,setEditForm]   = useState(null);
   const [yearOverview,setYearOverview] = useState<any>(null);
+  const [summarySettingsOpen,setSummarySettingsOpen] = useState(false);
+  const [summaryDetail,setSummaryDetail] = useState<any>(null);
+  const [visibleSummaryCards,setVisibleSummaryCards] = useState<any[]>(["campaigns","launches","deadlines","products","tasks","completed","progress","phaseout"]);
   const [seasonalEditForm,setSeasonalEditForm] = useState<any>(null);
   const [phaseoutBrandFilter,setPhaseoutBrandFilter] = useState("all");
   const [phaseoutTagEdit,setPhaseoutTagEdit] = useState<any>(null);
@@ -2278,7 +2281,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       const rawStart = String(ev.date || "");
       const rawEnd = String(ev.dateEnd || "");
       const startIsYearly = rawStart.startsWith("yearly:");
-      const endIsYearly = rawEnd.startsWith("yearly:");
       let include = false;
 
       if (startIsYearly) {
@@ -2298,6 +2300,17 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     const monthOnly = monthOnlyCalendarEvents.filter((ev:any)=>filter==="all" || ev.type===filter);
     const allMonthItems = [...monthlyEvents, ...monthOnly];
 
+    const details:any = {
+      campaigns:[],
+      launches:[],
+      deadlines:[],
+      products:[],
+      tasks:[],
+      completed:[],
+      progress:[],
+      phaseout:[],
+    };
+
     const summary:any = {
       campaigns:0,
       launches:0,
@@ -2311,17 +2324,23 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       checklistCompleted:0,
       progressTotal:0,
       progressCount:0,
+      details,
     };
 
     allMonthItems.forEach((ev:any)=>{
       const type = String(ev?.type || "").toLowerCase();
-      if (type.includes("campaign")) summary.campaigns += 1;
-      if (type.includes("launch")) summary.launches += 1;
-      if (type.includes("deadline")) summary.deadlines += 1;
-      if (type.includes("meeting")) summary.meetings += 1;
-      if (type.includes("task")) summary.tasks += 1;
+      if (type.includes("campaign")) { summary.campaigns += 1; details.campaigns.push(ev); }
+      if (type.includes("launch")) { summary.launches += 1; details.launches.push(ev); }
+      if (type.includes("deadline")) { summary.deadlines += 1; details.deadlines.push(ev); }
+      if (type.includes("task")) { summary.tasks += 1; details.tasks.push(ev); }
 
       const metrics = getCalendarProjectMetrics(ev);
+      if (metrics.productCount > 0) details.products.push(ev);
+      if (metrics.taskCount > 0) details.tasks.push(ev);
+      if (metrics.completedTasks > 0) details.completed.push(ev);
+      if (metrics.progress > 0) details.progress.push(ev);
+      if (metrics.phaseoutCount > 0) details.phaseout.push(ev);
+
       summary.products += metrics.productCount;
       summary.phaseout += metrics.phaseoutCount;
       summary.checklistTasks += metrics.taskCount;
@@ -2337,6 +2356,18 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return summary;
   },[year,month,filter,allEvents,monthOnlyCalendarEvents,calendarFilterTypes]);
 
+  const summaryCards = [
+    { id:"campaigns", label:"Campaigns", value:monthlyPlannerSummary.campaigns, items:monthlyPlannerSummary.details?.campaigns || [] },
+    { id:"launches", label:"Launches", value:monthlyPlannerSummary.launches, items:monthlyPlannerSummary.details?.launches || [] },
+    { id:"deadlines", label:"Deadlines", value:monthlyPlannerSummary.deadlines, items:monthlyPlannerSummary.details?.deadlines || [] },
+    { id:"products", label:"Products", value:monthlyPlannerSummary.products, items:monthlyPlannerSummary.details?.products || [] },
+    { id:"tasks", label:"Tasks", value:monthlyPlannerSummary.checklistTasks, items:monthlyPlannerSummary.details?.tasks || [] },
+    { id:"completed", label:"Completed", value:monthlyPlannerSummary.checklistCompleted, items:monthlyPlannerSummary.details?.completed || [] },
+    { id:"progress", label:"Progress", value:monthlyPlannerSummary.avgProgress?`${monthlyPlannerSummary.avgProgress}%`:"—", items:monthlyPlannerSummary.details?.progress || [] },
+    { id:"phaseout", label:"Phase-out", value:monthlyPlannerSummary.phaseout, items:monthlyPlannerSummary.details?.phaseout || [] },
+  ];
+
+  const shownSummaryCards = summaryCards.filter((card:any)=>visibleSummaryCards.includes(card.id));
 
   // Date helpers must be defined before yearly list memo uses them during prerender.
   const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
@@ -3009,34 +3040,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         </div>
       )}
 
-      {/* Phase 2: Monthly Project Planner Summary */}
-      <div style={{ margin:"10px 0 12px",padding:isMobile?10:12,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surface }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:10 }}>
-          <div>
-            <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{MONTHS[month]} Project Summary</p>
-            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Planner snapshot from events, products, and checklist-linked dates.</p>
-          </div>
-          <span style={{ fontSize:11,fontWeight:900,color:C.text,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 9px" }}>{monthlyPlannerSummary.totalEvents} items</span>
-        </div>
-        <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8 }}>
-          {[
-            ["Campaigns",monthlyPlannerSummary.campaigns],
-            ["Launches",monthlyPlannerSummary.launches],
-            ["Deadlines",monthlyPlannerSummary.deadlines],
-            ["Products",monthlyPlannerSummary.products],
-            ["Tasks",monthlyPlannerSummary.checklistTasks],
-            ["Completed",monthlyPlannerSummary.checklistCompleted],
-            ["Progress",monthlyPlannerSummary.avgProgress?`${monthlyPlannerSummary.avgProgress}%`:"—"],
-            ["Phase-out",monthlyPlannerSummary.phaseout],
-          ].map(([label,value]:any)=>(
-            <div key={label} style={{ padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:9,background:C.bg }}>
-              <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>{label}</p>
-              <p style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Grid */}
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
@@ -3491,6 +3494,74 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       </Modal>
 
       {/* Manage Types Modal */}
+      {/* Phase 2: Monthly Project Planner Summary */}
+      <div style={{ margin:"14px 0 12px",padding:isMobile?10:12,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surface }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:10 }}>
+          <div>
+            <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{MONTHS[month]} Project Summary</p>
+            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Planner snapshot from events, products, and checklist-linked dates.</p>
+          </div>
+          <div style={{ display:"flex",gap:6,alignItems:"center",flexShrink:0 }}>
+            <button type="button" onClick={()=>setSummarySettingsOpen(true)}
+              style={{ height:28,padding:"0 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
+              Edit
+            </button>
+            <span style={{ fontSize:11,fontWeight:900,color:C.text,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 9px" }}>{monthlyPlannerSummary.totalEvents} items</span>
+          </div>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8 }}>
+          {shownSummaryCards.map((card:any)=>(
+            <button key={card.id} type="button" onClick={()=>setSummaryDetail(card)}
+              style={{ textAlign:"left",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,cursor:"pointer" }}>
+              <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>{card.label}</p>
+              <p style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{card.value}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Modal open={summarySettingsOpen} onClose={()=>setSummarySettingsOpen(false)} title="Edit Project Summary Cards" width={460}>
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          <p style={{ margin:"0 0 4px",fontSize:12,color:C.muted }}>Choose which summary cards appear below the calendar.</p>
+          {summaryCards.map((card:any)=>(
+            <label key={card.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,cursor:"pointer" }}>
+              <span style={{ fontSize:13,fontWeight:800,color:C.text }}>{card.label}</span>
+              <input type="checkbox" checked={visibleSummaryCards.includes(card.id)} onChange={e=>{
+                setVisibleSummaryCards((prev:any[])=>{
+                  if(e.target.checked) return prev.includes(card.id)?prev:[...prev,card.id];
+                  return prev.filter((id:any)=>id!==card.id);
+                });
+              }} />
+            </label>
+          ))}
+          <Btn full onClick={()=>setSummarySettingsOpen(false)}>Done</Btn>
+        </div>
+      </Modal>
+
+      <Modal open={!!summaryDetail} onClose={()=>setSummaryDetail(null)} title={summaryDetail?`${summaryDetail.label} Details`:"Details"} width={520}>
+        {summaryDetail&&(
+          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+            <div style={{ padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
+              <p style={{ margin:"0 0 4px",fontSize:11,fontWeight:900,color:C.faint,textTransform:"uppercase" }}>{MONTHS[month]} Summary</p>
+              <p style={{ margin:0,fontSize:20,fontWeight:900,color:C.text }}>{summaryDetail.value}</p>
+            </div>
+            {(summaryDetail.items || []).length===0&&(
+              <p style={{ margin:0,fontSize:13,color:C.muted,textAlign:"center",padding:"18px 0" }}>No matching items for this card.</p>
+            )}
+            {(summaryDetail.items || []).map((ev:any)=>(
+              <button key={ev.id} type="button" onClick={()=>{ setSummaryDetail(null); setDetailEv(ev); }}
+                style={{ textAlign:"left",padding:"11px 12px",border:`1px solid ${C.border}`,borderRadius:10,background:C.surfaceAlt,cursor:"pointer" }}>
+                <p style={{ margin:"0 0 4px",fontSize:13,fontWeight:900,color:C.text }}>{calendarEventTitle(ev)}</p>
+                <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
+                  <Tag color={typeColor(ev.type, ev.color || "#9CA3AF")} sm>{typeLabel(ev.type)}</Tag>
+                  {calendarPlannerMeta(ev)&&<span style={{ fontSize:10,fontWeight:800,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"1px 6px" }}>{calendarPlannerMeta(ev)}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </Modal>
+
       <ManageTypesModal open={typesModal} onClose={()=>setTypesModal(false)} eventTypes={eventTypes} onChange={saveEventTypes} />
 
       {/* Day View Modal — all events for a clicked date */}
