@@ -3133,6 +3133,35 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       </div>
 
       {/* Year event list */}
+      {/* Phase 2: Monthly Project Planner Summary */}
+      <div style={{ margin:"14px 0 12px",padding:isMobile?10:12,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surface }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:10 }}>
+          <div>
+            <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{MONTHS[month]} Project Summary</p>
+            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Planner snapshot from events, products, and checklist-linked dates.</p>
+          </div>
+          <div style={{ display:"flex",gap:6,alignItems:"center",flexShrink:0 }}>
+            <button type="button" onClick={()=>setSummarySettingsOpen(true)}
+              style={{ height:28,padding:"0 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
+              Edit
+            </button>
+            <span style={{ fontSize:11,fontWeight:900,color:C.text,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 9px" }}>{monthlyPlannerSummary.totalEvents} items</span>
+          </div>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8 }}>
+          {shownSummaryCards.map((card:any)=>(
+            <button key={card.id} type="button" onClick={()=>setSummaryDetail(card)}
+              style={{ textAlign:"left",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,cursor:"pointer" }}>
+              <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>{card.label}</p>
+              <p style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{card.value}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+
+
+
       <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:isMobile?12:16,marginTop:16 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12 }}>
           <div>
@@ -3535,33 +3564,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           </div>
         )}
       </Modal>
-
-      {/* Phase 2: Monthly Project Planner Summary */}
-      <div style={{ margin:"14px 0 12px",padding:isMobile?10:12,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.surface }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:10 }}>
-          <div>
-            <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text }}>{MONTHS[month]} Project Summary</p>
-            <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Planner snapshot from events, products, and checklist-linked dates.</p>
-          </div>
-          <div style={{ display:"flex",gap:6,alignItems:"center",flexShrink:0 }}>
-            <button type="button" onClick={()=>setSummarySettingsOpen(true)}
-              style={{ height:28,padding:"0 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
-              Edit
-            </button>
-            <span style={{ fontSize:11,fontWeight:900,color:C.text,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 9px" }}>{monthlyPlannerSummary.totalEvents} items</span>
-          </div>
-        </div>
-        <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8 }}>
-          {shownSummaryCards.map((card:any)=>(
-            <button key={card.id} type="button" onClick={()=>setSummaryDetail(card)}
-              style={{ textAlign:"left",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:9,background:C.bg,cursor:"pointer" }}>
-              <p style={{ margin:"0 0 3px",fontSize:10,fontWeight:900,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>{card.label}</p>
-              <p style={{ margin:0,fontSize:14,fontWeight:900,color:C.text }}>{card.value}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
 
       <ManageTypesModal open={typesModal} onClose={()=>setTypesModal(false)} eventTypes={eventTypes} onChange={saveEventTypes} />
 
