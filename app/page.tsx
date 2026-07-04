@@ -71,7 +71,21 @@ const GlobalStyles = () => {
         .stack-mobile{flex-direction:column!important;}
         .full-mobile{width:100%!important;}
       }
-    `;
+    
+      .emdc-mobile-bottom-nav{
+        position:fixed!important;
+        left:0!important;
+        right:0!important;
+        bottom:0!important;
+        z-index:9998!important;
+        background:#fff!important;
+        padding-bottom:env(safe-area-inset-bottom)!important;
+        box-shadow:0 -8px 24px rgba(15,23,42,.08)!important;
+      }
+      @media(max-width:759px){
+        .emdc-main-content{padding-bottom:calc(150px + env(safe-area-inset-bottom))!important;}
+      }
+`;
     document.head.appendChild(s);
   }, []);
   return null;
@@ -18810,7 +18824,7 @@ export default function App({
 
         {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
         {isMobile&&(
-          <div style={{ position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
+          <div className="emdc-mobile-bottom-nav" style={{ position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
             {TABS.map(t=>(
               <button key={t.id} onClick={()=>navigateMainTab(t.id)} style={{ flex:1,padding:"10px 4px 12px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3 }}>
                 <span style={{ fontSize:18,lineHeight:1 }}>{TAB_ICONS[t.id]}</span>
