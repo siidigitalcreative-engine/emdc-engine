@@ -2582,6 +2582,27 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const nextMo=()=>month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1);
 
   // For each day: point events (single date) + range events (multi-day spanning this date)
+  const yearlyPartsToDate = (raw:any, targetYear:number) => {
+    if (typeof raw !== "string" || !raw.startsWith("yearly:")) return null;
+    const parts = raw.replace("yearly:","").split("-");
+    const mm = Math.max(1, Math.min(12, Number(parts[0]) || 1));
+    const dd = Math.max(1, Math.min(new Date(targetYear, mm, 0).getDate(), Number(parts[1]) || 1));
+    return new Date(`${targetYear}-${pad(mm)}-${pad(dd)}T00:00:00`);
+  };
+
+  const isRecurringYearlyRangeActiveOnDay = (ev:any, d:number) => {
+    if (typeof ev?.date !== "string" || !ev.date.startsWith("yearly:")) return false;
+    if (typeof ev?.dateEnd !== "string" || !ev.dateEnd.startsWith("yearly:")) return false;
+
+    const current = new Date(`${dateKey(year,month,d)}T00:00:00`);
+    const start = yearlyPartsToDate(ev.date, year);
+    const end = yearlyPartsToDate(ev.dateEnd, year);
+    if (!start || !end) return false;
+
+    if (start <= end) return current >= start && current <= end;
+    return current >= start || current <= end;
+  };
+
   const eventsFor = d => {
     const key = dateKey(year,month,d);
     const dt  = new Date(`${key}T00:00:00`);
@@ -2590,6 +2611,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       if (filter!=="all" && ev.type!==filter) return false;
       // recurring yearly event (date like "yearly:01-01")
       if (typeof ev.date === "string" && ev.date.startsWith("yearly:")) {
+        if (isRecurringYearlyRangeActiveOnDay(ev,d)) return true;
         const [mm,dd] = ev.date.replace("yearly:","").split("-").map((n:any)=>Number(n));
         return mm === month + 1 && dd === d;
       }
@@ -2616,9 +2638,11 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     if (!ev.dateEnd) return null;
     const key = dateKey(year,month,d);
     const dt  = new Date(`${key}T00:00:00`);
-    const s   = parseDate(ev.date), e = parseDate(ev.dateEnd);
-    const isStart  = dt.getTime()===s.getTime();
-    const isEnd    = dt.getTime()===e.getTime();
+    const yearlyRange = typeof ev?.date === "string" && ev.date.startsWith("yearly:") && typeof ev?.dateEnd === "string" && ev.dateEnd.startsWith("yearly:");
+    const s   = yearlyRange ? yearlyPartsToDate(ev.date, year) : parseDate(ev.date);
+    const e   = yearlyRange ? yearlyPartsToDate(ev.dateEnd, year) : parseDate(ev.dateEnd);
+    const isStart  = !!s && dt.getTime()===s.getTime();
+    const isEnd    = !!e && dt.getTime()===e.getTime();
     const col      = (firstDay+d-1)%7;
     const isRowStart = col===0;
     const isRowEnd   = col===6 || d===days;
