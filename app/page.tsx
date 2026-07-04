@@ -2741,15 +2741,24 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const saveSeasonalEdit = () => {
     if (!seasonalEditForm?.name?.trim()) return;
     if (!setSeasonalEvents) return;
+
+    const selectedMonths = monthOnlyValues(seasonalEditForm.months);
+    const cleanSeasonalEdit = {
+      ...seasonalEditForm,
+      name:seasonalEditForm.name.trim(),
+      months:selectedMonths,
+      date:selectedMonths.length ? formatMonthOnlyLabel(selectedMonths) : (seasonalEditForm.date || ""),
+      calDate:selectedMonths.length ? null : (seasonalEditForm.calDate || null),
+      calDateEnd:selectedMonths.length ? null : (seasonalEditForm.calDateEnd || null),
+    };
+
     setSeasonalEvents((prev:any[])=>{
-      const next = prev.map((ev:any)=>ev.id===seasonalEditForm.id ? {
+      const next = prev.map((ev:any)=>ev.id===cleanSeasonalEdit.id ? {
         ...ev,
-        ...seasonalEditForm,
-        name:seasonalEditForm.name.trim(),
-        calDate:seasonalEditForm.calDate || null,
-        calDateEnd:seasonalEditForm.calDateEnd || null,
+        ...cleanSeasonalEdit,
       } : ev);
       if(onStateChange) onStateChange({seasonalEvents:next});
+      try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
       return next;
     });
     setSeasonalEditForm(null);
@@ -2821,13 +2830,22 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         <TI value={seasonalEditForm.date||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,date:v}))} placeholder="e.g. June - July" />
       </Field>
       <Field label="Month Only" hint="optional, no specific date needed">
-        <MonthOnlyPicker value={seasonalEditForm.months||[]} onChange={(months:any[])=>setSeasonalEditForm((f:any)=>({...f,months,date:months.length?formatMonthOnlyLabel(months):f.date,calDate:months.length?"":f.calDate,calDateEnd:months.length?"":f.calDateEnd}))} />
+        <MonthOnlyPicker value={seasonalEditForm.months||[]} onChange={(months:any[])=>setSeasonalEditForm((f:any)=>{
+          const selectedMonths = monthOnlyValues(months);
+          return {
+            ...f,
+            months:selectedMonths,
+            date:selectedMonths.length ? formatMonthOnlyLabel(selectedMonths) : f.date,
+            calDate:selectedMonths.length ? "" : f.calDate,
+            calDateEnd:selectedMonths.length ? "" : f.calDateEnd,
+          };
+        })} />
       </Field>
       <Field label="Calendar Date">
         <DateInput value={seasonalEditForm.calDate||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDate:v,months:v?[]:(f.months||[])}))} />
       </Field>
       <Field label="Calendar End Date">
-        <DateInput value={seasonalEditForm.calDateEnd||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDateEnd:v}))} />
+        <DateInput value={seasonalEditForm.calDateEnd||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,calDateEnd:v,months:v?[]:(f.months||[])}))} />
       </Field>
       <Field label="Tag / Filter Type">
         <Select value={seasonalEditForm.type||"campaign"} onChange={v=>{
