@@ -2091,8 +2091,8 @@ const ManageTypesModal = ({ open, onClose, eventTypes, onChange }) => {
                 <span style={{ flex:1,fontSize:13,fontWeight:600,color:C.text }}>{t.label}</span>
                 {t.useColor&&<span style={{ padding:"2px 8px",borderRadius:4,background:t.color+"18",color:t.color,border:`1px solid ${t.color}28`,fontSize:11,fontWeight:700 }}>{t.label}</span>}
                 {!t.useColor&&<span style={{ padding:"2px 8px",borderRadius:4,background:C.surface,border:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".04em" }}>No tag color</span>}
-                <button onClick={()=>moveType(t.id,-1)} disabled={idx===0} style={{ background:C.surface,border:`1px solid ${C.border}`,cursor:idx===0?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5,opacity:idx===0?.45:1 }}>Up</button>
-                <button onClick={()=>moveType(t.id,1)} disabled={idx===orderedEventTypes.length-1} style={{ background:C.surface,border:`1px solid ${C.border}`,cursor:idx===orderedEventTypes.length-1?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5,opacity:idx===orderedEventTypes.length-1?.45:1 }}>Down</button>
+                <button onClick={()=>moveType(t.id,-1)} disabled={idx===0} style={{ background:C.surface,border:`1px solid ${C.border}`,cursor:idx===0?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5,opacity:idx===0 ? .45 : 1 }}>Up</button>
+                <button onClick={()=>moveType(t.id,1)} disabled={idx===orderedEventTypes.length-1} style={{ background:C.surface,border:`1px solid ${C.border}`,cursor:idx===orderedEventTypes.length-1?"not-allowed":"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5,opacity:idx===orderedEventTypes.length-1 ? .45 : 1 }}>Down</button>
                 <button onClick={()=>startEdit(t)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:600,padding:"4px 8px",borderRadius:5 }}>Edit</button>
                 <button onClick={()=>removeType(t.id)} style={{ width:26,height:26,borderRadius:5,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>
               </div>
@@ -3372,7 +3372,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       {/* Day View Modal — all events for a clicked date */}
       <Modal open={!!dayView} onClose={()=>setDayView(null)} title={dayView?`${MONTHS[month]} ${dayView.label}, ${year}`:"Day"} width={480}>
         {dayView&&(()=>{
-          const dayEv = eventsFor(parseInt(dayView.label));
+          const dayEv = sortCalendarEventsForDisplay(eventsFor(parseInt(dayView.label)));
           return (
             <div>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
@@ -3396,7 +3396,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                           <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
                             <Tag color={tColor} sm>{tLabel}</Tag>
                             {ev.dateEnd&&<span style={{ fontSize:10,color:C.muted }}>{ev.date} → {ev.dateEnd}</span>}
-                            {isSeasonal&&<Tag color={typeColor(detailEv.type || "seasonal", "#14B8A6")} sm>{typeLabel(detailEv.type || "seasonal")}</Tag>}
+                            {isSeasonal&&<Tag color={typeColor(ev.type || "seasonal", "#14B8A6")} sm>{typeLabel(ev.type || "seasonal")}</Tag>}
                             {isChecklist&&<Tag color="#8B5CF6" sm>Checklist</Tag>}
                           </div>
                         </div>
