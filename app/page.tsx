@@ -77,7 +77,7 @@ const GlobalStyles = () => {
         left:0!important;
         right:0!important;
         bottom:0!important;
-        z-index:9998!important;
+        z-index:9000!important;
         background:#fff!important;
         padding-bottom:env(safe-area-inset-bottom)!important;
         box-shadow:0 -8px 24px rgba(15,23,42,.08)!important;
@@ -101,6 +101,28 @@ const GlobalStyles = () => {
         .emdc-main-content{
           padding-bottom:calc(170px + env(safe-area-inset-bottom))!important;
         }
+      }
+
+      .emdc-modal-overlay{
+        align-items:flex-end!important;
+        overflow-y:auto!important;
+        -webkit-overflow-scrolling:touch!important;
+        padding:12px!important;
+        padding-bottom:calc(96px + env(safe-area-inset-bottom))!important;
+      }
+      .emdc-modal-sheet{
+        max-height:calc(100dvh - 130px - env(safe-area-inset-bottom))!important;
+        overflow:hidden!important;
+        display:flex!important;
+        flex-direction:column!important;
+      }
+      .emdc-modal-body{
+        flex:1 1 auto!important;
+        min-height:0!important;
+        overflow-y:auto!important;
+        -webkit-overflow-scrolling:touch!important;
+        padding-bottom:calc(120px + env(safe-area-inset-bottom))!important;
+        overscroll-behavior:contain!important;
       }
 `;
     document.head.appendChild(s);
