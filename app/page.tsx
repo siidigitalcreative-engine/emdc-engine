@@ -336,6 +336,31 @@ const GlobalStyles = () => {
         max-width:100%!important;
         min-width:0!important;
       }
+
+      .emdc-date-compact-row{
+        width:100%!important;
+        max-width:100%!important;
+        padding-right:0!important;
+        margin-right:0!important;
+        overflow:hidden!important;
+      }
+      .emdc-date-compact-row > *{
+        min-width:0!important;
+        max-width:100%!important;
+      }
+      .emdc-date-compact-row input,
+      .emdc-date-compact-row select{
+        width:100%!important;
+        max-width:100%!important;
+        min-width:0!important;
+        box-sizing:border-box!important;
+      }
+      .emdc-date-align-right-v4{
+        width:100%!important;
+        max-width:100%!important;
+        overflow:hidden!important;
+        padding-right:0!important;
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -1012,7 +1037,7 @@ const DateInput = ({ value, onChange, style={} }) => {
     color:C.text,
     fontSize:14,
     fontWeight:700,
-    padding:"0 10px",
+    padding:"0 8px",
     outline:"none",
     overflow:"hidden",
     textOverflow:"ellipsis",
@@ -1027,10 +1052,10 @@ const DateInput = ({ value, onChange, style={} }) => {
 
   return (
     <div
-      className="emdc-date-compact-row"
+      className="emdc-date-compact-row emdc-date-align-right-v4"
       style={{
         display:"grid",
-        gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
+        gridTemplateColumns:"minmax(0,calc(50% - 5px)) minmax(0,calc(50% - 5px))",
         gap:10,
         alignItems:"stretch",
         width:"100%",
@@ -1038,6 +1063,7 @@ const DateInput = ({ value, onChange, style={} }) => {
         minWidth:0,
         overflow:"hidden",
         boxSizing:"border-box",
+        paddingRight:0,
         ...style,
       }}
     >
