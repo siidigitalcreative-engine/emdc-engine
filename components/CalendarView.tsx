@@ -1146,10 +1146,11 @@ const DateInput = ({ value, onChange, style={} }) => {
                 inset:0,
                 width:"100%",
                 height:"100%",
-                opacity:0,
-                pointerEvents:"none",
+                opacity:0.001,
+                pointerEvents:"auto",
+                cursor:"pointer",
+                zIndex:2,
               }}
-              tabIndex={-1}
             />
           </div>
         )}
@@ -2730,7 +2731,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const allEvents = useMemo(()=>{
     const colorizeByTag = (ev:any) => ({
       ...ev,
-      color:typeColor(ev?.type || "task", ev?.color || "#9CA3AF"),
+      color:ev?.type ? typeColor(ev.type, ev?.color || "#9CA3AF") : (ev?.color || "#9CA3AF"),
     });
 
     return [
@@ -3007,8 +3008,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       sourceId:ev.id,
       itemKind:ev.fromChecklist ? "checklist" : "extra",
       title:ev.title,
-      type:ev.type || "deadline",
-      color:resolveSavedEventColor(ev),
+      type:ev.fromChecklist ? String(ev.type || "").trim() : (ev.type || "deadline"),
+      color:ev.fromChecklist ? (ev.color || "#8B5CF6") : resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
@@ -4190,8 +4191,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
               <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                 {dayEv.map(ev=>{
                   const isChecklist=!!ev.fromChecklist, isSeasonal=!!ev.fromSeasonal;
-                  const tLabel = isChecklist ? "Deadline" : typeLabel(ev.type);
-                  const tColor = isChecklist ? typeColor("deadline", "#8B5CF6") : eventDisplayColor(ev);
+                  const tLabel = isChecklist ? (ev.type ? typeLabel(ev.type) : "") : typeLabel(ev.type);
+                  const tColor = isChecklist ? (ev.type ? typeColor(ev.type, ev.color || "#8B5CF6") : (ev.color || "#8B5CF6")) : eventDisplayColor(ev);
                   return (
                     <div key={ev.id} style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,borderLeft:`4px solid ${tColor}`,cursor:"pointer" }}
                       onClick={()=>{ setPrevDayView(dayView); setDayView(null); setDetailEv(ev); }}>
@@ -4199,10 +4200,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         <div style={{ minWidth:0 }}>
                           <p style={{ margin:"0 0 4px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.title}</p>
                           <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
-                            <Tag color={tColor} sm>{tLabel}</Tag>
+                            {tLabel&&<Tag color={tColor} sm>{tLabel}</Tag>}
                             {ev.dateEnd&&<span style={{ fontSize:10,color:C.muted }}>{ev.date} → {ev.dateEnd}</span>}
                             {isSeasonal&&<Tag color={typeColor(ev.type || "seasonal", "#14B8A6")} sm>{typeLabel(ev.type || "seasonal")}</Tag>}
-                            {isChecklist&&<Tag color="#8B5CF6" sm>Checklist</Tag>}
                             {calendarPlannerMeta(ev)&&<span style={{ fontSize:10,fontWeight:800,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"1px 6px" }}>{calendarPlannerMeta(ev)}</span>}
                           </div>
                         </div>
@@ -4225,8 +4225,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           const isChecklist = !!detailEv.fromChecklist;
           const isSeasonal  = !!detailEv.fromSeasonal;
           const isManual    = !isChecklist && !isSeasonal;
-          const tLabel = isChecklist ? "Deadline" : typeLabel(detailEv.type);
-          const tColor = isChecklist ? typeColor("deadline", "#8B5CF6") : typeColor(detailEv.type, detailEv.color || "#9CA3AF");
+          const tLabel = isChecklist ? (detailEv.type ? typeLabel(detailEv.type) : "") : typeLabel(detailEv.type);
+          const tColor = isChecklist ? (detailEv.type ? typeColor(detailEv.type, detailEv.color || "#8B5CF6") : (detailEv.color || "#8B5CF6")) : typeColor(detailEv.type, detailEv.color || "#9CA3AF");
           const seasonalSource = isSeasonal ? (seasonalEvents||[]).find((ev:any)=>ev.id===detailEv.sourceEventId) : null;
           const products = Array.isArray(seasonalSource?.products) ? seasonalSource.products : [];
           const phaseoutSkus = getOverviewPhaseoutSkus(seasonalSource);
@@ -4247,11 +4247,10 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                       {dateText}{endText&&<span> → {endText}</span>}
                     </p>
                   </div>
-                  <Tag color={tColor}>{tLabel}</Tag>
+                  {tLabel&&<Tag color={tColor}>{tLabel}</Tag>}
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
-                  {isChecklist&&<Tag color="#8B5CF6">Checklist Deadline</Tag>}
                   {detailEv.monthOnly&&<Tag color={C.muted}>Month-only</Tag>}
                   {detailEv.dateEnd&&!detailEv.monthOnly&&<Tag color={C.muted}>Multi-day</Tag>}
                 </div>
@@ -18425,8 +18424,8 @@ export default function App({
 
   const checklistCalEvents = useMemo(()=>
     (checklistGroups || []).flatMap((g:any)=>{
-      const type = g.calendarType || "deadline";
-      const color = g.calendarColor || "#8B5CF6";
+      const type = String(g.calendarType || g.eventType || "").trim();
+      const color = g.calendarColor || g.color || "#8B5CF6";
 
       if(g.deadline){
         return [{
