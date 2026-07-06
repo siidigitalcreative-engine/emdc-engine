@@ -139,6 +139,41 @@ const GlobalStyles = () => {
           padding-bottom:calc(180px + env(safe-area-inset-bottom))!important;
         }
       }
+
+      .emdc-modal-overlay{
+        box-sizing:border-box;
+      }
+      .emdc-modal-sheet{
+        animation:emdcSheetIn .16s ease-out;
+      }
+      .emdc-modal-body{
+        overscroll-behavior:contain;
+        touch-action:pan-y;
+        scrollbar-width:thin;
+      }
+      @keyframes emdcSheetIn{
+        from{transform:translateY(12px);opacity:.92;}
+        to{transform:translateY(0);opacity:1;}
+      }
+      @media(max-width:759px){
+        .emdc-modal-overlay{
+          height:100dvh!important;
+          align-items:flex-end!important;
+          padding-left:10px!important;
+          padding-right:10px!important;
+          padding-bottom:calc(92px + env(safe-area-inset-bottom))!important;
+        }
+        .emdc-modal-sheet{
+          max-height:min(78dvh, 720px)!important;
+          border-radius:22px 22px 18px 18px!important;
+        }
+        .emdc-modal-body{
+          max-height:calc(78dvh - 82px)!important;
+          overflow-y:auto!important;
+          -webkit-overflow-scrolling:touch!important;
+          padding-bottom:32px!important;
+        }
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -1025,12 +1060,12 @@ const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
       style={{
         position:"fixed",
         inset:0,
-        background:"rgba(0,0,0,.45)",
         zIndex:10000,
+        background:"rgba(15,23,42,.48)",
         display:"flex",
         alignItems:isSmall?"flex-end":"center",
         justifyContent:"center",
-        padding:isSmall?0:16,
+        padding:isSmall?"0 10px calc(88px + env(safe-area-inset-bottom))":"20px",
         overflow:"hidden",
       }}
       onClick={onClose}
@@ -1038,27 +1073,27 @@ const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
       <div
         className="emdc-modal-sheet"
         style={{
-          background:C.surface,
-          borderRadius:isSmall?"16px 16px 0 0":14,
           width:"100%",
           maxWidth:width,
-          height:isSmall?"calc(100dvh - 72px)":"auto",
-          maxHeight:isSmall?"calc(100dvh - 72px)":"min(90vh, 760px)",
-          boxShadow:"0 -4px 32px rgba(0,0,0,.16)",
+          maxHeight:isSmall?"min(78dvh, 720px)":"min(88vh, 760px)",
+          background:C.surface,
+          border:`1px solid ${C.border}`,
+          borderRadius:isSmall?"22px 22px 18px 18px":18,
+          boxShadow:"0 24px 80px rgba(15,23,42,.28)",
+          overflow:"hidden",
           display:"flex",
           flexDirection:"column",
-          overflow:"hidden",
         }}
         onClick={e=>e.stopPropagation()}
       >
-        <div style={{ flex:"0 0 auto",padding:isSmall?"18px 24px 12px":24,borderBottom:`1px solid ${C.border}` }}>
-          {isSmall&&<div style={{ width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 18px" }} />}
+        <div style={{ flex:"0 0 auto",padding:isSmall?"12px 20px 14px":"18px 22px 16px",borderBottom:`1px solid ${C.border}`,background:C.surface }}>
+          {isSmall&&<div style={{ width:44,height:5,borderRadius:999,background:C.border,margin:"0 auto 18px" }} />}
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:12 }}>
             <div style={{ display:"flex",alignItems:"center",gap:10,minWidth:0 }}>
-              {onBack&&<button onClick={onBack} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:15,flexShrink:0 }}>&#8249;</button>}
-              <h3 style={{ margin:0,fontSize:16,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{title}</h3>
+              {onBack&&<button onClick={onBack} style={{ width:38,height:38,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:18,flexShrink:0 }}>&#8249;</button>}
+              <h3 style={{ margin:0,fontSize:isSmall?18:17,fontWeight:900,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{title}</h3>
             </div>
-            <button onClick={onClose} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:16,flexShrink:0 }}>&#215;</button>
+            <button onClick={onClose} style={{ width:44,height:44,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:22,flexShrink:0 }}>&#215;</button>
           </div>
         </div>
         <div
@@ -1070,7 +1105,8 @@ const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
             WebkitOverflowScrolling:"touch",
             overscrollBehavior:"contain",
             touchAction:"pan-y",
-            padding:isSmall?"18px 24px calc(180px + env(safe-area-inset-bottom))":24,
+            padding:isSmall?"18px 20px 28px":"22px",
+            background:C.surface,
           }}
         >
           {children}
@@ -2361,7 +2397,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         id:`month-only-${ev.id}-${year}-${month}`,
         title:ev.name,
         type:ev.type || "seasonal",
-        color:eventDisplayColor(ev),
+        color:ev.color || eventDisplayColor(ev),
         date:monthStart,
         dateEnd:monthEnd,
         fromSeasonal:true,
@@ -2579,7 +2615,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         itemKind:"seasonal",
         title:ev.name,
         type:ev.type || "seasonal",
-        color:eventDisplayColor(ev),
+        color:ev.color || eventDisplayColor(ev),
         calDate:ev.calDate,
         dateEnd:ev.calDateEnd,
         dateText:ev.date,
@@ -2594,7 +2630,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:"manual",
       title:ev.title,
       type:ev.type || "task",
-      color:eventDisplayColor(ev),
+      color:ev.color || eventDisplayColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -2607,7 +2643,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:ev.fromChecklist ? "checklist" : "extra",
       title:ev.title,
       type:ev.type || "deadline",
-      color:eventDisplayColor(ev),
+      color:ev.color || eventDisplayColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -3031,7 +3067,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         </Select>
       </Field>
       <Field label="Color">
-        <ColorPicker value={form.color} onChange={v=>setForm(f=>({...f,color:v}))} palette={EVENT_COLORS} />
+        <ColorPicker value={form.color} onChange={v=>setForm(f=>({...f,color:String(v).toUpperCase()}))} palette={EVENT_COLORS} />
       </Field>
       {form.title&&(
         <div style={{ padding:"10px 14px",borderRadius:8,background:C.surfaceAlt,borderLeft:`3px solid ${form.color}`,fontSize:13,color:C.textSub,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
@@ -3079,7 +3115,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         </Select>
       </Field>
       <Field label="Color">
-        <ColorPicker value={seasonalEditForm.color || typeMeta(seasonalEditForm.type)?.color || "#374151"} onChange={v=>setSeasonalEditForm((f:any)=>({...f,color:v}))} palette={EVENT_COLORS} />
+        <ColorPicker value={seasonalEditForm.color || typeMeta(seasonalEditForm.type)?.color || "#374151"} onChange={v=>setSeasonalEditForm((f:any)=>({...f,color:String(v).toUpperCase()}))} palette={EVENT_COLORS} />
       </Field>
       <Field label="Description" hint="optional">
         <TI value={seasonalEditForm.desc||""} onChange={v=>setSeasonalEditForm((f:any)=>({...f,desc:v}))} placeholder="Short description" />
@@ -3147,7 +3183,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
             {monthOnlyCalendarEvents.filter((ev:any)=>filter==="all" || ev.type===filter).map((ev:any)=>(
               <button key={ev.id} type="button" onClick={()=>setDetailEv(ev)}
-                style={{ border:`1px solid ${eventDisplayColor(ev)}28`,background:eventDisplayColor(ev)+"14",color:eventDisplayColor(ev),borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                style={{ border:`1px solid ${eventDisplayColor(ev)}28`,background:eventDisplayColor(ev)+"14",color:ev.color || eventDisplayColor(ev),borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
                 {ev.phaseoutCount>0?"⚑ ":""}{ev.title}
               </button>
             ))}
@@ -4061,7 +4097,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
           {eventFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
       </Field>
-      <Field label="Color"><ColorPicker value={eventTypeColor(form.type, form.color || "#6B7280")} onChange={v=>setForm(f=>({...f,color:v}))} palette={EVENT_COLORS} /></Field>
+      <Field label="Color"><ColorPicker value={eventTypeColor(form.type, form.color || "#6B7280")} onChange={v=>setForm(f=>({...f,color:String(v).toUpperCase()}))} palette={EVENT_COLORS} /></Field>
       <Field label="Description" hint="(optional)"><TI value={form.desc||""} onChange={v=>setForm(f=>({...f,desc:v}))} placeholder="Brief description" /></Field>
       <Btn full onClick={onSave} disabled={!form.name.trim()}>{saveLabel}</Btn>
       {onDelete&&<Btn full variant="danger" onClick={onDelete}>Delete Event</Btn>}
