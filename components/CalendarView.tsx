@@ -1017,6 +1017,7 @@ const DateInput = ({ value, onChange, style={} }) => {
   const dateInputRef = useRef<any>(null);
 
   const getModeFromValue = (v:any) =>
+    !v ? "none" :
     String(v || "").startsWith("monthly:") ? "monthly" :
     String(v || "").startsWith("yearly:") ? "yearly" :
     "date";
@@ -1109,12 +1110,14 @@ const DateInput = ({ value, onChange, style={} }) => {
           value={mode}
           onChange={e=>{
             const v = e.target.value;
-            if(v==="monthly") onChange(`monthly:15,30`);
+            if(v==="none") onChange("");
+            else if(v==="monthly") onChange(`monthly:15,30`);
             else if(v==="yearly") onChange(`yearly:${yearlyMonth}-${yearlyDay}`);
-            else onChange(currentDateValue || "");
+            else onChange(currentDateValue || fallbackDateValue);
           }}
           style={selectStyle}
         >
+          <option value="none">No date</option>
           <option value="date">Specific date</option>
           <option value="yearly">Recurring yearly</option>
           <option value="monthly">Recurring monthly</option>
@@ -1122,6 +1125,21 @@ const DateInput = ({ value, onChange, style={} }) => {
       </div>
 
       <div style={{ flex:"0 0 calc(50% - 5px)", width:"calc(50% - 5px)", maxWidth:"calc(50% - 5px)", minWidth:0, overflow:"hidden", boxSizing:"border-box" }}>
+        {mode === "none" && (
+          <div
+            style={{
+              ...baseField,
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"center",
+              color:C.faint,
+              background:C.surfaceAlt,
+            }}
+          >
+            No date
+          </div>
+        )}
+
         {mode === "date" && (
           <div style={{ position:"relative", width:"100%", maxWidth:"100%", minWidth:0, overflow:"hidden", boxSizing:"border-box" }}>
             <button
@@ -12903,12 +12921,12 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
         </Field>
         {(deadline || deadlineEnd) && (
           <button type="button" onClick={()=>{ setDeadline(""); setDeadlineEnd(""); }} style={{ alignSelf:"flex-start",border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer",padding:"0 0 2px" }}>
-            Clear calendar date
+            Clear start and end dates
           </button>
         )}
         {(deadline || deadlineEnd) && (
           <button type="button" onClick={()=>{ setDeadline(""); setDeadlineEnd(""); }} style={{ alignSelf:"flex-start",border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer",padding:"0 0 2px" }}>
-            Clear calendar date
+            Clear start and end dates
           </button>
         )}
         <Field label="Tag / Filter Type">
