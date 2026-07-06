@@ -2812,6 +2812,52 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     return s;
   };
 
+  const formatYearListDateText = (start:any,end:any,fallback:any="") => {
+    const fmtSpecific = (v:any) => {
+      const raw = String(v || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+      const d = new Date(raw+"T00:00:00");
+      if (Number.isNaN(d.getTime())) return "";
+      return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+    };
+
+    const fmtShort = (v:any) => {
+      const raw = String(v || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+      const d = new Date(raw+"T00:00:00");
+      if (Number.isNaN(d.getTime())) return "";
+      return d;
+    };
+
+    const startRaw = String(start || "");
+    const endRaw = String(end || "");
+
+    if (startRaw.startsWith("yearly:")) {
+      const [sm,sd] = startRaw.replace("yearly:","").split("-").map((n:any)=>Number(n));
+      const sLabel = `${MONTHS_SHORT[Math.max(0,Math.min(11,(sm||1)-1))]} ${sd||1}`;
+      if (endRaw.startsWith("yearly:")) {
+        const [em,ed] = endRaw.replace("yearly:","").split("-").map((n:any)=>Number(n));
+        const eLabel = `${MONTHS_SHORT[Math.max(0,Math.min(11,(em||1)-1))]} ${ed||1}`;
+        if (eLabel !== sLabel) return `Every ${sLabel} - ${eLabel}`;
+      }
+      return `Every ${sLabel}`;
+    }
+
+    if (startRaw.startsWith("monthly:")) return formatDate(startRaw);
+
+    const s = fmtShort(startRaw);
+    const e = fmtShort(endRaw);
+    if (s && e && s.getTime() !== e.getTime()) {
+      const sameYear = s.getFullYear() === e.getFullYear();
+      const sameMonth = sameYear && s.getMonth() === e.getMonth();
+      if (sameMonth) return `${MONTHS_SHORT[s.getMonth()]} ${s.getDate()}-${e.getDate()}, ${s.getFullYear()}`;
+      return `${s.toLocaleDateString("en-US",{month:"short",day:"numeric",year:sameYear?undefined:"numeric"})} - ${e.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}`;
+    }
+
+    if (s) return fmtSpecific(startRaw);
+    return fallback || "";
+  };
+
   const getMonthFromText = (value:any) => {
     const txt = String(value || "").toLowerCase();
     if (!txt) return null;
@@ -2893,7 +2939,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         color:resolveSavedEventColor(ev),
         calDate:ev.calDate,
         dateEnd:ev.calDateEnd,
-        dateText:ev.date,
+        dateText:formatYearListDateText(ev.calDate, ev.calDateEnd, ev.date),
         source:"Events & Seasons",
         phaseoutCount,
       }];
@@ -2908,7 +2954,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       color:resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
-      dateText:formatDate(ev.date),
+      dateText:formatYearListDateText(ev.date, ev.dateEnd, formatDate(ev.date)),
       source:"Calendar",
     }));
 
@@ -2921,7 +2967,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       color:resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
-      dateText:formatDate(ev.date),
+      dateText:formatYearListDateText(ev.date, ev.dateEnd, formatDate(ev.date)),
       source:ev.fromChecklist ? "Checklist" : "Calendar",
       groupId:ev.groupId,
     }));
@@ -3683,7 +3729,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                           </div>
                         </div>
                         <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
-                          {item.dateText || item.calDate || "No specific date"}{item.dateEnd?` → ${item.dateEnd}`:""} · {item.source}
+                          {item.dateText || item.calDate || "No specific date"} · {item.source}
                         </div>
                       </button>
                       <button type="button"
@@ -3818,7 +3864,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                         }}
                                         style={{ flex:"0 0 132px",border:`1px solid ${C.border}`,background:C.bg,borderRadius:7,padding:"4px 7px",textAlign:"left",cursor:"pointer" }}>
                                         <span style={{ display:"block",fontSize:10.1,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
-                                        <span style={{ display:"block",fontSize:9.3,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || "No specific date"}</span>
+                                        <span style={{ display:"block",fontSize:9.3,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatYearListDateText(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || "No specific date")}</span>
                                       </button>
                                     ))}
                                   </div>
@@ -3869,7 +3915,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         <span style={{ width:18,height:18,borderRadius:999,border:`2px solid ${checked?"#F59E0B":C.borderStrong}`,background:checked?"#F59E0B":"transparent",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,flexShrink:0 }}>{checked?"✓":""}</span>
                         <span style={{ minWidth:0,flex:1 }}>
                           <span style={{ display:"block",fontSize:12.5,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
-                          <span style={{ display:"block",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || ev.calDate || formatMonthOnlyLabel(ev.months) || "No specific date"} · {ev.type || "event"}</span>
+                          <span style={{ display:"block",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatYearListDateText(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || formatMonthOnlyLabel(ev.months) || "No specific date")} · {ev.type || "event"}</span>
                         </span>
                         <Tag color={eventDisplayColor(ev)}>{typeLabel(ev.type || "seasonal")}</Tag>
                       </button>
@@ -12715,6 +12761,10 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
   const isPhaseoutType = selType==="phaseout" || (launchTypes?.[selType]?.label || "").toLowerCase().includes("phase-out");
   const selectedCalendarType = calendarTypes.find((t:any)=>t.id===calendarType) || defaultCalendarType;
   const onCalendarTypeChange = (id:any) => {
+    if (id === "__none__" || id === "") {
+      setCalendarType("");
+      return;
+    }
     const selected = calendarTypes.find((t:any)=>t.id===id) || defaultCalendarType;
     setCalendarType(selected.id);
     if(selected.useColor) setCalendarColor(selected.color || "#8B5CF6");
@@ -12773,7 +12823,8 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
           <DateInput value={deadlineEnd} onChange={v=>{ setDeadlineEnd(v); if(v){ setDateMode("specific"); setMonthOnlyMonths([]); } }} />
         </Field>
         <Field label="Tag / Filter Type">
-          <Select value={calendarType} onChange={onCalendarTypeChange}>
+          <Select value={calendarType || "__none__"} onChange={onCalendarTypeChange}>
+            <option value="__none__">No Tag Type</option>
             {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
           </Select>
         </Field>
@@ -12835,7 +12886,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
           )}
         </Field>
 
-        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType,calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
+        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
   );
@@ -12873,9 +12924,9 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       const existingMonths = Array.isArray(group.monthOnlyMonths) ? group.monthOnlyMonths : (Array.isArray(group.months) ? group.months : []);
       setMonthOnlyMonths(existingMonths);
       setDateMode(group.dateMode || (existingMonths.length && !group.deadline ? "months" : "specific"));
-      const loadedCalendarType = group.calendarType || group.eventType || "deadline";
+      const loadedCalendarType = Object.prototype.hasOwnProperty.call(group,"calendarType") ? (group.calendarType || "") : (group.eventType || "deadline");
       const matchedCalendarType = calendarTypes.find((t:any)=>t.id===loadedCalendarType) || defaultCalendarType;
-      setCalendarType(loadedCalendarType || matchedCalendarType.id);
+      setCalendarType(loadedCalendarType || "");
       setCalendarColor(group.calendarColor || group.color || matchedCalendarType.color || "#8B5CF6");
       setLinkedEventIds(Array.isArray(group.linkedEventIds)?group.linkedEventIds:[]);
       const availableTypes = Object.keys(launchTypes||LAUNCH_TYPES); setLaunchType((group.launchType&&availableTypes.includes(group.launchType)) ? group.launchType : (availableTypes[0]||"introduction"));
@@ -12898,6 +12949,10 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const isPhaseoutType = launchType==="phaseout" || (launchTypes?.[launchType]?.label || "").toLowerCase().includes("phase-out");
   const canSave = finalSkus.length>0 && groupName.trim();
   const onCalendarTypeChange = (id:any) => {
+    if (id === "__none__" || id === "") {
+      setCalendarType("");
+      return;
+    }
     const selected = calendarTypes.find((t:any)=>t.id===id) || defaultCalendarType;
     setCalendarType(selected.id);
     if(selected.useColor) setCalendarColor(selected.color || "#8B5CF6");
@@ -12947,7 +13002,8 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
           <DateInput value={deadlineEnd} onChange={v=>{ setDeadlineEnd(v); if(v){ setDateMode("specific"); setMonthOnlyMonths([]); } }} />
         </Field>
         <Field label="Tag / Filter Type">
-          <Select value={calendarType} onChange={onCalendarTypeChange}>
+          <Select value={calendarType || "__none__"} onChange={onCalendarTypeChange}>
+            <option value="__none__">No Tag Type</option>
             {calendarTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
           </Select>
         </Field>
@@ -13014,7 +13070,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
                       <span style={{ width:6,height:26,borderRadius:999,background:active?evColor:C.border,flexShrink:0 }} />
                       <div style={{ minWidth:0,flex:1 }}>
                         <p style={{ margin:0,fontSize:12,fontWeight:750,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</p>
-                        <p style={{ margin:"1px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || ev.type || "No date"}</p>
+                        <p style={{ margin:"1px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatYearListDateText(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || ev.type || "No date")}</p>
                       </div>
                     </div>
                     <div style={{ width:17,height:17,borderRadius:"50%",border:`2px solid ${active?evColor:C.border}`,background:active?evColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{active&&<span style={{ color:"#fff",fontSize:9 }}>&#10003;</span>}</div>
@@ -13040,7 +13096,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
-        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType,calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
   );
