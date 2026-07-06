@@ -381,6 +381,15 @@ const GlobalStyles = () => {
         max-width:100%!important;
         min-width:0!important;
       }
+
+      .emdc-date-row-hardfix input[type="date"],
+      .emdc-date-row-final input[type="date"],
+      input[type="date"]{
+        pointer-events:auto!important;
+        -webkit-user-select:auto!important;
+        user-select:auto!important;
+        touch-action:manipulation!important;
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -1131,6 +1140,7 @@ const DateInput = ({ value, onChange, style={} }) => {
                 alignItems:"center",
                 justifyContent:"center",
                 cursor:"pointer",
+                pointerEvents:"none",
                 padding:"0 8px",
               }}
             >
@@ -1146,8 +1156,9 @@ const DateInput = ({ value, onChange, style={} }) => {
                 inset:0,
                 width:"100%",
                 height:"100%",
-                opacity:0,
-                pointerEvents:"none",
+                opacity:0.001,
+                pointerEvents:"auto",
+                cursor:"pointer",
               }}
               tabIndex={-1}
             />
@@ -1188,6 +1199,15 @@ const formatMonthOnlyLabel = (months:any[]) => {
   return vals.map((m:number)=>MONTHS_SHORT[m]).join(" / ");
 };
 
+
+
+const checklistGroupTagTypeForEvent = (ev:any, groups:any[]=[]) => {
+  if (!ev?.fromChecklist && ev?.itemKind !== "checklist") return String(ev?.type || "");
+  const groupId = ev?.groupId || ev?.checklistGroupId || ev?.sourceGroupId;
+  const g = (groups || []).find((x:any)=>String(x?.id)===String(groupId));
+  if (!g) return "";
+  return String(g?.calendarType || g?.eventType || "").trim();
+};
 
 const formatEventPreviewDateGlobal = (start:any,end:any,fallback:any="") => {
   const fmtSpecificDate = (rawValue:any) => {
@@ -1334,7 +1354,7 @@ const Select = ({ value, onChange, children, style={} }) => {
           right:12,
           top:"50%",
           transform:"translateY(-50%)",
-          pointerEvents:"none",
+          pointerEvents:"auto",
           color:C.muted,
           fontSize:10,
           lineHeight:1,
@@ -3007,7 +3027,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       sourceId:ev.id,
       itemKind:ev.fromChecklist ? "checklist" : "extra",
       title:ev.title,
-      type:ev.type || "deadline",
+      type:ev.fromChecklist ? checklistGroupTagTypeForEvent(ev, checklistGroups) : (ev.type || "deadline"),
       color:resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
@@ -3769,7 +3789,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                 ⚑ {item.phaseoutCount}
                               </span>
                             )}
-                            <span style={{ fontSize:10,color:typeColor(item.type,item.color||C.faint),background:typeColor(item.type,item.color||C.faint)+"14",border:`1px solid ${typeColor(item.type,item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{typeLabel(item.type)}</span>
+                            {item.type&&<span style={{ fontSize:10,color:typeColor(item.type,item.color||C.faint),background:typeColor(item.type,item.color||C.faint)+"14",border:`1px solid ${typeColor(item.type,item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{typeLabel(item.type)}</span>}
                           </div>
                         </div>
                         <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
@@ -4251,7 +4271,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
-                  {isChecklist&&<Tag color="#8B5CF6">Checklist Deadline</Tag>}
+                  {isChecklist&&<Tag color="#8B5CF6">Checklist</Tag>}
                   {detailEv.monthOnly&&<Tag color={C.muted}>Month-only</Tag>}
                   {detailEv.dateEnd&&!detailEv.monthOnly&&<Tag color={C.muted}>Multi-day</Tag>}
                 </div>
