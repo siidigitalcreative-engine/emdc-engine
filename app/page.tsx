@@ -295,6 +295,27 @@ const GlobalStyles = () => {
           max-width:100%!important;
         }
       }
+
+      .emdc-date-final-fix,
+      .emdc-date-final-fix *{
+        box-sizing:border-box!important;
+      }
+      .emdc-date-final-fix{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+        gap:10px!important;
+        width:100%!important;
+        max-width:100%!important;
+        overflow:hidden!important;
+      }
+      .emdc-date-final-fix select,
+      .emdc-date-final-fix input{
+        height:48px!important;
+        min-height:48px!important;
+        max-height:48px!important;
+        width:100%!important;
+        max-width:100%!important;
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -927,122 +948,37 @@ const TI = ({ value, onChange, placeholder, type="text", style={} }) => (
   />
 );
 
-const DateInput = ({ value, onChange, style={} }) => {
-  const recurring = typeof value === "string" && value.startsWith("monthly:");
-  const yearly = typeof value === "string" && value.startsWith("yearly:");
-  const getModeFromValue = (v:any) => String(v || "").startsWith("monthly:") ? "monthly" : String(v || "").startsWith("yearly:") ? "yearly" : "date";
-  const [mode,setMode]=useState(getModeFromValue(value));
-  const dateInputRef = useRef<any>(null);
-  const yearlyRaw = yearly ? String(value).replace("yearly:","") : (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(5) : `${pad(today.getMonth()+1)}-${pad(today.getDate())}`);
-  const yearlyParts = yearlyRaw.split("-");
-  const yearlyMonth = /^\d{2}$/.test(yearlyParts[0] || "") ? yearlyParts[0] : pad(today.getMonth()+1);
-  const yearlyDayMax = new Date(2024, Number(yearlyMonth), 0).getDate();
-  const yearlyDay = pad(Math.min(Math.max(Number(yearlyParts[1]) || 1, 1), yearlyDayMax));
-  const setYearlyPart = (nextMonth:any, nextDay:any) => {
-    const mm = pad(Number(nextMonth) || 1);
-    const max = new Date(2024, Number(mm), 0).getDate();
-    const dd = pad(Math.min(Math.max(Number(nextDay) || 1, 1), max));
-    onChange(`yearly:${mm}-${dd}`);
-  };
-  const monthlyDays = recurring ? value.replace("monthly:","").split(",").filter(Boolean) : ["15","30"];
-  const [customDay,setCustomDay] = useState("");
-  useEffect(()=>{ if(typeof value==="string") setMode(getModeFromValue(value)); },[value]);
+const DateInput = ({ value, onChange }: any) => {
+  const displayValue = value && /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? new Date(String(value) + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })
+    : "";
 
-  const openNativeDatePicker = () => {
-    const el:any = dateInputRef.current;
-    if(!el) return;
-    try {
-      if(typeof el.showPicker === "function") el.showPicker();
-      else el.focus();
-    } catch {
-      try { el.focus(); } catch {}
-    }
-  };
-
-  const toggleDay = day => {
-    const has = monthlyDays.includes(day);
-    const next = has ? monthlyDays.filter(d=>d!==day) : [...monthlyDays, day];
-    onChange(`monthly:${next.join(",")}`);
-  };
-  const addCustomDay = () => {
-    const n = customDay.trim();
-    if (!n || +n<1 || +n>31 || monthlyDays.includes(n)) { setCustomDay(""); return; }
-    onChange(`monthly:${[...monthlyDays, n].join(",")}`);
-    setCustomDay("");
-  };
-  const numericDays = monthlyDays.filter(d=>d!=="first"&&d!=="last");
-
-  return (<div style={{display:"flex",flexDirection:"column",gap:8,...style}}>
-    <div style={{display:"flex",gap:8,alignItems:"center"}}>
-      <Select value={mode} onChange={v=>{
-        setMode(v);
-        if(v==="monthly") onChange(`monthly:${monthlyDays.join(",")}`);
-        else if(v==="yearly") {
-          const base = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(5) : yearly ? String(value).replace("yearly:","") : `${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-          onChange(`yearly:${base}`);
-        }
-        else onChange("");
-      }} style={{width:170,flexShrink:0}}>
-        <option value="date">Specific date</option>
-        <option value="yearly">Recurring yearly</option>
-        <option value="monthly">Recurring monthly</option>
-      </Select>
-      {mode==="date" && (
-        <div onClick={openNativeDatePicker} style={{ flex:1,position:"relative",cursor:"pointer" }}>
-          <input
-            ref={dateInputRef}
-            type="date"
-            value={(recurring||yearly)?"":(value||"")}
-            onClick={openNativeDatePicker}
-            onFocus={openNativeDatePicker}
-            onChange={e=>onChange(e.target.value)}
-            style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",colorScheme:"light",fontFamily:"inherit",boxSizing:"border-box",cursor:"pointer" }}
-          />
-        </div>
-      )}
-      {mode==="yearly" && (
-        <div style={{ flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-          <Select value={yearlyMonth} onChange={(m:any)=>setYearlyPart(m, yearlyDay)} style={{height:38}}>
-            {MONTHS_SHORT.map((m,i)=><option key={m} value={pad(i+1)}>{m}</option>)}
-          </Select>
-          <Select value={yearlyDay} onChange={(d:any)=>setYearlyPart(yearlyMonth, d)} style={{height:38}}>
-            {Array.from({length:yearlyDayMax},(_,i)=>pad(i+1)).map(d=><option key={d} value={d}>{Number(d)}</option>)}
-          </Select>
-        </div>
-      )}
-    </div>
-    {mode==="yearly" && <span style={{fontSize:11,color:C.muted}}>Repeats every year on this same month and day.</span>}
-    {mode==="monthly" && (
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[{id:"first",label:"First day"},{id:"last",label:"Last day"}].map(opt=>{
-            const active = monthlyDays.includes(opt.id);
-            return (
-              <button className="emdc-date-display-v3" key={opt.id} type="button" onClick={()=>toggleDay(opt.id)}
-                style={{ padding:"6px 12px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",
-                  border:`1.5px solid ${active?C.accent:C.border}`,
-                  background:active?C.accent:C.surface, color:active?"#fff":C.textSub }}>
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          {numericDays.map(d=>(
-            <span key={d} onClick={()=>toggleDay(d)} style={{ cursor:"pointer",padding:"4px 9px",borderRadius:6,fontSize:12,fontWeight:600,background:C.accent+"18",color:C.accent,border:`1px solid ${C.accent}28`,display:"inline-flex",alignItems:"center",gap:5 }}>
-              Day {d} <span style={{fontSize:11}}>&#215;</span>
-            </span>
-          ))}
-          <input type="text" value={customDay} placeholder="+ day (1-31)"
-            onChange={e=>setCustomDay(e.target.value.replace(/[^0-9]/g,""))}
-            onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addCustomDay(); } }}
-            onBlur={addCustomDay}
-            style={{ width:96,height:30,padding:"4px 10px",fontSize:12,borderRadius:6,border:`1.5px solid ${C.border}`,outline:"none" }} />
-        </div>
-        {monthlyDays.length===0&&<span style={{fontSize:11,color:C.faint}}>Select at least one day, or First/Last day.</span>}
-      </div>
-    )}
-  </div>);
+  return (
+    <input
+      type="date"
+      value={value || ""}
+      onChange={e=>onChange(e.target.value)}
+      title={displayValue || "Select date"}
+      style={{
+        width:"100%",
+        maxWidth:"100%",
+        minWidth:0,
+        height:48,
+        minHeight:48,
+        maxHeight:48,
+        boxSizing:"border-box",
+        border:`1.5px solid ${C.border}`,
+        borderRadius:10,
+        background:C.surface,
+        color:C.text,
+        fontSize:14,
+        fontWeight:700,
+        padding:"0 10px",
+        outline:"none",
+        overflow:"hidden",
+      }}
+    />
+  );
 };
 
 const monthOnlyValues = (value:any) => Array.isArray(value)
@@ -18329,6 +18265,7 @@ export default function App({
   const cloudApplyingRef = useRef(false);
   const cloudSavingRef = useRef(false);
   const cloudSaveTimerRef = useRef<any>(null);
+  const eventLocalEditUntilRef = useRef(0);
   const cloudClientIdRef = useRef("");
   const lastDirectSkuSaveSignatureRef = useRef("");
   const skuDirectSaveTimerRef = useRef<any>(null);
@@ -18375,6 +18312,8 @@ export default function App({
       setSeasonalEvents(patch.seasonalEvents);
       try { localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(patch.seasonalEvents)); } catch {}
     }
+
+    if (Array.isArray(patch.calendarEvents) || Array.isArray(patch.seasonalEvents) || Array.isArray(patch.calendarTypes)) eventLocalEditUntilRef.current = Date.now() + 5000;
 
     if (Array.isArray(patch.calendarEvents)) {
       setCalendarManualEvents(patch.calendarEvents);
@@ -18469,6 +18408,8 @@ export default function App({
   };
 
   const applyCloudState = (cloud:any) => {
+    if (Date.now() < eventLocalEditUntilRef.current) return;
+
     if (!cloud || typeof cloud !== "object") return;
 
     const cloudAppState = cloud.appState || cloud;
@@ -18853,12 +18794,44 @@ export default function App({
     }
   };
 
-  const handleRootStateChange = (patch:any) => {
+  const handleRootStateChange = (patch:any = {}) => {
     if (!patch || typeof patch !== "object") return;
-    if (onStateChange) onStateChange(patch);
-    saveAppPatchDirect(patch);
-  };
 
+    if (Array.isArray(patch.calendarEvents)) {
+      setCalendarManualEvents(patch.calendarEvents);
+      try { localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(patch.calendarEvents)); } catch {}
+    }
+
+    if (Array.isArray(patch.seasonalEvents)) {
+      setSeasonalEvents(patch.seasonalEvents);
+      try { localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(patch.seasonalEvents)); } catch {}
+    }
+
+    if (Array.isArray(patch.calendarTypes)) {
+      setCalendarEventTypes(patch.calendarTypes);
+      try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
+    }
+
+    try {
+      const currentPayload = {
+        skuBrands: brands,
+        skuItems: skuStorage,
+        skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
+        checklistGroups,
+        checklistItems: checklistAllItems,
+        checklistStatuses,
+        calendarEvents: Array.isArray(patch.calendarEvents) ? patch.calendarEvents : calendarManualEvents,
+        calendarTypes: Array.isArray(patch.calendarTypes) ? patch.calendarTypes : calendarEventTypes,
+        seasonalEvents: Array.isArray(patch.seasonalEvents) ? patch.seasonalEvents : seasonalEvents,
+      };
+      localStorage.setItem("emdc_app_state_v1", JSON.stringify(currentPayload));
+      localStorage.setItem("emdc_app_state_last_good_v1", JSON.stringify(currentPayload));
+      localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
+
+    if (onStateChange) onStateChange(patch);
+  };
   const readCurrentLocalSnapshot = () => {
     const snapshot:any = {};
     if (typeof window === "undefined") return snapshot;
