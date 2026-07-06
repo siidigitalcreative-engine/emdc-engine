@@ -1190,15 +1190,6 @@ const formatMonthOnlyLabel = (months:any[]) => {
 };
 
 
-
-const getChecklistGroupTagDisplay = (ev:any, groups:any[]=[]) => {
-  const groupId = ev?.groupId || ev?.checklistGroupId || ev?.sourceGroupId;
-  const g = (groups || []).find((x:any)=>String(x?.id)===String(groupId));
-  const tagType = String(g?.calendarType || g?.eventType || "").trim();
-  if (!tagType || tagType === "__none__") return "";
-  return tagType;
-};
-
 const formatEventPreviewDateGlobal = (start:any,end:any,fallback:any="") => {
   const fmtSpecificDate = (rawValue:any) => {
     const raw = String(rawValue || "");
@@ -3024,7 +3015,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
       source:ev.fromChecklist ? "Checklist" : "Calendar",
       groupId:ev.groupId,
-      groupTagType:getChecklistGroupTagDisplay(ev, checklistGroups),
     }));
 
     const items = [...seasonal,...manual,...checklist]
@@ -4201,8 +4191,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
               <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                 {dayEv.map(ev=>{
                   const isChecklist=!!ev.fromChecklist, isSeasonal=!!ev.fromSeasonal;
-                  const tLabel = isChecklist ? (ev.type ? typeLabel(ev.type) : "") : typeLabel(ev.type);
-                  const tColor = isChecklist ? (ev.type ? typeColor(ev.type, ev.color || "#8B5CF6") : (ev.color || "#8B5CF6")) : eventDisplayColor(ev);
+                  const checklistTag = ev.groupTagType || ev.type;
+                  const tLabel = isChecklist ? (checklistTag ? typeLabel(checklistTag) : "") : typeLabel(ev.type);
+                  const tColor = isChecklist ? (checklistTag ? typeColor(checklistTag, ev.color || "#8B5CF6") : (ev.color || "#8B5CF6")) : eventDisplayColor(ev);
                   return (
                     <div key={ev.id} style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,borderLeft:`4px solid ${tColor}`,cursor:"pointer" }}
                       onClick={()=>{ setPrevDayView(dayView); setDayView(null); setDetailEv(ev); }}>
@@ -4235,8 +4226,9 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           const isChecklist = !!detailEv.fromChecklist;
           const isSeasonal  = !!detailEv.fromSeasonal;
           const isManual    = !isChecklist && !isSeasonal;
-          const tLabel = isChecklist ? (detailEv.type ? typeLabel(detailEv.type) : "") : typeLabel(detailEv.type);
-          const tColor = isChecklist ? (detailEv.type ? typeColor(detailEv.type, detailEv.color || "#8B5CF6") : (detailEv.color || "#8B5CF6")) : typeColor(detailEv.type, detailEv.color || "#9CA3AF");
+          const checklistTag = detailEv.groupTagType || detailEv.type;
+          const tLabel = isChecklist ? (checklistTag ? typeLabel(checklistTag) : "") : typeLabel(detailEv.type);
+          const tColor = isChecklist ? (checklistTag ? typeColor(checklistTag, detailEv.color || "#8B5CF6") : (detailEv.color || "#8B5CF6")) : typeColor(detailEv.type, detailEv.color || "#9CA3AF");
           const seasonalSource = isSeasonal ? (seasonalEvents||[]).find((ev:any)=>ev.id===detailEv.sourceEventId) : null;
           const products = Array.isArray(seasonalSource?.products) ? seasonalSource.products : [];
           const phaseoutSkus = getOverviewPhaseoutSkus(seasonalSource);
@@ -4262,10 +4254,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
                   {detailEv.monthOnly&&<Tag color={C.muted}>Month-only</Tag>}
-                  {detailEv.dateEnd&&!detailEv.monthOnly&&{(yearOverview?.item?.itemKind==="checklist" && yearOverview?.item?.groupTagType)&&(
-              <Tag color={yearOverview?.item?.color || "#9CA3AF"}>{typeLabel(yearOverview.item.groupTagType)}</Tag>
-            )}
-            <Tag color={C.muted}>Multi-day</Tag>}
+                  {detailEv.dateEnd&&!detailEv.monthOnly&&<Tag color={C.muted}>Multi-day</Tag>}
                 </div>
                 {seasonalSource?.desc&&<p style={{ margin:"10px 0 0",fontSize:13,color:C.textSub,lineHeight:1.45 }}>{seasonalSource.desc}</p>}
               </div>
@@ -18447,6 +18436,7 @@ export default function App({
           ...(g.deadlineEnd ? { dateEnd:g.deadlineEnd } : {}),
           title:g.groupName,
           type,
+          groupTagType:type,
           color,
           fromChecklist:true,
           groupId:g.id,
@@ -18461,6 +18451,7 @@ export default function App({
           dateEnd:`${today.getFullYear()}-${pad(monthIdx+1)}-${pad(getDaysInMonth(today.getFullYear(),monthIdx))}`,
           title:g.groupName,
           type,
+          groupTagType:type,
           color,
           fromChecklist:true,
           groupId:g.id,
