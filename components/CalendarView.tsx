@@ -1188,6 +1188,50 @@ const formatMonthOnlyLabel = (months:any[]) => {
   return vals.map((m:number)=>MONTHS_SHORT[m]).join(" / ");
 };
 
+
+const formatEventPreviewDateGlobal = (start:any,end:any,fallback:any="") => {
+  const fmtSpecificDate = (rawValue:any) => {
+    const raw = String(rawValue || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    const d = new Date(raw + "T00:00:00");
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const startRaw = String(start || "");
+  const endRaw = String(end || "");
+
+  if (startRaw.startsWith("yearly:")) {
+    const [sm,sd] = startRaw.replace("yearly:","").split("-").map((n:any)=>Number(n));
+    const sLabel = `${MONTHS_SHORT[Math.max(0,Math.min(11,(sm||1)-1))]} ${sd||1}`;
+    if (endRaw.startsWith("yearly:")) {
+      const [em,ed] = endRaw.replace("yearly:","").split("-").map((n:any)=>Number(n));
+      const eLabel = `${MONTHS_SHORT[Math.max(0,Math.min(11,(em||1)-1))]} ${ed||1}`;
+      if (eLabel !== sLabel) return `Every ${sLabel} - ${eLabel}`;
+    }
+    return `Every ${sLabel}`;
+  }
+
+  if (startRaw.startsWith("monthly:")) {
+    const labels:any = { first:"first day", last:"last day" };
+    const tokens = startRaw.replace("monthly:","").split(",").filter(Boolean)
+      .map((t:any)=>labels[t] || `the ${t}${ordinalSuffix(t)}`);
+    return `Monthly on ${tokens.join(" & ")}`;
+  }
+
+  const s = fmtSpecificDate(startRaw);
+  const e = fmtSpecificDate(endRaw);
+
+  if (s && e && s.getTime() !== e.getTime()) {
+    const sameYear = s.getFullYear() === e.getFullYear();
+    const sameMonth = sameYear && s.getMonth() === e.getMonth();
+    if (sameMonth) return `${MONTHS_SHORT[s.getMonth()]} ${s.getDate()}-${e.getDate()}, ${s.getFullYear()}`;
+    return `${s.toLocaleDateString("en-US",{month:"short",day:"numeric",year:sameYear?undefined:"numeric"})} - ${e.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}`;
+  }
+
+  if (s) return s.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+  return String(fallback || "");
+};
+
 const MonthOnlyPicker = ({ value=[], onChange }: any) => {
   const selected = monthOnlyValues(value);
   const toggle = (idx:number) => {
@@ -2939,7 +2983,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         color:resolveSavedEventColor(ev),
         calDate:ev.calDate,
         dateEnd:ev.calDateEnd,
-        dateText:formatYearListDateText(ev.calDate, ev.calDateEnd, ev.date),
+        dateText:formatEventPreviewDateGlobal(ev.calDate, ev.calDateEnd, ev.date),
         source:"Events & Seasons",
         phaseoutCount,
       }];
@@ -2954,7 +2998,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       color:resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
-      dateText:formatYearListDateText(ev.date, ev.dateEnd, formatDate(ev.date)),
+      dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
       source:"Calendar",
     }));
 
@@ -2967,7 +3011,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       color:resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
-      dateText:formatYearListDateText(ev.date, ev.dateEnd, formatDate(ev.date)),
+      dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
       source:ev.fromChecklist ? "Checklist" : "Calendar",
       groupId:ev.groupId,
     }));
@@ -3864,7 +3908,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                         }}
                                         style={{ flex:"0 0 132px",border:`1px solid ${C.border}`,background:C.bg,borderRadius:7,padding:"4px 7px",textAlign:"left",cursor:"pointer" }}>
                                         <span style={{ display:"block",fontSize:10.1,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
-                                        <span style={{ display:"block",fontSize:9.3,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatYearListDateText(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || "No specific date")}</span>
+                                        <span style={{ display:"block",fontSize:9.3,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatEventPreviewDateGlobal(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || "No specific date")}</span>
                                       </button>
                                     ))}
                                   </div>
@@ -3915,7 +3959,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                         <span style={{ width:18,height:18,borderRadius:999,border:`2px solid ${checked?"#F59E0B":C.borderStrong}`,background:checked?"#F59E0B":"transparent",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,flexShrink:0 }}>{checked?"✓":""}</span>
                         <span style={{ minWidth:0,flex:1 }}>
                           <span style={{ display:"block",fontSize:12.5,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
-                          <span style={{ display:"block",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatYearListDateText(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || formatMonthOnlyLabel(ev.months) || "No specific date")} · {ev.type || "event"}</span>
+                          <span style={{ display:"block",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatEventPreviewDateGlobal(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || formatMonthOnlyLabel(ev.months) || "No specific date")} · {ev.type || "event"}</span>
                         </span>
                         <Tag color={eventDisplayColor(ev)}>{typeLabel(ev.type || "seasonal")}</Tag>
                       </button>
@@ -13070,7 +13114,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
                       <span style={{ width:6,height:26,borderRadius:999,background:active?evColor:C.border,flexShrink:0 }} />
                       <div style={{ minWidth:0,flex:1 }}>
                         <p style={{ margin:0,fontSize:12,fontWeight:750,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</p>
-                        <p style={{ margin:"1px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatYearListDateText(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || ev.type || "No date")}</p>
+                        <p style={{ margin:"1px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{formatEventPreviewDateGlobal(ev.calDate || ev.date, ev.calDateEnd || ev.dateEnd, ev.date || ev.type || "No date")}</p>
                       </div>
                     </div>
                     <div style={{ width:17,height:17,borderRadius:"50%",border:`2px solid ${active?evColor:C.border}`,background:active?evColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{active&&<span style={{ color:"#fff",fontSize:9 }}>&#10003;</span>}</div>
