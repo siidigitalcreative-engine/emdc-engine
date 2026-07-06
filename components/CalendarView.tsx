@@ -96,7 +96,7 @@ const GlobalStyles = () => {
           max-height:calc(100dvh - 140px)!important;
           overflow-y:auto!important;
           -webkit-overflow-scrolling:touch!important;
-          padding-bottom:calc(120px + env(safe-area-inset-bottom))!important;
+          padding-bottom:calc(24px + env(safe-area-inset-bottom))!important;
         }
         .emdc-main-content{
           padding-bottom:calc(170px + env(safe-area-inset-bottom))!important;
@@ -108,10 +108,10 @@ const GlobalStyles = () => {
         overflow-y:auto!important;
         -webkit-overflow-scrolling:touch!important;
         padding:12px!important;
-        padding-bottom:calc(96px + env(safe-area-inset-bottom))!important;
+        padding-bottom:calc(12px + env(safe-area-inset-bottom))!important;
       }
       .emdc-modal-sheet{
-        max-height:calc(100dvh - 130px - env(safe-area-inset-bottom))!important;
+        max-height:calc(92dvh - env(safe-area-inset-bottom))!important;
         overflow:hidden!important;
         display:flex!important;
         flex-direction:column!important;
@@ -1036,11 +1036,13 @@ const DateInput = ({ value, onChange, style={} }) => {
 
   const currentDateValue = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? value
-    : `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+    : "";
+
+  const fallbackDateValue = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 
   const displayDate = currentDateValue
     ? new Date(currentDateValue + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })
-    : "Select date";
+    : "No date";
 
   const setYearlyPart = (nextMonth:any, nextDay:any) => {
     const mm = pad(Number(nextMonth) || 1);
@@ -1109,7 +1111,7 @@ const DateInput = ({ value, onChange, style={} }) => {
             const v = e.target.value;
             if(v==="monthly") onChange(`monthly:15,30`);
             else if(v==="yearly") onChange(`yearly:${yearlyMonth}-${yearlyDay}`);
-            else onChange(currentDateValue);
+            else onChange(currentDateValue || "");
           }}
           style={selectStyle}
         >
@@ -1350,6 +1352,36 @@ const Select = ({ value, onChange, children, style={} }) => {
 const Divider = ({ my=16 }) => <div style={{ height:1,background:C.border,margin:`${my}px 0` }} />;
 
 const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    const scrollY = window.scrollY || 0;
+    const previous = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.position = previous.position;
+      document.body.style.top = previous.top;
+      document.body.style.left = previous.left;
+      document.body.style.right = previous.right;
+      document.body.style.width = previous.width;
+      document.body.style.overflow = previous.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
   if (!open) return null;
   const isSmall = typeof window !== "undefined" ? window.innerWidth < 640 : false;
 
@@ -1368,6 +1400,8 @@ const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
         overflow:"hidden",
       }}
       onClick={onClose}
+      onTouchMove={(e:any)=>{ if(e.target===e.currentTarget) e.preventDefault(); }}
+      onWheel={(e:any)=>{ if(e.target===e.currentTarget) e.preventDefault(); }}
     >
       <div
         className="emdc-modal-sheet"
@@ -1404,7 +1438,7 @@ const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
             WebkitOverflowScrolling:"touch",
             overscrollBehavior:"contain",
             touchAction:"pan-y",
-            padding:isSmall?"18px 20px 28px":"22px",overflowX:"hidden",overflowX:"hidden",
+            padding:isSmall?"18px 20px 24px":"22px",overflowX:"hidden",
             background:C.surface,
           }}
         >
@@ -12867,6 +12901,16 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
         <Field label="Calendar End Date">
           <DateInput value={deadlineEnd} onChange={v=>{ setDeadlineEnd(v); if(v){ setDateMode("specific"); setMonthOnlyMonths([]); } }} />
         </Field>
+        {(deadline || deadlineEnd) && (
+          <button type="button" onClick={()=>{ setDeadline(""); setDeadlineEnd(""); }} style={{ alignSelf:"flex-start",border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer",padding:"0 0 2px" }}>
+            Clear calendar date
+          </button>
+        )}
+        {(deadline || deadlineEnd) && (
+          <button type="button" onClick={()=>{ setDeadline(""); setDeadlineEnd(""); }} style={{ alignSelf:"flex-start",border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer",padding:"0 0 2px" }}>
+            Clear calendar date
+          </button>
+        )}
         <Field label="Tag / Filter Type">
           <Select value={calendarType || "__none__"} onChange={onCalendarTypeChange}>
             <option value="__none__">No Tag Type</option>
@@ -12931,7 +12975,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
           )}
         </Field>
 
-        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
+        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
   );
@@ -13141,7 +13185,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
-        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":"specific",monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
   );
