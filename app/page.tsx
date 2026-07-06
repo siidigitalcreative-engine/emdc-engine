@@ -174,6 +174,35 @@ const GlobalStyles = () => {
           padding-bottom:32px!important;
         }
       }
+
+      .emdc-date-row{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+        gap:10px;
+        align-items:stretch;
+        width:100%;
+      }
+      .emdc-date-row > *{
+        min-width:0!important;
+        width:100%!important;
+        height:48px!important;
+      }
+      .emdc-date-row input,
+      .emdc-date-row select,
+      .emdc-date-row button{
+        width:100%!important;
+        height:48px!important;
+        min-height:48px!important;
+        box-sizing:border-box!important;
+      }
+      @media(max-width:759px){
+        .emdc-date-row{
+          grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+          gap:10px!important;
+          padding-right:0!important;
+          margin-right:0!important;
+        }
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -1105,7 +1134,7 @@ const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
             WebkitOverflowScrolling:"touch",
             overscrollBehavior:"contain",
             touchAction:"pan-y",
-            padding:isSmall?"18px 20px 28px":"22px",
+            padding:isSmall?"18px 20px 28px":"22px",overflowX:"hidden",
             background:C.surface,
           }}
         >
