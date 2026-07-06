@@ -238,6 +238,63 @@ const GlobalStyles = () => {
         align-items:center!important;
         justify-content:center!important;
       }
+
+      .emdc-date-pair-v3{
+        display:grid!important;
+        grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)!important;
+        column-gap:10px!important;
+        align-items:stretch!important;
+        width:100%!important;
+        max-width:100%!important;
+        overflow:hidden!important;
+      }
+      .emdc-date-pair-v3 > div,
+      .emdc-date-pair-v3 > button,
+      .emdc-date-pair-v3 > input,
+      .emdc-date-pair-v3 > select{
+        min-width:0!important;
+        width:100%!important;
+        max-width:100%!important;
+        height:48px!important;
+        min-height:48px!important;
+        max-height:48px!important;
+        box-sizing:border-box!important;
+      }
+      .emdc-date-pair-v3 button,
+      .emdc-date-pair-v3 input,
+      .emdc-date-pair-v3 select{
+        height:48px!important;
+        min-height:48px!important;
+        max-height:48px!important;
+        width:100%!important;
+        max-width:100%!important;
+        box-sizing:border-box!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+        white-space:nowrap!important;
+      }
+      .emdc-date-pair-v3 .emdc-date-display-v3{
+        height:48px!important;
+        min-height:48px!important;
+        max-height:48px!important;
+        width:100%!important;
+        max-width:100%!important;
+        display:flex!important;
+        align-items:center!important;
+        justify-content:center!important;
+        padding:0 10px!important;
+        line-height:1!important;
+      }
+      @media(max-width:759px){
+        .emdc-modal-body{
+          overflow-x:hidden!important;
+        }
+        .emdc-date-pair-v3{
+          grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)!important;
+          width:100%!important;
+          max-width:100%!important;
+        }
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -961,7 +1018,7 @@ const DateInput = ({ value, onChange, style={} }) => {
           {[{id:"first",label:"First day"},{id:"last",label:"Last day"}].map(opt=>{
             const active = monthlyDays.includes(opt.id);
             return (
-              <button key={opt.id} type="button" onClick={()=>toggleDay(opt.id)}
+              <button className="emdc-date-display-v3" key={opt.id} type="button" onClick={()=>toggleDay(opt.id)}
                 style={{ padding:"6px 12px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",
                   border:`1.5px solid ${active?C.accent:C.border}`,
                   background:active?C.accent:C.surface, color:active?"#fff":C.textSub }}>
@@ -1020,7 +1077,7 @@ const MonthOnlyPicker = ({ value=[], onChange }: any) => {
         })}
       </div>
       {selected.length>0&&(
-        <button className="emdc-date-display" type="button" onClick={()=>onChange([])}
+        <button className="emdc-date-display-v3" type="button" onClick={()=>onChange([])}
           style={{ alignSelf:"flex-start",border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",padding:0 }}>
           Clear month-only selection
         </button>
@@ -1508,7 +1565,7 @@ const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU stora
                 {categoryOptions.map((option:string)=><option key={option} value={option}>{option}</option>)}
               </Select>
               {(brandFilter!=="all" || categoryFilter!=="all")&&(
-                <button className="emdc-date-display" type="button" onClick={()=>{ setBrandFilter("all"); setCategoryFilter("all"); setOpen(true); }}
+                <button className="emdc-date-display-v3" type="button" onClick={()=>{ setBrandFilter("all"); setCategoryFilter("all"); setOpen(true); }}
                   style={{ height:48,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,borderRadius:8,padding:"0 10px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",whiteSpace:"nowrap" }}>
                   Clear
                 </button>
@@ -3417,7 +3474,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
             <p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>Planner snapshot from events, products, and checklist-linked dates.</p>
           </div>
           <div style={{ display:"flex",gap:6,alignItems:"center",flexShrink:0 }}>
-            <button className="emdc-date-display" type="button" onClick={()=>setSummarySettingsOpen(true)}
+            <button className="emdc-date-display-v3" type="button" onClick={()=>setSummarySettingsOpen(true)}
               style={{ height:28,padding:"0 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
               Edit
             </button>
@@ -3497,7 +3554,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
             <p style={{ margin:0,fontSize:12,color:C.muted }}>Products tagged Phase Out in SKU Storage appear here. Tag edits sync back to SKU Storage.</p>
           </div>
           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-            <button className="emdc-date-display" type="button" onClick={clearAllPhaseoutTags} disabled={!phaseoutSkuLinks.some((item:any)=>item.skuId)}
+            <button className="emdc-date-display-v3" type="button" onClick={clearAllPhaseoutTags} disabled={!phaseoutSkuLinks.some((item:any)=>item.skuId)}
               style={{ height:28,padding:"0 10px",border:`1px solid ${C.border}`,borderRadius:7,background:C.surfaceAlt,color:C.muted,fontSize:11,fontWeight:800,cursor:phaseoutSkuLinks.some((item:any)=>item.skuId)?"pointer":"not-allowed",opacity:phaseoutSkuLinks.some((item:any)=>item.skuId)?1:.55 }}>
               Clear All Phase-Out Tags
             </button>
@@ -3509,7 +3566,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
         {phaseoutSkuLinks.length>0&&(
           <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
-            <button className="emdc-date-display" type="button" onClick={()=>setPhaseoutBrandFilter("all")}
+            <button className="emdc-date-display-v3" type="button" onClick={()=>setPhaseoutBrandFilter("all")}
               style={{ height:30,padding:"0 12px",borderRadius:999,border:`1.5px solid ${phaseoutBrandFilter==="all"?C.accent:C.border}`,background:phaseoutBrandFilter==="all"?C.accent:C.surface,color:phaseoutBrandFilter==="all"?"#fff":C.textSub,fontSize:12,fontWeight:800,cursor:"pointer" }}>
               All Brands <span style={{ opacity:.75 }}>({phaseoutSkuLinks.length})</span>
             </button>
@@ -3559,7 +3616,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                       const categoryOpen = !!phaseoutOpenCategoryKeys[categoryKey];
                       return (
                         <div key={categoryKey}>
-                          <button className="emdc-date-display" type="button" onClick={()=>togglePhaseoutCategory(categoryKey)} style={{ width:"100%",position:"sticky",top:0,zIndex:1,padding:"7px 9px",background:categoryOpen?"#EEF2FF":"#F3F4F6",border:"none",borderBottom:`1px solid ${C.border}`,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,cursor:"pointer" }}>
+                          <button className="emdc-date-display-v3" type="button" onClick={()=>togglePhaseoutCategory(categoryKey)} style={{ width:"100%",position:"sticky",top:0,zIndex:1,padding:"7px 9px",background:categoryOpen?"#EEF2FF":"#F3F4F6",border:"none",borderBottom:`1px solid ${C.border}`,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,cursor:"pointer" }}>
                             <span style={{ minWidth:0,display:"flex",alignItems:"center",gap:7 }}>
                               <span style={{ width:18,height:18,borderRadius:6,background:categoryOpen?C.accent:C.surface,border:`1px solid ${categoryOpen?C.accent:C.border}`,color:categoryOpen?"#fff":C.muted,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,flexShrink:0 }}>{categoryOpen?"▾":"▸"}</span>
                               <span style={{ minWidth:0,fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{group.collectionName}</span>
@@ -3571,7 +3628,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                             <div key={`${item.brandName}-${item.label}`} style={{ borderBottom:`1px solid ${C.border}`,background:C.surface }}>
                               <div style={{ padding:"8px 9px",display:"flex",gap:8,alignItems:"flex-start" }}>
                                 <span style={{ width:18,height:18,borderRadius:999,background:"#F59E0B",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,flexShrink:0,marginTop:1 }}>⚑</span>
-                                <button className="emdc-date-display" type="button" onClick={()=>item.sku&&openPhaseoutTagEdit(item.sku)} style={{ minWidth:0,flex:1,border:"none",background:"transparent",padding:0,textAlign:"left",cursor:item.sku?"pointer":"default" }}>
+                                <button className="emdc-date-display-v3" type="button" onClick={()=>item.sku&&openPhaseoutTagEdit(item.sku)} style={{ minWidth:0,flex:1,border:"none",background:"transparent",padding:0,textAlign:"left",cursor:item.sku?"pointer":"default" }}>
                                   <span style={{ display:"block",fontSize:11.3,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
                                     {item.sku?.productName || String(item.label||"").replace(String(item.brandName||"")+" - ","")}
                                   </span>
@@ -3584,8 +3641,8 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                 </button>
                                 {item.sku&&(
                                   <div style={{ display:"flex",gap:4,flexShrink:0 }}>
-                                    <button className="emdc-date-display" type="button" onClick={()=>openPhaseoutTagEdit(item.sku)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:6,padding:"4px 6px",fontSize:9.8,fontWeight:800,cursor:"pointer" }}>Edit</button>
-                                    <button className="emdc-date-display" type="button" onClick={()=>clearPhaseoutTag(item.sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 6px",fontSize:9.8,fontWeight:800,cursor:"pointer" }}>Clear</button>
+                                    <button className="emdc-date-display-v3" type="button" onClick={()=>openPhaseoutTagEdit(item.sku)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:6,padding:"4px 6px",fontSize:9.8,fontWeight:800,cursor:"pointer" }}>Edit</button>
+                                    <button className="emdc-date-display-v3" type="button" onClick={()=>clearPhaseoutTag(item.sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 6px",fontSize:9.8,fontWeight:800,cursor:"pointer" }}>Clear</button>
                                   </div>
                                 )}
                               </div>
@@ -4301,8 +4358,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
               {showSortOptions&&(
                 <div style={{ padding:"8px 12px",borderTop:`1px solid ${C.border}`,background:C.bg,display:"flex",gap:6,flexWrap:"wrap" }}
                   onClick={e=>e.stopPropagation()}>
-                  <button className="emdc-date-display" type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ flex:isMobile?"1 1 120px":"0 0 auto",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>↑ Up</button>
-                  <button className="emdc-date-display" type="button" onClick={()=>moveEventCard(ev.id,"down")} style={{ flex:isMobile?"1 1 120px":"0 0 auto",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>↓ Down</button>
+                  <button className="emdc-date-display-v3" type="button" onClick={()=>moveEventCard(ev.id,"up")} style={{ flex:isMobile?"1 1 120px":"0 0 auto",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>↑ Up</button>
+                  <button className="emdc-date-display-v3" type="button" onClick={()=>moveEventCard(ev.id,"down")} style={{ flex:isMobile?"1 1 120px":"0 0 auto",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>↓ Down</button>
                 </div>
               )}
 
@@ -9632,8 +9689,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             <div style={{ display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",marginBottom:6 }}>
               <p style={{ margin:0,fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
               <div style={{ display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
-                {canEdit&&<button className="emdc-date-display" type="button" onClick={editingProducts ? (onDoneEdit || undefined) : (onToggleEdit || undefined)} style={{ border:`1px solid ${C.border}`,background:editingProducts?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editingProducts?"#fff":C.textSub,cursor:"pointer" }}>{editingProducts?"Done":"Edit Products"}</button>}
-                {editingProducts&&<button className="emdc-date-display" type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+                {canEdit&&<button className="emdc-date-display-v3" type="button" onClick={editingProducts ? (onDoneEdit || undefined) : (onToggleEdit || undefined)} style={{ border:`1px solid ${C.border}`,background:editingProducts?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editingProducts?"#fff":C.textSub,cursor:"pointer" }}>{editingProducts?"Done":"Edit Products"}</button>}
+                {editingProducts&&<button className="emdc-date-display-v3" type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
               </div>
             </div>
             {products.length ? products.slice(0,6).map((row:any,idx:number)=>{
@@ -9645,7 +9702,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <input value={row?.product || ""} placeholder="Product name" onChange={e=>updateRef(idx,{ product:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontWeight:800,color:C.text,background:C.surface }} />
                       <input value={row?.sku || ""} placeholder="SKU" onChange={e=>updateRef(idx,{ sku:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontFamily:"monospace",color:C.textSub,background:C.surface }} />
                       <input value={rowLinks.join(", ")} placeholder="Product image link/s" onChange={e=>updateRef(idx,{ links:String(e.target.value).split(/[\n,]+/).map((v:string)=>v.trim()).filter(Boolean) })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,color:C.textSub,background:C.surface }} />
-                      <button className="emdc-date-display" type="button" onClick={()=>removeRef(idx)} style={{ justifySelf:"end",border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:900,cursor:"pointer" }}>Remove Product</button>
+                      <button className="emdc-date-display-v3" type="button" onClick={()=>removeRef(idx)} style={{ justifySelf:"end",border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:900,cursor:"pointer" }}>Remove Product</button>
                     </div>
                   ) : (
                     <>
@@ -10086,7 +10143,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               }}
                               style={{ fontSize:11,color:C.muted,maxWidth:"100%" }}
                             />
-                            {Array.isArray(item.referenceImages)&&item.referenceImages.length>0&&<button className="emdc-date-display" type="button" onClick={()=>updateCampaignDigitalItem(item.id,{ referenceImages:[] })} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear refs ({item.referenceImages.length})</button>}
+                            {Array.isArray(item.referenceImages)&&item.referenceImages.length>0&&<button className="emdc-date-display-v3" type="button" onClick={()=>updateCampaignDigitalItem(item.id,{ referenceImages:[] })} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear refs ({item.referenceImages.length})</button>}
                             <span style={{ fontSize:10.5,color:C.faint }}>Optional uploaded references. Product image links are still read automatically.</span>
                           </div>
                         </div>
@@ -10801,8 +10858,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             <div style={{ display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",marginBottom:6 }}>
               <p style={{ margin:0,fontSize:10,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Featured Product / SKU References</p>
               <div style={{ display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
-                {canEdit&&<button className="emdc-date-display" type="button" onClick={editable ? (onDoneEdit || undefined) : (onToggleEdit || undefined)} style={{ border:`1px solid ${C.border}`,background:editable?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editable?"#fff":C.textSub,cursor:"pointer" }}>{editable?"Done":"Edit Products"}</button>}
-                {editable&&<button className="emdc-date-display" type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
+                {canEdit&&<button className="emdc-date-display-v3" type="button" onClick={editable ? (onDoneEdit || undefined) : (onToggleEdit || undefined)} style={{ border:`1px solid ${C.border}`,background:editable?C.accent:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:editable?"#fff":C.textSub,cursor:"pointer" }}>{editable?"Done":"Edit Products"}</button>}
+                {editable&&<button className="emdc-date-display-v3" type="button" onClick={addRef} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:999,padding:"2px 7px",fontSize:10,fontWeight:900,color:C.textSub,cursor:"pointer" }}>+ Add</button>}
               </div>
             </div>
             {products.length ? products.slice(0,6).map((row:any,idx:number)=>{
@@ -10814,7 +10871,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <input value={row?.product || ""} placeholder="Product name" onChange={e=>updateRef(idx,{ product:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontWeight:800,color:C.text,background:C.surface }} />
                       <input value={row?.sku || ""} placeholder="SKU" onChange={e=>updateRef(idx,{ sku:e.target.value })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,fontFamily:"monospace",color:C.textSub,background:C.surface }} />
                       <input value={rowLinks.join(", ")} placeholder="Product/image link/s" onChange={e=>updateRef(idx,{ links:String(e.target.value).split(/[\n,]+/).map((v:string)=>v.trim()).filter(Boolean) })} style={{ width:"100%",height:28,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",fontSize:10.5,color:C.textSub,background:C.surface }} />
-                      <button className="emdc-date-display" type="button" onClick={()=>removeRef(idx)} style={{ justifySelf:"end",border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:900,cursor:"pointer" }}>Remove Product</button>
+                      <button className="emdc-date-display-v3" type="button" onClick={()=>removeRef(idx)} style={{ justifySelf:"end",border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:900,cursor:"pointer" }}>Remove Product</button>
                     </div>
                   ) : (
                     <>
@@ -11321,7 +11378,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               }}
                               style={{ fontSize:11,color:C.muted,maxWidth:"100%" }}
                             />
-                            {Array.isArray(item.referenceImages)&&item.referenceImages.length>0&&<button className="emdc-date-display" type="button" onClick={()=>updateProductIntroDigitalItem(item.id,{ referenceImages:[] })} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear refs ({item.referenceImages.length})</button>}
+                            {Array.isArray(item.referenceImages)&&item.referenceImages.length>0&&<button className="emdc-date-display-v3" type="button" onClick={()=>updateProductIntroDigitalItem(item.id,{ referenceImages:[] })} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 8px",fontSize:10.5,fontWeight:800,cursor:"pointer" }}>Clear refs ({item.referenceImages.length})</button>}
                             <span style={{ fontSize:10.5,color:C.faint }}>Optional uploaded references. Product image links are still read automatically.</span>
                           </div>
                         </div>
@@ -11534,7 +11591,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       {Array.isArray(data.promptProductRows)&&data.promptProductRows.length>0&&(
                         <div style={{ marginTop:8,padding:"7px 10px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:8,fontSize:11.5,color:"#047857",fontWeight:800 }}>
                           <span>Prompt product scope: {data.promptProductRows.length} product{data.promptProductRows.length!==1?"s":""}. Save Changes will keep this same product scope.</span>
-                          <button className="emdc-date-display" type="button" onClick={()=>updateAiWorkspace("ecommerce",{ promptProductRows:[], textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,productRows) })} style={{ marginLeft:8,border:"none",background:"transparent",color:"#047857",fontSize:11.5,fontWeight:900,textDecoration:"underline",cursor:"pointer" }}>Use all products</button>
+                          <button className="emdc-date-display-v3" type="button" onClick={()=>updateAiWorkspace("ecommerce",{ promptProductRows:[], textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,productRows) })} style={{ marginLeft:8,border:"none",background:"transparent",color:"#047857",fontSize:11.5,fontWeight:900,textDecoration:"underline",cursor:"pointer" }}>Use all products</button>
                         </div>
                       )}
                       {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
@@ -11589,14 +11646,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 ⋮⋮
                               </span>
         
-                              <button className="emdc-date-display" type="button" onClick={()=>toggleEcommerceSection(section)} style={{ width:18,height:18,borderRadius:4,display:"inline-flex",alignItems:"center",justifyContent:"center",background:active?C.accent:"transparent",border:`1.5px solid ${active?C.accent:C.borderStrong}`,color:"#fff",fontSize:11,fontWeight:900,flexShrink:0,cursor:"pointer" }}>{active?"✓":""}</button>
+                              <button className="emdc-date-display-v3" type="button" onClick={()=>toggleEcommerceSection(section)} style={{ width:18,height:18,borderRadius:4,display:"inline-flex",alignItems:"center",justifyContent:"center",background:active?C.accent:"transparent",border:`1.5px solid ${active?C.accent:C.borderStrong}`,color:"#fff",fontSize:11,fontWeight:900,flexShrink:0,cursor:"pointer" }}>{active?"✓":""}</button>
         
-                              <button className="emdc-date-display" type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>
+                              <button className="emdc-date-display-v3" type="button" onClick={()=>toggleEcommerceSection(section)} style={{ minWidth:0,textAlign:"left",border:"none",background:"transparent",fontSize:12,fontWeight:750,color:C.text,cursor:"pointer",padding:0 }}>
                                 <span style={{ display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{index+1}. {section}</span>
                                 {hasInstruction&&<span style={{ display:"block",marginTop:2,fontSize:10.5,fontWeight:700,color:"#047857" }}>Has instruction</span>}
                               </button>
         
-                              <button className="emdc-date-display" type="button" onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
+                              <button className="emdc-date-display-v3" type="button" onClick={()=>startEditEcommerceSection(section)} style={{ border:"none",background:C.surfaceAlt,color:C.muted,borderRadius:6,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Edit</button>
                             </div>
                           );
                         })}
@@ -11917,8 +11974,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                           <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{campaignRows.length} campaign product row{campaignRows.length!==1?"s":""}</span>
                           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                            {campaignHasOutput&&<button className="emdc-date-display" type="button" onClick={saveEcommerceCampaignOutput} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save Generated Outputs</button>}
-                            {campaignRows.length>0&&<button className="emdc-date-display" type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear Rows</button>}
+                            {campaignHasOutput&&<button className="emdc-date-display-v3" type="button" onClick={saveEcommerceCampaignOutput} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save Generated Outputs</button>}
+                            {campaignRows.length>0&&<button className="emdc-date-display-v3" type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear Rows</button>}
                           </div>
                         </div>
 
@@ -11940,8 +11997,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                         {getCampaignRowProductKeys(row).length>1&&<p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{getCampaignRowProductKeys(row).length} products inside this row</p>}
                                       </div>
                                       <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto",alignItems:"center",gap:6,justifyContent:"flex-end",width:isMobile?"100%":"auto" }}>
-                                        <button className="emdc-date-display" type="button" onClick={()=>generateEcommerceCampaignRow(row.id)} disabled={!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?"not-allowed":"pointer",opacity:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?.65:1,width:"100%" }}>{aiBusy.ecommerceCampaignRow===row.id?"Generating":"Generate"}</button>
-                                        <button className="emdc-date-display" type="button" onClick={()=>deleteEcommerceCampaignRow(row.id,rowIndex)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:"pointer",width:"100%" }}>Delete</button>
+                                        <button className="emdc-date-display-v3" type="button" onClick={()=>generateEcommerceCampaignRow(row.id)} disabled={!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?"not-allowed":"pointer",opacity:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?.65:1,width:"100%" }}>{aiBusy.ecommerceCampaignRow===row.id?"Generating":"Generate"}</button>
+                                        <button className="emdc-date-display-v3" type="button" onClick={()=>deleteEcommerceCampaignRow(row.id,rowIndex)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:"pointer",width:"100%" }}>Delete</button>
                                       </div>
                                     </div>
                                     <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(240px,.9fr) minmax(170px,.65fr) minmax(260px,1fr)",gap:10,alignItems:"end" }}>
@@ -12084,11 +12141,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <div style={{ display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                   {campaignSavedOutputs.map((item:any)=>(
                     <div key={item.id} style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) auto",gap:10,alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg }}>
-                      <button className="emdc-date-display" type="button" onClick={()=>openSavedEcommerceOutput(item)} style={{ minWidth:0,textAlign:"left",border:"none",background:"transparent",padding:0,cursor:"pointer" }}>
+                      <button className="emdc-date-display-v3" type="button" onClick={()=>openSavedEcommerceOutput(item)} style={{ minWidth:0,textAlign:"left",border:"none",background:"transparent",padding:0,cursor:"pointer" }}>
                         <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.title || "Campaign Copy"}</p>
                         <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.platform || campaignBuilder.platform} · {item.theme || campaignTheme} · Click to view</p>
                       </button>
-                      <button className="emdc-date-display" type="button" onClick={()=>deleteEcommerceCampaignSavedOutput(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:8,padding:"8px 10px",fontSize:10.5,fontWeight:850,cursor:"pointer",width:isMobile?"100%":"auto" }}>Delete</button>
+                      <button className="emdc-date-display-v3" type="button" onClick={()=>deleteEcommerceCampaignSavedOutput(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:8,padding:"8px 10px",fontSize:10.5,fontWeight:850,cursor:"pointer",width:isMobile?"100%":"auto" }}>Delete</button>
                     </div>
                   ))}
                 </div>
@@ -12538,7 +12595,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
         {skuMode==="manual"?(
           <Field label="SKU(s)">
             {skus.map((s,i)=>(<div key={s.id} style={{ display:"flex",gap:8,marginBottom:8 }}><TI value={s.value} onChange={v=>updSku(s.id,v)} placeholder={`SKU ${i+1}`} style={{ flex:1 }} />{skus.length>1&&<button onClick={()=>remSku(s.id)} style={{ width:40,height:48,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.faint,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>}</div>))}
-            <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}><button onClick={addSku} style={{ padding:"7px 14px",fontSize:12,fontWeight:600,borderRadius:7,border:`1.5px dashed ${C.borderStrong}`,background:"transparent",cursor:"pointer",color:C.muted }}>+ Add SKU</button><button className="emdc-date-display" type="button" onClick={()=>setSkus([{id:uid(),value:""}])} style={{ padding:"7px 14px",fontSize:12,fontWeight:700,borderRadius:7,border:`1px solid #FECACA`,background:"#FEF2F2",cursor:"pointer",color:"#DC2626" }}>Clear SKU</button></div>
+            <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}><button onClick={addSku} style={{ padding:"7px 14px",fontSize:12,fontWeight:600,borderRadius:7,border:`1.5px dashed ${C.borderStrong}`,background:"transparent",cursor:"pointer",color:C.muted }}>+ Add SKU</button><button className="emdc-date-display-v3" type="button" onClick={()=>setSkus([{id:uid(),value:""}])} style={{ padding:"7px 14px",fontSize:12,fontWeight:700,borderRadius:7,border:`1px solid #FECACA`,background:"#FEF2F2",cursor:"pointer",color:"#DC2626" }}>Clear SKU</button></div>
           </Field>
         ):(
           <Field label="Search SKU Storage">
@@ -12546,7 +12603,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
               ? <div style={{ padding:"14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No SKUs in storage yet. Go to SKU Storage tab first.</div>
               : <>
                   <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickSku} placeholder="Search by product, SKU, or brand..." multiSelect selectedIds={pickedSkus.map((s:any)=>s.id)} />
-                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}><div style={{ fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""}</div><button className="emdc-date-display" type="button" onClick={()=>setPickedSkus([])} style={{ border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",lineHeight:1 }}>Clear SKU</button></div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map(s=>(<div key={s.id} style={{ display:"flex",alignItems:"center",gap:6,padding:"3px 7px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span><button onClick={()=>setPickedSkus(p=>p.filter(x=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>))}</div></div>)}
+                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}><div style={{ fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""}</div><button className="emdc-date-display-v3" type="button" onClick={()=>setPickedSkus([])} style={{ border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",lineHeight:1 }}>Clear SKU</button></div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map(s=>(<div key={s.id} style={{ display:"flex",alignItems:"center",gap:6,padding:"3px 7px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span><button onClick={()=>setPickedSkus(p=>p.filter(x=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>))}</div></div>)}
                 </>
             }
           </Field>
@@ -12712,7 +12769,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
         {skuMode==="manual"?(
           <Field label="SKU(s)">
             {skus.map((s:any,i:number)=>(<div key={s.id} style={{ display:"flex",gap:8,marginBottom:8 }}><TI value={s.value} onChange={(v:string)=>updSku(s.id,v)} placeholder={`SKU ${i+1}`} style={{ flex:1 }} />{skus.length>1&&<button onClick={()=>remSku(s.id)} style={{ width:40,height:48,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.faint,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>}</div>))}
-            <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}><button onClick={addSku} style={{ padding:"7px 14px",fontSize:12,fontWeight:600,borderRadius:7,border:`1.5px dashed ${C.borderStrong}`,background:"transparent",cursor:"pointer",color:C.muted }}>+ Add SKU</button><button className="emdc-date-display" type="button" onClick={()=>setSkus([{id:uid(),value:""}])} style={{ padding:"7px 14px",fontSize:12,fontWeight:700,borderRadius:7,border:`1px solid #FECACA`,background:"#FEF2F2",cursor:"pointer",color:"#DC2626" }}>Clear SKU</button></div>
+            <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}><button onClick={addSku} style={{ padding:"7px 14px",fontSize:12,fontWeight:600,borderRadius:7,border:`1.5px dashed ${C.borderStrong}`,background:"transparent",cursor:"pointer",color:C.muted }}>+ Add SKU</button><button className="emdc-date-display-v3" type="button" onClick={()=>setSkus([{id:uid(),value:""}])} style={{ padding:"7px 14px",fontSize:12,fontWeight:700,borderRadius:7,border:`1px solid #FECACA`,background:"#FEF2F2",cursor:"pointer",color:"#DC2626" }}>Clear SKU</button></div>
           </Field>
         ):(
           <Field label="Search SKU Storage">
@@ -12720,7 +12777,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
               ? <div style={{ padding:"14px",background:C.surfaceAlt,borderRadius:8,fontSize:12,color:C.muted }}>No SKUs in storage yet. Go to SKU Storage tab first.</div>
               : <>
                   <SKUPicker skuStorage={skuStorage} brands={brands} onSelect={pickSku} placeholder="Search by product, SKU, or brand..." multiSelect selectedIds={pickedSkus.map((s:any)=>s.id)} />
-                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}><div style={{ fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""} · {pickedSkus.filter((s:any)=>!originalSkuIds.has(s.id)&&!originalSkuIds.has(s.sku)).length} new</div><button className="emdc-date-display" type="button" onClick={()=>setPickedSkus([])} style={{ border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",lineHeight:1 }}>Clear SKU</button></div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map((s:any)=>{ const isNew=!originalSkuIds.has(s.id)&&!originalSkuIds.has(s.sku); return (<div key={s.id} title={`${isNew?"New SKU · ":""}${s.productName} · ${s.sku}`} style={{ display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",padding:"3px 7px",background:isNew?"#ECFDF5":C.surfaceAlt,borderRadius:6,border:`1px solid ${isNew?"#86EFAC":C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span>{isNew&&<span style={{ fontSize:9,fontWeight:900,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"1px 5px",lineHeight:1 }}>NEW</span>}<button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>);})}</div></div>)}
+                  {pickedSkus.length>0&&(<div style={{ marginTop:8 }}><div style={{ marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap" }}><div style={{ fontSize:11,color:C.muted,fontWeight:700 }}>{pickedSkus.length} selected SKU{pickedSkus.length!==1?"s":""} · {pickedSkus.filter((s:any)=>!originalSkuIds.has(s.id)&&!originalSkuIds.has(s.sku)).length} new</div><button className="emdc-date-display-v3" type="button" onClick={()=>setPickedSkus([])} style={{ border:`1px solid #FECACA`,background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",lineHeight:1 }}>Clear SKU</button></div><div style={{ display:"flex",flexWrap:"wrap",gap:5,maxHeight:96,overflowY:"auto",paddingRight:4,alignContent:"flex-start" }}>{pickedSkus.map((s:any)=>{ const isNew=!originalSkuIds.has(s.id)&&!originalSkuIds.has(s.sku); return (<div key={s.id} title={`${isNew?"New SKU · ":""}${s.productName} · ${s.sku}`} style={{ display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",padding:"3px 7px",background:isNew?"#ECFDF5":C.surfaceAlt,borderRadius:6,border:`1px solid ${isNew?"#86EFAC":C.border}`,lineHeight:1 }}><span style={{ fontSize:10,fontFamily:"monospace",fontWeight:800,color:C.text,whiteSpace:"nowrap" }}>{s.sku}</span>{isNew&&<span style={{ fontSize:9,fontWeight:900,color:"#047857",background:"#D1FAE5",border:"1px solid #A7F3D0",borderRadius:999,padding:"1px 5px",lineHeight:1 }}>NEW</span>}<button onClick={()=>setPickedSkus((p:any)=>p.filter((x:any)=>x.id!==s.id))} style={{ background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:12,lineHeight:1,padding:0 }}>&#215;</button></div>);})}</div></div>)}
                 </>
             }
           </Field>
@@ -13400,7 +13457,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={onStateChange} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
 
   return (
     <div>
@@ -14579,7 +14636,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                 style={{ flex:1,minWidth:0,height:30,border:"none",outline:"none",background:"transparent",fontSize:13,color:C.text }}
               />
               {skuSearch.trim()&&(
-                <button className="emdc-date-display" type="button" onClick={()=>setSkuSearch("")}
+                <button className="emdc-date-display-v3" type="button" onClick={()=>setSkuSearch("")}
                   style={{ border:"none",background:C.surfaceAlt,borderRadius:6,padding:"5px 8px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",flexShrink:0 }}>
                   Clear
                 </button>
@@ -14588,7 +14645,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
             {skuTagOptions.length>0&&(
               <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
-                <button className="emdc-date-display" type="button" onClick={()=>setActiveSkuTag("all")}
+                <button className="emdc-date-display-v3" type="button" onClick={()=>setActiveSkuTag("all")}
                   style={{ height:28,padding:"0 10px",borderRadius:999,border:`1.5px solid ${activeSkuTag==="all"?C.accent:C.border}`,background:activeSkuTag==="all"?C.accent:C.surface,color:activeSkuTag==="all"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>
                   All Tags
                 </button>
@@ -14606,10 +14663,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap" }}>
                   <span style={{ fontSize:12,color:C.muted }}>Preview columns follow the pasted sheet format. Adjust column widths here, then click Done Editing to continue.</span>
                   <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
-                    <button className="emdc-date-display" type="button" onClick={()=>setSkuColumnWidthMode("manual")} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="manual"?C.accent:C.border}`,background:skuColumnWidthMode==="manual"?C.accent:C.surface,color:skuColumnWidthMode==="manual"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Manual</button>
-                    <button className="emdc-date-display" type="button" onClick={fitSkuColumnsByContent} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="content"?C.accent:C.border}`,background:skuColumnWidthMode==="content"?C.accent:C.surface,color:skuColumnWidthMode==="content"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Fit by Content</button>
-                    <button className="emdc-date-display" type="button" onClick={makeSkuColumnsEqual} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="equal"?C.accent:C.border}`,background:skuColumnWidthMode==="equal"?C.accent:C.surface,color:skuColumnWidthMode==="equal"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Equal Widths</button>
-                    <button className="emdc-date-display" type="button" onClick={resetSkuColumnWidths} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,color:C.muted,fontSize:11,fontWeight:800,cursor:"pointer" }}>Reset</button>
+                    <button className="emdc-date-display-v3" type="button" onClick={()=>setSkuColumnWidthMode("manual")} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="manual"?C.accent:C.border}`,background:skuColumnWidthMode==="manual"?C.accent:C.surface,color:skuColumnWidthMode==="manual"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Manual</button>
+                    <button className="emdc-date-display-v3" type="button" onClick={fitSkuColumnsByContent} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="content"?C.accent:C.border}`,background:skuColumnWidthMode==="content"?C.accent:C.surface,color:skuColumnWidthMode==="content"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Fit by Content</button>
+                    <button className="emdc-date-display-v3" type="button" onClick={makeSkuColumnsEqual} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${skuColumnWidthMode==="equal"?C.accent:C.border}`,background:skuColumnWidthMode==="equal"?C.accent:C.surface,color:skuColumnWidthMode==="equal"?"#fff":C.textSub,fontSize:11,fontWeight:800,cursor:"pointer" }}>Equal Widths</button>
+                    <button className="emdc-date-display-v3" type="button" onClick={resetSkuColumnWidths} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,color:C.muted,fontSize:11,fontWeight:800,cursor:"pointer" }}>Reset</button>
                   </div>
                 </div>
                 {skuColumnWidthMode==="manual"&&(
@@ -14678,8 +14735,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                                   </div>
                                 ))}
                                 <div style={{ minHeight:48,padding:"8px 10px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center",background:C.surface }}>
-                                  <button className="emdc-date-display" type="button" onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5 }}>Edit</button>
-                                  <button className="emdc-date-display" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800 }}>&#215;</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5 }}>Edit</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800 }}>&#215;</button>
                                 </div>
                               </div>
                             );
@@ -14803,7 +14860,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                 {bulkVisibleRows.length} / {bulkGridRows.length}
               </span>
               {bulkSearch.trim()&&(
-                <button className="emdc-date-display" type="button" onClick={()=>setBulkSearch("")}
+                <button className="emdc-date-display-v3" type="button" onClick={()=>setBulkSearch("")}
                   style={{ border:"none",background:C.surfaceAlt,borderRadius:6,padding:"5px 8px",fontSize:11,fontWeight:700,color:C.muted,cursor:"pointer",flexShrink:0 }}>
                   Clear
                 </button>
@@ -14815,7 +14872,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             <div style={{ overflowX:"auto" }}>
               <div style={{ minWidth:bulkTableMinWidth }}>
                 <div style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-                  <button className="emdc-date-display" type="button" onClick={()=>{ setBulkSelection(null); setBulkSelectedRows(bulkGridRows.map((r:any)=>r.id)); }} title="Select all rows" style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",border:"none",borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",textAlign:"left" }}>#</button>
+                  <button className="emdc-date-display-v3" type="button" onClick={()=>{ setBulkSelection(null); setBulkSelectedRows(bulkGridRows.map((r:any)=>r.id)); }} title="Select all rows" style={{ padding:"8px 8px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".05em",border:"none",borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",textAlign:"left" }}>#</button>
                   {BULK_COLUMNS.map((c:any,colIdx:number)=>(
                     <div key={c.key}
                       draggable
@@ -14834,7 +14891,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                       ) : (
                         <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1 }}>{c.label}</span>
                       )}
-                      {c.custom&&<button className="emdc-date-display" type="button" onClick={()=>removeBulkColumn(c.key)} title="Remove custom column"
+                      {c.custom&&<button className="emdc-date-display-v3" type="button" onClick={()=>removeBulkColumn(c.key)} title="Remove custom column"
                         style={{ width:18,height:18,borderRadius:4,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0 }}>&#215;</button>}
                     </div>
                   ))}
@@ -14850,7 +14907,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                     const skuMissing=hasAny&&!String(r.sku||"").trim();
                     return (
                       <div key={r.id} style={{ display:"grid",gridTemplateColumns:bulkGridTemplate,borderBottom:`1px solid ${C.border}`,background:isBulkRowSelected(r.id)?"#EFF6FF":(productMissing||skuMissing)?"#FEF2F2":C.surface }}>
-                        <button className="emdc-date-display" type="button" onClick={e=>selectBulkRow(idx,e)} title="Click to select row. Ctrl/Shift click for multiple rows."
+                        <button className="emdc-date-display-v3" type="button" onClick={e=>selectBulkRow(idx,e)} title="Click to select row. Ctrl/Shift click for multiple rows."
                           style={{ padding:"9px 8px",fontSize:11,color:isBulkRowSelected(r.id)?C.accent:C.faint,border:"none",borderRight:`1px solid ${C.border}`,background:isBulkRowSelected(r.id)?"#DBEAFE":C.bg,display:"flex",alignItems:"center",cursor:"pointer",fontWeight:isBulkRowSelected(r.id)?700:400,textAlign:"left" }}>{idx+1}</button>
                         {BULK_COLUMNS.map((c:any,colIdx:number)=>{
                           const missing=(c.key==="productName"&&productMissing)||(c.key==="sku"&&skuMissing);
@@ -14871,7 +14928,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                   })}
                   {bulkVisibleRows.length<bulkVisibleRowsAll.length&&(
                     <div style={{ padding:10,borderTop:`1px solid ${C.border}`,background:C.bg,display:"flex",justifyContent:"center" }}>
-                      <button className="emdc-date-display" type="button" onClick={()=>setBulkRenderLimit((n:number)=>n+80)}
+                      <button className="emdc-date-display-v3" type="button" onClick={()=>setBulkRenderLimit((n:number)=>n+80)}
                         style={{ height:32,padding:"0 14px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,fontSize:12,fontWeight:800,cursor:"pointer" }}>
                         Load more rows ({bulkVisibleRows.length} / {bulkVisibleRowsAll.length})
                       </button>
@@ -17067,7 +17124,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   <h4 style={{ margin:0,fontSize:12,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>1. Select Products</h4>
                   <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>Pick products/category like ordering from a menu.</p>
                 </div>
-                {selectedAdSkus.length>0&&<button className="emdc-date-display" type="button" onClick={clearAdSkus} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear</button>}
+                {selectedAdSkus.length>0&&<button className="emdc-date-display-v3" type="button" onClick={clearAdSkus} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear</button>}
               </div>
 
               <SKUPicker
@@ -17094,7 +17151,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                           <p style={{ margin:0,fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{sku.productName || sku.sku}</p>
                           <p style={{ margin:"2px 0 0",fontSize:10.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{getAdSkuBrand(sku)} · {getAdSkuCategory(sku) || "No collection/category"} · {sku.sku}</p>
                         </div>
-                        <button className="emdc-date-display" type="button" onClick={()=>toggleAdSku(sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Remove</button>
+                        <button className="emdc-date-display-v3" type="button" onClick={()=>toggleAdSku(sku)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:6,padding:"4px 7px",fontSize:10,fontWeight:800,cursor:"pointer" }}>Remove</button>
                       </div>
                     ))}
                   </div>
@@ -17165,7 +17222,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                               <input type="checkbox" checked={selectedForBatch} onChange={()=>toggleSelectedAdFormatKey(formatKey)} />
                               Add
                             </label>
-                          <button className="emdc-date-display" type="button" onClick={()=>{
+                          <button className="emdc-date-display-v3" type="button" onClick={()=>{
                               setSelectedPlatformId(platform.id);
                               setSelectedFormatId(format.id);
                               if(firstTemplate?.id) setSelectedTemplateId(firstTemplate.id);
@@ -17355,7 +17412,7 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                   <p style={{ margin:"2px 0 0",fontSize:12,color:C.muted }}>Saved generated ads stay in this browser.</p>
                 </div>
                 {savedAdTemplates.length>0&&(
-                  <button className="emdc-date-display" type="button" onClick={()=>setSavedAdTemplates([])} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}>Clear All</button>
+                  <button className="emdc-date-display-v3" type="button" onClick={()=>setSavedAdTemplates([])} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer" }}>Clear All</button>
                 )}
               </div>
 
@@ -17371,10 +17428,10 @@ const AIAdTemplates = ({ skuStorage=[], brands=[], hideProductSelector=false, pr
                         <p style={{ margin:"4px 0 0",fontSize:10.5,color:C.faint,fontWeight:800 }}>Click to open</p>
                       </div>
                       <div style={{ display:"flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
-                        <button className="emdc-date-display" type="button" onClick={()=>copySavedAdTemplate(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Copy</button>
+                        <button className="emdc-date-display-v3" type="button" onClick={()=>copySavedAdTemplate(item)} style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:C.textSub,cursor:"pointer" }}>Copy</button>
                         {onAddToOverview&&<OverviewActionButton xs id={`saved-${item.id}`} onClick={()=>addMarketingOutputToOverview(item,`saved-${item.id}`)} style={{ padding:"5px 7px",fontSize:10 }}>Add to Overview</OverviewActionButton>}
                         {onSendToDC&&<DcSendButton xs id={`saved-ad-send-dc-${item.id}`} onClick={()=>sendSavedAdToDC(item)} style={{ padding:"5px 7px",fontSize:10 }}>Send to DC</DcSendButton>}
-                        <button className="emdc-date-display" type="button" onClick={()=>deleteSavedAdTemplate(item.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
+                        <button className="emdc-date-display-v3" type="button" onClick={()=>deleteSavedAdTemplate(item.id)} style={{ border:"none",background:"#FEF2F2",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:700,color:"#DC2626",cursor:"pointer" }}>Delete</button>
                       </div>
                     </div>
                   ))}
@@ -17828,7 +17885,7 @@ const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
               </Select>
             </Field>
             <Field label="Watermark">
-              <button className="emdc-date-display" type="button" onClick={()=>setWatermark(v=>!v)}
+              <button className="emdc-date-display-v3" type="button" onClick={()=>setWatermark(v=>!v)}
                 style={{ height:38,borderRadius:8,border:`1.5px solid ${watermark?C.accent:C.border}`,background:watermark?C.accent:C.surface,color:watermark?"#fff":C.textSub,fontSize:13,fontWeight:700,cursor:"pointer" }}>
                 {watermark ? "On" : "Off"}
               </button>
@@ -18310,6 +18367,30 @@ export default function App({
     calendarTypes: calendarEventTypes,
     seasonalEvents,
   });
+
+  const applyImmediateAppPatch = (patch:any = {}) => {
+    if (!patch || typeof patch !== "object") return;
+
+    if (Array.isArray(patch.seasonalEvents)) {
+      setSeasonalEvents(patch.seasonalEvents);
+      try { localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(patch.seasonalEvents)); } catch {}
+    }
+
+    if (Array.isArray(patch.calendarEvents)) {
+      setCalendarManualEvents(patch.calendarEvents);
+      try { localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(patch.calendarEvents)); } catch {}
+    }
+
+    if (Array.isArray(patch.calendarTypes)) {
+      setCalendarEventTypes(patch.calendarTypes);
+      try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
+    }
+
+    try {
+      window.dispatchEvent(new Event("emdc-local-sync"));
+      window.dispatchEvent(new Event("emdc-force-cloud-save"));
+    } catch {}
+  };
 
   const isLargeCloudLocalStorageKey = (key:any, value:any) => {
     const k = String(key || "");
@@ -19087,7 +19168,7 @@ export default function App({
               <span style={{ fontSize:11,color:cloudSyncStatus==="Sync save failed" || cloudSyncStatus==="Backup export failed" || cloudSyncStatus==="Backup import failed" ? "#DC2626" : C.faint }}>
                 Shared Sync: {cloudSyncStatus}
               </span>
-              <button className="emdc-date-display" type="button" onClick={exportFullBackup}
+              <button className="emdc-date-display-v3" type="button" onClick={exportFullBackup}
                 style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:7,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
                 Export Full Backup
               </button>
