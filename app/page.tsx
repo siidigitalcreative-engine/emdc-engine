@@ -2286,7 +2286,15 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
     const applyTagColor = (ev:any) => {
       const matchedColor = tagColorMap[ev?.type];
-      return matchedColor ? { ...ev, color:matchedColor } : ev;
+
+      // Checked: "Use tag color for matching events" means overwrite matching event colors.
+      if (matchedColor) return { ...ev, color:String(matchedColor).toUpperCase() };
+
+      // Unchecked: keep each event's own custom color.
+      const explicit = String(ev?.color || "").trim();
+      if (/^#[0-9A-F]{6}$/i.test(explicit)) return { ...ev, color:explicit.toUpperCase() };
+
+      return ev;
     };
 
     const nextManualEvents = (Array.isArray(manualEvents) ? manualEvents : []).map(applyTagColor);
@@ -2343,11 +2351,23 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   };
   const typeLabel = (id:any) => typeMeta(id)?.label || normalizeTagLabel(id);
 
-  const eventDisplayColor = (ev:any) => {
+  const resolveSavedEventColor = (ev:any) => {
+    const tag = typeMeta(ev?.type);
+    const tagColor = String(tag?.color || "").trim();
+
+    // If "Use tag color for matching events" is enabled, tag color is the source of truth.
+    if (tag?.useColor && /^#[0-9A-F]{6}$/i.test(tagColor)) return tagColor.toUpperCase();
+
+    // If tag color matching is not enabled, use the event's own custom color.
     const explicit = String(ev?.color || "").trim();
     if (/^#[0-9A-F]{6}$/i.test(explicit)) return explicit.toUpperCase();
+
+    if (/^#[0-9A-F]{6}$/i.test(tagColor)) return tagColor.toUpperCase();
+
     return typeColor(ev?.type, "#9CA3AF");
   };
+
+  const eventDisplayColor = (ev:any) => resolveSavedEventColor(ev);
 
   const typeOrder = (id:any) => {
     const found = typeMeta(id);
@@ -2397,7 +2417,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         id:`month-only-${ev.id}-${year}-${month}`,
         title:ev.name,
         type:ev.type || "seasonal",
-        color:ev.color || eventDisplayColor(ev),
+        color:resolveSavedEventColor(ev),
         date:monthStart,
         dateEnd:monthEnd,
         fromSeasonal:true,
@@ -2615,7 +2635,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         itemKind:"seasonal",
         title:ev.name,
         type:ev.type || "seasonal",
-        color:ev.color || eventDisplayColor(ev),
+        color:resolveSavedEventColor(ev),
         calDate:ev.calDate,
         dateEnd:ev.calDateEnd,
         dateText:ev.date,
@@ -2630,7 +2650,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:"manual",
       title:ev.title,
       type:ev.type || "task",
-      color:ev.color || eventDisplayColor(ev),
+      color:resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -2643,7 +2663,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:ev.fromChecklist ? "checklist" : "extra",
       title:ev.title,
       type:ev.type || "deadline",
-      color:ev.color || eventDisplayColor(ev),
+      color:resolveSavedEventColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -3137,6 +3157,20 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const dayLabels = isMobile ? DAYS_SHORT : DAYS_FULL;
   const calendarEventTitle = (ev:any) => String(ev?.title || ev?.name || ev?.groupName || ev?.label || ev?.type || "Event").trim();
 
+  const formatYearlyDateLabel = (raw:any) => {
+    const value = String(raw || "");
+    if (!value.startsWith("yearly:")) return value;
+    const [mm,dd] = value.replace("yearly:","").split("-").map((n:any)=>Number(n));
+    return `${MONTHS[(mm || 1)-1] || "Month"} ${dd || 1}`;
+  };
+
+  const formatCalendarRangeText = (start:any,end:any) => {
+    const s = formatYearlyDateLabel(start);
+    const e = formatYearlyDateLabel(end);
+    if (s && e && s !== e) return `${s} → ${e}`;
+    return s || e || "";
+  };
+
 
   return (
     <div>
@@ -3183,7 +3217,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
             {monthOnlyCalendarEvents.filter((ev:any)=>filter==="all" || ev.type===filter).map((ev:any)=>(
               <button key={ev.id} type="button" onClick={()=>setDetailEv(ev)}
-                style={{ border:`1px solid ${eventDisplayColor(ev)}28`,background:eventDisplayColor(ev)+"14",color:ev.color || eventDisplayColor(ev),borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                style={{ border:`1px solid ${eventDisplayColor(ev)}28`,background:eventDisplayColor(ev)+"14",color:resolveSavedEventColor(ev),borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
                 {ev.phaseoutCount>0?"⚑ ":""}{ev.title}
               </button>
             ))}
