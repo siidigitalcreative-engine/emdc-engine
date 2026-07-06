@@ -3020,20 +3020,33 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     if (!setSeasonalEvents) return;
 
     const selectedMonths = monthOnlyValues(seasonalEditForm.months);
+    const nextType = String(seasonalEditForm.type || "seasonal");
+    const tag = typeMeta(nextType);
+    const tagColor = String(tag?.color || "").trim();
+    const selectedColor = String(seasonalEditForm.color || tagColor || "#9CA3AF").toUpperCase();
+
     const cleanSeasonalEdit = {
       ...seasonalEditForm,
       name:seasonalEditForm.name.trim(),
+      type:nextType,
+      tag:nextType,
+      calendarType:nextType,
       months:selectedMonths,
       date:selectedMonths.length ? formatMonthOnlyLabel(selectedMonths) : (seasonalEditForm.date || ""),
       calDate:selectedMonths.length ? null : (seasonalEditForm.calDate || null),
       calDateEnd:selectedMonths.length ? null : (seasonalEditForm.calDateEnd || null),
-      color:String(seasonalEditForm.color || typeMeta(seasonalEditForm.type)?.color || "#9CA3AF").toUpperCase(),
+      color:tag?.useColor && /^#[0-9A-F]{6}$/i.test(tagColor) ? tagColor.toUpperCase() : selectedColor,
+      updatedAt:new Date().toISOString(),
     };
 
     setSeasonalEvents((prev:any[])=>{
-      const next = prev.map((ev:any)=>ev.id===cleanSeasonalEdit.id ? {
+      const next = (prev||[]).map((ev:any)=>String(ev.id)===String(cleanSeasonalEdit.id) ? {
         ...ev,
         ...cleanSeasonalEdit,
+        type:cleanSeasonalEdit.type,
+        tag:cleanSeasonalEdit.type,
+        calendarType:cleanSeasonalEdit.type,
+        color:cleanSeasonalEdit.color,
       } : ev);
       if(onStateChange) onStateChange({seasonalEvents:next});
       try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
@@ -3129,7 +3142,13 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       <Field label="Tag / Filter Type">
         <Select value={seasonalEditForm.type||"campaign"} onChange={v=>{
           const selectedType = calendarFilterTypes.find((t:any)=>t.id===v);
-          setSeasonalEditForm((f:any)=>({...f,type:v,color:f.color || selectedType?.color || "#9CA3AF"}));
+          setSeasonalEditForm((f:any)=>({
+            ...f,
+            type:v,
+            tag:v,
+            calendarType:v,
+            color:selectedType?.useColor ? String(selectedType.color || f.color || "#9CA3AF").toUpperCase() : (f.color || selectedType?.color || "#9CA3AF")
+          }));
         }}>
           {calendarFilterTypes.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
