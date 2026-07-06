@@ -1,11 +1,6 @@
 export function safeJsonParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
+  try { return JSON.parse(value) as T; } catch { return fallback; }
 }
 
 export function readLocalStorage<T>(key: string, fallback: T): T {
@@ -15,20 +10,10 @@ export function readLocalStorage<T>(key: string, fallback: T): T {
 
 export function writeLocalStorage(key: string, value: unknown) {
   if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Keep app safe if storage quota is full.
-  }
+  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
 export function removeLocalStorage(key: string) {
   if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // Keep app safe.
-  }
+  try { window.localStorage.removeItem(key); } catch {}
 }
