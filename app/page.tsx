@@ -124,6 +124,21 @@ const GlobalStyles = () => {
         padding-bottom:calc(120px + env(safe-area-inset-bottom))!important;
         overscroll-behavior:contain!important;
       }
+
+      .emdc-modal-body{
+        overscroll-behavior:contain;
+        touch-action:pan-y;
+      }
+      .emdc-modal-body::-webkit-scrollbar{width:5px;}
+      @media(max-width:759px){
+        .emdc-modal-overlay{height:100dvh!important;overflow:hidden!important;}
+        .emdc-modal-sheet{height:calc(100dvh - 72px)!important;max-height:calc(100dvh - 72px)!important;}
+        .emdc-modal-body{
+          overflow-y:auto!important;
+          -webkit-overflow-scrolling:touch!important;
+          padding-bottom:calc(180px + env(safe-area-inset-bottom))!important;
+        }
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -1002,25 +1017,64 @@ const Divider = ({ my=16 }) => <div style={{ height:1,background:C.border,margin
 
 const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
   if (!open) return null;
+  const isSmall = typeof window !== "undefined" ? window.innerWidth < 640 : false;
+
   return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:0 }}
+    <div
+      className="emdc-modal-overlay"
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,.45)",
+        zIndex:10000,
+        display:"flex",
+        alignItems:isSmall?"flex-end":"center",
+        justifyContent:"center",
+        padding:isSmall?0:16,
+        overflow:"hidden",
+      }}
       onClick={onClose}
-      // On tablet+ center it
-      onMouseEnter={e=>{ if(window.innerWidth>=640) { e.currentTarget.style.alignItems="center"; e.currentTarget.style.padding="16px"; } }}>
-      <div style={{ background:C.surface,borderRadius:"16px 16px 0 0",padding:24,width:"100%",maxWidth:width,
-        boxShadow:"0 -4px 32px rgba(0,0,0,.16)",maxHeight:"92vh",overflowY:"auto",
-        ...(window.innerWidth>=640?{borderRadius:14,padding:28}:{}) }}
-        onClick={e=>e.stopPropagation()}>
-        {/* Drag handle (mobile) */}
-        {window.innerWidth<640&&<div style={{ width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 20px" }} />}
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
-          <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-            {onBack&&<button onClick={onBack} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:15,flexShrink:0 }}>&#8249;</button>}
-            <h3 style={{ margin:0,fontSize:16,fontWeight:700,color:C.text }}>{title}</h3>
+    >
+      <div
+        className="emdc-modal-sheet"
+        style={{
+          background:C.surface,
+          borderRadius:isSmall?"16px 16px 0 0":14,
+          width:"100%",
+          maxWidth:width,
+          height:isSmall?"calc(100dvh - 72px)":"auto",
+          maxHeight:isSmall?"calc(100dvh - 72px)":"min(90vh, 760px)",
+          boxShadow:"0 -4px 32px rgba(0,0,0,.16)",
+          display:"flex",
+          flexDirection:"column",
+          overflow:"hidden",
+        }}
+        onClick={e=>e.stopPropagation()}
+      >
+        <div style={{ flex:"0 0 auto",padding:isSmall?"18px 24px 12px":24,borderBottom:`1px solid ${C.border}` }}>
+          {isSmall&&<div style={{ width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 18px" }} />}
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:12 }}>
+            <div style={{ display:"flex",alignItems:"center",gap:10,minWidth:0 }}>
+              {onBack&&<button onClick={onBack} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:15,flexShrink:0 }}>&#8249;</button>}
+              <h3 style={{ margin:0,fontSize:16,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{title}</h3>
+            </div>
+            <button onClick={onClose} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:16,flexShrink:0 }}>&#215;</button>
           </div>
-          <button onClick={onClose} style={{ width:32,height:32,borderRadius:"50%",background:C.surfaceAlt,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:16,flexShrink:0 }}>&#215;</button>
         </div>
-        {children}
+        <div
+          className="emdc-modal-body"
+          style={{
+            flex:"1 1 auto",
+            minHeight:0,
+            overflowY:"auto",
+            WebkitOverflowScrolling:"touch",
+            overscrollBehavior:"contain",
+            touchAction:"pan-y",
+            padding:isSmall?"18px 24px calc(180px + env(safe-area-inset-bottom))":24,
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -2253,6 +2307,12 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   };
   const typeLabel = (id:any) => typeMeta(id)?.label || normalizeTagLabel(id);
 
+  const eventDisplayColor = (ev:any) => {
+    const explicit = String(ev?.color || "").trim();
+    if (/^#[0-9A-F]{6}$/i.test(explicit)) return explicit.toUpperCase();
+    return typeColor(ev?.type, "#9CA3AF");
+  };
+
   const typeOrder = (id:any) => {
     const found = typeMeta(id);
     return Number.isFinite(Number(found?.order)) ? Number(found.order) : 999;
@@ -2301,7 +2361,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         id:`month-only-${ev.id}-${year}-${month}`,
         title:ev.name,
         type:ev.type || "seasonal",
-        color:typeColor(ev.type || "seasonal", ev.color || "#14B8A6"),
+        color:eventDisplayColor(ev),
         date:monthStart,
         dateEnd:monthEnd,
         fromSeasonal:true,
@@ -2519,7 +2579,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         itemKind:"seasonal",
         title:ev.name,
         type:ev.type || "seasonal",
-        color:typeColor(ev.type || "seasonal", ev.color || "#14B8A6"),
+        color:eventDisplayColor(ev),
         calDate:ev.calDate,
         dateEnd:ev.calDateEnd,
         dateText:ev.date,
@@ -2534,7 +2594,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:"manual",
       title:ev.title,
       type:ev.type || "task",
-      color:typeColor(ev.type || "task", ev.color || "#374151"),
+      color:eventDisplayColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -2547,7 +2607,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       itemKind:ev.fromChecklist ? "checklist" : "extra",
       title:ev.title,
       type:ev.type || "deadline",
-      color:typeColor(ev.type || "deadline", ev.color || "#8B5CF6"),
+      color:eventDisplayColor(ev),
       calDate:ev.date,
       dateEnd:ev.dateEnd,
       dateText:formatDate(ev.date),
@@ -2857,7 +2917,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       isRealStart:isStart,
       isStart: isStart || isRowStart,
       isEnd:   isEnd   || isRowEnd,
-      color: typeColor(ev.type, ev.color || "#9CA3AF"),
+      color: eventDisplayColor(ev),
     };
   };
 
@@ -2911,7 +2971,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       date:selectedMonths.length ? formatMonthOnlyLabel(selectedMonths) : (seasonalEditForm.date || ""),
       calDate:selectedMonths.length ? null : (seasonalEditForm.calDate || null),
       calDateEnd:selectedMonths.length ? null : (seasonalEditForm.calDateEnd || null),
-      color:seasonalEditForm.color || typeMeta(seasonalEditForm.type)?.color || "#9CA3AF",
+      color:String(seasonalEditForm.color || typeMeta(seasonalEditForm.type)?.color || "#9CA3AF").toUpperCase(),
     };
 
     setSeasonalEvents((prev:any[])=>{
@@ -3087,7 +3147,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
             {monthOnlyCalendarEvents.filter((ev:any)=>filter==="all" || ev.type===filter).map((ev:any)=>(
               <button key={ev.id} type="button" onClick={()=>setDetailEv(ev)}
-                style={{ border:`1px solid ${typeColor(ev.type, ev.color||C.accent)}28`,background:typeColor(ev.type, ev.color||C.accent)+"14",color:typeColor(ev.type, ev.color||C.accent),borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
+                style={{ border:`1px solid ${eventDisplayColor(ev)}28`,background:eventDisplayColor(ev)+"14",color:eventDisplayColor(ev),borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>
                 {ev.phaseoutCount>0?"⚑ ":""}{ev.title}
               </button>
             ))}
@@ -3136,7 +3196,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
                 {/* Range bands — fixed height per band, flush to cell edges */}
                 {rangeEvs.map(ev=>{
-                  const rs=getRangeStyle(ev,d), ec=typeColor(ev.type, ev.color || "#9CA3AF");
+                  const rs=getRangeStyle(ev,d), ec=eventDisplayColor(ev);
                   return (
                     <div key={ev._monthOnlyCloneId||ev.id}
                       onClick={e=>{e.stopPropagation();setDetailEv(ev);}}
@@ -3160,7 +3220,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
                 {/* Point chips — same visual style as range bands */}
                 {pointEvs.map(ev=>{
-                  const ec = typeColor(ev.type, ev.color || "#9CA3AF");
+                  const ec = eventDisplayColor(ev);
                   return (
                     <div key={ev.id}
                       onClick={e=>{e.stopPropagation();setDetailEv(ev);}}
@@ -3440,7 +3500,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                           <span style={{ display:"block",fontSize:12.5,fontWeight:850,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.name}</span>
                           <span style={{ display:"block",fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{ev.date || ev.calDate || formatMonthOnlyLabel(ev.months) || "No specific date"} · {ev.type || "event"}</span>
                         </span>
-                        <Tag color={typeColor(ev.type || "seasonal", ev.color || "#14B8A6")}>{typeLabel(ev.type || "seasonal")}</Tag>
+                        <Tag color={eventDisplayColor(ev)}>{typeLabel(ev.type || "seasonal")}</Tag>
                       </button>
                     );
                   })
@@ -3611,7 +3671,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 style={{ textAlign:"left",padding:"11px 12px",border:`1px solid ${C.border}`,borderRadius:10,background:C.surfaceAlt,cursor:"pointer" }}>
                 <p style={{ margin:"0 0 4px",fontSize:13,fontWeight:900,color:C.text }}>{calendarEventTitle(ev)}</p>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
-                  <Tag color={typeColor(ev.type, ev.color || "#9CA3AF")} sm>{typeLabel(ev.type)}</Tag>
+                  <Tag color={eventDisplayColor(ev)} sm>{typeLabel(ev.type)}</Tag>
                   {calendarPlannerMeta(ev)&&<span style={{ fontSize:10,fontWeight:800,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"1px 6px" }}>{calendarPlannerMeta(ev)}</span>}
                 </div>
               </button>
@@ -3665,7 +3725,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 {dayEv.map(ev=>{
                   const isChecklist=!!ev.fromChecklist, isSeasonal=!!ev.fromSeasonal;
                   const tLabel = isChecklist ? "Deadline" : typeLabel(ev.type);
-                  const tColor = isChecklist ? typeColor("deadline", "#8B5CF6") : typeColor(ev.type, ev.color || "#9CA3AF");
+                  const tColor = isChecklist ? typeColor("deadline", "#8B5CF6") : eventDisplayColor(ev);
                   return (
                     <div key={ev.id} style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:10,borderLeft:`4px solid ${tColor}`,cursor:"pointer" }}
                       onClick={()=>{ setPrevDayView(dayView); setDayView(null); setDetailEv(ev); }}>
