@@ -381,6 +381,12 @@ const GlobalStyles = () => {
         max-width:100%!important;
         min-width:0!important;
       }
+
+      .emdc-date-row-final,
+      .emdc-date-row-final *{box-sizing:border-box!important;}
+      .emdc-date-row-final{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;}
+      .emdc-date-row-final select,
+      .emdc-date-row-final input{height:48px!important;min-height:48px!important;max-height:48px!important;width:100%!important;max-width:100%!important;min-width:0!important;}
 `;
     document.head.appendChild(s);
   }, []);
@@ -1021,6 +1027,10 @@ const DateInput = ({ value, onChange, style={} }) => {
 
   const mode = getModeFromValue(value);
 
+  const currentDateValue = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+
   const yearlyRaw = mode === "yearly"
     ? String(value).replace("yearly:","")
     : (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -1031,10 +1041,6 @@ const DateInput = ({ value, onChange, style={} }) => {
   const yearlyMonth = /^\d{2}$/.test(yearlyParts[0] || "") ? yearlyParts[0] : pad(today.getMonth()+1);
   const yearlyDayMax = new Date(2024, Number(yearlyMonth), 0).getDate();
   const yearlyDay = pad(Math.min(Math.max(Number(yearlyParts[1]) || 1, 1), yearlyDayMax));
-
-  const currentDateValue = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? value
-    : `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 
   const setYearlyPart = (nextMonth:any, nextDay:any) => {
     const mm = pad(Number(nextMonth) || 1);
@@ -1064,20 +1070,13 @@ const DateInput = ({ value, onChange, style={} }) => {
     whiteSpace:"nowrap",
   };
 
-  const selectStyle:any = {
-    ...baseField,
-    appearance:"auto",
-    WebkitAppearance:"menulist",
-  };
-
   return (
     <div
-      className="emdc-date-row-hardfix"
+      className="emdc-date-row-final"
       style={{
         display:"grid",
         gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
         gap:10,
-        alignItems:"stretch",
         width:"100%",
         maxWidth:"100%",
         minWidth:0,
@@ -1090,11 +1089,11 @@ const DateInput = ({ value, onChange, style={} }) => {
         value={mode}
         onChange={e=>{
           const v = e.target.value;
-          if(v==="monthly") onChange(`monthly:15,30`);
+          if(v==="monthly") onChange("monthly:15,30");
           else if(v==="yearly") onChange(`yearly:${yearlyMonth}-${yearlyDay}`);
           else onChange(currentDateValue);
         }}
-        style={selectStyle}
+        style={{...baseField,appearance:"auto",WebkitAppearance:"menulist"}}
       >
         <option value="date">Specific date</option>
         <option value="yearly">Recurring yearly</option>
@@ -1111,17 +1110,16 @@ const DateInput = ({ value, onChange, style={} }) => {
             WebkitAppearance:"none",
             appearance:"none",
             textAlign:"center",
-            cursor:"pointer",
           }}
         />
       )}
 
       {mode === "yearly" && (
-        <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) 58px",gap:8,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
-          <select value={yearlyMonth} onChange={e=>setYearlyPart(e.target.value, yearlyDay)} style={selectStyle}>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 58px",gap:8,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden"}}>
+          <select value={yearlyMonth} onChange={e=>setYearlyPart(e.target.value, yearlyDay)} style={{...baseField,appearance:"auto",WebkitAppearance:"menulist"}}>
             {MONTHS.map((m,i)=><option key={m} value={pad(i+1)}>{m.slice(0,3)}</option>)}
           </select>
-          <select value={yearlyDay} onChange={e=>setYearlyPart(yearlyMonth, e.target.value)} style={selectStyle}>
+          <select value={yearlyDay} onChange={e=>setYearlyPart(yearlyMonth, e.target.value)} style={{...baseField,appearance:"auto",WebkitAppearance:"menulist",padding:"0 4px"}}>
             {Array.from({length:yearlyDayMax},(_,i)=>pad(i+1)).map(d=><option key={d} value={d}>{Number(d)}</option>)}
           </select>
         </div>
@@ -1138,132 +1136,6 @@ const DateInput = ({ value, onChange, style={} }) => {
     </div>
   );
 };
-
-const monthOnlyValues = (value:any) => Array.isArray(value)
-  ? value.map((v:any)=>Number(v)).filter((n:number)=>Number.isFinite(n)&&n>=0&&n<12)
-  : [];
-
-const formatMonthOnlyLabel = (months:any[]) => {
-  const vals = monthOnlyValues(months).sort((a:number,b:number)=>a-b);
-  if (!vals.length) return "";
-  return vals.map((m:number)=>MONTHS_SHORT[m]).join(" / ");
-};
-
-const MonthOnlyPicker = ({ value=[], onChange }: any) => {
-  const selected = monthOnlyValues(value);
-  const toggle = (idx:number) => {
-    const exists = selected.includes(idx);
-    const next = exists ? selected.filter((m:number)=>m!==idx) : [...selected,idx];
-    onChange(next.sort((a:number,b:number)=>a-b));
-  };
-
-  return (
-    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(72px,1fr))",gap:6 }}>
-        {MONTHS_SHORT.map((month:string,idx:number)=>{
-          const active = selected.includes(idx);
-          return (
-            <button key={month} type="button" onClick={()=>toggle(idx)}
-              style={{ height:32,borderRadius:8,border:`1.5px solid ${active?C.accent:C.border}`,background:active?C.accent:C.surface,color:active?"#fff":C.textSub,fontSize:12,fontWeight:700,cursor:"pointer" }}>
-              {month}
-            </button>
-          );
-        })}
-      </div>
-      {selected.length>0&&(
-        <button className="emdc-date-display-v3" type="button" onClick={()=>onChange([])}
-          style={{ alignSelf:"flex-start",border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",padding:0 }}>
-          Clear month-only selection
-        </button>
-      )}
-    </div>
-  );
-};
-
-const Select = ({ value, onChange, children, style={} }) => {
-  const layoutStyle:any = style || {};
-  const wrapperStyle:any = {
-    position:"relative",
-    width:layoutStyle.width || "100%",
-    minWidth:layoutStyle.minWidth,
-    maxWidth:layoutStyle.maxWidth,
-    flex:layoutStyle.flex,
-    flexShrink:layoutStyle.flexShrink,
-  };
-
-  const selectStyle:any = {
-    width:"100%",
-    height:layoutStyle.height || 40,
-    padding:layoutStyle.padding || "0 30px 0 12px",
-    fontSize:14,
-    fontWeight:400,
-    borderRadius:10,
-    border:`1.5px solid ${C.border}`,
-    background:C.surface,
-    color:C.text,
-    outline:"none",
-    cursor:"pointer",
-    appearance:"none",
-    WebkitAppearance:"none",
-    MozAppearance:"none",
-    boxSizing:"border-box",
-    lineHeight:"normal",
-    whiteSpace:"nowrap",
-    overflow:"hidden",
-    textOverflow:"ellipsis",
-    transition:"border-color .15s, box-shadow .15s",
-    ...layoutStyle,
-  };
-
-  delete selectStyle.minWidth;
-  delete selectStyle.maxWidth;
-  delete selectStyle.flex;
-  delete selectStyle.flexShrink;
-  selectStyle.width = "100%";
-  selectStyle.padding = layoutStyle.padding || "0 30px 0 12px";
-  selectStyle.appearance = "none";
-  selectStyle.WebkitAppearance = "none";
-  selectStyle.MozAppearance = "none";
-  selectStyle.background = layoutStyle.background || C.surface;
-  selectStyle.fontWeight = layoutStyle.fontWeight || 400;
-
-  return (
-    <div style={wrapperStyle}>
-      <select
-        value={value}
-        onChange={e=>onChange(e.target.value)}
-        style={selectStyle}
-        onFocus={e=>{
-          e.currentTarget.style.borderColor = C.accent;
-          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(17,24,39,.06)";
-        }}
-        onBlur={e=>{
-          e.currentTarget.style.borderColor = C.border;
-          e.currentTarget.style.boxShadow = "none";
-        }}
-      >
-        {children}
-      </select>
-      <span
-        aria-hidden="true"
-        style={{
-          position:"absolute",
-          right:12,
-          top:"50%",
-          transform:"translateY(-50%)",
-          pointerEvents:"none",
-          color:C.muted,
-          fontSize:10,
-          lineHeight:1,
-        }}
-      >
-        ▾
-      </span>
-    </div>
-  );
-};
-
-const Divider = ({ my=16 }) => <div style={{ height:1,background:C.border,margin:`${my}px 0` }} />;
 
 const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
   if (!open) return null;
@@ -2545,20 +2417,22 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes));
       }
 
-      const updatedAt = new Date().toISOString();
-      localStorage.setItem("emdc_app_state_local_updated_at_v1", updatedAt);
-      window.dispatchEvent(new Event("emdc-local-sync"));
+      localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
 
       if (onStateChange) onStateChange(patch);
 
-      fetch("/api/emdc-state", {
+      window.dispatchEvent(new Event("emdc-local-sync"));
+
+      await fetch("/api/save", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({
-          mode:"app-patch",
-          updatedAt,
-          patch,
-        }),
+        body:JSON.stringify(patch),
+      }).catch(()=>{});
+
+      await fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ patch, updatedAt:new Date().toISOString() }),
       }).catch(()=>{});
     } catch {
       if (onStateChange) onStateChange(patch);
@@ -3297,7 +3171,6 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       calDateEnd:selectedMonths.length ? null : (seasonalEditForm.calDateEnd || null),
       color:tag?.useColor && /^#[0-9A-F]{6}$/i.test(tagColor) ? tagColor.toUpperCase() : selectedColor,
       updatedAt:new Date().toISOString(),
-      updatedAt:new Date().toISOString(),
     };
 
     eventEditSaveLockRef.current = Date.now();
@@ -3456,12 +3329,39 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
 
   const formatYearlyDateLabel = (raw:any) => {
     const value = String(raw || "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const d = new Date(value + "T00:00:00");
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+      }
+    }
     if (!value.startsWith("yearly:")) return value;
     const [mm,dd] = value.replace("yearly:","").split("-").map((n:any)=>Number(n));
     return `${MONTHS[(mm || 1)-1] || "Month"} ${dd || 1}`;
   };
 
-  const formatCalendarRangeText = (start:any,end:any) => {
+  
+const formatEventCardPreviewDate = (ev:any) => {
+  const start = ev?.calDate || ev?.date || "";
+  const end = ev?.calDateEnd || ev?.dateEnd || "";
+
+  const isMonthOnly = Array.isArray(ev?.months) && ev.months.length > 0;
+  const startStr = String(start || "");
+  const endStr = String(end || "");
+
+  if (!isMonthOnly && startStr) {
+    const startLabel = formatYearlyDateLabel(startStr);
+    const endLabel = endStr ? formatYearlyDateLabel(endStr) : "";
+
+    if (endLabel && endLabel !== startLabel) return `${startLabel} - ${endLabel}`;
+    return startLabel;
+  }
+
+  if (isMonthOnly) return formatMonthOnlyLabel(ev.months);
+  return ev?.displayDate || ev?.date || "";
+};
+
+const formatCalendarRangeText = (start:any,end:any) => {
     const s = formatYearlyDateLabel(start);
     const e = formatYearlyDateLabel(end);
     if (s && e && s !== e) return `${s} → ${e}`;
