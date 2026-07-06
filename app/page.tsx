@@ -316,6 +316,26 @@ const GlobalStyles = () => {
         width:100%!important;
         max-width:100%!important;
       }
+
+      .emdc-date-compact-row,
+      .emdc-date-compact-row *{
+        box-sizing:border-box!important;
+      }
+      .emdc-date-compact-row{
+        width:100%!important;
+        max-width:100%!important;
+        min-width:0!important;
+        overflow:hidden!important;
+      }
+      .emdc-date-compact-row select,
+      .emdc-date-compact-row input{
+        height:48px!important;
+        min-height:48px!important;
+        max-height:48px!important;
+        width:100%!important;
+        max-width:100%!important;
+        min-width:0!important;
+      }
 `;
     document.head.appendChild(s);
   }, []);
@@ -942,42 +962,129 @@ const Field = ({ label, hint, children }) => (
 
 const TI = ({ value, onChange, placeholder, type="text", style={} }) => (
   <input type={type} value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}
-    style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box",transition:"border-color .15s",...style }}
+    style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,overflowX:"hidden",color:C.text,outline:"none",boxSizing:"border-box",transition:"border-color .15s",...style }}
     onFocus={e=>e.target.style.borderColor=C.accent}
     onBlur={e=>e.target.style.borderColor=C.border}
   />
 );
 
-const DateInput = ({ value, onChange }: any) => {
-  const displayValue = value && /^\d{4}-\d{2}-\d{2}$/.test(String(value))
-    ? new Date(String(value) + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })
-    : "";
+const DateInput = ({ value, onChange, style={} }) => {
+  const getModeFromValue = (v:any) =>
+    String(v || "").startsWith("monthly:") ? "monthly" :
+    String(v || "").startsWith("yearly:") ? "yearly" :
+    "date";
+
+  const mode = getModeFromValue(value);
+
+  const yearlyRaw = mode === "yearly"
+    ? String(value).replace("yearly:","")
+    : (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? value.slice(5)
+        : `${pad(today.getMonth()+1)}-${pad(today.getDate())}`);
+
+  const yearlyParts = yearlyRaw.split("-");
+  const yearlyMonth = /^\d{2}$/.test(yearlyParts[0] || "") ? yearlyParts[0] : pad(today.getMonth()+1);
+  const yearlyDayMax = new Date(2024, Number(yearlyMonth), 0).getDate();
+  const yearlyDay = pad(Math.min(Math.max(Number(yearlyParts[1]) || 1, 1), yearlyDayMax));
+
+  const setYearlyPart = (nextMonth:any, nextDay:any) => {
+    const mm = pad(Number(nextMonth) || 1);
+    const max = new Date(2024, Number(mm), 0).getDate();
+    const dd = pad(Math.min(Math.max(Number(nextDay) || 1, 1), max));
+    onChange(`yearly:${mm}-${dd}`);
+  };
+
+  const currentDateValue = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+
+  const baseField:any = {
+    height:48,
+    minHeight:48,
+    maxHeight:48,
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
+    boxSizing:"border-box",
+    border:`1.5px solid ${C.border}`,
+    borderRadius:10,
+    background:C.surface,
+    color:C.text,
+    fontSize:14,
+    fontWeight:700,
+    padding:"0 10px",
+    outline:"none",
+    overflow:"hidden",
+    textOverflow:"ellipsis",
+    whiteSpace:"nowrap",
+  };
+
+  const selectStyle:any = {
+    ...baseField,
+    appearance:"auto",
+    WebkitAppearance:"menulist",
+  };
 
   return (
-    <input
-      type="date"
-      value={value || ""}
-      onChange={e=>onChange(e.target.value)}
-      title={displayValue || "Select date"}
+    <div
+      className="emdc-date-compact-row"
       style={{
+        display:"grid",
+        gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
+        gap:10,
+        alignItems:"stretch",
         width:"100%",
         maxWidth:"100%",
         minWidth:0,
-        height:48,
-        minHeight:48,
-        maxHeight:48,
-        boxSizing:"border-box",
-        border:`1.5px solid ${C.border}`,
-        borderRadius:10,
-        background:C.surface,
-        color:C.text,
-        fontSize:14,
-        fontWeight:700,
-        padding:"0 10px",
-        outline:"none",
         overflow:"hidden",
+        boxSizing:"border-box",
+        ...style,
       }}
-    />
+    >
+      <select
+        value={mode}
+        onChange={e=>{
+          const v = e.target.value;
+          if(v==="monthly") onChange(`monthly:15,30`);
+          else if(v==="yearly") onChange(`yearly:${yearlyMonth}-${yearlyDay}`);
+          else onChange(currentDateValue);
+        }}
+        style={selectStyle}
+      >
+        <option value="date">Specific date</option>
+        <option value="yearly">Recurring yearly</option>
+        <option value="monthly">Recurring monthly</option>
+      </select>
+
+      {mode === "date" && (
+        <input
+          type="date"
+          value={currentDateValue}
+          onChange={e=>onChange(e.target.value)}
+          style={baseField}
+        />
+      )}
+
+      {mode === "yearly" && (
+        <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,.8fr)",gap:8,width:"100%",minWidth:0,maxWidth:"100%",overflow:"hidden" }}>
+          <select value={yearlyMonth} onChange={e=>setYearlyPart(e.target.value, yearlyDay)} style={selectStyle}>
+            {MONTHS.map((m,i)=><option key={m} value={pad(i+1)}>{m.slice(0,3)}</option>)}
+          </select>
+          <select value={yearlyDay} onChange={e=>setYearlyPart(yearlyMonth, e.target.value)} style={selectStyle}>
+            {Array.from({length:yearlyDayMax},(_,i)=>pad(i+1)).map(d=><option key={d} value={d}>{Number(d)}</option>)}
+          </select>
+        </div>
+      )}
+
+      {mode === "monthly" && (
+        <input
+          value={String(value || "monthly:15,30").replace("monthly:","")}
+          onChange={e=>onChange(`monthly:${e.target.value.replace(/[^0-9,]/g,"")}`)}
+          placeholder="15,30"
+          style={baseField}
+        />
+      )}
+    </div>
   );
 };
 
