@@ -3002,19 +3002,29 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       source:"Calendar",
     }));
 
-    const checklist = (extraEvents||[]).filter((ev:any)=>!ev.fromSeasonal).map((ev:any)=>({
-      id:"extra-list-"+ev.id,
-      sourceId:ev.id,
-      itemKind:ev.fromChecklist ? "checklist" : "extra",
-      title:ev.title,
-      type:ev.type || "",
-      color:resolveSavedEventColor(ev),
-      calDate:ev.date,
-      dateEnd:ev.dateEnd,
-      dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
-      source:ev.fromChecklist ? "Checklist" : "Calendar",
-      groupId:ev.groupId,
-    }));
+    const checklist = (extraEvents||[]).filter((ev:any)=>!ev.fromSeasonal).map((ev:any)=>{
+      const parentGroup = ev.fromChecklist
+        ? (checklistGroups||[]).find((g:any)=>String(g.id)===String(ev.groupId))
+        : null;
+
+      const parentType = String(parentGroup?.calendarType || parentGroup?.eventType || "").trim();
+      const finalType = ev.fromChecklist ? parentType : (ev.type || "");
+      const parentColor = parentGroup?.calendarColor || parentGroup?.color || ev.color;
+
+      return {
+        id:"extra-list-"+ev.id,
+        sourceId:ev.id,
+        itemKind:ev.fromChecklist ? "checklist" : "extra",
+        title:ev.title,
+        type:finalType,
+        color:parentColor || resolveSavedEventColor(ev),
+        calDate:ev.date,
+        dateEnd:ev.dateEnd,
+        dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
+        source:ev.fromChecklist ? "Checklist" : "Calendar",
+        groupId:ev.groupId,
+      };
+    });
 
     const items = [...seasonal,...manual,...checklist]
       .filter((item:any)=>overlapsYear(item.calDate,item.dateEnd))
@@ -4251,7 +4261,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
-                  {isChecklist&&<Tag color="#8B5CF6">Checklist Deadline</Tag>}
+                  {isChecklist&&<Tag color="#8B5CF6">Checklist</Tag>}
                   {detailEv.monthOnly&&<Tag color={C.muted}>Month-only</Tag>}
                   {detailEv.dateEnd&&!detailEv.monthOnly&&<Tag color={C.muted}>Multi-day</Tag>}
                 </div>
