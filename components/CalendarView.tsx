@@ -1014,8 +1014,6 @@ const TI = ({ value, onChange, placeholder, type="text", style={} }) => (
 );
 
 const DateInput = ({ value, onChange, style={} }) => {
-  const dateInputRef = useRef<any>(null);
-
   const getModeFromValue = (v:any) =>
     String(v || "").startsWith("monthly:") ? "monthly" :
     String(v || "").startsWith("yearly:") ? "yearly" :
@@ -1038,26 +1036,11 @@ const DateInput = ({ value, onChange, style={} }) => {
     ? value
     : `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 
-  const displayDate = currentDateValue
-    ? new Date(currentDateValue + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })
-    : "Select date";
-
   const setYearlyPart = (nextMonth:any, nextDay:any) => {
     const mm = pad(Number(nextMonth) || 1);
     const max = new Date(2024, Number(mm), 0).getDate();
     const dd = pad(Math.min(Math.max(Number(nextDay) || 1, 1), max));
     onChange(`yearly:${mm}-${dd}`);
-  };
-
-  const openDatePicker = () => {
-    const el:any = dateInputRef.current;
-    if (!el) return;
-    try {
-      if (typeof el.showPicker === "function") el.showPicker();
-      else el.click();
-    } catch {
-      try { el.focus(); } catch {}
-    }
   };
 
   const baseField:any = {
@@ -1091,9 +1074,10 @@ const DateInput = ({ value, onChange, style={} }) => {
     <div
       className="emdc-date-row-hardfix"
       style={{
-        display:"flex",
-        alignItems:"stretch",
+        display:"grid",
+        gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
         gap:10,
+        alignItems:"stretch",
         width:"100%",
         maxWidth:"100%",
         minWidth:0,
@@ -1102,78 +1086,55 @@ const DateInput = ({ value, onChange, style={} }) => {
         ...style,
       }}
     >
-      <div style={{ flex:"0 0 calc(50% - 5px)", width:"calc(50% - 5px)", maxWidth:"calc(50% - 5px)", minWidth:0, overflow:"hidden", boxSizing:"border-box" }}>
-        <select
-          value={mode}
-          onChange={e=>{
-            const v = e.target.value;
-            if(v==="monthly") onChange(`monthly:15,30`);
-            else if(v==="yearly") onChange(`yearly:${yearlyMonth}-${yearlyDay}`);
-            else onChange(currentDateValue);
+      <select
+        value={mode}
+        onChange={e=>{
+          const v = e.target.value;
+          if(v==="monthly") onChange(`monthly:15,30`);
+          else if(v==="yearly") onChange(`yearly:${yearlyMonth}-${yearlyDay}`);
+          else onChange(currentDateValue);
+        }}
+        style={selectStyle}
+      >
+        <option value="date">Specific date</option>
+        <option value="yearly">Recurring yearly</option>
+        <option value="monthly">Recurring monthly</option>
+      </select>
+
+      {mode === "date" && (
+        <input
+          type="date"
+          value={currentDateValue}
+          onChange={e=>onChange(e.target.value)}
+          style={{
+            ...baseField,
+            WebkitAppearance:"none",
+            appearance:"none",
+            textAlign:"center",
+            cursor:"pointer",
           }}
-          style={selectStyle}
-        >
-          <option value="date">Specific date</option>
-          <option value="yearly">Recurring yearly</option>
-          <option value="monthly">Recurring monthly</option>
-        </select>
-      </div>
+        />
+      )}
 
-      <div style={{ flex:"0 0 calc(50% - 5px)", width:"calc(50% - 5px)", maxWidth:"calc(50% - 5px)", minWidth:0, overflow:"hidden", boxSizing:"border-box" }}>
-        {mode === "date" && (
-          <div style={{ position:"relative", width:"100%", maxWidth:"100%", minWidth:0, overflow:"hidden", boxSizing:"border-box" }}>
-            <button
-              type="button"
-              onClick={openDatePicker}
-              style={{
-                ...baseField,
-                display:"flex",
-                alignItems:"center",
-                justifyContent:"center",
-                cursor:"pointer",
-                padding:"0 8px",
-              }}
-            >
-              {displayDate}
-            </button>
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={currentDateValue}
-              onChange={e=>onChange(e.target.value)}
-              style={{
-                position:"absolute",
-                inset:0,
-                width:"100%",
-                height:"100%",
-                opacity:0,
-                pointerEvents:"none",
-              }}
-              tabIndex={-1}
-            />
-          </div>
-        )}
+      {mode === "yearly" && (
+        <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) 58px",gap:8,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+          <select value={yearlyMonth} onChange={e=>setYearlyPart(e.target.value, yearlyDay)} style={selectStyle}>
+            {MONTHS.map((m,i)=><option key={m} value={pad(i+1)}>{m.slice(0,3)}</option>)}
+          </select>
+          <select value={yearlyDay} onChange={e=>setYearlyPart(yearlyMonth, e.target.value)} style={selectStyle}>
+            {Array.from({length:yearlyDayMax},(_,i)=>pad(i+1)).map(d=><option key={d} value={d}>{Number(d)}</option>)}
+          </select>
+        </div>
+      )}
 
-        {mode === "yearly" && (
-          <div style={{ display:"flex",gap:8,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
-            <select value={yearlyMonth} onChange={e=>setYearlyPart(e.target.value, yearlyDay)} style={{...selectStyle, flex:"1 1 0", minWidth:0}}>
-              {MONTHS.map((m,i)=><option key={m} value={pad(i+1)}>{m.slice(0,3)}</option>)}
-            </select>
-            <select value={yearlyDay} onChange={e=>setYearlyPart(yearlyMonth, e.target.value)} style={{...selectStyle, flex:"0 0 58px", minWidth:0}}>
-              {Array.from({length:yearlyDayMax},(_,i)=>pad(i+1)).map(d=><option key={d} value={d}>{Number(d)}</option>)}
-            </select>
-          </div>
-        )}
-
-        {mode === "monthly" && (
-          <input
-            value={String(value || "monthly:15,30").replace("monthly:","")}
-            onChange={e=>onChange(`monthly:${e.target.value.replace(/[^0-9,]/g,"")}`)}
-            placeholder="15,30"
-            style={baseField}
-          />
-        )}
-      </div>
+      {mode === "monthly" && (
+        <input
+          value={String(value || "monthly:15,30").replace("monthly:","")}
+          onChange={e=>onChange(`monthly:${e.target.value.replace(/[^0-9,]/g,"")}`)}
+          placeholder="15,30"
+          style={baseField}
+        />
+      )}
     </div>
   );
 };
@@ -2570,6 +2531,40 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
   const eventEditSaveLockRef = useRef(0);
   const [summarySettingsOpen,setSummarySettingsOpen] = useState(false);
   const [summaryDetail,setSummaryDetail] = useState<any>(null);
+  const persistEventPatchNow = async (patch:any = {}) => {
+    if (!patch || typeof patch !== "object") return;
+
+    try {
+      if (Array.isArray(patch.seasonalEvents)) {
+        localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(patch.seasonalEvents));
+      }
+      if (Array.isArray(patch.calendarEvents)) {
+        localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(patch.calendarEvents));
+      }
+      if (Array.isArray(patch.calendarTypes)) {
+        localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes));
+      }
+
+      const updatedAt = new Date().toISOString();
+      localStorage.setItem("emdc_app_state_local_updated_at_v1", updatedAt);
+      window.dispatchEvent(new Event("emdc-local-sync"));
+
+      if (onStateChange) onStateChange(patch);
+
+      fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"app-patch",
+          updatedAt,
+          patch,
+        }),
+      }).catch(()=>{});
+    } catch {
+      if (onStateChange) onStateChange(patch);
+    }
+  };
+
   const [visibleSummaryCards,setVisibleSummaryCards] = useState<any[]>(["campaigns","launches","deadlines","products","tasks","completed","progress","phaseout"]);
   const [seasonalEditForm,setSeasonalEditForm] = useState<any>(null);
   const [phaseoutBrandFilter,setPhaseoutBrandFilter] = useState("all");
@@ -3232,14 +3227,14 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     };
   };
 
-  const saveNew=()=>{ if(!addForm.title||!addForm.date) return; setManualEvents(p=>{ const next=[...p,{id:uid(),...addForm}]; if(onStateChange) onStateChange({calendarEvents:next});
+  const saveNew=()=>{ if(!addForm.title||!addForm.date) return; setManualEvents(p=>{ const next=[...p,{id:uid(),...addForm}]; persistEventPatchNow({calendarEvents:next});
       try {
         localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
         window.dispatchEvent(new Event("emdc-local-sync"));
       } catch {} return next; }); setAddForm({title:"",type:"task",date:"",color:"#374151"}); setAddModal(false); };
   const openEdit=ev=>{ setEditForm({...ev}); setDetailEv(null); setEditModal(true); };
-  const saveEdit=()=>{ if(!editForm.title||!editForm.date) return; setManualEvents(p=>{ const next=p.map(e=>e.id===editForm.id?editForm:e); if(onStateChange) onStateChange({calendarEvents:next});
+  const saveEdit=()=>{ if(!editForm.title||!editForm.date) return; setManualEvents(p=>{ const next=p.map(e=>e.id===editForm.id?editForm:e); persistEventPatchNow({calendarEvents:next});
       try {
         localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -3302,6 +3297,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       calDateEnd:selectedMonths.length ? null : (seasonalEditForm.calDateEnd || null),
       color:tag?.useColor && /^#[0-9A-F]{6}$/i.test(tagColor) ? tagColor.toUpperCase() : selectedColor,
       updatedAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
     };
 
     eventEditSaveLockRef.current = Date.now();
@@ -3316,7 +3312,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
         color:cleanSeasonalEdit.color,
         updatedAt:cleanSeasonalEdit.updatedAt,
       } : ev);
-      if(onStateChange) onStateChange({seasonalEvents:next});
+      persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -3336,7 +3332,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
     if (!seasonalEditForm?.id || !setSeasonalEvents) return;
     setSeasonalEvents((prev:any[])=>{
       const next = prev.filter((ev:any)=>ev.id!==seasonalEditForm.id);
-      if(onStateChange) onStateChange({seasonalEvents:next});
+      persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -4004,7 +4000,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
           onSave:saveEdit,
           saveLabel:"Save Changes",
           showDelete:true,
-          onDelete:()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editForm.id); if(onStateChange) onStateChange({calendarEvents:next});
+          onDelete:()=>{ setManualEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editForm.id); persistEventPatchNow({calendarEvents:next});
       try {
         localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -4216,7 +4212,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
               )}
 
               <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
-                {isManual&&<Btn variant="danger" onClick={()=>{ setManualEvents((p:any)=>{ const base=Array.isArray(p)?p:[]; const next=base.filter((e:any)=>e.id!==detailEv.id); if(onStateChange) onStateChange({calendarEvents:next});
+                {isManual&&<Btn variant="danger" onClick={()=>{ setManualEvents((p:any)=>{ const base=Array.isArray(p)?p:[]; const next=base.filter((e:any)=>e.id!==detailEv.id); persistEventPatchNow({calendarEvents:next});
       try {
         localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -4381,7 +4377,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     setEvents((prev:any[])=>{
       const base = Array.isArray(prev) ? prev : [];
       const next = base.map((ev:any)=>nextIds.includes(ev.id)?{...ev,manualOrder:nextIds.indexOf(ev.id)}:ev);
-      if(onStateChange) onStateChange({seasonalEvents:next});
+      persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -4428,7 +4424,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     setSortMode("date");
     setEvents((prev:any[])=>{
       const next = prev.map((ev:any)=>{ const copy={...ev}; delete copy.manualOrder; return copy; });
-      if(onStateChange) onStateChange({seasonalEvents:next});
+      persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -4443,7 +4439,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     });
   };
 
-  const updProds = (id:any,fn:any) => setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===id?{...e,products:fn(e.products)}:e); if(onStateChange) onStateChange({seasonalEvents:next});
+  const updProds = (id:any,fn:any) => setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===id?{...e,products:fn(e.products)}:e); persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -4614,7 +4610,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
           form: evForm,
           setForm: setEvForm,
           saveLabel: "Add Event",
-          onSave: ()=>{ if(!evForm.name.trim()) return; setEvents((p:any)=>{ const next=[...p,{id:uid(),...evForm,calDate:evForm.calDate||null,calDateEnd:evForm.calDateEnd||null,products:[]}]; if(onStateChange) onStateChange({seasonalEvents:next});
+          onSave: ()=>{ if(!evForm.name.trim()) return; setEvents((p:any)=>{ const next=[...p,{id:uid(),...evForm,calDate:evForm.calDate||null,calDateEnd:evForm.calDateEnd||null,products:[]}]; persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -4627,13 +4623,13 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
           form: editEvForm,
           setForm: setEditEvForm,
           saveLabel: "Save Changes",
-          onSave: ()=>{ setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===editEvForm.id?editEvForm:e); if(onStateChange) onStateChange({seasonalEvents:next});
+          onSave: ()=>{ setEvents((p:any)=>{ const next=p.map((e:any)=>e.id===editEvForm.id?editEvForm:e); persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
         window.dispatchEvent(new Event("emdc-local-sync"));
       } catch {} return next; }); setEditEvModal(false); setEditEvForm(null); },
-          onDelete: ()=>{ setEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editEvForm.id); if(onStateChange) onStateChange({seasonalEvents:next});
+          onDelete: ()=>{ setEvents((p:any)=>{ const next=p.filter((e:any)=>e.id!==editEvForm.id); persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -13530,7 +13526,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
         return additions.length ? { ...ev, products:[...existingProducts,...additions] } : ev;
       });
-      if(onStateChange) onStateChange({seasonalEvents:next});
+      persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -13569,7 +13565,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         const cleaned = products.filter((product:any)=>!labelsToRemove.has(String(product||"").toLowerCase().trim()));
         return cleaned.length === products.length ? ev : { ...ev, products:cleaned };
       });
-      if(onStateChange) onStateChange({seasonalEvents:next});
+      persistEventPatchNow({seasonalEvents:next});
       try {
         localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(next));
         localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
@@ -19068,12 +19064,10 @@ export default function App({
       setCalendarManualEvents(patch.calendarEvents);
       try { localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(patch.calendarEvents)); } catch {}
     }
-
     if (Array.isArray(patch.seasonalEvents)) {
       setSeasonalEvents(patch.seasonalEvents);
       try { localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(patch.seasonalEvents)); } catch {}
     }
-
     if (Array.isArray(patch.calendarTypes)) {
       setCalendarEventTypes(patch.calendarTypes);
       try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
