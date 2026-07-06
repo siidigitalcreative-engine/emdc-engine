@@ -1190,6 +1190,15 @@ const formatMonthOnlyLabel = (months:any[]) => {
 };
 
 
+
+const getChecklistGroupTagDisplay = (ev:any, groups:any[]=[]) => {
+  const groupId = ev?.groupId || ev?.checklistGroupId || ev?.sourceGroupId;
+  const g = (groups || []).find((x:any)=>String(x?.id)===String(groupId));
+  const tagType = String(g?.calendarType || g?.eventType || "").trim();
+  if (!tagType || tagType === "__none__") return "";
+  return tagType;
+};
+
 const formatEventPreviewDateGlobal = (start:any,end:any,fallback:any="") => {
   const fmtSpecificDate = (rawValue:any) => {
     const raw = String(rawValue || "");
@@ -3015,6 +3024,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
       source:ev.fromChecklist ? "Checklist" : "Calendar",
       groupId:ev.groupId,
+      groupTagType:getChecklistGroupTagDisplay(ev, checklistGroups),
     }));
 
     const items = [...seasonal,...manual,...checklist]
@@ -4252,7 +4262,10 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
                   {detailEv.monthOnly&&<Tag color={C.muted}>Month-only</Tag>}
-                  {detailEv.dateEnd&&!detailEv.monthOnly&&<Tag color={C.muted}>Multi-day</Tag>}
+                  {detailEv.dateEnd&&!detailEv.monthOnly&&{(yearOverview?.item?.itemKind==="checklist" && yearOverview?.item?.groupTagType)&&(
+              <Tag color={yearOverview?.item?.color || "#9CA3AF"}>{typeLabel(yearOverview.item.groupTagType)}</Tag>
+            )}
+            <Tag color={C.muted}>Multi-day</Tag>}
                 </div>
                 {seasonalSource?.desc&&<p style={{ margin:"10px 0 0",fontSize:13,color:C.textSub,lineHeight:1.45 }}>{seasonalSource.desc}</p>}
               </div>
