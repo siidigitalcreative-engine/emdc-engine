@@ -3002,29 +3002,19 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
       source:"Calendar",
     }));
 
-    const checklist = (extraEvents||[]).filter((ev:any)=>!ev.fromSeasonal).map((ev:any)=>{
-      const parentGroup = ev.fromChecklist
-        ? (checklistGroups||[]).find((g:any)=>String(g.id)===String(ev.groupId))
-        : null;
-
-      const parentType = String(parentGroup?.calendarType || parentGroup?.eventType || "").trim();
-      const finalType = ev.fromChecklist ? parentType : (ev.type || "");
-      const parentColor = parentGroup?.calendarColor || parentGroup?.color || ev.color;
-
-      return {
-        id:"extra-list-"+ev.id,
-        sourceId:ev.id,
-        itemKind:ev.fromChecklist ? "checklist" : "extra",
-        title:ev.title,
-        type:finalType,
-        color:parentColor || resolveSavedEventColor(ev),
-        calDate:ev.date,
-        dateEnd:ev.dateEnd,
-        dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
-        source:ev.fromChecklist ? "Checklist" : "Calendar",
-        groupId:ev.groupId,
-      };
-    });
+    const checklist = (extraEvents||[]).filter((ev:any)=>!ev.fromSeasonal).map((ev:any)=>({
+      id:"extra-list-"+ev.id,
+      sourceId:ev.id,
+      itemKind:ev.fromChecklist ? "checklist" : "extra",
+      title:ev.title,
+      type:ev.type || "deadline",
+      color:resolveSavedEventColor(ev),
+      calDate:ev.date,
+      dateEnd:ev.dateEnd,
+      dateText:formatEventPreviewDateGlobal(ev.date, ev.dateEnd, formatDate(ev.date)),
+      source:ev.fromChecklist ? "Checklist" : "Calendar",
+      groupId:ev.groupId,
+    }));
 
     const items = [...seasonal,...manual,...checklist]
       .filter((item:any)=>overlapsYear(item.calDate,item.dateEnd))
@@ -3779,7 +3769,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                                 ⚑ {item.phaseoutCount}
                               </span>
                             )}
-                            {item.type&&<span style={{ fontSize:10,color:(item.type?typeColor(item.type,item.color||C.faint):(item.color||C.faint)),background:(item.type?typeColor(item.type,item.color||C.faint):(item.color||C.faint))+"14",border:`1px solid ${(item.type?typeColor(item.type,item.color||C.faint):(item.color||C.faint))}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{typeLabel(item.type)}</span>}
+                            <span style={{ fontSize:10,color:typeColor(item.type,item.color||C.faint),background:typeColor(item.type,item.color||C.faint)+"14",border:`1px solid ${typeColor(item.type,item.color||C.faint)}28`,borderRadius:5,padding:"1px 6px",fontWeight:700 }}>{typeLabel(item.type)}</span>
                           </div>
                         </div>
                         <div style={{ marginTop:3,fontSize:11,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
@@ -4147,7 +4137,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 style={{ textAlign:"left",padding:"11px 12px",border:`1px solid ${C.border}`,borderRadius:10,background:C.surfaceAlt,cursor:"pointer" }}>
                 <p style={{ margin:"0 0 4px",fontSize:13,fontWeight:900,color:C.text }}>{calendarEventTitle(ev)}</p>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
-                  {ev.type&&<Tag color={eventDisplayColor(ev)} sm>{typeLabel(ev.type)}</Tag>}
+                  <Tag color={eventDisplayColor(ev)} sm>{typeLabel(ev.type)}</Tag>
                   {calendarPlannerMeta(ev)&&<span style={{ fontSize:10,fontWeight:800,color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:999,padding:"1px 6px" }}>{calendarPlannerMeta(ev)}</span>}
                 </div>
               </button>
@@ -4261,7 +4251,7 @@ const CalendarView = ({ extraEvents=[], seasonalEvents=[], setSeasonalEvents, br
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:10 }}>
                   {isSeasonal&&<Tag color="#14B8A6">Seasonal Event</Tag>}
-                  {isChecklist&&<Tag color="#8B5CF6">Checklist</Tag>}
+                  {isChecklist&&<Tag color="#8B5CF6">Checklist Deadline</Tag>}
                   {detailEv.monthOnly&&<Tag color={C.muted}>Month-only</Tag>}
                   {detailEv.dateEnd&&!detailEv.monthOnly&&<Tag color={C.muted}>Multi-day</Tag>}
                 </div>
