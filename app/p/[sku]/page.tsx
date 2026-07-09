@@ -225,6 +225,74 @@ function getCategory(product?: SkuItem | null) {
   return String(product?.collection || product?.category || product?.extraFields?.category || product?.extraFields?.collection || "").trim();
 }
 
+function getSearchText(item: any) {
+  const extra = item?.extraFields && typeof item.extraFields === "object"
+    ? Object.values(item.extraFields).join(" ")
+    : "";
+  return [
+    item?.sku,
+    item?.id,
+    item?.productName,
+    item?.product,
+    item?.name,
+    item?.collection,
+    item?.category,
+    item?.tag,
+    item?.brand,
+    item?.brandId,
+    item?.brandName,
+    extra,
+  ].join(" ").toLowerCase();
+}
+
+function countKeywordHits(text: string, keywords: string[]) {
+  return keywords.reduce((sum, word) => sum + (text.includes(word) ? 1 : 0), 0);
+}
+
+function getRelatedProfile(product: any) {
+  const text = getSearchText(product);
+
+  // Condiment / sauce / oil bottles should relate to cooking and kitchen-prep items,
+  // not drinking glassware such as rock glasses, whiskey sets, wine items, or ice buckets.
+  if (/condiment|sauce|oil|vinegar|dispenser|seasoning|spice|salt|pepper/.test(text)) {
+    return {
+      positive: [
+        "condiment", "sauce", "oil", "vinegar", "dispenser", "seasoning", "spice", "salt", "pepper",
+        "kitchen", "cooking", "cookware", "utensil", "tool", "acacia", "wood", "butter", "cheese",
+        "tong", "turner", "spoon", "ladle", "grater", "chopper", "board", "cutting", "lazy susan",
+        "baking", "tray", "dish", "pot", "pan", "casserole", "food", "serve", "serving"
+      ],
+      negative: [
+        "rock glass", "whiskey", "wine", "champagne", "goblet", "shot glass", "drinking", "tumbler",
+        "ice bucket", "decanter", "beer", "cocktail", "highball", "glass set", "double wall"
+      ],
+    };
+  }
+
+  if (/lunch|bento|food jar|food container|meal|insulated/.test(text)) {
+    return {
+      positive: ["lunch", "bento", "food", "container", "jar", "bag", "tumbler", "cutlery", "utensil", "meal", "insulated"],
+      negative: ["whiskey", "wine", "rock glass", "ice bucket", "decanter"],
+    };
+  }
+
+  if (/dinnerware|plate|bowl|serveware|serving|cutlery/.test(text)) {
+    return {
+      positive: ["dinnerware", "plate", "bowl", "serve", "serving", "cutlery", "glassware", "placemat", "table", "dish"],
+      negative: [],
+    };
+  }
+
+  if (/clean|mop|brush|sponge|trash|bin|hose|reel/.test(text)) {
+    return {
+      positive: ["clean", "mop", "brush", "sponge", "trash", "bin", "hose", "reel", "spray", "scrub"],
+      negative: ["lunch", "dinnerware", "whiskey", "wine"],
+    };
+  }
+
+  return { positive: [], negative: [] };
+}
+
 export default function ProductInfoPage({ params }: { params: { sku: string } }) {
   const [loading, setLoading] = useState(true);
   const [product, setProduct] = useState<SkuItem | null>(null);
@@ -327,6 +395,8 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
             .filter(Boolean)
         );
 
+        const profile = getRelatedProfile(found);
+
         const automaticRelatedItems = found ? skuItems
           .filter((item: any) => {
             const itemSkuKey = normalize(item?.sku || item?.id || "");
@@ -340,19 +410,27 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
           })
           .sort((a: any, b: any) => {
             const score = (item: any) => {
+              const text = getSearchText(item);
               const itemCategory = normalize(getCategory(item));
               const itemCollection = normalize(String(item?.collection || item?.extraFields?.collection || ""));
-              let value = 0;
+              let value = 10; // same-brand fallback
 
-              // Priority 1: same collection.
-              if (currentCollection && itemCollection === currentCollection) value += 40;
+              const positiveHits = countKeywordHits(text, profile.positive);
+              const negativeHits = countKeywordHits(text, profile.negative);
 
-              // Priority 2: same category.
-              if (currentCategory && itemCategory === currentCategory) value += 30;
+              // Functional relevance is the main priority.
+              value += positiveHits * 25;
 
-              // Priority 3: same brand fallback. This makes sure the section still fills to 4
-              // even when there are not enough products in the exact same category/collection.
-              value += 10;
+              // Keep same collection/category useful, but not mandatory.
+              if (currentCollection && itemCollection === currentCollection) value += 12;
+              if (currentCategory && itemCategory === currentCategory) value += 10;
+
+              // Strongly push down unrelated display/drinking products on cooking-related pages.
+              value -= negativeHits * 60;
+
+              // Prefer rows with a real image and name.
+              if (item?.imageLink || item?.imageUrl) value += 3;
+              if (item?.productName || item?.product || item?.name) value += 2;
 
               return value;
             };
