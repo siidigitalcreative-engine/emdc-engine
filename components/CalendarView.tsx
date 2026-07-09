@@ -19017,6 +19017,8 @@ export default function App({
   const cloudClientIdRef = useRef("");
   const lastDirectSkuSaveSignatureRef = useRef("");
   const skuDirectSaveTimerRef = useRef<any>(null);
+  const skuSavePromiseRef = useRef<Promise<void> | null>(null);
+  const skuQueuedItemsRef = useRef<any[] | null>(null);
   const skuLocalEditUntilRef = useRef(0);
   const SKU_PENDING_SAVE_KEY = "emdc_sku_items_pending_cloud_save_v1";
 
@@ -19261,6 +19263,7 @@ export default function App({
   };
 
   const saveCloudSkuItemsChunked = async (skuItems:any[] = [], updatedAt:string) => {
+    const saveId = encodeURIComponent(`${updatedAt}-${cloudClientIdRef.current}`);
     const chunks:any[][] = [];
     for (let i=0; i<skuItems.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
       chunks.push(skuItems.slice(i,i+EMDC_CLOUD_SKU_CHUNK_SIZE));
@@ -19274,6 +19277,7 @@ export default function App({
           mode:"sku-chunk",
           clientId:cloudClientIdRef.current,
           updatedAt,
+          saveId,
           index,
           total:chunks.length,
           totalItems:skuItems.length,
@@ -19337,6 +19341,7 @@ export default function App({
           mode:"local-storage-chunk",
           clientId:cloudClientIdRef.current,
           updatedAt,
+          saveId,
           index,
           total:chunks.length,
           totalKeys:Object.keys(snapshot || {}).length,
@@ -19708,23 +19713,18 @@ export default function App({
   };
 
 
-  const saveSkuStorageDirect = async (nextSkus:any[]) => {
+  const performSkuStorageCloudSave = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
-    nextSkus = filterDeletedSkuItems(nextSkus);
-    markSkuLocalEditProtected(nextSkus,"direct-sku-cloud-save-start");
+    const rowsToSave = filterDeletedSkuItems(nextSkus);
+    markSkuLocalEditProtected(rowsToSave,"direct-sku-cloud-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
 
     try {
       setCloudSyncStatus("Saving SKUs...");
       const updatedAt = new Date().toISOString();
 
-      // IMPORTANT: save SKU Storage in chunks, not as one huge request.
-      // Paste Sheet can create thousands of rows. A single big POST can fail silently
-      // or be interrupted, which made SKUs appear saved but disappear after refresh.
-      await saveCloudSkuItemsChunked(nextSkus, updatedAt);
+      await saveCloudSkuItemsChunked(rowsToSave, updatedAt);
 
-      // After all SKU chunks are saved and consolidated by /api/emdc-state, save only
-      // lightweight metadata in the main app state. Do NOT send the full SKU array here.
       const res = await fetch("/api/emdc-state", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -19734,10 +19734,11 @@ export default function App({
           updatedAt,
           patch:{
             skuItems:[],
+            deletedSkuKeys:Array.from(readDeletedSkuKeySet()),
             skuItemsExternalCloud:true,
             skuItemsExternalBlob:true,
-            skuItemsExternalCount:nextSkus.length,
-            skuItemsCloudChunkCount:Math.ceil(nextSkus.length/EMDC_CLOUD_SKU_CHUNK_SIZE),
+            skuItemsExternalCount:rowsToSave.length,
+            skuItemsCloudChunkCount:Math.ceil(rowsToSave.length/EMDC_CLOUD_SKU_CHUNK_SIZE),
             skuItemsCloudUpdatedAt:updatedAt,
           },
         }),
@@ -19746,11 +19747,41 @@ export default function App({
       if (!res.ok) throw new Error("SKU metadata save failed");
       cloudLastUpdatedAtRef.current = updatedAt;
       clearSkuPendingSave();
-      setCloudSyncStatus(`Synced ${nextSkus.length} SKUs`);
+      setCloudSyncStatus(`Synced ${rowsToSave.length} SKUs`);
     } catch (error:any) {
-      console.error("[EMDC] SKU chunked save failed:", error);
+      console.error("[EMDC] SKU cloud save failed:", error);
       setCloudSyncStatus("SKU save failed - export backup now");
+      throw error;
     }
+  };
+
+  const saveSkuStorageDirect = async (nextSkus:any[]) => {
+    if (!Array.isArray(nextSkus)) return;
+    const safeNext = filterDeletedSkuItems(nextSkus);
+    markSkuLocalEditProtected(safeNext,"direct-sku-save-queued");
+
+    // Prevent overlapping SKU saves. Overlapping chunk saves were the main reason
+    // deleted rows sometimes came back: an older save could finish after a newer delete.
+    if (skuSavePromiseRef.current) {
+      skuQueuedItemsRef.current = safeNext;
+      return;
+    }
+
+    const run = async (rows:any[]) => {
+      skuSavePromiseRef.current = performSkuStorageCloudSave(rows);
+      try {
+        await skuSavePromiseRef.current;
+      } finally {
+        skuSavePromiseRef.current = null;
+        const queued = skuQueuedItemsRef.current;
+        skuQueuedItemsRef.current = null;
+        if (queued) {
+          window.setTimeout(()=>{ saveSkuStorageDirect(queued); }, 0);
+        }
+      }
+    };
+
+    await run(safeNext);
   };
 
   useEffect(() => {
