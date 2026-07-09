@@ -389,7 +389,10 @@ export async function POST(req: NextRequest) {
             ...(isRecord(existing?.appState) ? existing.appState : {}),
             skuItems: [],
             skuItemsExternalBlob: true,
+            skuItemsExternalCloud: true,
             skuItemsExternalCount: allRows.length,
+            skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
+            skuItemsSaveId: saveIdRaw,
           },
           localStorage: {},
         };
@@ -398,7 +401,7 @@ export async function POST(req: NextRequest) {
         await writeJsonBlob(LAST_GOOD_PATH, payload);
       }
 
-      return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length, saveId: saveIdRaw });
+      return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length, totalSaved: index === total - 1 && body?.consolidateToAll === true ? Number(body?.totalItems || 0) : undefined, saveId: saveIdRaw });
     }
 
     if (mode === "app-patch" || body?.mode === "app-patch") {
@@ -487,7 +490,10 @@ export async function POST(req: NextRequest) {
           ...(isRecord(existing?.appState) ? existing.appState : {}),
           skuItems: [],
           skuItemsExternalBlob: true,
+          skuItemsExternalCloud: true,
           skuItemsExternalCount: nextSkus.length,
+          skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
+          skuItemsSaveId: body?.saveId || "",
         },
         localStorage: {},
       };
