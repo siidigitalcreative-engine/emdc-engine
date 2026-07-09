@@ -13927,7 +13927,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [editSkuId,setEditSkuId]         = useState(null);
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
-  const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""});
+  const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:"",srp:"",imageLink:""});
   const DEFAULT_SKU_TABLE_COLUMNS = DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
   const SKU_TABLE_BASE_COLUMN_ALIASES:any = {
     product:{ key:"productName", label:"Product", base:true },
@@ -14212,11 +14212,31 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const openEditBrand = b=>{ setEditBrandForm({...b}); setEditBrandModal(true); };
   const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; commitBrands((p:any[])=>p.map((b:any)=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
   const delBrand  = id=>{ commitBrands((p:any[])=>p.filter((b:any)=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
-  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""}); setEditSkuId(null); setSkuModal(true); };
-  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||"",tag:getSkuTags(s).join(", ")}); setEditSkuId(s.id); setSkuModal(true); };
+  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:"",srp:"",imageLink:""}); setEditSkuId(null); setSkuModal(true); };
+  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||"",tag:getSkuTags(s).join(", "),srp:String(s.srp || s.extraFields?.SRP || s.extraFields?.srp || ""),imageLink:String(s.imageLink || s.imageUrl || s.extraFields?.["Image Link"] || s.extraFields?.imageLink || s.extraFields?.imagelink || "")}); setEditSkuId(s.id); setSkuModal(true); };
   const saveSku   = ()=>{
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
-    const baseSku={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
+    const existing = editSkuId ? skuStorage.find((s:any)=>s.id===editSkuId) : null;
+    const imageLink = String(sForm.imageLink || "").trim();
+    const srp = String(sForm.srp || "").trim();
+    const baseSku={
+      ...(existing || {}),
+      id:editSkuId||uid(),
+      brandId:sForm.brandId||activeBrand||brands[0]?.id||"",
+      productName:sForm.productName.trim(),
+      collection:sForm.collection.trim(),
+      sku:sForm.sku.trim(),
+      inventory:parseInt(sForm.inventory)||0,
+      status:sForm.status,
+      customStatus:sForm.customStatus.trim(),
+      srp,
+      imageLink,
+      extraFields:{
+        ...((existing && existing.extraFields) || {}),
+        ...(srp ? { SRP: srp } : {}),
+        ...(imageLink ? { "Image Link": imageLink } : {}),
+      },
+    };
     const e=setSkuTagsOnItem(baseSku,sForm.tag);
     if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s), true); else commitSkuStorage((p:any[])=>[...p,e], true);
     setSkuModal(false);
@@ -15388,14 +15408,17 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             </Select>
           </Field>
           <Field label="Product Name"><TI value={sForm.productName} onChange={v=>setSForm(f=>({...f,productName:v}))} placeholder="e.g. Quencha 750ml Tumbler Horizon" /></Field>
-          <Field label="Collection" hint="select existing or type new">
+          <Field label="Collection / Category" hint="select existing or type new">
             <input list="sku-collection-options" value={sForm.collection} placeholder="e.g. Horizon Collection" onChange={e=>setSForm(f=>({...f,collection:e.target.value}))}
               style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box" }} />
             <datalist id="sku-collection-options">
               {collectionOptions.map((c:any)=><option key={c} value={c} />)}
             </datalist>
           </Field>
+          <Field label="Tag"><TI value={sForm.tag} onChange={v=>setSForm(f=>({...f,tag:v}))} placeholder="e.g. PHASE OUT, New, Promo" /></Field>
           <Field label="SKU Code"><TI value={sForm.sku} onChange={v=>setSForm(f=>({...f,sku:v}))} placeholder="e.g. QNC-TBL-750-HRZ" /></Field>
+          <Field label="SRP"><TI value={sForm.srp} onChange={v=>setSForm(f=>({...f,srp:v}))} placeholder="e.g. 619.75" inputMode="decimal" /></Field>
+          <Field label="Image Link"><TI value={sForm.imageLink} onChange={v=>setSForm(f=>({...f,imageLink:v}))} placeholder="https://..." /></Field>
           <Field label="Inventory"><TI value={sForm.inventory} onChange={v=>setSForm(f=>({...f,inventory:v}))} placeholder="0" type="number" /></Field>
           <Field label="Status">
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
