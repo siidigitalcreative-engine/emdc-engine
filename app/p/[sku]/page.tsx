@@ -300,8 +300,25 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
           ...(Array.isArray(found?.productHub?.relatedSkus) ? found.productHub.relatedSkus : []),
         ].map((code) => String(code || "").trim()).filter(Boolean)));
 
+        const currentSkuKey = normalize(found?.sku || found?.id || "");
+        const currentCategory = normalize(category);
+        const currentCollection = normalize(String(found?.collection || found?.extraFields?.collection || ""));
+        const currentBrand = normalize(String(found?.brandId || found?.brand || found?.brandName || ""));
+
+        const getItemBrand = (item: any) => normalize(String(item?.brandId || item?.brand || item?.brandName || ""));
+        const isSameBrand = (item: any) => {
+          if (!currentBrand) return true;
+          return getItemBrand(item) === currentBrand;
+        };
+
         const selectedRelatedItems = selectedRelatedSkus
-          .map((code) => findSkuByCode(skuItems, code) || makeMissingRelatedProduct(code)) as SkuItem[];
+          .map((code) => findSkuByCode(skuItems, code) || makeMissingRelatedProduct(code))
+          .filter((item: any) => {
+            const itemSkuKey = normalize(item?.sku || item?.id || "");
+            if (itemSkuKey && itemSkuKey === currentSkuKey) return false;
+            if (item?.__missingRelated) return true;
+            return isSameBrand(item);
+          }) as SkuItem[];
 
         const selectedKeys = new Set(
           selectedRelatedItems
@@ -309,33 +326,30 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
             .map((value) => normalize(String(value || "")))
             .filter(Boolean)
         );
-        const currentSkuKey = normalize(found?.sku || found?.id || "");
-        const currentCategory = normalize(category);
-        const currentCollection = normalize(String(found?.collection || found?.extraFields?.collection || ""));
-        const currentBrand = normalize(String(found?.brandId || ""));
 
         const automaticRelatedItems = found ? skuItems
           .filter((item: any) => {
             const itemSkuKey = normalize(item?.sku || item?.id || "");
             if (!itemSkuKey || itemSkuKey === currentSkuKey || selectedKeys.has(itemSkuKey)) return false;
+
+            // Auto-fill must stay inside the same brand only.
+            // Example: Crysalis pages can auto-fill Crysalis products only; Slique pages can auto-fill Slique products only.
+            if (!isSameBrand(item)) return false;
+
             const itemCategory = normalize(getCategory(item));
             const itemCollection = normalize(String(item?.collection || item?.extraFields?.collection || ""));
-            const itemBrand = normalize(String(item?.brandId || ""));
             return (
               (currentCollection && itemCollection === currentCollection) ||
-              (currentCategory && itemCategory === currentCategory) ||
-              (currentBrand && itemBrand === currentBrand)
+              (currentCategory && itemCategory === currentCategory)
             );
           })
           .sort((a: any, b: any) => {
             const score = (item: any) => {
               const itemCategory = normalize(getCategory(item));
               const itemCollection = normalize(String(item?.collection || item?.extraFields?.collection || ""));
-              const itemBrand = normalize(String(item?.brandId || ""));
               let value = 0;
               if (currentCollection && itemCollection === currentCollection) value += 4;
               if (currentCategory && itemCategory === currentCategory) value += 3;
-              if (currentBrand && itemBrand === currentBrand) value += 1;
               return value;
             };
             return score(b) - score(a);
