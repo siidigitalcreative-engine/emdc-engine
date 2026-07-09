@@ -12,6 +12,7 @@ const CHECKLIST_GROUPS_PATH = "emdc-state/checklist-groups/all.json";
 const LOCAL_SNAPSHOT_PATH = "emdc-state/local-snapshot/all.json";
 const SKU_META_PATH = "emdc-state/sku-items/meta.json";
 const SKU_CHUNK_PREFIX = "emdc-state/sku-items/chunk-";
+const SKU_SESSION_CHUNK_PREFIX = "emdc-state/sku-items/sessions/";
 const SKU_DELETED_KEYS_PATH = "emdc-state/sku-items/deleted-keys.json";
 
 const MAX_SKU_CHUNKS = 2000;
@@ -270,6 +271,7 @@ export async function POST(req: NextRequest) {
       await Promise.all([
         del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, SKU_DELETED_KEYS_PATH, CHECKLIST_ITEMS_PATH, CHECKLIST_GROUPS_PATH, LOCAL_SNAPSHOT_PATH] as any).catch(() => {}),
         deleteBlobPrefix(SKU_CHUNK_PREFIX),
+        deleteBlobPrefix(SKU_SESSION_CHUNK_PREFIX),
       ]);
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
     }
@@ -277,6 +279,8 @@ export async function POST(req: NextRequest) {
     if (mode === "sku-chunk" || body?.mode === "sku-chunk") {
       const index = Number(body?.index);
       const total = Number(body?.total);
+      const saveIdRaw = String(body?.saveId || body?.updatedAt || "latest").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 140) || "latest";
+      const sessionPrefix = `${SKU_SESSION_CHUNK_PREFIX}${saveIdRaw}/chunk-`;
       const deletedSkuKeys = await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
       const rows = filterDeletedSkuRows(safeArray(body?.rows), deletedSkuKeys);
 
@@ -284,30 +288,59 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "Invalid SKU chunk index." }, { status: 400 });
       }
 
-      // Keep supporting the old chunk calls from page.tsx, but also consolidate into all.json
-      // after the final chunk so newly added SKUs do not disappear on refresh/poll.
-      await writeJsonBlob(`${SKU_CHUNK_PREFIX}${index}.json`, rows);
+      // Write chunks into a unique save session. This prevents a previous save and a
+      // newer delete save from mixing chunks and re-saving old deleted SKUs.
+      await writeJsonBlob(`${sessionPrefix}${index}.json`, rows);
 
       const meta = {
         version: 1,
         clientId: body?.clientId || "",
         updatedAt: body?.updatedAt || new Date().toISOString(),
+        saveId: saveIdRaw,
         chunkCount: total,
         totalItems: Number(body?.totalItems || 0),
+        deletedSkuKeys,
       };
       await writeJsonBlob(SKU_META_PATH, meta);
 
       if (index === total - 1) {
         const chunks = await Promise.all(
-          Array.from({ length: total }, (_, i) => readJsonBlob(`${SKU_CHUNK_PREFIX}${i}.json`))
+          Array.from({ length: total }, (_, i) => readJsonBlob(`${sessionPrefix}${i}.json`))
         );
         const allRows = filterDeletedSkuRows(chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []), await readDeletedSkuKeys());
-        if (allRows.length) {
-          await writeJsonBlob(SKU_ALL_PATH, allRows);
-        }
+
+        // Always overwrite all.json, even if the new SKU list is empty.
+        await writeJsonBlob(SKU_ALL_PATH, allRows);
+
+        const existingRaw:any = await readJsonBlob(STATE_PATH);
+        const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+          version: 1,
+          updatedAt: "",
+          appState: {},
+          localStorage: {},
+        };
+
+        const payload = {
+          ...existing,
+          version: 1,
+          clientId: body?.clientId || existing?.clientId || "",
+          updatedAt: body?.updatedAt || new Date().toISOString(),
+          appState: {
+            ...(isRecord(existing?.appState) ? existing.appState : {}),
+            skuItems: [],
+            skuItemsExternalBlob: true,
+            skuItemsExternalCloud: true,
+            skuItemsExternalCount: allRows.length,
+            skuItemsCloudChunkCount: total,
+            skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
+          },
+          localStorage: {},
+        };
+        await writeJsonBlob(STATE_PATH, payload);
+        await writeJsonBlob(LAST_GOOD_PATH, payload);
       }
 
-      return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length });
+      return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length, saveId: saveIdRaw });
     }
 
     if (mode === "app-patch" || body?.mode === "app-patch") {
