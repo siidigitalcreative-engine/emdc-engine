@@ -104,18 +104,35 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
         let skuItems: SkuItem[] = [];
         let brands: any[] = [];
 
-        // 1. Try cloud/shared data first.
+        // 1. Try the same cloud state endpoint used by the live EMDC backup/sync system.
+        // This endpoint hydrates the full SKU Storage from Vercel Blob, so it can load all 3,000+ SKUs.
         try {
-          const res = await fetch("/api/load", { cache: "no-store" });
+          const res = await fetch("/api/emdc-state?mode=current", { cache: "no-store" });
           const data = await res.json();
-          const source = data?.appState || data || {};
+          const source = data?.data?.appState || data?.appState || {};
           skuItems = Array.isArray(source?.skuItems) ? source.skuItems : [];
           brands = Array.isArray(source?.skuBrands) ? source.skuBrands : [];
         } catch (error) {
-          console.warn("[EMDC] Product page cloud load failed, trying local cache.", error);
+          console.warn("[EMDC] Product page /api/emdc-state load failed.", error);
         }
 
-        // 2. Fallback to local protected SKU cache used by EMDC.
+        // 2. Fallback to the older Redis load endpoint.
+        // This may only contain checklist SKUs, so it is not the preferred source.
+        if (!skuItems.length || skuItems.length < 10) {
+          try {
+            const res = await fetch("/api/load", { cache: "no-store" });
+            const data = await res.json();
+            const source = data?.appState || data || {};
+            const redisSkuItems = Array.isArray(source?.skuItems) ? source.skuItems : [];
+            const redisBrands = Array.isArray(source?.skuBrands) ? source.skuBrands : [];
+            if (redisSkuItems.length > skuItems.length) skuItems = redisSkuItems;
+            if (!brands.length && redisBrands.length) brands = redisBrands;
+          } catch (error) {
+            console.warn("[EMDC] Product page /api/load fallback failed.", error);
+          }
+        }
+
+        // 3. Fallback to local protected SKU cache used by EMDC.
         if (!skuItems.length) skuItems = readLocalSkuItems();
         if (!brands.length) brands = readLocalBrands();
 
