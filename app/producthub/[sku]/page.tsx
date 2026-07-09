@@ -18,7 +18,7 @@ type HubData = {
   website?: string;
   manual?: string;
   video?: string;
-  relatedSkus?: string;
+  relatedSkus?: string | string[];
   metaTitle?: string;
   metaDescription?: string;
   keywords?: string;
@@ -45,6 +45,24 @@ const emptyHub: HubData = {
   metaDescription: "",
   keywords: "",
 };
+
+
+function textToLines(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => String(item || "").split(/[\r\n,;]+/))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return String(value || "")
+    .split(/[\r\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function linesToText(value: unknown) {
+  return textToLines(value).join("\n");
+}
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -130,7 +148,7 @@ export default function ProductHubEditorPage({ params }: { params: { sku: string
 
         if (hubRes.status === "fulfilled") {
           const json = await hubRes.value.json().catch(() => null);
-          if (json?.ok && json?.data) setHub({ ...emptyHub, ...json.data });
+          if (json?.ok && json?.data) setHub({ ...emptyHub, ...json.data, relatedSkus: linesToText(json.data.relatedSkus) });
           else setHub({ ...emptyHub, slug: decodedSku });
         }
 
@@ -166,7 +184,13 @@ export default function ProductHubEditorPage({ params }: { params: { sku: string
       const res = await fetch("/api/product-hub", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: decodedSku, data: hub }),
+        body: JSON.stringify({
+          sku: decodedSku,
+          data: {
+            ...hub,
+            relatedSkus: textToLines(hub.relatedSkus),
+          },
+        }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Save failed");
