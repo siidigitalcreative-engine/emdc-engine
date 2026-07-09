@@ -7,20 +7,10 @@ type ProductHub = {
   slug?: string;
   heroImage?: string;
   intro?: string;
-  introduction?: string;
   features?: string[];
   specs?: string[];
-  specifications?: string[];
   careUse?: string;
   warranty?: string;
-  galleryImages?: string[];
-  badges?: string[];
-  websiteLink?: string;
-  catalogLink?: string;
-  warrantyLink?: string;
-  seoTitle?: string;
-  seoDescription?: string;
-  seoKeywords?: string[];
   shopeeLink?: string;
   lazadaLink?: string;
   tiktokLink?: string;
@@ -167,7 +157,6 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
   const [product, setProduct] = useState<SkuItem | null>(null);
   const [related, setRelated] = useState<SkuItem[]>([]);
   const [brand, setBrand] = useState<any>(null);
-  const [externalHub, setExternalHub] = useState<ProductHub | null>(null);
   const [debugCount, setDebugCount] = useState(0);
 
   useEffect(() => {
@@ -175,60 +164,52 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
 
     async function load() {
       try {
+        try { window.sessionStorage.removeItem(PUBLIC_STATE_CACHE_KEY); } catch {}
         let skuItems: SkuItem[] = [];
         let brands: any[] = [];
 
-        const cached = readCachedPublicState();
-        if (cached?.skuItems?.length) {
-          skuItems = cached.skuItems;
-          brands = cached.skuBrands || [];
+        // IMPORTANT: Do not use the SKU table render limit or session cache here.
+        // The public product page must search the full cloud catalog, otherwise
+        // SKUs outside the first visible batch, especially Slique, can show as not found.
+        const candidates: { skuItems: SkuItem[]; brands: any[]; source: string }[] = [];
+
+        try {
+          const res = await fetch(`/api/emdc-state?mode=current&t=${Date.now()}`, { cache: "no-store" });
+          const data = await res.json();
+          const source = data?.data?.appState || data?.appState || {};
+          candidates.push({
+            skuItems: Array.isArray(source?.skuItems) ? source.skuItems : [],
+            brands: Array.isArray(source?.skuBrands) ? source.skuBrands : [],
+            source: "emdc-state",
+          });
+        } catch (error) {
+          console.warn("[EMDC] Product page /api/emdc-state load failed.", error);
         }
 
-        if (!skuItems.length || skuItems.length < 10) {
-          try {
-            const res = await fetch("/api/emdc-state?mode=current", { cache: "force-cache" });
-            const data = await res.json();
-            const source = data?.data?.appState || data?.appState || {};
-            skuItems = Array.isArray(source?.skuItems) ? source.skuItems : [];
-            brands = Array.isArray(source?.skuBrands) ? source.skuBrands : [];
-          } catch (error) {
-            console.warn("[EMDC] Product page /api/emdc-state load failed.", error);
-          }
+        try {
+          const res = await fetch(`/api/load?t=${Date.now()}`, { cache: "no-store" });
+          const data = await res.json();
+          const source = data?.appState || data || {};
+          candidates.push({
+            skuItems: Array.isArray(source?.skuItems) ? source.skuItems : [],
+            brands: Array.isArray(source?.skuBrands) ? source.skuBrands : [],
+            source: "load",
+          });
+        } catch (error) {
+          console.warn("[EMDC] Product page /api/load fallback failed.", error);
         }
 
-        if (!skuItems.length || skuItems.length < 10) {
-          try {
-            const res = await fetch("/api/load", { cache: "force-cache" });
-            const data = await res.json();
-            const source = data?.appState || data || {};
-            const redisSkuItems = Array.isArray(source?.skuItems) ? source.skuItems : [];
-            const redisBrands = Array.isArray(source?.skuBrands) ? source.skuBrands : [];
-            if (redisSkuItems.length > skuItems.length) skuItems = redisSkuItems;
-            if (!brands.length && redisBrands.length) brands = redisBrands;
-          } catch (error) {
-            console.warn("[EMDC] Product page /api/load fallback failed.", error);
-          }
-        }
+        const localSkus = readLocalSkuItems();
+        const localBrands = readLocalBrands();
+        if (localSkus.length) candidates.push({ skuItems: localSkus, brands: localBrands, source: "local" });
 
-        if (!skuItems.length) skuItems = readLocalSkuItems();
-        if (!brands.length) brands = readLocalBrands();
-        if (skuItems.length) writeCachedPublicState(skuItems, brands);
+        const best = candidates.sort((a, b) => (b.skuItems?.length || 0) - (a.skuItems?.length || 0))[0];
+        skuItems = best?.skuItems || [];
+        brands = best?.brands || [];
 
         const found = findProduct(skuItems, params.sku);
-        let loadedExternalHub: ProductHub | null = null;
-        if (found?.sku || found?.id) {
-          const hubSku = found.sku || found.id || params.sku;
-          try {
-            const hubRes = await fetch(`/api/product-hub?sku=${encodeURIComponent(hubSku)}`, { cache: "no-store" });
-            const hubJson = await hubRes.json();
-            loadedExternalHub = hubJson?.data || null;
-          } catch (error) {
-            console.warn("[EMDC] External Product Hub load failed.", error);
-          }
-        }
-        const mergedHub: ProductHub = loadedExternalHub || found?.productHub || {};
         const category = getCategory(found);
-        const selectedRelatedSkus = Array.isArray(mergedHub?.relatedSkus) ? mergedHub.relatedSkus : [];
+        const selectedRelatedSkus = Array.isArray(found?.productHub?.relatedSkus) ? found.productHub.relatedSkus : [];
         const selectedRelatedItems = selectedRelatedSkus
           .map((code) => findSkuByCode(skuItems, code))
           .filter(Boolean) as SkuItem[];
@@ -242,7 +223,6 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
 
         if (!cancelled) {
           setProduct(found);
-          setExternalHub(loadedExternalHub);
           setRelated(relatedItems);
           setBrand(found ? brands.find((b) => b.id === found.brandId) || null : null);
           setDebugCount(skuItems.length);
@@ -258,21 +238,16 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
     return () => { cancelled = true; };
   }, [params.sku]);
 
-  const hub = useMemo(() => externalHub || product?.productHub || {}, [externalHub, product]);
+  const hub = useMemo(() => product?.productHub || {}, [product]);
   const hero = hub.heroImage || product?.imageLink || product?.imageUrl || "";
   const features = list(hub.features);
-  const specs = list(hub.specifications || hub.specs);
-  const badges = list(hub.badges);
-  const gallery = list(hub.galleryImages);
+  const specs = list(hub.specs);
   const category = getCategory(product);
   const links = [
     { label: "Shopee", href: hub.shopeeLink },
     { label: "Lazada", href: hub.lazadaLink },
     { label: "TikTok Shop", href: hub.tiktokLink },
-    { label: "Website", href: hub.websiteLink },
     { label: "Manual / PDF", href: hub.manualLink },
-    { label: "Catalog", href: hub.catalogLink },
-    { label: "Warranty PDF", href: hub.warrantyLink },
     { label: "Video", href: hub.videoLink },
   ].filter((x) => x.href);
 
@@ -317,12 +292,6 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
             {product.srp && <p className="emdc-product-price">SRP: ₱{product.srp}</p>}
             {hub.intro ? <p className="emdc-product-intro">{hub.intro}</p> : <p className="emdc-product-intro emdc-product-intro-muted">Product details can be added from EMDC SKU Storage &gt; Edit &gt; Product Hub / QR Page.</p>}
 
-            {badges.length > 0 && (
-              <div className="emdc-product-badge-row">
-                {badges.map((badge, index) => <span key={index} className="emdc-product-badge">{badge}</span>)}
-              </div>
-            )}
-
             {links.length > 0 && (
               <div className="emdc-product-button-row">
                 {links.map((link) => <a key={link.label} href={link.href} target="_blank" rel="noreferrer" className="emdc-product-button">{link.label}</a>)}
@@ -330,15 +299,6 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
             )}
           </div>
         </section>
-
-        {gallery.length > 0 && (
-          <section className="emdc-product-gallery-card">
-            <h2 className="emdc-product-h2">Gallery</h2>
-            <div className="emdc-product-gallery-grid">
-              {gallery.map((src, index) => <img key={index} src={src} alt={`${product.productName || product.sku || "Product"} ${index + 1}`} className="emdc-product-gallery-img" loading="lazy" decoding="async" />)}
-            </div>
-          </section>
-        )}
 
         <section className="emdc-product-info-grid">
           {features.length > 0 && <InfoCard title="Features" items={features} />}
@@ -519,21 +479,6 @@ function ResponsiveCss() {
         line-height: 1.65;
         color: #9CA3AF;
       }
-      .emdc-product-badge-row {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin: 0 0 16px;
-      }
-      .emdc-product-badge {
-        font-size: 12px;
-        font-weight: 900;
-        color: #111827;
-        background: #F3F4F6;
-        border: 1px solid #E5E7EB;
-        border-radius: 999px;
-        padding: 7px 10px;
-      }
       .emdc-product-button-row {
         display: flex;
         gap: 10px;
@@ -552,27 +497,6 @@ function ResponsiveCss() {
         align-items: center;
         justify-content: center;
         text-align: center;
-      }
-      .emdc-product-gallery-card {
-        margin-top: 16px;
-        background: #FFFFFF;
-        border: 1px solid #E5E7EB;
-        border-radius: 18px;
-        padding: clamp(16px, 2vw, 18px);
-        box-shadow: 0 10px 28px rgba(17,24,39,.04);
-      }
-      .emdc-product-gallery-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-        gap: 12px;
-      }
-      .emdc-product-gallery-img {
-        width: 100%;
-        height: 180px;
-        object-fit: contain;
-        background: #F3F4F6;
-        border-radius: 14px;
-        display: block;
       }
       .emdc-product-info-grid {
         margin-top: 16px;
