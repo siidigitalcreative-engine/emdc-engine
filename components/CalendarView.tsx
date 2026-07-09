@@ -35,6 +35,15 @@ const useBreakpoint = () => {
   return { isMobile: w < 760, isTablet: w < 1024, w };
 };
 
+const useDebouncedValue = <T,>(value:T, delay:number) => {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+};
+
 // ─── GLOBAL STYLES (injected once) ──────────────────────────────────────────
 const GlobalStyles = () => {
   useEffect(() => {
@@ -906,9 +915,10 @@ const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP = 120;
 const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE = 36;
 const PERF_SKU_STORAGE_LOAD_MORE_DESKTOP = 120;
 const PERF_SKU_STORAGE_LOAD_MORE_MOBILE = 36;
-const PERF_IDLE_SAVE_DELAY = 450;
-const PERF_CLOUD_SAVE_DELAY = 150;
-const PERF_CLOUD_POLL_INTERVAL = 5000;
+const PERF_IDLE_SAVE_DELAY = 1200;
+const PERF_CLOUD_SAVE_DELAY = 1800;
+// Keep cloud polling light. Frequent 5s polling can freeze Chrome when a large SKU catalog is open.
+const PERF_CLOUD_POLL_INTERVAL = 60000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
   if (typeof window === "undefined") return setTimeout(cb, 0);
@@ -14011,7 +14021,8 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     try { localStorage.setItem(SKU_COLUMN_WIDTH_SETTINGS_KEY, JSON.stringify({ mode:skuColumnWidthMode, widths:skuColumnWidths })); } catch {}
   },[skuColumnWidthMode,skuColumnWidths]);
   const [skuSearch,setSkuSearch] = useState("");
-  const deferredSkuSearch = useDeferredValue(skuSearch);
+  const debouncedSkuSearch = useDebouncedValue(skuSearch, isMobile ? 450 : 275);
+  const deferredSkuSearch = useDeferredValue(debouncedSkuSearch);
   const [activeSkuTag,setActiveSkuTag] = useState("all");
   const [skuRenderLimit,setSkuRenderLimit] = useState(()=>isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
   useEffect(()=>{
@@ -14192,36 +14203,43 @@ ${url}`);
     return Object.values(byKey).sort((a:any,b:any)=>String(a.label).localeCompare(String(b.label)));
   },[skuStorage]);
 
-  const filteredSkus = useMemo(() => {
-    const brandFiltered = activeBrand ? skuStorage.filter((s:any)=>s.brandId===activeBrand) : skuStorage;
-    const tagFiltered = activeSkuTag==="all" ? brandFiltered : brandFiltered.filter((s:any)=>hasSkuTag(s,activeSkuTag));
-    const terms = deferredSkuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if(!terms.length) return tagFiltered;
-
-    return tagFiltered.filter((s:any)=>{
+  const skuSearchIndex = useMemo(() => {
+    const map:any = {};
+    (skuStorage || []).forEach((s:any) => {
       const brandName = brandById[s.brandId]?.name || "";
       const statusLabel = s.status==="active" ? "active" : s.status==="nostocks" ? "no stocks out of stock sold out" : (s.customStatus || "custom");
       const tagText = getSkuTags(s).join(" ");
       const extraText = Object.values(s.extraFields || {}).join(" ");
-      const searchable = [
-        s.productName,
-        s.sku,
-        brandName,
-        s.collection,
-        s.category,
-        s.inventory,
-        s.srp,
-        s.imageLink,
-        s.imageUrl,
-        s.status,
-        statusLabel,
-        tagText,
-        extraText,
+      const key = s.id || s.sourceId || s.sku;
+      map[key] = [
+        s.productName, s.sku, brandName, s.collection, s.category, s.inventory, s.srp,
+        s.imageLink, s.imageUrl, s.status, statusLabel, tagText, extraText
       ].filter(Boolean).join(" ").toLowerCase();
-
-      return terms.every((term:string)=>searchable.includes(term));
     });
-  }, [activeBrand,activeSkuTag,skuStorage,deferredSkuSearch,brandById]);
+    return map;
+  }, [skuStorage, brandById]);
+
+  const filteredSkus = useMemo(() => {
+    const terms = deferredSkuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const results:any[] = [];
+
+    for (const s of (skuStorage || [])) {
+      if (activeBrand && s.brandId !== activeBrand) continue;
+      if (activeSkuTag !== "all" && !hasSkuTag(s, activeSkuTag)) continue;
+      if (terms.length) {
+        const key = s.id || s.sourceId || s.sku;
+        const searchable = skuSearchIndex[key] || "";
+        let matched = true;
+        for (const term of terms) {
+          if (!searchable.includes(term)) { matched = false; break; }
+        }
+        if (!matched) continue;
+      }
+      results.push(s);
+    }
+
+    return results;
+  }, [activeBrand,activeSkuTag,skuStorage,deferredSkuSearch,skuSearchIndex]);
   const collectionOptions = useMemo(() => Array.from(new Set(
     skuStorage
       .filter(s => !sForm.brandId || s.brandId===sForm.brandId)
@@ -19538,9 +19556,14 @@ export default function App({
 
   const scheduleLocalSnapshotSave = () => {
     if (typeof window === "undefined" || cloudApplyingRef.current || !cloudHydrated) return;
+    // Do not keep doing background sync work while the tab is hidden.
+    // This prevents Chrome from hanging when EMDC is left open.
+    if (document.visibilityState === "hidden") return;
     try {
       if ((window as any).__emdcLocalSnapshotTimer) clearTimeout((window as any).__emdcLocalSnapshotTimer);
-      (window as any).__emdcLocalSnapshotTimer = setTimeout(()=>saveLocalSnapshotDirect(), 300);
+      (window as any).__emdcLocalSnapshotTimer = setTimeout(()=>{
+        if (document.visibilityState !== "hidden") saveLocalSnapshotDirect();
+      }, 2500);
     } catch {}
   };
 
@@ -19608,9 +19631,27 @@ export default function App({
   }, [appStateHydrated]);
 
   useEffect(() => {
-    if (!cloudHydrated) return;
-    const timer = setInterval(()=>fetchCloudState("poll"), PERF_CLOUD_POLL_INTERVAL);
-    return () => clearInterval(timer);
+    if (!cloudHydrated || typeof window === "undefined") return;
+
+    const runPoll = () => {
+      // Poll only when the tab is active. Large cloud payloads can make Chrome freeze
+      // if they are parsed repeatedly while the site is left open.
+      if (document.visibilityState === "hidden") return;
+      fetchCloudState("poll");
+    };
+
+    const timer = setInterval(runPoll, PERF_CLOUD_POLL_INTERVAL);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        window.setTimeout(runPoll, 1200);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [cloudHydrated]);
 
   useEffect(() => {
@@ -19621,8 +19662,11 @@ export default function App({
 
   useEffect(() => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), PERF_CLOUD_SAVE_DELAY);
+    cloudSaveTimerRef.current = setTimeout(()=>{
+      if (typeof document === "undefined" || document.visibilityState !== "hidden") saveCloudState();
+    }, PERF_CLOUD_SAVE_DELAY);
     return () => {
       if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
     };
