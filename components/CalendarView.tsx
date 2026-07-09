@@ -15215,6 +15215,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                     )}
                   </div>
                 ))}
+                {hasMoreSkuRows&&(
+                  <div style={{ padding:"14px 16px",display:"flex",justifyContent:"center",borderTop:`1px solid ${C.border}`,background:C.surface }}>
+                    <Btn sm variant="outline" onClick={loadMoreSkuRows}>Load more SKUs ({Math.min(skuRenderLimit, filteredSkus.length)} / {filteredSkus.length})</Btn>
+                  </div>
+                )}
               </div>
             )}
           </div>
