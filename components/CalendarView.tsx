@@ -19407,17 +19407,22 @@ export default function App({
   const makeCloudAppStatePayload = async (updatedAt:string) => {
     const fullAppState = makeAppStatePayload();
     const skuItems = Array.isArray(fullAppState.skuItems) ? fullAppState.skuItems : [];
-    if (skuItems.length < EMDC_LARGE_SKU_COUNT) return fullAppState;
 
-    await saveCloudSkuItemsChunked(skuItems,updatedAt);
-    return {
-      ...fullAppState,
-      skuItems:[],
-      skuItemsExternalCloud:true,
-      skuItemsExternalCount:skuItems.length,
-      skuItemsCloudChunkCount:Math.ceil(skuItems.length/EMDC_CLOUD_SKU_CHUNK_SIZE),
-      skuItemsCloudUpdatedAt:updatedAt,
-    };
+    // The SKU list is saved by saveSkuStorageDirect() using /api/emdc-state?mode=sku-items.
+    // The general workspace save should only save SKU metadata, otherwise an older
+    // background save can overwrite newly added/deleted SKUs.
+    if (skuItems.length >= EMDC_LARGE_SKU_COUNT) {
+      return {
+        ...fullAppState,
+        skuItems:[],
+        skuItemsExternalCloud:true,
+        skuItemsExternalBlob:true,
+        skuItemsExternalCount:skuItems.length,
+        skuItemsCloudUpdatedAt:updatedAt,
+      };
+    }
+
+    return fullAppState;
   };
 
   const saveCloudState = async () => {
@@ -19758,37 +19763,34 @@ export default function App({
 
   const performSkuStorageCloudSave = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
-    const rowsToSave = filterDeletedSkuItems(nextSkus);
-    markSkuLocalEditProtected(rowsToSave,"direct-sku-cloud-save-start");
+
+    // AUTHORITATIVE SKU SAVE:
+    // Add, edit, Paste Sheet, and delete now all save the exact current SKU list
+    // directly to the server's SKU file. Do not send skuItems: [] through app-patch,
+    // because that can accidentally overwrite the cloud SKU file with an empty list.
+    const rowsToSave = Array.isArray(nextSkus) ? nextSkus : [];
+    markSkuLocalEditProtected(rowsToSave,"direct-authoritative-sku-cloud-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
 
     try {
       setCloudSyncStatus("Saving SKUs...");
       const updatedAt = new Date().toISOString();
 
-      await saveCloudSkuItemsChunked(rowsToSave, updatedAt);
-
-      const res = await fetch("/api/emdc-state", {
+      const res = await fetch("/api/emdc-state?mode=sku-items", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({
-          mode:"app-patch",
+          mode:"sku-items",
           clientId:cloudClientIdRef.current,
           updatedAt,
-          patch:{
-            skuItems:[],
-            deletedSkuKeys:Array.from(readDeletedSkuKeySet()),
-            skuItemsExternalCloud:true,
-            skuItemsExternalBlob:true,
-            skuItemsExternalCount:rowsToSave.length,
-            skuItemsCloudChunkCount:Math.ceil(rowsToSave.length/EMDC_CLOUD_SKU_CHUNK_SIZE),
-            skuItemsCloudUpdatedAt:updatedAt,
-          },
+          skuItems: rowsToSave,
+          resetDeletedSkuKeys: true,
         }),
       });
 
-      if (!res.ok) throw new Error("SKU metadata save failed");
-      cloudLastUpdatedAtRef.current = updatedAt;
+      if (!res.ok) throw new Error("Authoritative SKU save failed");
+      const data = await res.json().catch(()=>({}));
+      cloudLastUpdatedAtRef.current = data?.data?.updatedAt || updatedAt;
       clearSkuPendingSave();
       setCloudSyncStatus(`Synced ${rowsToSave.length} SKUs`);
     } catch (error:any) {
