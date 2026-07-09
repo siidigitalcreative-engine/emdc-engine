@@ -18956,6 +18956,29 @@ export default function App({
   const cloudClientIdRef = useRef("");
   const lastDirectSkuSaveSignatureRef = useRef("");
   const skuDirectSaveTimerRef = useRef<any>(null);
+  const skuLocalEditUntilRef = useRef(0);
+  const SKU_PENDING_SAVE_KEY = "emdc_sku_items_pending_cloud_save_v1";
+
+  const markSkuLocalEditProtected = (rows:any[] = [], reason="sku-edit") => {
+    skuLocalEditUntilRef.current = Date.now() + 120000;
+    try {
+      if (Array.isArray(rows)) rememberProtectedSkuItems(rows,reason);
+      localStorage.setItem(SKU_PENDING_SAVE_KEY, JSON.stringify({
+        reason,
+        count:Array.isArray(rows) ? rows.length : 0,
+        savedAt:new Date().toISOString(),
+      }));
+      window.dispatchEvent(new Event("emdc-local-sync"));
+    } catch {}
+  };
+
+  const clearSkuPendingSave = () => {
+    try { localStorage.removeItem(SKU_PENDING_SAVE_KEY); } catch {}
+  };
+
+  const hasPendingSkuSave = () => {
+    try { return !!localStorage.getItem(SKU_PENDING_SAVE_KEY); } catch { return false; }
+  };
 
   const EMDC_SYNC_LOCAL_KEYS = [
     "emdc_app_state_v1",
@@ -19105,9 +19128,29 @@ export default function App({
       return;
     }
 
+    // DATA PROTECTION: After Paste Sheet / bulk SKU edits, never let an older cloud
+    // payload replace the browser's newer SKU list. This was the cause of rows
+    // appearing saved, then disappearing a little later after a poll/refetch.
+    const protectedSkuItems = readProtectedSkuItemsBackup();
+    const localSkuItems = Array.isArray(skuStorage) ? skuStorage : [];
+    const bestLocalSkuItems = protectedSkuItems.length >= localSkuItems.length ? protectedSkuItems : localSkuItems;
+    const hasRecentLocalSkuEdit = Date.now() < skuLocalEditUntilRef.current || hasPendingSkuSave();
+
+    let safeCloudAppState = cloudAppState;
+    if (hasRecentLocalSkuEdit && bestLocalSkuItems.length) {
+      safeCloudAppState = {
+        ...cloudAppState,
+        skuItems:bestLocalSkuItems,
+        skuItemsExternalCloud:false,
+        skuItemsExternalBlob:false,
+        skuItemsExternalCount:bestLocalSkuItems.length,
+      };
+      setCloudSyncStatus("Keeping local SKU edits");
+    }
+
     cloudApplyingRef.current = true;
     try {
-      applyAppState(cloudAppState);
+      applyAppState(safeCloudAppState);
       if (cloud?.localStorage && typeof cloud.localStorage === "object") {
         try {
           Object.entries(cloud.localStorage).forEach(([key,value]:any)=>{
@@ -19484,6 +19527,20 @@ export default function App({
   const handleRootStateChange = (patch:any = {}) => {
     if (!patch || typeof patch !== "object") return;
 
+    if (Array.isArray(patch.skuItems)) {
+      markSkuLocalEditProtected(patch.skuItems,"root-state-sku-items-patch");
+      setSkuStorage(patch.skuItems);
+      try { (window as any).__EMDC_LAST_SKU_STORAGE__ = patch.skuItems; } catch {}
+    }
+
+    if (Array.isArray(patch.skuBrands)) {
+      setBrands(patch.skuBrands);
+    }
+
+    if (Array.isArray(patch.skuTableColumns)) {
+      setSkuTableColumns(sanitizeSkuTableColumns(patch.skuTableColumns));
+    }
+
     if (Array.isArray(patch.calendarEvents)) {
       setCalendarManualEvents(patch.calendarEvents);
       try { localStorage.setItem("emdc_calendar_manual_events_v1", JSON.stringify(patch.calendarEvents)); } catch {}
@@ -19569,6 +19626,8 @@ export default function App({
 
 
   const saveSkuStorageDirect = async (nextSkus:any[]) => {
+    if (!Array.isArray(nextSkus)) return;
+    markSkuLocalEditProtected(nextSkus,"direct-sku-cloud-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
     try {
       setCloudSyncStatus("Saving SKUs...");
@@ -19586,9 +19645,10 @@ export default function App({
 
       if (!res.ok) throw new Error("SKU save failed");
       cloudLastUpdatedAtRef.current = updatedAt;
+      clearSkuPendingSave();
       setCloudSyncStatus("Synced");
     } catch {
-      setCloudSyncStatus("SKU save failed");
+      setCloudSyncStatus("SKU save failed - local copy protected");
     }
   };
 
@@ -19686,7 +19746,11 @@ export default function App({
   ]);
 
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
-  useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
+  useEffect(() => {
+    if (cloudApplyingRef.current) return;
+    if (Array.isArray(skuStorage) && skuStorage.length) rememberProtectedSkuItems(skuStorage,"root-sku-storage-effect");
+    if (onStateChange) onStateChange({ skuItems: skuStorage });
+  }, [skuStorage]);
   useEffect(() => { if (onStateChange) onStateChange({ skuTableColumns: sanitizeSkuTableColumns(skuTableColumns) }); }, [skuTableColumns]);
   useEffect(() => {
     setCalendarEventTypes((prev:any[])=>{
@@ -19702,7 +19766,7 @@ export default function App({
     setSkuStorage((prev:any[]) => {
       const nextRaw = typeof updater === "function" ? updater(prev) : updater;
       const next = Array.isArray(nextRaw) ? nextRaw : [];
-      rememberProtectedSkuItems(next,"root-sku-storage-direct-set");
+      markSkuLocalEditProtected(next,"root-sku-storage-direct-set");
       saveSkuStorageDirect(next);
       return next;
     });
