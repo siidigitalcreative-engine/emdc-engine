@@ -12,6 +12,7 @@ const CHECKLIST_GROUPS_PATH = "emdc-state/checklist-groups/all.json";
 const LOCAL_SNAPSHOT_PATH = "emdc-state/local-snapshot/all.json";
 const SKU_META_PATH = "emdc-state/sku-items/meta.json";
 const SKU_CHUNK_PREFIX = "emdc-state/sku-items/chunk-";
+const SKU_DELETED_KEYS_PATH = "emdc-state/sku-items/deleted-keys.json";
 
 const MAX_SKU_CHUNKS = 2000;
 
@@ -28,6 +29,43 @@ function isRecord(value: any) {
 
 function safeArray(value: any) {
   return Array.isArray(value) ? value : [];
+}
+
+function normalizeSkuDeleteKey(value: any) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function getSkuDeleteKeys(row: any) {
+  const keys: string[] = [];
+  const id = normalizeSkuDeleteKey(row?.id);
+  const sku = normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value);
+  if (id) keys.push(`id:${id}`);
+  if (sku) keys.push(`sku:${sku}`);
+  return keys;
+}
+
+function normalizeDeletedKeys(value: any) {
+  const raw = Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items.map((item: any) => item?.key || item) : [];
+  return Array.from(new Set(raw.map((item: any) => String(item?.key || item || "").trim().toLowerCase()).filter(Boolean))).slice(-20000);
+}
+
+async function readDeletedSkuKeys() {
+  const parsed: any = await readJsonBlob(SKU_DELETED_KEYS_PATH);
+  return normalizeDeletedKeys(parsed);
+}
+
+async function mergeDeletedSkuKeys(incoming: any) {
+  const next = normalizeDeletedKeys([...(await readDeletedSkuKeys()), ...normalizeDeletedKeys(incoming)]);
+  if (next.length) {
+    await writeJsonBlob(SKU_DELETED_KEYS_PATH, { updatedAt: new Date().toISOString(), keys: next }).catch(() => {});
+  }
+  return next;
+}
+
+function filterDeletedSkuRows(rows: any[] = [], deletedKeys: string[] = []) {
+  if (!Array.isArray(rows) || !rows.length || !deletedKeys.length) return safeArray(rows);
+  const deleted = new Set(deletedKeys);
+  return rows.filter((row: any) => !getSkuDeleteKeys(row).some((key) => deleted.has(key)));
 }
 
 async function streamToText(stream: any) {
@@ -84,8 +122,13 @@ async function hydrateSkuData(data: any) {
   const appState = data.appState;
 
   // Preferred Blob SKU source: one dedicated private JSON file.
-  const allSkuItems = await readJsonBlob(SKU_ALL_PATH);
+  const deletedSkuKeys = await readDeletedSkuKeys();
+  const allSkuItemsRaw = await readJsonBlob(SKU_ALL_PATH);
+  const allSkuItems = filterDeletedSkuRows(Array.isArray(allSkuItemsRaw) ? allSkuItemsRaw : [], deletedSkuKeys);
   if (Array.isArray(allSkuItems) && allSkuItems.length) {
+    if (Array.isArray(allSkuItemsRaw) && allSkuItemsRaw.length !== allSkuItems.length) {
+      await writeJsonBlob(SKU_ALL_PATH, allSkuItems).catch(() => {});
+    }
     return {
       ...data,
       appState: {
@@ -114,7 +157,7 @@ async function hydrateSkuData(data: any) {
     Array.from({ length: chunkCount }, (_, index) => readJsonBlob(`${SKU_CHUNK_PREFIX}${index}.json`))
   );
 
-  const skuItems = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
+  const skuItems = filterDeletedSkuRows(chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []), deletedSkuKeys);
   if (!skuItems.length) return data;
 
   // Migrate old chunks into the stable all.json file.
@@ -225,7 +268,7 @@ export async function POST(req: NextRequest) {
 
     if (mode === "cleanup-all-cloud" || body?.mode === "cleanup-all-cloud" || mode === "cleanup-cloud" || body?.mode === "cleanup-cloud") {
       await Promise.all([
-        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, CHECKLIST_ITEMS_PATH, CHECKLIST_GROUPS_PATH, LOCAL_SNAPSHOT_PATH] as any).catch(() => {}),
+        del([STATE_PATH, LAST_GOOD_PATH, SKU_ALL_PATH, SKU_META_PATH, SKU_DELETED_KEYS_PATH, CHECKLIST_ITEMS_PATH, CHECKLIST_GROUPS_PATH, LOCAL_SNAPSHOT_PATH] as any).catch(() => {}),
         deleteBlobPrefix(SKU_CHUNK_PREFIX),
       ]);
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
@@ -234,7 +277,8 @@ export async function POST(req: NextRequest) {
     if (mode === "sku-chunk" || body?.mode === "sku-chunk") {
       const index = Number(body?.index);
       const total = Number(body?.total);
-      const rows = safeArray(body?.rows);
+      const deletedSkuKeys = await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
+      const rows = filterDeletedSkuRows(safeArray(body?.rows), deletedSkuKeys);
 
       if (!Number.isInteger(index) || !Number.isInteger(total) || index < 0 || total <= 0 || index >= total || total > MAX_SKU_CHUNKS) {
         return NextResponse.json({ ok: false, error: "Invalid SKU chunk index." }, { status: 400 });
@@ -257,7 +301,7 @@ export async function POST(req: NextRequest) {
         const chunks = await Promise.all(
           Array.from({ length: total }, (_, i) => readJsonBlob(`${SKU_CHUNK_PREFIX}${i}.json`))
         );
-        const allRows = chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
+        const allRows = filterDeletedSkuRows(chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []), await readDeletedSkuKeys());
         if (allRows.length) {
           await writeJsonBlob(SKU_ALL_PATH, allRows);
         }
@@ -279,8 +323,12 @@ export async function POST(req: NextRequest) {
       const existingAppState:any = isRecord(existing?.appState) ? existing.appState : {};
       let nextAppState:any = { ...existingAppState, ...patch };
 
-      if (Array.isArray((patch as any).skuItems)) {
-        const nextSkus = safeArray((patch as any).skuItems);
+      if (Array.isArray((patch as any).deletedSkuKeys)) {
+        await mergeDeletedSkuKeys((patch as any).deletedSkuKeys);
+      }
+
+      if (Array.isArray((patch as any).skuItems) && (patch as any).skuItems.length > 0) {
+        const nextSkus = filterDeletedSkuRows(safeArray((patch as any).skuItems), await readDeletedSkuKeys());
         await writeJsonBlob(SKU_ALL_PATH, nextSkus);
         nextAppState = { ...nextAppState, skuItems: [], skuItemsExternalBlob: true, skuItemsExternalCount: nextSkus.length };
       }
@@ -320,7 +368,8 @@ export async function POST(req: NextRequest) {
         localStorage: {},
       };
 
-      const nextSkus = safeArray(body?.skuItems);
+      const deletedSkuKeys = await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
+      const nextSkus = filterDeletedSkuRows(safeArray(body?.skuItems), deletedSkuKeys);
       await writeJsonBlob(SKU_ALL_PATH, nextSkus);
 
       const payload = {
@@ -436,7 +485,8 @@ export async function POST(req: NextRequest) {
     }
 
     const incomingAppState = isRecord(body?.appState) ? body.appState : {};
-    const incomingSkuItems = safeArray((incomingAppState as any).skuItems);
+    const incomingDeletedSkuKeys = await mergeDeletedSkuKeys((incomingAppState as any).deletedSkuKeys || body?.deletedSkuKeys || body?.deletedKeys || []);
+    const incomingSkuItems = filterDeletedSkuRows(safeArray((incomingAppState as any).skuItems), incomingDeletedSkuKeys);
 
     // Any POST that includes SKU rows becomes the authoritative SKU Blob file.
     // This covers adding 88 SKUs, editing SKUs, and importing backup files.
