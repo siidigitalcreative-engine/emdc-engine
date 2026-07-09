@@ -19278,6 +19278,7 @@ export default function App({
           total:chunks.length,
           totalItems:skuItems.length,
           rows:chunks[index],
+          deletedSkuKeys:Array.from(readDeletedSkuKeySet()),
         }),
       });
       if (!res.ok) throw new Error("SKU chunk save failed");
