@@ -14082,6 +14082,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   },[brands]);
 
   const getSkuPublicPath = (s:any) => `/p/${encodeURIComponent(String(s?.sku || s?.value || s?.id || ""))}`;
+  const getSkuProductHubEditPath = (s:any) => `/producthub/${encodeURIComponent(String(s?.sku || s?.value || s?.id || ""))}`;
   const getSkuPublicUrl = (s:any) => {
     const path = getSkuPublicPath(s);
     if (typeof window === "undefined") return path;
@@ -15151,6 +15152,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                                 ))}
                                 <div style={{ minHeight:48,padding:"7px 8px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:5,justifyContent:"flex-end",alignItems:"center",background:C.surface,whiteSpace:"nowrap",overflow:"hidden" }}>
                                   <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",fontSize:11,fontWeight:800,color:C.textSub,padding:"4px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surfaceAlt }}>Hub</a>
+                                  <a href={getSkuProductHubEditPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",fontSize:11,fontWeight:800,color:C.textSub,padding:"4px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surfaceAlt }}>Edit Hub</a>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>downloadSkuQr(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>QR</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>copySkuHubLink(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>Copy</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5 }}>Edit</button>
@@ -15193,6 +15195,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                             <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center",overflowX:"auto",maxWidth:"50vw" }}>
                               {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint,flexShrink:0 }}>&#8942;&#8942;</span>}
                               <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Hub</a>
+                              <a href={getSkuProductHubEditPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Edit Hub</a>
                               <button onClick={()=>downloadSkuQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>QR</button>
                               <button onClick={()=>copySkuHubLink(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Copy</button>
                               <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600,whiteSpace:"nowrap" }}>Edit</button>
