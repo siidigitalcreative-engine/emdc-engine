@@ -352,13 +352,16 @@ export async function POST(req: NextRequest) {
       };
       await writeJsonBlob(SKU_META_PATH, meta);
 
-      if (index === total - 1) {
+      // Do not automatically consolidate chunks into all.json.
+      // The authoritative SKU file is updated only by the sku-items endpoint.
+      // This prevents older background/autosave chunk writes from overwriting
+      // newly added or newly deleted SKUs.
+      if (index === total - 1 && body?.consolidateToAll === true) {
         const chunks = await Promise.all(
           Array.from({ length: total }, (_, i) => readJsonBlob(`${sessionPrefix}${i}.json`))
         );
         const allRows = filterDeletedSkuRows(chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []), await readDeletedSkuKeys());
 
-        // Always overwrite all.json, even if the new SKU list is empty.
         await writeJsonBlob(SKU_ALL_PATH, allRows);
 
         const existingRaw:any = await readJsonBlob(STATE_PATH);
@@ -378,13 +381,11 @@ export async function POST(req: NextRequest) {
             ...(isRecord(existing?.appState) ? existing.appState : {}),
             skuItems: [],
             skuItemsExternalBlob: true,
-            skuItemsExternalCloud: true,
             skuItemsExternalCount: allRows.length,
-            skuItemsCloudChunkCount: total,
-            skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
           },
           localStorage: {},
         };
+
         await writeJsonBlob(STATE_PATH, payload);
         await writeJsonBlob(LAST_GOOD_PATH, payload);
       }
@@ -409,10 +410,21 @@ export async function POST(req: NextRequest) {
         await mergeDeletedSkuKeys((patch as any).deletedSkuKeys);
       }
 
-      if (Array.isArray((patch as any).skuItems) && (patch as any).skuItems.length > 0) {
-        const nextSkus = filterDeletedSkuRows(safeArray((patch as any).skuItems), await readDeletedSkuKeys());
-        await writeJsonBlob(SKU_ALL_PATH, nextSkus);
-        nextAppState = { ...nextAppState, skuItems: [], skuItemsExternalBlob: true, skuItemsExternalCount: nextSkus.length };
+      if (Array.isArray((patch as any).skuItems)) {
+        const patchSkus = safeArray((patch as any).skuItems);
+        const allowEmptySkuOverwrite = body?.allowEmptySkuItemsOverwrite === true;
+
+        // app-patch may send skuItems: [] as metadata. Never let that clear
+        // the real cloud SKU file unless explicitly requested.
+        if (patchSkus.length > 0 || allowEmptySkuOverwrite) {
+          const nextSkus = filterDeletedSkuRows(patchSkus, await readDeletedSkuKeys());
+          await writeJsonBlob(SKU_ALL_PATH, nextSkus);
+          nextAppState = { ...nextAppState, skuItems: [], skuItemsExternalBlob: true, skuItemsExternalCount: nextSkus.length };
+        } else {
+          const existingSkus = await readJsonBlob(SKU_ALL_PATH);
+          const existingCount = Array.isArray(existingSkus) ? existingSkus.length : Number(existingAppState?.skuItemsExternalCount || 0);
+          nextAppState = { ...nextAppState, skuItems: [], skuItemsExternalBlob: true, skuItemsExternalCount: existingCount };
+        }
       }
 
       if (Array.isArray((patch as any).checklistGroups)) {
@@ -450,7 +462,11 @@ export async function POST(req: NextRequest) {
         localStorage: {},
       };
 
-      const deletedSkuKeys = await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
+      const resetDeletedSkuKeys = body?.resetDeletedSkuKeys === true;
+      if (resetDeletedSkuKeys) {
+        await writeJsonBlob(SKU_DELETED_KEYS_PATH, { updatedAt: new Date().toISOString(), keys: [] }).catch(() => {});
+      }
+      const deletedSkuKeys = resetDeletedSkuKeys ? [] : await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
       const nextSkus = filterDeletedSkuRows(safeArray(body?.skuItems), deletedSkuKeys);
       await writeJsonBlob(SKU_ALL_PATH, nextSkus);
 
