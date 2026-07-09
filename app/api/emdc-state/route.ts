@@ -276,6 +276,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, mode: mode || body?.mode || "cleanup-cloud" });
     }
 
+    if (mode === "sku-delete" || body?.mode === "sku-delete") {
+      const incomingDeleted = normalizeDeletedKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
+      if (!incomingDeleted.length) {
+        return NextResponse.json({ ok: false, error: "No SKU delete keys received." }, { status: 400 });
+      }
+
+      const deletedSkuKeys = await mergeDeletedSkuKeys(incomingDeleted);
+      const existingRowsRaw = await readJsonBlob(SKU_ALL_PATH);
+      const existingRows = Array.isArray(existingRowsRaw) ? existingRowsRaw : [];
+      const nextSkus = filterDeletedSkuRows(existingRows, deletedSkuKeys);
+      await writeJsonBlob(SKU_ALL_PATH, nextSkus);
+
+      const existingRaw:any = await readJsonBlob(STATE_PATH);
+      const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt: body?.updatedAt || new Date().toISOString(),
+        appState: {
+          ...(isRecord(existing?.appState) ? existing.appState : {}),
+          skuItems: [],
+          deletedSkuKeys,
+          skuItemsExternalBlob: true,
+          skuItemsExternalCloud: true,
+          skuItemsExternalCount: nextSkus.length,
+          skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
+        },
+        localStorage: {},
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({
+        ok: true,
+        mode: "sku-delete",
+        deletedKeys: incomingDeleted.length,
+        count: nextSkus.length,
+        data: payload,
+      });
+    }
+
     if (mode === "sku-chunk" || body?.mode === "sku-chunk") {
       const index = Number(body?.index);
       const total = Number(body?.total);
