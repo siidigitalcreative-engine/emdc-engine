@@ -91,6 +91,31 @@ const TEMPLATES = {
 };
 
 const uid = () => Math.random().toString(36).slice(2,9);
+const productSlug = (sku:string="") => String(sku||"").trim().replace(/[^a-zA-Z0-9-_]/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"") || "product";
+const productPublicPath = (sku:string="") => `/p/${encodeURIComponent(productSlug(sku))}`;
+const getProductPublicUrl = (sku:string="") => {
+  const path = productPublicPath(sku);
+  if (typeof window === "undefined") return path;
+  return `${window.location.origin}${path}`;
+};
+const csvSplit = (value:any) => String(value||"").split(/\r?\n|,/).map(v=>v.trim()).filter(Boolean);
+const csvJoin = (value:any) => Array.isArray(value) ? value.join("\n") : String(value||"");
+const normalizeProductHub = (sku:any) => ({
+  enabled: true,
+  slug: sku?.productHub?.slug || productSlug(sku?.sku),
+  heroImage: sku?.productHub?.heroImage || sku?.imageLink || "",
+  intro: sku?.productHub?.intro || "",
+  features: Array.isArray(sku?.productHub?.features) ? sku.productHub.features : csvSplit(sku?.productHub?.features),
+  specs: Array.isArray(sku?.productHub?.specs) ? sku.productHub.specs : csvSplit(sku?.productHub?.specs),
+  careUse: sku?.productHub?.careUse || "",
+  warranty: sku?.productHub?.warranty || "",
+  shopeeLink: sku?.productHub?.shopeeLink || "",
+  lazadaLink: sku?.productHub?.lazadaLink || "",
+  tiktokLink: sku?.productHub?.tiktokLink || "",
+  manualLink: sku?.productHub?.manualLink || "",
+  videoLink: sku?.productHub?.videoLink || "",
+  updatedAt: sku?.productHub?.updatedAt || "",
+});
 const getDaysInMonth = (y:number,m:number) => new Date(y,m+1,0).getDate();
 const getFirstDay    = (y:number,m:number) => new Date(y,m,1).getDay();
 const pad = (n:number) => String(n).padStart(2,"0");
@@ -1499,6 +1524,9 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [editBrandModal,setEditBrandModal] = useState(false);
   const [editBrandForm,setEditBrandForm]   = useState(null);
   const [editSkuId,setEditSkuId]         = useState(null);
+  const [hubModal,setHubModal]           = useState(false);
+  const [hubSku,setHubSku]               = useState<any>(null);
+  const [hubForm,setHubForm]             = useState<any>(null);
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
   const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""});
@@ -1594,10 +1622,33 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const delBrand  = id=>{ commitBrands((p:any[])=>p.filter((b:any)=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
   const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:""}); setEditSkuId(null); setSkuModal(true); };
   const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||""}); setEditSkuId(s.id); setSkuModal(true); };
+  const openProductHub = (s:any) => { const hub=normalizeProductHub(s); setHubSku(s); setHubForm({...hub, featuresText:csvJoin(hub.features), specsText:csvJoin(hub.specs)}); setHubModal(true); };
+  const saveProductHub = () => {
+    if(!hubSku || !hubForm) return;
+    const nextHub = {
+      ...normalizeProductHub(hubSku),
+      ...hubForm,
+      slug: productSlug(hubForm.slug || hubSku.sku),
+      features: csvSplit(hubForm.featuresText),
+      specs: csvSplit(hubForm.specsText),
+      updatedAt: new Date().toISOString(),
+    };
+    delete (nextHub as any).featuresText;
+    delete (nextHub as any).specsText;
+    commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===hubSku.id?{...s, productHub:nextHub}:s));
+    setHubModal(false);
+    setHubSku(null);
+    setHubForm(null);
+  };
   const saveSku   = ()=>{
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
-    const e={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
-    if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s)); else commitSkuStorage((p:any[])=>[...p,e]);
+    const base={brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
+    if(editSkuId) {
+      // IMPORTANT: merge into the existing SKU so imageLink, extraFields, productHub, and any future fields are not erased.
+      commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?{...s,...base}:s));
+    } else {
+      commitSkuStorage((p:any[])=>[...p,{id:uid(),...base}]);
+    }
     setSkuModal(false);
   };
   const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id));
@@ -2047,7 +2098,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const bulkTableMinWidth = isMobile ? Math.max(820,36+(BULK_COLUMNS.length*140)) : Math.max(760,42+(BULK_COLUMNS.length*120));
   const skuTableColumnWidth = (key:string) => {
     if(key==="productName") return "minmax(220px,1.6fr)";
-    if(key==="sku") return "minmax(150px,.9fr)";
+    if(key==="sku") return "minmax(190px,1fr)";
     if(key==="brand") return "minmax(130px,.8fr)";
     if(key==="collection") return "minmax(140px,.8fr)";
     if(key==="inventory") return "minmax(90px,.5fr)";
@@ -2058,7 +2109,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const skuTableMinWidth = Math.max(760,(skuTableEditMode?132:0)+(skuTableColumns.length*140));
   const renderSkuDesktopCell = (s:any, col:any, brand:any, st:any) => {
     if(col.key==="productName") return <span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:12 }}>{s.productName}</span>;
-    if(col.key==="sku") return <span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span>;
+    if(col.key==="sku") return <div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0,flexWrap:"wrap" }}><span style={{ fontSize:12,color:C.muted,fontFamily:"monospace",background:C.surfaceAlt,padding:"2px 6px",borderRadius:4,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.sku}</span><button type="button" onClick={()=>openProductHub(s)} title="Open Product Hub / QR" style={{ border:`1px solid ${C.border}`,background:s.productHub?.enabled?"#F0FDF4":C.surface,color:s.productHub?.enabled?"#15803D":C.muted,borderRadius:5,padding:"2px 6px",fontSize:10,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap" }}>Hub / QR</button></div>;
     if(col.key==="brand") return <div>{brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color,flexShrink:0 }} /><span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{brand.name}</span></div>}</div>;
     if(col.key==="collection") return <span style={{ fontSize:12,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection||"Uncategorized"}</span>;
     if(col.key==="inventory") return <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:400,fontVariantNumeric:"tabular-nums" }}>{s.inventory.toLocaleString()}</span>;
@@ -2237,6 +2288,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                             {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
                             <span style={{ fontSize:11,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:500 }}>{s.inventory.toLocaleString()} units</span>
                             <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"2px 8px",borderRadius:4,border:`1px solid ${st.color}28` }}>{st.label}</span>
+                            <button type="button" onClick={()=>openProductHub(s)} style={{ border:`1px solid ${C.border}`,background:s.productHub?.enabled?"#F0FDF4":C.surface,color:s.productHub?.enabled?"#15803D":C.muted,borderRadius:5,padding:"3px 8px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Hub / QR</button>
                           </div>
                         </div>
                       );
@@ -2357,6 +2409,65 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
             <Btn onClick={saveBulkSkus} disabled={bulkRows.filter(r=>r.valid).length===0}>Import {bulkRows.filter(r=>r.valid).length} SKU{bulkRows.filter(r=>r.valid).length!==1?"s":""}</Btn>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={hubModal&&!!hubSku&&!!hubForm} onClose={()=>{setHubModal(false);setHubSku(null);setHubForm(null);}} title="Product Hub & QR" width={720}>
+        {hubSku&&hubForm&&(()=>{ const publicUrl=getProductPublicUrl(hubSku.sku); const qrUrl=`/api/qr?text=${encodeURIComponent(publicUrl)}`; return (
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"220px minmax(0,1fr)",gap:16,alignItems:"start" }}>
+            <div style={{ border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,background:C.surfaceAlt }}>
+              <div style={{ width:180,height:180,margin:"0 auto 12px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden" }}>
+                <img src={qrUrl} alt="Product QR" style={{ width:170,height:170,objectFit:"contain" }} />
+              </div>
+              <p style={{ margin:"0 0 4px",fontSize:12,fontWeight:800,color:C.text }}>{hubSku.productName}</p>
+              <p style={{ margin:"0 0 10px",fontSize:11,fontFamily:"monospace",color:C.muted,wordBreak:"break-all" }}>{hubSku.sku}</p>
+              <input readOnly value={publicUrl} style={{ width:"100%",height:34,padding:"7px 9px",fontSize:11,borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",marginBottom:8 }} />
+              <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                <Btn xs variant="outline" onClick={()=>navigator.clipboard?.writeText(publicUrl)}>Copy Link</Btn>
+                <Btn xs variant="outline" onClick={()=>window.open(publicUrl,"_blank")}>Open Page</Btn>
+                <a href={qrUrl} download={`${productSlug(hubSku.sku)}-qr.svg`} style={{ textDecoration:"none" }}><Btn xs variant="outline">Download QR</Btn></a>
+              </div>
+            </div>
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div style={{ padding:"10px 12px",background:"#F0FDF4",border:`1px solid #BBF7D0`,borderRadius:10 }}>
+                <p style={{ margin:0,fontSize:12,color:"#166534",lineHeight:1.45 }}><b>Safe update:</b> this saves only a new <code>productHub</code> field inside this SKU. It does not reset SKU Storage, checklists, calendar, or AI workspace data.</p>
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10 }}>
+                <Field label="Page Slug"><TI value={hubForm.slug} onChange={v=>setHubForm(f=>({...f,slug:v}))} placeholder={productSlug(hubSku.sku)} /></Field>
+                <Field label="Hero Image URL"><TI value={hubForm.heroImage} onChange={v=>setHubForm(f=>({...f,heroImage:v}))} placeholder="https://..." /></Field>
+              </div>
+              <Field label="Product Introduction">
+                <textarea value={hubForm.intro} onChange={e=>setHubForm(f=>({...f,intro:e.target.value}))} rows={4} placeholder="Short product description shown on the public QR page."
+                  style={{ width:"100%",padding:"10px 12px",fontSize:13,lineHeight:1.5,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }} />
+              </Field>
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10 }}>
+                <Field label="Features" hint="one per line">
+                  <textarea value={hubForm.featuresText} onChange={e=>setHubForm(f=>({...f,featuresText:e.target.value}))} rows={6} placeholder={"Soft-close lid\nHands-free pedal\nRemovable inner bucket"}
+                    style={{ width:"100%",padding:"10px 12px",fontSize:13,lineHeight:1.5,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }} />
+                </Field>
+                <Field label="Specifications" hint="one per line">
+                  <textarea value={hubForm.specsText} onChange={e=>setHubForm(f=>({...f,specsText:e.target.value}))} rows={6} placeholder={"Capacity: 50L\nMaterial: SS410 stainless steel\nDimensions: 42.5 x 37 x 62 cm"}
+                    style={{ width:"100%",padding:"10px 12px",fontSize:13,lineHeight:1.5,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }} />
+                </Field>
+              </div>
+              <Field label="Care & Use">
+                <textarea value={hubForm.careUse} onChange={e=>setHubForm(f=>({...f,careUse:e.target.value}))} rows={3} placeholder="Care instructions for the product."
+                  style={{ width:"100%",padding:"10px 12px",fontSize:13,lineHeight:1.5,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",resize:"vertical",boxSizing:"border-box" }} />
+              </Field>
+              <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10 }}>
+                <Field label="Manual Link"><TI value={hubForm.manualLink} onChange={v=>setHubForm(f=>({...f,manualLink:v}))} placeholder="Google Drive / PDF link" /></Field>
+                <Field label="Video Link"><TI value={hubForm.videoLink} onChange={v=>setHubForm(f=>({...f,videoLink:v}))} placeholder="Video URL" /></Field>
+                <Field label="Shopee Link"><TI value={hubForm.shopeeLink} onChange={v=>setHubForm(f=>({...f,shopeeLink:v}))} placeholder="Shopee product link" /></Field>
+                <Field label="Lazada Link"><TI value={hubForm.lazadaLink} onChange={v=>setHubForm(f=>({...f,lazadaLink:v}))} placeholder="Lazada product link" /></Field>
+                <Field label="TikTok Shop Link"><TI value={hubForm.tiktokLink} onChange={v=>setHubForm(f=>({...f,tiktokLink:v}))} placeholder="TikTok Shop product link" /></Field>
+                <Field label="Warranty"><TI value={hubForm.warranty} onChange={v=>setHubForm(f=>({...f,warranty:v}))} placeholder="Warranty note" /></Field>
+              </div>
+              <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                <Btn variant="outline" onClick={()=>{setHubModal(false);setHubSku(null);setHubForm(null);}}>Cancel</Btn>
+                <Btn onClick={saveProductHub}>Save Product Hub</Btn>
+              </div>
+            </div>
+          </div>
+        );})()}
       </Modal>
 
       <Modal open={skuModal} onClose={()=>setSkuModal(false)} title={editSkuId?"Edit SKU":"Add SKU"} width={440}>
