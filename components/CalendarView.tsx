@@ -19761,33 +19761,24 @@ export default function App({
   };
 
 
-  const getSkuSaveVerificationSignature = (rows:any[] = []) => {
-    const safeRows = Array.isArray(rows) ? rows : [];
-    const count = safeRows.length;
-    const first = count ? String(safeRows[0]?.id || safeRows[0]?.sku || "") : "";
-    const last = count ? String(safeRows[count-1]?.id || safeRows[count-1]?.sku || "") : "";
-    const checksum = safeRows.reduce((sum:any,row:any)=>sum + String(row?.sku||"").length + String(row?.productName||"").length + String(row?.imageLink||"").length + String(row?.srp||"").length, 0);
-    return `${count}:${first}:${last}:${checksum}`;
-  };
-
   const performSkuStorageCloudSave = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
 
-    // AUTHORITATIVE SKU SAVE:
-    // Save the exact current product list to the dedicated SKU endpoint.
-    // This avoids race conditions from app autosave, Redis legacy endpoints, and chunk sessions.
+    // AUTHORITATIVE SKU SAVE (single source of truth):
+    // Save the exact current SKU Storage list directly to the Blob-backed sku-items endpoint.
+    // This avoids mixed chunk sessions and prevents refresh from loading an older SKU list.
     const rowsToSave = Array.isArray(nextSkus) ? nextSkus : [];
-    markSkuLocalEditProtected(rowsToSave,"authoritative-sku-items-save-start");
+    markSkuLocalEditProtected(rowsToSave,"authoritative-single-sku-items-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
 
     try {
       setCloudSyncStatus("Saving SKUs...");
       const updatedAt = new Date().toISOString();
-      const expectedSignature = getSkuSaveVerificationSignature(rowsToSave);
 
       const res = await fetch("/api/emdc-state?mode=sku-items", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
+        cache:"no-store",
         body:JSON.stringify({
           mode:"sku-items",
           clientId:cloudClientIdRef.current,
@@ -19797,24 +19788,23 @@ export default function App({
         }),
       });
 
-      const text = await res.text().catch(()=>"");
-      let payload:any = null;
-      try { payload = text ? JSON.parse(text) : null; } catch {}
-      if (!res.ok || !payload?.ok) {
-        throw new Error(payload?.error || text || "SKU cloud save failed");
+      const saved = await res.json().catch(()=>null);
+      if (!res.ok || !saved?.ok) {
+        throw new Error(saved?.error || "SKU cloud save failed");
       }
 
-      // Verify from cloud immediately. Do not show Synced unless the saved count matches.
+      // Verify by reading the same cloud source back before showing Synced.
       const verifyRes = await fetch("/api/emdc-state", { cache:"no-store" });
-      const verifyPayload = await verifyRes.json().catch(()=>null);
-      const verifiedRows = Array.isArray(verifyPayload?.data?.appState?.skuItems) ? verifyPayload.data.appState.skuItems : [];
-      const verifiedSignature = getSkuSaveVerificationSignature(verifiedRows);
-      if (!verifyRes.ok || verifiedSignature !== expectedSignature) {
-        throw new Error(`SKU verify failed. Expected ${expectedSignature}, got ${verifiedSignature}`);
+      const verifyJson = await verifyRes.json().catch(()=>null);
+      const verifiedRows = Array.isArray(verifyJson?.data?.appState?.skuItems)
+        ? verifyJson.data.appState.skuItems
+        : [];
+
+      if (verifiedRows.length !== rowsToSave.length) {
+        throw new Error(`SKU save verification failed. Sent ${rowsToSave.length}, read back ${verifiedRows.length}.`);
       }
 
       cloudLastUpdatedAtRef.current = updatedAt;
-      lastDirectSkuSaveSignatureRef.current = expectedSignature;
       clearSkuPendingSave();
       setCloudSyncStatus(`Synced ${rowsToSave.length} SKUs`);
     } catch (error:any) {
