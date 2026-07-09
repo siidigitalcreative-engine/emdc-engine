@@ -902,9 +902,9 @@ const shouldBlockEmptyEmdcState = (nextState:any) => {
 const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) ? "video" : "image");
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
-const PERF_IDLE_SAVE_DELAY = 450;
-const PERF_CLOUD_SAVE_DELAY = 150;
-const PERF_CLOUD_POLL_INTERVAL = 5000;
+const PERF_IDLE_SAVE_DELAY = 1800;
+const PERF_CLOUD_SAVE_DELAY = 2500;
+const PERF_CLOUD_POLL_INTERVAL = 60000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
   if (typeof window === "undefined") return setTimeout(cb, 0);
