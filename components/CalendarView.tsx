@@ -35,15 +35,6 @@ const useBreakpoint = () => {
   return { isMobile: w < 760, isTablet: w < 1024, w };
 };
 
-const useDebouncedValue = <T,>(value:T, delay:number) => {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delay);
-    return () => window.clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-};
-
 // ─── GLOBAL STYLES (injected once) ──────────────────────────────────────────
 const GlobalStyles = () => {
   useEffect(() => {
@@ -508,7 +499,6 @@ const EMDC_SKU_ITEMS_STORAGE_KEY = "emdc_sku_items_v1";
 const EMDC_SKU_ITEMS_COUNT_KEY = "emdc_sku_items_count_v1";
 const EMDC_SKU_ITEMS_LAST_GOOD_KEY = "emdc_sku_items_last_good_v1";
 const EMDC_SKU_ITEMS_EMPTY_MARKER_KEY = "emdc_sku_items_explicit_empty_v1";
-const EMDC_SKU_ITEMS_DELETED_KEYS_KEY = "emdc_sku_items_deleted_keys_v1";
 const EMDC_CALENDAR_MANUAL_EVENTS_KEY = "emdc_calendar_manual_events_v1";
 const EMDC_SEASONAL_EVENTS_STORAGE_KEY = "emdc_seasonal_events_v1";
 const EMDC_CALENDAR_TYPES_STORAGE_KEY = "emdc_calendar_types_v1";
@@ -728,75 +718,6 @@ const parseEmdcJson = (value:any) => {
   try { return typeof value === "string" ? JSON.parse(value) : value; } catch { return null; }
 };
 
-const normalizeSkuDeleteKey = (value:any) => String(value ?? "").trim().toLowerCase();
-const getSkuDeleteKeys = (row:any) => {
-  const keys:string[] = [];
-  const id = normalizeSkuDeleteKey(row?.id);
-  const sku = normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value);
-  if (id) keys.push(`id:${id}`);
-  if (sku) keys.push(`sku:${sku}`);
-  return keys;
-};
-const readDeletedSkuKeySet = () => {
-  const set = new Set<string>();
-  if (typeof window === "undefined") return set;
-  try {
-    const parsed:any = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_DELETED_KEYS_KEY));
-    const cutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
-    const items = Array.isArray(parsed?.items) ? parsed.items : [];
-    items.forEach((item:any)=>{
-      const key = String(item?.key || "");
-      const time = Date.parse(String(item?.deletedAt || ""));
-      if (key && (!Number.isFinite(time) || time >= cutoff)) set.add(key);
-    });
-  } catch {}
-  return set;
-};
-const writeDeletedSkuKeySet = (keys:Set<string>, reason="sku-delete") => {
-  if (typeof window === "undefined") return;
-  try {
-    const now = new Date().toISOString();
-    const items = Array.from(keys).slice(-12000).map(key=>({ key, deletedAt:now, reason }));
-    localStorage.setItem(EMDC_SKU_ITEMS_DELETED_KEYS_KEY, JSON.stringify({ updatedAt:now, items }));
-  } catch {}
-};
-const rememberDeletedSkuRows = (previous:any[] = [], next:any[] = [], reason="sku-delete") => {
-  if (typeof window === "undefined" || !Array.isArray(previous) || !Array.isArray(next)) return;
-  if (!previous.length || previous.length <= next.length) return;
-
-  const nextIds = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.id)).filter(Boolean));
-  const nextSkus = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value)).filter(Boolean));
-  const deleted = readDeletedSkuKeySet();
-
-  previous.forEach((row:any)=>{
-    const id = normalizeSkuDeleteKey(row?.id);
-    const sku = normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value);
-    if (id && !nextIds.has(id)) deleted.add(`id:${id}`);
-    if (sku && !nextSkus.has(sku)) deleted.add(`sku:${sku}`);
-  });
-
-  writeDeletedSkuKeySet(deleted, reason);
-};
-const getDeletedSkuKeysBetween = (previous:any[] = [], next:any[] = []) => {
-  if (!Array.isArray(previous) || !Array.isArray(next) || !previous.length || previous.length <= next.length) return [];
-  const nextIds = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.id)).filter(Boolean));
-  const nextSkus = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value)).filter(Boolean));
-  const keys = new Set<string>();
-  previous.forEach((row:any)=>{
-    const id = normalizeSkuDeleteKey(row?.id);
-    const sku = normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value);
-    if (id && !nextIds.has(id)) keys.add(`id:${id}`);
-    if (sku && !nextSkus.has(sku)) keys.add(`sku:${sku}`);
-  });
-  return Array.from(keys);
-};
-const filterDeletedSkuItems = (rows:any[] = []) => {
-  if (!Array.isArray(rows) || !rows.length) return [];
-  const deleted = readDeletedSkuKeySet();
-  if (!deleted.size) return rows;
-  return rows.filter((row:any)=>!getSkuDeleteKeys(row).some(key=>deleted.has(key)));
-};
-
 const getExplicitEmptySkuStorageAt = () => {
   if (typeof window === "undefined") return "";
   try {
@@ -852,15 +773,15 @@ const readProtectedSkuItemsBackup = () => {
   try {
     const explicitEmptyAt = getExplicitEmptySkuStorageAt();
     const direct = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_STORAGE_KEY));
-    if (Array.isArray(direct) && direct.length) return filterDeletedSkuItems(direct);
+    if (Array.isArray(direct) && direct.length) return direct;
 
     const lastGood:any = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_LAST_GOOD_KEY));
     const lastGoodAt = String(lastGood?.savedAt || "");
     if (explicitEmptyAt && (!lastGoodAt || !isIsoTimeNewer(lastGoodAt, explicitEmptyAt, 0))) return [];
-    if (Array.isArray(lastGood?.skuItems) && lastGood.skuItems.length) return filterDeletedSkuItems(lastGood.skuItems);
+    if (Array.isArray(lastGood?.skuItems) && lastGood.skuItems.length) return lastGood.skuItems;
 
     const appState:any = parseEmdcJson(localStorage.getItem("emdc_app_state_v1"));
-    if (Array.isArray(appState?.skuItems) && appState.skuItems.length) return filterDeletedSkuItems(appState.skuItems);
+    if (Array.isArray(appState?.skuItems) && appState.skuItems.length) return appState.skuItems;
   } catch {}
   return [];
 };
@@ -985,10 +906,9 @@ const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP = 120;
 const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE = 36;
 const PERF_SKU_STORAGE_LOAD_MORE_DESKTOP = 120;
 const PERF_SKU_STORAGE_LOAD_MORE_MOBILE = 36;
-const PERF_IDLE_SAVE_DELAY = 1200;
-const PERF_CLOUD_SAVE_DELAY = 1800;
-// Keep cloud polling light. Frequent 5s polling can freeze Chrome when a large SKU catalog is open.
-const PERF_CLOUD_POLL_INTERVAL = 60000;
+const PERF_IDLE_SAVE_DELAY = 450;
+const PERF_CLOUD_SAVE_DELAY = 150;
+const PERF_CLOUD_POLL_INTERVAL = 5000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
   if (typeof window === "undefined") return setTimeout(cb, 0);
@@ -1092,14 +1012,6 @@ const Field = ({ label, hint, children }) => (
 const TI = ({ value, onChange, placeholder, type="text", style={} }) => (
   <input type={type} value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}
     style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,overflowX:"hidden",color:C.text,outline:"none",boxSizing:"border-box",transition:"border-color .15s",...style }}
-    onFocus={e=>e.target.style.borderColor=C.accent}
-    onBlur={e=>e.target.style.borderColor=C.border}
-  />
-);
-
-const TA = ({ value, onChange, placeholder, rows=4, style={} }) => (
-  <textarea value={value} placeholder={placeholder} rows={rows} onChange={e=>onChange(e.target.value)}
-    style={{ width:"100%",minHeight:90,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box",resize:"vertical",lineHeight:1.5,transition:"border-color .15s",...style }}
     onFocus={e=>e.target.style.borderColor=C.accent}
     onBlur={e=>e.target.style.borderColor=C.border}
   />
@@ -12725,6 +12637,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 {linkedEvents.map((ev:any)=>(
                   <span key={ev.id} style={{ fontSize:11,color:ev.color||C.muted,background:(ev.color||C.accent)+"12",padding:"2px 8px",borderRadius:4,border:`1px solid ${(ev.color||C.accent)}33` }}>{ev.name}</span>
                 ))}
+                {hasMoreSkuRows&&(<div style={{ padding:"12px 16px",display:"flex",justifyContent:"center",borderTop:`1px solid ${C.border}`,background:C.surface }}>
+                  <Btn sm variant="outline" onClick={loadMoreSkuRows}>Load more SKUs ({Math.min(skuRenderLimit, filteredSkus.length)} / {filteredSkus.length})</Btn>
+                </div>)}
               </div>
             )}
           </div>
@@ -13998,7 +13913,7 @@ const DEFAULT_GLOBAL_SKU_TABLE_COLUMNS = [
 // This intentionally ignores any previously saved column arrangement that may have broken the UI.
 const sanitizeSkuTableColumns = (columns:any[] = []) => DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
 
-const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, onSkuStorageDirectSave, onSkuStorageDeleteDirect, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
+const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, onSkuStorageDirectSave, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
   const { isMobile } = useBreakpoint();
   const [activeBrand,setActiveBrand]     = useState(null);
   const [skuModal,setSkuModal]           = useState(false);
@@ -14012,32 +13927,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [editSkuId,setEditSkuId]         = useState(null);
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
-  const makeSkuForm = (overrides:any = {}) => ({
-    brandId:"",
-    productName:"",
-    collection:"",
-    sku:"",
-    inventory:"",
-    status:"active",
-    customStatus:"",
-    tag:"",
-    hubEnabled:true,
-    hubSlug:"",
-    hubHeroImage:"",
-    hubIntro:"",
-    hubFeatures:"",
-    hubSpecs:"",
-    hubCareUse:"",
-    hubWarranty:"",
-    hubShopeeLink:"",
-    hubLazadaLink:"",
-    hubTiktokLink:"",
-    hubManualLink:"",
-    hubVideoLink:"",
-    hubRelatedSkus:"",
-    ...overrides,
-  });
-  const [sForm,setSForm] = useState<any>(()=>makeSkuForm());
+  const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""});
   const DEFAULT_SKU_TABLE_COLUMNS = DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
   const SKU_TABLE_BASE_COLUMN_ALIASES:any = {
     product:{ key:"productName", label:"Product", base:true },
@@ -14091,13 +13981,9 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     try { localStorage.setItem(SKU_COLUMN_WIDTH_SETTINGS_KEY, JSON.stringify({ mode:skuColumnWidthMode, widths:skuColumnWidths })); } catch {}
   },[skuColumnWidthMode,skuColumnWidths]);
   const [skuSearch,setSkuSearch] = useState("");
-  const debouncedSkuSearch = useDebouncedValue(skuSearch, isMobile ? 450 : 275);
-  const deferredSkuSearch = useDeferredValue(debouncedSkuSearch);
+  const deferredSkuSearch = useDeferredValue(skuSearch);
   const [activeSkuTag,setActiveSkuTag] = useState("all");
-  const [skuRenderLimit,setSkuRenderLimit] = useState(()=>isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
-  useEffect(()=>{
-    setSkuRenderLimit(isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
-  },[isMobile,activeBrand,activeSkuTag,deferredSkuSearch]);
+  const [skuRenderLimit,setSkuRenderLimit] = useState(() => isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
   const DEFAULT_BULK_COLUMNS = [
     { key:"brand",       label:"Brand",      placeholder:"Quencha",                          locked:true },
     { key:"sku",         label:"SKU",        placeholder:"QNH-COOL12-TP",                    locked:true },
@@ -14156,14 +14042,6 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       const nextRaw = typeof updater === "function" ? updater(prev) : updater;
       const next = Array.isArray(nextRaw) ? nextRaw : [];
 
-      // If rows were deleted, remember their ID/SKU in a small tombstone list.
-      // This prevents an older cloud/local backup from re-adding them on refresh/poll.
-      const deletedKeysForThisChange = getDeletedSkuKeysBetween(Array.isArray(prev) ? prev : [], next);
-      rememberDeletedSkuRows(Array.isArray(prev) ? prev : [], next, "sku-storage-delete");
-      if (deletedKeysForThisChange.length && onSkuStorageDeleteDirect) {
-        onSkuStorageDeleteDirect(deletedKeysForThisChange);
-      }
-
       // Protect user-entered SKU Storage before any app/cloud save runs.
       // This separate key survives page/code updates and is used as the local source of truth.
       rememberProtectedSkuItems(next,"sku-storage-commit");
@@ -14203,63 +14081,26 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     return map;
   },[brands]);
 
-  const getProductHubUrl = (skuRow:any) => {
-    const code = String(skuRow?.sku || "").trim();
-    if (!code) return "";
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/p/${encodeURIComponent(code)}`;
+  const getSkuPublicPath = (s:any) => `/p/${encodeURIComponent(String(s?.sku || s?.value || s?.id || ""))}`;
+  const getSkuPublicUrl = (s:any) => {
+    const path = getSkuPublicPath(s);
+    if (typeof window === "undefined") return path;
+    return `${window.location.origin}${path}`;
   };
-
-  const getProductHubQrUrl = (skuRow:any) => {
-    const hubUrl = getProductHubUrl(skuRow);
-    if (!hubUrl) return "";
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/api/qr?url=${encodeURIComponent(hubUrl)}`;
+  const copySkuHubLink = async (s:any) => {
+    const url = getSkuPublicUrl(s);
+    try { await navigator.clipboard.writeText(url); alert("Product Hub link copied."); }
+    catch { prompt("Copy Product Hub link:", url); }
   };
-
-  const openProductHub = (skuRow:any) => {
-    const url = getProductHubUrl(skuRow);
-    if (!url || typeof window === "undefined") return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-  const openProductHubQr = (skuRow:any) => {
-    const url = getProductHubQrUrl(skuRow);
-    if (!url || typeof window === "undefined") return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-  const copyProductHubLink = async (skuRow:any) => {
-    const url = getProductHubUrl(skuRow);
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      alert(`Product Hub link copied:
-${url}`);
-    } catch {
-      if (typeof window !== "undefined") window.prompt("Copy Product Hub link", url);
-    }
-  };
-
-  const downloadProductHubQr = async (skuRow:any) => {
-    const qrUrl = getProductHubQrUrl(skuRow);
-    const skuCode = String(skuRow?.sku || "product").trim() || "product";
-    if (!qrUrl || typeof window === "undefined") return;
-    try {
-      const response = await fetch(qrUrl);
-      if (!response.ok) throw new Error("QR download failed");
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = `${skuCode.replace(/[^a-zA-Z0-9-_]/g, "-")}-qr.svg`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(objectUrl);
-    } catch (error) {
-      window.open(qrUrl, "_blank", "noopener,noreferrer");
-    }
+  const downloadSkuQr = (s:any) => {
+    const url = getSkuPublicUrl(s);
+    const sku = String(s?.sku || s?.value || s?.id || "product").replace(/[^a-z0-9_-]+/gi,"-");
+    const a = document.createElement("a");
+    a.href = `/api/qr?url=${encodeURIComponent(url)}`;
+    a.download = `${sku}-qr.svg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const skuCountByBrandId = useMemo(()=>{
@@ -14281,43 +14122,36 @@ ${url}`);
     return Object.values(byKey).sort((a:any,b:any)=>String(a.label).localeCompare(String(b.label)));
   },[skuStorage]);
 
-  const skuSearchIndex = useMemo(() => {
-    const map:any = {};
-    (skuStorage || []).forEach((s:any) => {
+  const filteredSkus = useMemo(() => {
+    const brandFiltered = activeBrand ? skuStorage.filter((s:any)=>s.brandId===activeBrand) : skuStorage;
+    const tagFiltered = activeSkuTag==="all" ? brandFiltered : brandFiltered.filter((s:any)=>hasSkuTag(s,activeSkuTag));
+    const terms = deferredSkuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if(!terms.length) return tagFiltered;
+
+    return tagFiltered.filter((s:any)=>{
       const brandName = brandById[s.brandId]?.name || "";
       const statusLabel = s.status==="active" ? "active" : s.status==="nostocks" ? "no stocks out of stock sold out" : (s.customStatus || "custom");
       const tagText = getSkuTags(s).join(" ");
       const extraText = Object.values(s.extraFields || {}).join(" ");
-      const key = s.id || s.sourceId || s.sku;
-      map[key] = [
-        s.productName, s.sku, brandName, s.collection, s.category, s.inventory, s.srp,
-        s.imageLink, s.imageUrl, s.status, statusLabel, tagText, extraText
+      const searchable = [
+        s.productName,
+        s.sku,
+        brandName,
+        s.collection,
+        s.category,
+        s.inventory,
+        s.srp,
+        s.imageLink,
+        s.imageUrl,
+        s.status,
+        statusLabel,
+        tagText,
+        extraText,
       ].filter(Boolean).join(" ").toLowerCase();
+
+      return terms.every((term:string)=>searchable.includes(term));
     });
-    return map;
-  }, [skuStorage, brandById]);
-
-  const filteredSkus = useMemo(() => {
-    const terms = deferredSkuSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const results:any[] = [];
-
-    for (const s of (skuStorage || [])) {
-      if (activeBrand && s.brandId !== activeBrand) continue;
-      if (activeSkuTag !== "all" && !hasSkuTag(s, activeSkuTag)) continue;
-      if (terms.length) {
-        const key = s.id || s.sourceId || s.sku;
-        const searchable = skuSearchIndex[key] || "";
-        let matched = true;
-        for (const term of terms) {
-          if (!searchable.includes(term)) { matched = false; break; }
-        }
-        if (!matched) continue;
-      }
-      results.push(s);
-    }
-
-    return results;
-  }, [activeBrand,activeSkuTag,skuStorage,deferredSkuSearch,skuSearchIndex]);
+  }, [activeBrand,activeSkuTag,skuStorage,deferredSkuSearch,brandById]);
   const collectionOptions = useMemo(() => Array.from(new Set(
     skuStorage
       .filter(s => !sForm.brandId || s.brandId===sForm.brandId)
@@ -14353,104 +14187,37 @@ ${url}`);
     });
   }, [filteredSkus]);
 
-  // Performance guard: do not render all 3,000+ SKU rows at once.
-  // Rendering thousands of rows with buttons can freeze mobile Chrome.
-  const renderedSkuGroups = useMemo(() => {
-    let remaining = Math.max(0, Number(skuRenderLimit) || 0);
-    return groupedSkus
-      .map((group:any) => {
-        const totalCount = Array.isArray(group.skus) ? group.skus.length : 0;
-        if (remaining <= 0) return { ...group, skus: [], totalCount };
-        const visible = (group.skus || []).slice(0, remaining);
-        remaining -= visible.length;
-        return { ...group, skus: visible, totalCount };
-      })
-      .filter((group:any)=>group.skus.length > 0);
-  }, [groupedSkus,skuRenderLimit]);
+  useEffect(()=>{
+    setSkuRenderLimit(isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
+  },[activeBrand,activeSkuTag,deferredSkuSearch,isMobile]);
 
-  const renderedSkuCount = useMemo(() => renderedSkuGroups.reduce((sum:number,group:any)=>sum + (group.skus?.length || 0),0), [renderedSkuGroups]);
-  const hiddenSkuCount = Math.max(0, filteredSkus.length - renderedSkuCount);
-  const loadMoreSkuRows = () => {
-    setSkuRenderLimit((prev:number)=>Math.min(filteredSkus.length, prev + (isMobile ? PERF_SKU_STORAGE_LOAD_MORE_MOBILE : PERF_SKU_STORAGE_LOAD_MORE_DESKTOP)));
-  };
+  const visibleGroupedSkus = useMemo(()=>{
+    let remaining = skuRenderLimit;
+    const out:any[] = [];
+    for (const group of groupedSkus) {
+      if (remaining <= 0) break;
+      const rows = Array.isArray(group.skus) ? group.skus : [];
+      const take = Math.min(rows.length, remaining);
+      if (take > 0) out.push({ ...group, total: rows.length, skus: rows.slice(0, take) });
+      remaining -= take;
+    }
+    return out;
+  },[groupedSkus,skuRenderLimit]);
+  const hasMoreSkuRows = filteredSkus.length > visibleGroupedSkus.reduce((sum:number,g:any)=>sum + (Array.isArray(g.skus) ? g.skus.length : 0), 0);
+  const loadMoreSkuRows = () => setSkuRenderLimit((n:number)=>n + (isMobile ? PERF_SKU_STORAGE_LOAD_MORE_MOBILE : PERF_SKU_STORAGE_LOAD_MORE_DESKTOP));
   const activeBrandObj = brandById[activeBrand];
   const bulkEditBrandObj = brandById[bulkEditBrandId];
   const addBrand  = ()=>{ if(!bForm.name.trim()) return; commitBrands((p:any[])=>[...p,{id:uid(),name:bForm.name.trim(),color:"#111827"}]); setBForm({name:"",color:"#111827"}); setBrandModal(false); };
   const openEditBrand = b=>{ setEditBrandForm({...b}); setEditBrandModal(true); };
   const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; commitBrands((p:any[])=>p.map((b:any)=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
   const delBrand  = id=>{ commitBrands((p:any[])=>p.filter((b:any)=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
-  const arrayTextToList = (value:any) => String(value||"").split(/\n|,/).map((v:string)=>v.trim()).filter(Boolean);
-  const listToText = (value:any) => Array.isArray(value) ? value.filter(Boolean).join("\n") : String(value||"");
-  const buildProductHubFromForm = () => ({
-    enabled: !!sForm.hubEnabled,
-    slug: String(sForm.hubSlug || sForm.sku || "").trim(),
-    heroImage: String(sForm.hubHeroImage || "").trim(),
-    intro: String(sForm.hubIntro || "").trim(),
-    features: arrayTextToList(sForm.hubFeatures),
-    specs: arrayTextToList(sForm.hubSpecs),
-    careUse: String(sForm.hubCareUse || "").trim(),
-    warranty: String(sForm.hubWarranty || "").trim(),
-    shopeeLink: String(sForm.hubShopeeLink || "").trim(),
-    lazadaLink: String(sForm.hubLazadaLink || "").trim(),
-    tiktokLink: String(sForm.hubTiktokLink || "").trim(),
-    manualLink: String(sForm.hubManualLink || "").trim(),
-    videoLink: String(sForm.hubVideoLink || "").trim(),
-    relatedSkus: arrayTextToList(sForm.hubRelatedSkus),
-  });
-  const openAdd   = ()=>{ setSForm(makeSkuForm({brandId:activeBrand||brands[0]?.id||""})); setEditSkuId(null); setSkuModal(true); };
-  const openEdit  = s=>{
-    const hub = s?.productHub || {};
-    setSForm(makeSkuForm({
-      brandId:s.brandId,
-      productName:s.productName,
-      collection:s.collection||"",
-      sku:s.sku,
-      inventory:String(s.inventory),
-      status:s.status,
-      customStatus:s.customStatus||"",
-      tag:getSkuTags(s).join(", "),
-      hubEnabled:hub.enabled !== false,
-      hubSlug:hub.slug || s.sku || "",
-      hubHeroImage:hub.heroImage || s.imageLink || s.imageUrl || "",
-      hubIntro:hub.intro || "",
-      hubFeatures:listToText(hub.features),
-      hubSpecs:listToText(hub.specs),
-      hubCareUse:hub.careUse || "",
-      hubWarranty:hub.warranty || "",
-      hubShopeeLink:hub.shopeeLink || "",
-      hubLazadaLink:hub.lazadaLink || "",
-      hubTiktokLink:hub.tiktokLink || "",
-      hubManualLink:hub.manualLink || "",
-      hubVideoLink:hub.videoLink || "",
-      hubRelatedSkus:listToText(hub.relatedSkus),
-    }));
-    setEditSkuId(s.id);
-    setSkuModal(true);
-  };
+  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""}); setEditSkuId(null); setSkuModal(true); };
+  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||"",tag:getSkuTags(s).join(", ")}); setEditSkuId(s.id); setSkuModal(true); };
   const saveSku   = ()=>{
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
-    const productHub = buildProductHubFromForm();
-    if(editSkuId) {
-      commitSkuStorage((p:any[])=>p.map((existing:any)=>{
-        if(existing.id!==editSkuId) return existing;
-        const updated = {
-          ...existing,
-          brandId:sForm.brandId||activeBrand||brands[0]?.id||"",
-          productName:sForm.productName.trim(),
-          collection:sForm.collection.trim(),
-          sku:sForm.sku.trim(),
-          inventory:parseInt(sForm.inventory)||0,
-          status:sForm.status,
-          customStatus:sForm.customStatus.trim(),
-          productHub,
-        };
-        return setSkuTagsOnItem(updated,sForm.tag);
-      }), true);
-    } else {
-      const baseSku={id:uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim(),productHub};
-      const e=setSkuTagsOnItem(baseSku,sForm.tag);
-      commitSkuStorage((p:any[])=>[...p,e], true);
-    }
+    const baseSku={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
+    const e=setSkuTagsOnItem(baseSku,sForm.tag);
+    if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s), true); else commitSkuStorage((p:any[])=>[...p,e], true);
     setSkuModal(false);
   };
   const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id), true);
@@ -15130,10 +14897,10 @@ ${url}`);
     setSkuColumnWidths(DEFAULT_SKU_COLUMN_WIDTHS);
     setSkuColumnWidthMode("manual");
   };
-  const skuActionsColumnWidth = "278px";
+  const skuActionsColumnWidth = "220px";
   const skuColumnWidthValues = skuTableColumns.map((c:any)=>getSkuColumnWidthPx(c));
   const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuColumnWidthValues.map((w:number)=>`${w}px`).join(" ")} ${skuActionsColumnWidth}`;
-  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+224+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
+  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+220+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
 
   const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
   const normalizeSkuCellUrl = (url:any) => {
@@ -15342,7 +15109,7 @@ ${url}`);
             ):(
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                 {!isMobile&&(
-                  <div style={{ overflowX:"auto",maxWidth:"100%",scrollbarWidth:"auto",scrollbarColor:"#CBD5E1 #F1F5F9" }}>
+                  <div style={{ overflowX:"auto",maxWidth:"100%" }}>
                     <div style={{ minWidth:skuTableMinWidth,width:"max-content",maxWidth:"none" }}>
                       <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
                         {skuTableEditMode&&<span style={{ padding:"9px 10px",fontSize:12,fontWeight:700,color:C.faint,letterSpacing:".02em",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8942;&#8942;</span>}
@@ -15352,20 +15119,21 @@ ${url}`);
                             <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{col.label}</span>
                           </div>
                         ))}
-                        <span style={{ padding:"9px 12px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}`,minWidth:skuActionsColumnWidth }}>Actions</span>
+                        <span style={{ padding:"9px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}` }}>Actions</span>
                       </div>
-                      <div style={{ maxHeight:"calc(100vh - 330px)",overflowY:"auto",scrollbarWidth:"auto",scrollbarColor:"#CBD5E1 #F1F5F9" }}>
-                      {renderedSkuGroups.map(group=>(
+                      <div style={{ maxHeight:"calc(100vh - 330px)",overflowY:"auto" }}>
+                      {visibleGroupedSkus.map(group=>(
                         <div key={group.label}>
                           <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,alignItems:"center",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
                             <span style={{ gridColumn:"1 / -1",fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8,padding:"8px 16px" }}>
                               {group.label}
-                              <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.totalCount || group.skus.length} SKU{(group.totalCount || group.skus.length)!==1?"s":""}</span>
+                              <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
                             </span>
                           </div>
-                          {group.skus.map((s:any,i:number)=>{
+                          {group.skus.slice(0,PERF_SKU_STORAGE_GROUP_LIMIT).map((s:any,i:number)=>{
                             const brand=brandById[s.brandId], st=getSD(s);
-                                  return (
+                            const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
+                            return (
                               <div key={s.id} className="emdc-row"
                                 draggable={skuTableEditMode}
                                 onDragStart={()=>skuTableEditMode&&setSkuRowDragId(s.id)}
@@ -15373,26 +15141,25 @@ ${url}`);
                                 onDrop={e=>{ if(!skuTableEditMode) return; e.preventDefault(); if(skuRowDragId&&skuRowDragId!==s.id) reorderSkuRows(skuRowDragId,s.id); setSkuRowDragId(null); }}
                                 onDragEnd={()=>setSkuRowDragId(null)}
                                 style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,alignItems:"center",background:skuTableEditMode&&skuRowDragId===s.id?C.surfaceAlt:C.surface }}>
-                                {skuTableEditMode&&<div title="Drag the 6-dot handle to reorder this row" style={{ minHeight:40,padding:"6px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"grab",color:C.faint }}>
+                                {skuTableEditMode&&<div title="Drag the 6-dot handle to reorder this row" style={{ minHeight:48,padding:"8px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"grab",color:C.faint }}>
                                   <span style={{ fontSize:13,lineHeight:1 }}>&#8942;&#8942;</span>
                                 </div>}
                                 {skuTableColumns.map((col:any)=>(
-                                  <div key={col.key} style={{ minHeight:40,padding:"7px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",minWidth:0,overflow:"hidden",maxWidth:"100%" }}>
+                                  <div key={col.key} style={{ minHeight:48,padding:"10px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",minWidth:0,overflow:"hidden",maxWidth:"100%" }}>
                                     {renderSkuDesktopCell(s,col,brand,st)}
                                   </div>
                                 ))}
-                                <div style={{ minHeight:40,padding:"5px 10px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:5,justifyContent:"flex-end",alignItems:"center",background:C.surface,flexWrap:"nowrap",whiteSpace:"nowrap",overflow:"visible",minWidth:skuActionsColumnWidth }}>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHub(s)} title="Open public Product Hub page" style={{ height:24,background:C.accent,border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:800,padding:"0 8px",borderRadius:6,flexShrink:0,lineHeight:"24px" }}>Hub</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHubQr(s)} title="Open QR code" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>QR</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>downloadProductHubQr(s)} title="Download QR code for packaging" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>DL QR</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>copyProductHubLink(s)} title="Copy Product Hub link" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>Copy</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ height:24,background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"0 5px",borderRadius:5,flexShrink:0,lineHeight:"24px" }}>Edit</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:24,height:24,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0 }}>&#215;</button>
+                                <div style={{ minHeight:48,padding:"7px 8px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:5,justifyContent:"flex-end",alignItems:"center",background:C.surface,whiteSpace:"nowrap",overflow:"hidden" }}>
+                                  <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",fontSize:11,fontWeight:800,color:C.textSub,padding:"4px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surfaceAlt }}>Hub</a>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>downloadSkuQr(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>QR</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>copySkuHubLink(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>Copy</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5 }}>Edit</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,flexShrink:0 }}>&#215;</button>
                                 </div>
                               </div>
                             );
                           })}
-                          {false&&group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
+                          {group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
                             <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
                               <div style={{ gridColumn:"1 / -1",padding:"10px 16px",fontSize:12,fontWeight:800,color:C.muted }}>
                                 Showing first {PERF_SKU_STORAGE_GROUP_LIMIT} of {group.skus.length} SKUs in this category. Use search to narrow results.
@@ -15405,59 +15172,49 @@ ${url}`);
                     </div>
                   </div>
                 )}
-                {isMobile&&renderedSkuGroups.map(group=>(
+                {isMobile&&visibleGroupedSkus.map(group=>(
                   <div key={group.label}>
                     <div style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8 }}>
                         {group.label}
-                        <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.totalCount || group.skus.length} SKU{(group.totalCount || group.skus.length)!==1?"s":""}</span>
+                        <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
                       </span>
                     </div>
-                    {group.skus.map((s:any,i:number)=>{
+                    {group.skus.slice(0,PERF_SKU_STORAGE_GROUP_LIMIT).map((s:any,i:number)=>{
                       const brand=brandById[s.brandId], st=getSD(s);
+                      const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
                       return (
-                        <div key={s.id} className="emdc-row" style={{ padding:"12px 14px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
-                          <div style={{ minWidth:0,marginBottom:8 }}>
-                            <p style={{ margin:"0 0 5px",fontSize:14,fontWeight:800,color:C.text,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" }}>{renderClickableSkuCellText(s.productName,"—",{ color:C.text })}</p>
-                            <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
-                              {renderClickableSkuCellText(s.sku,"—",{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"3px 7px",borderRadius:5,display:"inline-block",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis" })}
-                              {s.collection&&<span style={{ fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".03em",background:C.bg,padding:"3px 7px",borderRadius:5,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection}</span>}
+                        <div key={s.id} className="emdc-row" style={{ padding:"14px 16px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
+                          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
+                            <div style={{ minWidth:0,flex:1 }}>
+                              <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{renderClickableSkuCellText(s.productName,"—",{ color:C.text })}</p>
+                              {renderClickableSkuCellText(s.sku,"—",{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4,display:"inline-block" })}
+                            </div>
+                            <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center",overflowX:"auto",maxWidth:"50vw" }}>
+                              {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint,flexShrink:0 }}>&#8942;&#8942;</span>}
+                              <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Hub</a>
+                              <button onClick={()=>downloadSkuQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>QR</button>
+                              <button onClick={()=>copySkuHubLink(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Copy</button>
+                              <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600,whiteSpace:"nowrap" }}>Edit</button>
+                              <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>
                             </div>
                           </div>
-
-                          <div style={{ display:"flex",gap:6,alignItems:"center",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:4,marginBottom:8,scrollbarWidth:"thin" }}>
-                            {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:30,height:30,borderRadius:7,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint,flex:"0 0 auto" }}>&#8942;&#8942;</span>}
-                            <button onClick={()=>openProductHub(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.accent,border:"none",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>Hub</button>
-                            <button onClick={()=>openProductHubQr(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.textSub,fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>QR</button>
-                            <button onClick={()=>downloadProductHubQr(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.textSub,fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>DL QR</button>
-                            <button onClick={()=>copyProductHubLink(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.textSub,fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>Copy</button>
-                            <button onClick={()=>openEdit(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,whiteSpace:"nowrap",flex:"0 0 auto" }}>Edit</button>
-                            <button onClick={()=>delSku(s.id)} style={{ width:30,height:30,borderRadius:8,background:"#FEF2F2",border:`1px solid #FECACA`,cursor:"pointer",color:"#DC2626",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,flex:"0 0 auto" }}>&#215;</button>
-                          </div>
-
-                          <div style={{ display:"flex",gap:7,alignItems:"center",flexWrap:"wrap" }}>
-                            {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:12,color:C.muted }}>{brand.name}</span></div>}
-                            <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?800:600 }}>{s.inventory.toLocaleString()} units</span>
-                            <span style={{ fontSize:12,fontWeight:700,color:st.color,background:st.color+"16",padding:"3px 9px",borderRadius:6,border:`1px solid ${st.color}28` }}>{st.label}</span>
-                            {getSkuTags(s).map((tag:string)=><span key={tag} style={{ fontSize:11,fontWeight:800,color:"#92400E",background:"#FEF3C7",padding:"3px 8px",borderRadius:6,border:"1px solid #FDE68A" }}>{tag}</span>)}
+                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                            {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
+                            <span style={{ fontSize:11,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:500 }}>{s.inventory.toLocaleString()} units</span>
+                            <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"2px 8px",borderRadius:4,border:`1px solid ${st.color}28` }}>{st.label}</span>
+                            {getSkuTags(s).map((tag:string)=><span key={tag} style={{ fontSize:11,fontWeight:700,color:"#92400E",background:"#FEF3C7",padding:"2px 8px",borderRadius:4,border:"1px solid #FDE68A" }}>{tag}</span>)}
                           </div>
                         </div>
                       );
                     })}
-                    {false&&group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
+                    {group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
                       <div style={{ padding:"10px 16px",fontSize:12,fontWeight:800,color:C.muted,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
                         Showing first {PERF_SKU_STORAGE_GROUP_LIMIT} of {group.skus.length} SKUs in this category. Use search to narrow results.
                       </div>
                     )}
                   </div>
                 ))}
-                {hiddenSkuCount>0&&(
-                  <div style={{ padding:isMobile?"14px 16px":"14px 18px",display:"flex",justifyContent:"center",background:C.surface,borderTop:`1px solid ${C.border}` }}>
-                    <button type="button" onClick={loadMoreSkuRows} style={{ height:isMobile?38:34,padding:"0 16px",borderRadius:9,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:12,fontWeight:800,color:C.textSub }}>
-                      Load more SKUs ({hiddenSkuCount} remaining)
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -15615,7 +15372,7 @@ ${url}`);
         </div>
       </Modal>
 
-      <Modal open={skuModal} onClose={()=>setSkuModal(false)} title={editSkuId?"Edit SKU":"Add SKU"} width={760}>
+      <Modal open={skuModal} onClose={()=>setSkuModal(false)} title={editSkuId?"Edit SKU":"Add SKU"} width={440}>
         <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
           <Field label="Brand">
             <Select value={sForm.brandId} onChange={v=>setSForm(f=>({...f,brandId:v}))}>
@@ -15643,41 +15400,6 @@ ${url}`);
               {sForm.status==="custom"&&<TI value={sForm.customStatus} onChange={v=>setSForm(f=>({...f,customStatus:v}))} placeholder="Custom status label" />}
             </div>
           </Field>
-          <div style={{ border:`1px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:12 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap" }}>
-              <div>
-                <div style={{ fontSize:13,fontWeight:900,color:C.text }}>Product Hub / QR Page</div>
-                <div style={{ fontSize:11,color:C.muted,marginTop:2 }}>These details appear on the public product page opened by the Hub button and QR code.</div>
-              </div>
-              <label style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>
-                <input type="checkbox" checked={!!sForm.hubEnabled} onChange={e=>setSForm((f:any)=>({...f,hubEnabled:e.target.checked}))} />
-                Enabled
-              </label>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
-              <Field label="Hub Slug / URL SKU" hint="Leave as SKU unless you need a custom public URL."><TI value={sForm.hubSlug} onChange={v=>setSForm((f:any)=>({...f,hubSlug:v}))} placeholder={sForm.sku || "SKU-CODE"} /></Field>
-              <Field label="Hero Image URL" hint="Leave blank to use Image Link from SKU Storage."><TI value={sForm.hubHeroImage} onChange={v=>setSForm((f:any)=>({...f,hubHeroImage:v}))} placeholder="https://..." /></Field>
-            </div>
-            <Field label="Product Introduction"><TA value={sForm.hubIntro} onChange={v=>setSForm((f:any)=>({...f,hubIntro:v}))} placeholder="Short product overview for the QR product page." rows={4} /></Field>
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
-              <Field label="Features" hint="One feature per line."><TA value={sForm.hubFeatures} onChange={v=>setSForm((f:any)=>({...f,hubFeatures:v}))} placeholder={"Premium material\nEasy to clean\nPerfect for everyday use"} rows={5} /></Field>
-              <Field label="Specifications" hint="One specification per line."><TA value={sForm.hubSpecs} onChange={v=>setSForm((f:any)=>({...f,hubSpecs:v}))} placeholder={"Material: ...\nSize: ...\nColor: ..."} rows={5} /></Field>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
-              <Field label="Care & Use"><TA value={sForm.hubCareUse} onChange={v=>setSForm((f:any)=>({...f,hubCareUse:v}))} placeholder="Care instructions for customers." rows={4} /></Field>
-              <Field label="Warranty / Notes"><TA value={sForm.hubWarranty} onChange={v=>setSForm((f:any)=>({...f,hubWarranty:v}))} placeholder="Warranty, reminders, or usage notes." rows={4} /></Field>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
-              <Field label="Shopee Link"><TI value={sForm.hubShopeeLink} onChange={v=>setSForm((f:any)=>({...f,hubShopeeLink:v}))} placeholder="https://..." /></Field>
-              <Field label="Lazada Link"><TI value={sForm.hubLazadaLink} onChange={v=>setSForm((f:any)=>({...f,hubLazadaLink:v}))} placeholder="https://..." /></Field>
-              <Field label="TikTok Shop Link"><TI value={sForm.hubTiktokLink} onChange={v=>setSForm((f:any)=>({...f,hubTiktokLink:v}))} placeholder="https://..." /></Field>
-              <Field label="Manual / PDF Link"><TI value={sForm.hubManualLink} onChange={v=>setSForm((f:any)=>({...f,hubManualLink:v}))} placeholder="https://..." /></Field>
-              <Field label="Video Link"><TI value={sForm.hubVideoLink} onChange={v=>setSForm((f:any)=>({...f,hubVideoLink:v}))} placeholder="https://..." /></Field>
-            </div>
-            <Field label="Selected Related Products" hint="Enter SKU codes only, one per line. The customer page will show these exact products first. If left blank, it will still show automatic related products from the same brand/category.">
-              <TA value={sForm.hubRelatedSkus} onChange={v=>setSForm((f:any)=>({...f,hubRelatedSkus:v}))} placeholder={"CRY-ACABS-2\nCRY-ACABS-4\nCRY-ACACS-3"} rows={4} />
-            </Field>
-          </div>
           <Btn full onClick={saveSku} disabled={!sForm.productName.trim()||!sForm.sku.trim()}>{editSkuId?"Save Changes":"Add SKU"}</Btn>
           {editSkuId&&<Btn full variant="danger" onClick={()=>{ delSku(editSkuId); setSkuModal(false); setEditSkuId(null); }}>Delete Product Row</Btn>}
         </div>
@@ -19034,31 +18756,6 @@ export default function App({
   const cloudClientIdRef = useRef("");
   const lastDirectSkuSaveSignatureRef = useRef("");
   const skuDirectSaveTimerRef = useRef<any>(null);
-  const skuSavePromiseRef = useRef<Promise<void> | null>(null);
-  const skuQueuedItemsRef = useRef<any[] | null>(null);
-  const skuLocalEditUntilRef = useRef(0);
-  const SKU_PENDING_SAVE_KEY = "emdc_sku_items_pending_cloud_save_v1";
-
-  const markSkuLocalEditProtected = (rows:any[] = [], reason="sku-edit") => {
-    skuLocalEditUntilRef.current = Date.now() + 120000;
-    try {
-      if (Array.isArray(rows)) rememberProtectedSkuItems(rows,reason);
-      localStorage.setItem(SKU_PENDING_SAVE_KEY, JSON.stringify({
-        reason,
-        count:Array.isArray(rows) ? rows.length : 0,
-        savedAt:new Date().toISOString(),
-      }));
-      window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch {}
-  };
-
-  const clearSkuPendingSave = () => {
-    try { localStorage.removeItem(SKU_PENDING_SAVE_KEY); } catch {}
-  };
-
-  const hasPendingSkuSave = () => {
-    try { return !!localStorage.getItem(SKU_PENDING_SAVE_KEY); } catch { return false; }
-  };
 
   const EMDC_SYNC_LOCAL_KEYS = [
     "emdc_app_state_v1",
@@ -19208,43 +18905,9 @@ export default function App({
       return;
     }
 
-    // DATA PROTECTION: After Paste Sheet / bulk SKU edits, never let an older cloud
-    // payload replace the browser's newer SKU list. This was the cause of rows
-    // appearing saved, then disappearing a little later after a poll/refetch.
-    const protectedSkuItems = readProtectedSkuItemsBackup();
-    const localSkuItems = Array.isArray(skuStorage) ? skuStorage : [];
-    const bestLocalSkuItems = protectedSkuItems.length >= localSkuItems.length ? protectedSkuItems : localSkuItems;
-    const hasRecentLocalSkuEdit = Date.now() < skuLocalEditUntilRef.current || hasPendingSkuSave();
-
-    let safeCloudAppState = cloudAppState;
-
-    // Always apply local delete tombstones to cloud SKU rows before hydrating the UI.
-    // Without this, a stale cloud payload can make a deleted SKU come back after refresh.
-    if (Array.isArray(safeCloudAppState?.skuItems) && safeCloudAppState.skuItems.length) {
-      const filteredCloudSkus = filterDeletedSkuItems(safeCloudAppState.skuItems);
-      if (filteredCloudSkus.length !== safeCloudAppState.skuItems.length) {
-        safeCloudAppState = {
-          ...safeCloudAppState,
-          skuItems:filteredCloudSkus,
-          skuItemsExternalCount:filteredCloudSkus.length,
-        };
-      }
-    }
-
-    if (hasRecentLocalSkuEdit && bestLocalSkuItems.length) {
-      safeCloudAppState = {
-        ...cloudAppState,
-        skuItems:bestLocalSkuItems,
-        skuItemsExternalCloud:false,
-        skuItemsExternalBlob:false,
-        skuItemsExternalCount:bestLocalSkuItems.length,
-      };
-      setCloudSyncStatus("Keeping local SKU edits");
-    }
-
     cloudApplyingRef.current = true;
     try {
-      applyAppState(safeCloudAppState);
+      applyAppState(cloudAppState);
       if (cloud?.localStorage && typeof cloud.localStorage === "object") {
         try {
           Object.entries(cloud.localStorage).forEach(([key,value]:any)=>{
@@ -19280,7 +18943,6 @@ export default function App({
   };
 
   const saveCloudSkuItemsChunked = async (skuItems:any[] = [], updatedAt:string) => {
-    const saveId = encodeURIComponent(`${updatedAt}-${cloudClientIdRef.current}`);
     const chunks:any[][] = [];
     for (let i=0; i<skuItems.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
       chunks.push(skuItems.slice(i,i+EMDC_CLOUD_SKU_CHUNK_SIZE));
@@ -19294,14 +18956,10 @@ export default function App({
           mode:"sku-chunk",
           clientId:cloudClientIdRef.current,
           updatedAt,
-          saveId,
           index,
           total:chunks.length,
           totalItems:skuItems.length,
           rows:chunks[index],
-          deletedSkuKeys:Array.from(readDeletedSkuKeySet()),
-          resetDeletedSkuKeys:true,
-          consolidateToAll:index===chunks.length-1,
         }),
       });
       if (!res.ok) throw new Error("SKU chunk save failed");
@@ -19360,7 +19018,6 @@ export default function App({
           mode:"local-storage-chunk",
           clientId:cloudClientIdRef.current,
           updatedAt,
-          saveId,
           index,
           total:chunks.length,
           totalKeys:Object.keys(snapshot || {}).length,
@@ -19409,22 +19066,17 @@ export default function App({
   const makeCloudAppStatePayload = async (updatedAt:string) => {
     const fullAppState = makeAppStatePayload();
     const skuItems = Array.isArray(fullAppState.skuItems) ? fullAppState.skuItems : [];
+    if (skuItems.length < EMDC_LARGE_SKU_COUNT) return fullAppState;
 
-    // The SKU list is saved by saveSkuStorageDirect() using /api/emdc-state?mode=sku-items.
-    // The general workspace save should only save SKU metadata, otherwise an older
-    // background save can overwrite newly added/deleted SKUs.
-    if (skuItems.length >= EMDC_LARGE_SKU_COUNT) {
-      return {
-        ...fullAppState,
-        skuItems:[],
-        skuItemsExternalCloud:true,
-        skuItemsExternalBlob:true,
-        skuItemsExternalCount:skuItems.length,
-        skuItemsCloudUpdatedAt:updatedAt,
-      };
-    }
-
-    return fullAppState;
+    await saveCloudSkuItemsChunked(skuItems,updatedAt);
+    return {
+      ...fullAppState,
+      skuItems:[],
+      skuItemsExternalCloud:true,
+      skuItemsExternalCount:skuItems.length,
+      skuItemsCloudChunkCount:Math.ceil(skuItems.length/EMDC_CLOUD_SKU_CHUNK_SIZE),
+      skuItemsCloudUpdatedAt:updatedAt,
+    };
   };
 
   const saveCloudState = async () => {
@@ -19629,48 +19281,8 @@ export default function App({
     }
   };
 
-  const saveSkuDeleteDirect = async (deletedKeys:any[] = []) => {
-    const keys = Array.from(new Set((Array.isArray(deletedKeys) ? deletedKeys : []).map((key:any)=>String(key || "").trim().toLowerCase()).filter(Boolean)));
-    if (!keys.length || cloudApplyingRef.current) return;
-    try {
-      setCloudSyncStatus("Deleting SKU...");
-      const updatedAt = new Date().toISOString();
-      const res = await fetch("/api/emdc-state?mode=sku-delete", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({
-          mode:"sku-delete",
-          clientId:cloudClientIdRef.current,
-          updatedAt,
-          deletedSkuKeys:keys,
-        }),
-      });
-      if (!res.ok) throw new Error("SKU delete save failed");
-      cloudLastUpdatedAtRef.current = updatedAt;
-      setCloudSyncStatus("SKU deleted and synced");
-      setTimeout(()=>setCloudSyncStatus("Synced"),1200);
-    } catch (error:any) {
-      console.error("[EMDC] SKU delete save failed:", error);
-      setCloudSyncStatus("SKU delete save failed");
-    }
-  };
-
   const handleRootStateChange = (patch:any = {}) => {
     if (!patch || typeof patch !== "object") return;
-
-    if (Array.isArray(patch.skuItems)) {
-      markSkuLocalEditProtected(patch.skuItems,"root-state-sku-items-patch");
-      setSkuStorage(patch.skuItems);
-      try { (window as any).__EMDC_LAST_SKU_STORAGE__ = patch.skuItems; } catch {}
-    }
-
-    if (Array.isArray(patch.skuBrands)) {
-      setBrands(patch.skuBrands);
-    }
-
-    if (Array.isArray(patch.skuTableColumns)) {
-      setSkuTableColumns(sanitizeSkuTableColumns(patch.skuTableColumns));
-    }
 
     if (Array.isArray(patch.calendarEvents)) {
       setCalendarManualEvents(patch.calendarEvents);
@@ -19692,14 +19304,7 @@ export default function App({
       window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
 
-    const patchForCloud:any = { ...patch };
-
-    // SKU Storage is saved by saveSkuStorageDirect() in chunks/all.json.
-    // Do not also send the full SKU array through app-patch, because that can race
-    // with deletes and cause old rows to re-appear after refresh.
-    if (Array.isArray(patchForCloud.skuItems)) delete patchForCloud.skuItems;
-
-    if (Object.keys(patchForCloud).length) saveAppPatchDirect(patchForCloud);
+    saveAppPatchDirect(patch);
   };
   const readCurrentLocalSnapshot = () => {
     const snapshot:any = {};
@@ -19751,102 +19356,35 @@ export default function App({
 
   const scheduleLocalSnapshotSave = () => {
     if (typeof window === "undefined" || cloudApplyingRef.current || !cloudHydrated) return;
-    // Do not keep doing background sync work while the tab is hidden.
-    // This prevents Chrome from hanging when EMDC is left open.
-    if (document.visibilityState === "hidden") return;
     try {
       if ((window as any).__emdcLocalSnapshotTimer) clearTimeout((window as any).__emdcLocalSnapshotTimer);
-      (window as any).__emdcLocalSnapshotTimer = setTimeout(()=>{
-        if (document.visibilityState !== "hidden") saveLocalSnapshotDirect();
-      }, 2500);
+      (window as any).__emdcLocalSnapshotTimer = setTimeout(()=>saveLocalSnapshotDirect(), 300);
     } catch {}
   };
 
 
-  const performSkuStorageCloudSave = async (nextSkus:any[]) => {
-    if (!Array.isArray(nextSkus)) return;
-
-    // AUTHORITATIVE SKU SAVE (single source of truth):
-    // Save the exact current SKU Storage list directly to the Blob-backed sku-items endpoint.
-    // This avoids mixed chunk sessions and prevents refresh from loading an older SKU list.
-    const rowsToSave = Array.isArray(nextSkus) ? nextSkus : [];
-    markSkuLocalEditProtected(rowsToSave,"authoritative-single-sku-items-save-start");
+  const saveSkuStorageDirect = async (nextSkus:any[]) => {
     if (!cloudHydrated || cloudApplyingRef.current) return;
-
     try {
       setCloudSyncStatus("Saving SKUs...");
       const updatedAt = new Date().toISOString();
+      const res = await fetch("/api/emdc-state", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"sku-items",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          skuItems:Array.isArray(nextSkus) ? nextSkus : [],
+        }),
+      });
 
-      if (rowsToSave.length >= EMDC_LARGE_SKU_COUNT) {
-        await saveCloudSkuItemsChunked(rowsToSave, updatedAt);
-      } else {
-        const res = await fetch("/api/emdc-state?mode=sku-items", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          cache:"no-store",
-          body:JSON.stringify({
-            mode:"sku-items",
-            clientId:cloudClientIdRef.current,
-            updatedAt,
-            skuItems:rowsToSave,
-            resetDeletedSkuKeys:true,
-          }),
-        });
-
-        const saved = await res.json().catch(()=>null);
-        if (!res.ok || !saved?.ok) {
-          throw new Error(saved?.error || "SKU cloud save failed");
-        }
-      }
-
-      // Verify by reading the same cloud source back before showing Synced.
-      const verifyRes = await fetch("/api/emdc-state", { cache:"no-store" });
-      const verifyJson = await verifyRes.json().catch(()=>null);
-      const verifiedRows = Array.isArray(verifyJson?.data?.appState?.skuItems)
-        ? verifyJson.data.appState.skuItems
-        : [];
-
-      if (verifiedRows.length !== rowsToSave.length) {
-        throw new Error(`SKU save verification failed. Sent ${rowsToSave.length}, read back ${verifiedRows.length}.`);
-      }
-
+      if (!res.ok) throw new Error("SKU save failed");
       cloudLastUpdatedAtRef.current = updatedAt;
-      clearSkuPendingSave();
-      setCloudSyncStatus(`Synced ${rowsToSave.length} SKUs`);
-    } catch (error:any) {
-      console.error("[EMDC] SKU cloud save failed:", error);
-      setCloudSyncStatus("SKU save failed - export backup now");
-      throw error;
+      setCloudSyncStatus("Synced");
+    } catch {
+      setCloudSyncStatus("SKU save failed");
     }
-  };
-
-  const saveSkuStorageDirect = async (nextSkus:any[]) => {
-    if (!Array.isArray(nextSkus)) return;
-    const safeNext = filterDeletedSkuItems(nextSkus);
-    markSkuLocalEditProtected(safeNext,"direct-sku-save-queued");
-
-    // Prevent overlapping SKU saves. Overlapping chunk saves were the main reason
-    // deleted rows sometimes came back: an older save could finish after a newer delete.
-    if (skuSavePromiseRef.current) {
-      skuQueuedItemsRef.current = safeNext;
-      return;
-    }
-
-    const run = async (rows:any[]) => {
-      skuSavePromiseRef.current = performSkuStorageCloudSave(rows);
-      try {
-        await skuSavePromiseRef.current;
-      } finally {
-        skuSavePromiseRef.current = null;
-        const queued = skuQueuedItemsRef.current;
-        skuQueuedItemsRef.current = null;
-        if (queued) {
-          window.setTimeout(()=>{ saveSkuStorageDirect(queued); }, 0);
-        }
-      }
-    };
-
-    await run(safeNext);
   };
 
   useEffect(() => {
@@ -19888,27 +19426,9 @@ export default function App({
   }, [appStateHydrated]);
 
   useEffect(() => {
-    if (!cloudHydrated || typeof window === "undefined") return;
-
-    const runPoll = () => {
-      // Poll only when the tab is active. Large cloud payloads can make Chrome freeze
-      // if they are parsed repeatedly while the site is left open.
-      if (document.visibilityState === "hidden") return;
-      fetchCloudState("poll");
-    };
-
-    const timer = setInterval(runPoll, PERF_CLOUD_POLL_INTERVAL);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        window.setTimeout(runPoll, 1200);
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+    if (!cloudHydrated) return;
+    const timer = setInterval(()=>fetchCloudState("poll"), PERF_CLOUD_POLL_INTERVAL);
+    return () => clearInterval(timer);
   }, [cloudHydrated]);
 
   useEffect(() => {
@@ -19919,11 +19439,8 @@ export default function App({
 
   useEffect(() => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    cloudSaveTimerRef.current = setTimeout(()=>{
-      if (typeof document === "undefined" || document.visibilityState !== "hidden") saveCloudState();
-    }, PERF_CLOUD_SAVE_DELAY);
+    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), PERF_CLOUD_SAVE_DELAY);
     return () => {
       if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
     };
@@ -19932,6 +19449,7 @@ export default function App({
     cloudHydrated,
     localSyncTick,
     brands,
+    skuStorage,
     skuTableColumns,
     checklistGroups,
     checklistAllItems,
@@ -19942,13 +19460,7 @@ export default function App({
   ]);
 
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
-  useEffect(() => {
-    if (cloudApplyingRef.current) return;
-    if (Array.isArray(skuStorage) && skuStorage.length) rememberProtectedSkuItems(skuStorage,"root-sku-storage-effect");
-    // Do not route SKU Storage through the generic app-state patch.
-    // SKU Storage is saved only by saveSkuStorageDirect(), otherwise background app-state
-    // sync can race with imports/deletes and restore an older SKU list.
-  }, [skuStorage]);
+  useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
   useEffect(() => { if (onStateChange) onStateChange({ skuTableColumns: sanitizeSkuTableColumns(skuTableColumns) }); }, [skuTableColumns]);
   useEffect(() => {
     setCalendarEventTypes((prev:any[])=>{
@@ -19964,7 +19476,7 @@ export default function App({
     setSkuStorage((prev:any[]) => {
       const nextRaw = typeof updater === "function" ? updater(prev) : updater;
       const next = Array.isArray(nextRaw) ? nextRaw : [];
-      markSkuLocalEditProtected(next,"root-sku-storage-direct-set");
+      rememberProtectedSkuItems(next,"root-sku-storage-direct-set");
       saveSkuStorageDirect(next);
       return next;
     });
@@ -20116,7 +19628,7 @@ export default function App({
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleRootStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={handleRootStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} onSkuStorageDeleteDirect={saveSkuDeleteDirect} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
