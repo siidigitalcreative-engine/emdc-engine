@@ -15293,27 +15293,30 @@ ${url}`);
                       const brand=brandById[s.brandId], st=getSD(s);
                       const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
                       return (
-                        <div key={s.id} className="emdc-row" style={{ padding:"14px 16px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
-                          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
-                            <div style={{ minWidth:0,flex:1 }}>
-                              <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{renderClickableSkuCellText(s.productName,"—",{ color:C.text })}</p>
-                              {renderClickableSkuCellText(s.sku,"—",{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4,display:"inline-block" })}
-                            </div>
-                            <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
-                              {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint }}>&#8942;&#8942;</span>}
-                              <button onClick={()=>openProductHub(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.accent,border:"none",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:800 }}>Hub</button>
-                              <button onClick={()=>openProductHubQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800 }}>QR</button>
-                              <button onClick={()=>downloadProductHubQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800 }}>DL QR</button>
-                              <button onClick={()=>copyProductHubLink(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800 }}>Copy</button>
-                              <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
-                              <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
+                        <div key={s.id} className="emdc-row" style={{ padding:"12px 14px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
+                          <div style={{ minWidth:0,marginBottom:8 }}>
+                            <p style={{ margin:"0 0 5px",fontSize:14,fontWeight:800,color:C.text,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" }}>{renderClickableSkuCellText(s.productName,"—",{ color:C.text })}</p>
+                            <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
+                              {renderClickableSkuCellText(s.sku,"—",{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"3px 7px",borderRadius:5,display:"inline-block",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis" })}
+                              {s.collection&&<span style={{ fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".03em",background:C.bg,padding:"3px 7px",borderRadius:5,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.collection}</span>}
                             </div>
                           </div>
-                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                            {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:6,height:6,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:11,color:C.muted }}>{brand.name}</span></div>}
-                            <span style={{ fontSize:11,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?700:500 }}>{s.inventory.toLocaleString()} units</span>
-                            <span style={{ fontSize:11,fontWeight:600,color:st.color,background:st.color+"16",padding:"2px 8px",borderRadius:4,border:`1px solid ${st.color}28` }}>{st.label}</span>
-                            {getSkuTags(s).map((tag:string)=><span key={tag} style={{ fontSize:11,fontWeight:700,color:"#92400E",background:"#FEF3C7",padding:"2px 8px",borderRadius:4,border:"1px solid #FDE68A" }}>{tag}</span>)}
+
+                          <div style={{ display:"flex",gap:6,alignItems:"center",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:4,marginBottom:8,scrollbarWidth:"thin" }}>
+                            {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:30,height:30,borderRadius:7,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint,flex:"0 0 auto" }}>&#8942;&#8942;</span>}
+                            <button onClick={()=>openProductHub(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.accent,border:"none",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>Hub</button>
+                            <button onClick={()=>openProductHubQr(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.textSub,fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>QR</button>
+                            <button onClick={()=>downloadProductHubQr(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.textSub,fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>DL QR</button>
+                            <button onClick={()=>copyProductHubLink(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.textSub,fontWeight:800,whiteSpace:"nowrap",flex:"0 0 auto" }}>Copy</button>
+                            <button onClick={()=>openEdit(s)} style={{ height:30,padding:"0 12px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,whiteSpace:"nowrap",flex:"0 0 auto" }}>Edit</button>
+                            <button onClick={()=>delSku(s.id)} style={{ width:30,height:30,borderRadius:8,background:"#FEF2F2",border:`1px solid #FECACA`,cursor:"pointer",color:"#DC2626",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,flex:"0 0 auto" }}>&#215;</button>
+                          </div>
+
+                          <div style={{ display:"flex",gap:7,alignItems:"center",flexWrap:"wrap" }}>
+                            {brand&&<div style={{ display:"flex",alignItems:"center",gap:5 }}><div style={{ width:7,height:7,borderRadius:"50%",background:brand.color }} /><span style={{ fontSize:12,color:C.muted }}>{brand.name}</span></div>}
+                            <span style={{ fontSize:12,color:s.inventory===0?"#EF4444":C.textSub,fontWeight:s.inventory===0?800:600 }}>{s.inventory.toLocaleString()} units</span>
+                            <span style={{ fontSize:12,fontWeight:700,color:st.color,background:st.color+"16",padding:"3px 9px",borderRadius:6,border:`1px solid ${st.color}28` }}>{st.label}</span>
+                            {getSkuTags(s).map((tag:string)=><span key={tag} style={{ fontSize:11,fontWeight:800,color:"#92400E",background:"#FEF3C7",padding:"3px 8px",borderRadius:6,border:"1px solid #FDE68A" }}>{tag}</span>)}
                           </div>
                         </div>
                       );
