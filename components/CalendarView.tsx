@@ -1013,6 +1013,14 @@ const TI = ({ value, onChange, placeholder, type="text", style={} }) => (
   />
 );
 
+const TA = ({ value, onChange, placeholder, rows=4, style={} }) => (
+  <textarea value={value} placeholder={placeholder} rows={rows} onChange={e=>onChange(e.target.value)}
+    style={{ width:"100%",minHeight:90,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box",resize:"vertical",lineHeight:1.5,transition:"border-color .15s",...style }}
+    onFocus={e=>e.target.style.borderColor=C.accent}
+    onBlur={e=>e.target.style.borderColor=C.border}
+  />
+);
+
 const DateInput = ({ value, onChange, style={} }) => {
   const dateInputRef = useRef<any>(null);
 
@@ -13920,7 +13928,31 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [editSkuId,setEditSkuId]         = useState(null);
   const [showSidebar,setShowSidebar]     = useState(!isMobile);
   const [bForm,setBForm] = useState({name:"",color:"#111827"});
-  const [sForm,setSForm] = useState({brandId:"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""});
+  const makeSkuForm = (overrides:any = {}) => ({
+    brandId:"",
+    productName:"",
+    collection:"",
+    sku:"",
+    inventory:"",
+    status:"active",
+    customStatus:"",
+    tag:"",
+    hubEnabled:true,
+    hubSlug:"",
+    hubHeroImage:"",
+    hubIntro:"",
+    hubFeatures:"",
+    hubSpecs:"",
+    hubCareUse:"",
+    hubWarranty:"",
+    hubShopeeLink:"",
+    hubLazadaLink:"",
+    hubTiktokLink:"",
+    hubManualLink:"",
+    hubVideoLink:"",
+    ...overrides,
+  });
+  const [sForm,setSForm] = useState<any>(()=>makeSkuForm());
   const DEFAULT_SKU_TABLE_COLUMNS = DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
   const SKU_TABLE_BASE_COLUMN_ALIASES:any = {
     product:{ key:"productName", label:"Product", base:true },
@@ -14200,13 +14232,76 @@ ${url}`);
   const openEditBrand = b=>{ setEditBrandForm({...b}); setEditBrandModal(true); };
   const saveEditBrand = ()=>{ if(!editBrandForm.name.trim()) return; commitBrands((p:any[])=>p.map((b:any)=>b.id===editBrandForm.id?{...editBrandForm}:b)); setEditBrandModal(false); setEditBrandForm(null); };
   const delBrand  = id=>{ commitBrands((p:any[])=>p.filter((b:any)=>b.id!==id)); if(activeBrand===id) setActiveBrand(null); };
-  const openAdd   = ()=>{ setSForm({brandId:activeBrand||brands[0]?.id||"",productName:"",collection:"",sku:"",inventory:"",status:"active",customStatus:"",tag:""}); setEditSkuId(null); setSkuModal(true); };
-  const openEdit  = s=>{ setSForm({brandId:s.brandId,productName:s.productName,collection:s.collection||"",sku:s.sku,inventory:String(s.inventory),status:s.status,customStatus:s.customStatus||"",tag:getSkuTags(s).join(", ")}); setEditSkuId(s.id); setSkuModal(true); };
+  const arrayTextToList = (value:any) => String(value||"").split(/\n|,/).map((v:string)=>v.trim()).filter(Boolean);
+  const listToText = (value:any) => Array.isArray(value) ? value.filter(Boolean).join("\n") : String(value||"");
+  const buildProductHubFromForm = () => ({
+    enabled: !!sForm.hubEnabled,
+    slug: String(sForm.hubSlug || sForm.sku || "").trim(),
+    heroImage: String(sForm.hubHeroImage || "").trim(),
+    intro: String(sForm.hubIntro || "").trim(),
+    features: arrayTextToList(sForm.hubFeatures),
+    specs: arrayTextToList(sForm.hubSpecs),
+    careUse: String(sForm.hubCareUse || "").trim(),
+    warranty: String(sForm.hubWarranty || "").trim(),
+    shopeeLink: String(sForm.hubShopeeLink || "").trim(),
+    lazadaLink: String(sForm.hubLazadaLink || "").trim(),
+    tiktokLink: String(sForm.hubTiktokLink || "").trim(),
+    manualLink: String(sForm.hubManualLink || "").trim(),
+    videoLink: String(sForm.hubVideoLink || "").trim(),
+  });
+  const openAdd   = ()=>{ setSForm(makeSkuForm({brandId:activeBrand||brands[0]?.id||""})); setEditSkuId(null); setSkuModal(true); };
+  const openEdit  = s=>{
+    const hub = s?.productHub || {};
+    setSForm(makeSkuForm({
+      brandId:s.brandId,
+      productName:s.productName,
+      collection:s.collection||"",
+      sku:s.sku,
+      inventory:String(s.inventory),
+      status:s.status,
+      customStatus:s.customStatus||"",
+      tag:getSkuTags(s).join(", "),
+      hubEnabled:hub.enabled !== false,
+      hubSlug:hub.slug || s.sku || "",
+      hubHeroImage:hub.heroImage || s.imageLink || s.imageUrl || "",
+      hubIntro:hub.intro || "",
+      hubFeatures:listToText(hub.features),
+      hubSpecs:listToText(hub.specs),
+      hubCareUse:hub.careUse || "",
+      hubWarranty:hub.warranty || "",
+      hubShopeeLink:hub.shopeeLink || "",
+      hubLazadaLink:hub.lazadaLink || "",
+      hubTiktokLink:hub.tiktokLink || "",
+      hubManualLink:hub.manualLink || "",
+      hubVideoLink:hub.videoLink || "",
+    }));
+    setEditSkuId(s.id);
+    setSkuModal(true);
+  };
   const saveSku   = ()=>{
     if(!sForm.productName.trim()||!sForm.sku.trim()) return;
-    const baseSku={id:editSkuId||uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim()};
-    const e=setSkuTagsOnItem(baseSku,sForm.tag);
-    if(editSkuId) commitSkuStorage((p:any[])=>p.map((s:any)=>s.id===editSkuId?e:s), true); else commitSkuStorage((p:any[])=>[...p,e], true);
+    const productHub = buildProductHubFromForm();
+    if(editSkuId) {
+      commitSkuStorage((p:any[])=>p.map((existing:any)=>{
+        if(existing.id!==editSkuId) return existing;
+        const updated = {
+          ...existing,
+          brandId:sForm.brandId||activeBrand||brands[0]?.id||"",
+          productName:sForm.productName.trim(),
+          collection:sForm.collection.trim(),
+          sku:sForm.sku.trim(),
+          inventory:parseInt(sForm.inventory)||0,
+          status:sForm.status,
+          customStatus:sForm.customStatus.trim(),
+          productHub,
+        };
+        return setSkuTagsOnItem(updated,sForm.tag);
+      }), true);
+    } else {
+      const baseSku={id:uid(),brandId:sForm.brandId||activeBrand||brands[0]?.id||"",productName:sForm.productName.trim(),collection:sForm.collection.trim(),sku:sForm.sku.trim(),inventory:parseInt(sForm.inventory)||0,status:sForm.status,customStatus:sForm.customStatus.trim(),productHub};
+      const e=setSkuTagsOnItem(baseSku,sForm.tag);
+      commitSkuStorage((p:any[])=>[...p,e], true);
+    }
     setSkuModal(false);
   };
   const delSku = id=>commitSkuStorage((p:any[])=>p.filter((s:any)=>s.id!==id), true);
@@ -15361,7 +15456,7 @@ ${url}`);
         </div>
       </Modal>
 
-      <Modal open={skuModal} onClose={()=>setSkuModal(false)} title={editSkuId?"Edit SKU":"Add SKU"} width={440}>
+      <Modal open={skuModal} onClose={()=>setSkuModal(false)} title={editSkuId?"Edit SKU":"Add SKU"} width={760}>
         <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
           <Field label="Brand">
             <Select value={sForm.brandId} onChange={v=>setSForm(f=>({...f,brandId:v}))}>
@@ -15389,6 +15484,38 @@ ${url}`);
               {sForm.status==="custom"&&<TI value={sForm.customStatus} onChange={v=>setSForm(f=>({...f,customStatus:v}))} placeholder="Custom status label" />}
             </div>
           </Field>
+          <div style={{ border:`1px solid ${C.border}`,borderRadius:12,padding:14,background:C.bg,display:"flex",flexDirection:"column",gap:12 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap" }}>
+              <div>
+                <div style={{ fontSize:13,fontWeight:900,color:C.text }}>Product Hub / QR Page</div>
+                <div style={{ fontSize:11,color:C.muted,marginTop:2 }}>These details appear on the public product page opened by the Hub button and QR code.</div>
+              </div>
+              <label style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:800,color:C.textSub,cursor:"pointer" }}>
+                <input type="checkbox" checked={!!sForm.hubEnabled} onChange={e=>setSForm((f:any)=>({...f,hubEnabled:e.target.checked}))} />
+                Enabled
+              </label>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
+              <Field label="Hub Slug / URL SKU" hint="Leave as SKU unless you need a custom public URL."><TI value={sForm.hubSlug} onChange={v=>setSForm((f:any)=>({...f,hubSlug:v}))} placeholder={sForm.sku || "SKU-CODE"} /></Field>
+              <Field label="Hero Image URL" hint="Leave blank to use Image Link from SKU Storage."><TI value={sForm.hubHeroImage} onChange={v=>setSForm((f:any)=>({...f,hubHeroImage:v}))} placeholder="https://..." /></Field>
+            </div>
+            <Field label="Product Introduction"><TA value={sForm.hubIntro} onChange={v=>setSForm((f:any)=>({...f,hubIntro:v}))} placeholder="Short product overview for the QR product page." rows={4} /></Field>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
+              <Field label="Features" hint="One feature per line."><TA value={sForm.hubFeatures} onChange={v=>setSForm((f:any)=>({...f,hubFeatures:v}))} placeholder={"Premium material\nEasy to clean\nPerfect for everyday use"} rows={5} /></Field>
+              <Field label="Specifications" hint="One specification per line."><TA value={sForm.hubSpecs} onChange={v=>setSForm((f:any)=>({...f,hubSpecs:v}))} placeholder={"Material: ...\nSize: ...\nColor: ..."} rows={5} /></Field>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
+              <Field label="Care & Use"><TA value={sForm.hubCareUse} onChange={v=>setSForm((f:any)=>({...f,hubCareUse:v}))} placeholder="Care instructions for customers." rows={4} /></Field>
+              <Field label="Warranty / Notes"><TA value={sForm.hubWarranty} onChange={v=>setSForm((f:any)=>({...f,hubWarranty:v}))} placeholder="Warranty, reminders, or usage notes." rows={4} /></Field>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
+              <Field label="Shopee Link"><TI value={sForm.hubShopeeLink} onChange={v=>setSForm((f:any)=>({...f,hubShopeeLink:v}))} placeholder="https://..." /></Field>
+              <Field label="Lazada Link"><TI value={sForm.hubLazadaLink} onChange={v=>setSForm((f:any)=>({...f,hubLazadaLink:v}))} placeholder="https://..." /></Field>
+              <Field label="TikTok Shop Link"><TI value={sForm.hubTiktokLink} onChange={v=>setSForm((f:any)=>({...f,hubTiktokLink:v}))} placeholder="https://..." /></Field>
+              <Field label="Manual / PDF Link"><TI value={sForm.hubManualLink} onChange={v=>setSForm((f:any)=>({...f,hubManualLink:v}))} placeholder="https://..." /></Field>
+              <Field label="Video Link"><TI value={sForm.hubVideoLink} onChange={v=>setSForm((f:any)=>({...f,hubVideoLink:v}))} placeholder="https://..." /></Field>
+            </div>
+          </div>
           <Btn full onClick={saveSku} disabled={!sForm.productName.trim()||!sForm.sku.trim()}>{editSkuId?"Save Changes":"Add SKU"}</Btn>
           {editSkuId&&<Btn full variant="danger" onClick={()=>{ delSku(editSkuId); setSkuModal(false); setEditSkuId(null); }}>Delete Product Row</Btn>}
         </div>
