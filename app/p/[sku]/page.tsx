@@ -336,20 +336,24 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
             // Example: Crysalis pages can auto-fill Crysalis products only; Slique pages can auto-fill Slique products only.
             if (!isSameBrand(item)) return false;
 
-            const itemCategory = normalize(getCategory(item));
-            const itemCollection = normalize(String(item?.collection || item?.extraFields?.collection || ""));
-            return (
-              (currentCollection && itemCollection === currentCollection) ||
-              (currentCategory && itemCategory === currentCategory)
-            );
+            return true;
           })
           .sort((a: any, b: any) => {
             const score = (item: any) => {
               const itemCategory = normalize(getCategory(item));
               const itemCollection = normalize(String(item?.collection || item?.extraFields?.collection || ""));
               let value = 0;
-              if (currentCollection && itemCollection === currentCollection) value += 4;
-              if (currentCategory && itemCategory === currentCategory) value += 3;
+
+              // Priority 1: same collection.
+              if (currentCollection && itemCollection === currentCollection) value += 40;
+
+              // Priority 2: same category.
+              if (currentCategory && itemCategory === currentCategory) value += 30;
+
+              // Priority 3: same brand fallback. This makes sure the section still fills to 4
+              // even when there are not enough products in the exact same category/collection.
+              value += 10;
+
               return value;
             };
             return score(b) - score(a);
