@@ -90,6 +90,55 @@ const firstText = (...values: unknown[]) => {
   return "";
 };
 
+
+const getFirstImageUrl = (item: any, hub?: any) => {
+  const directValues = [
+    hub?.heroImage,
+    hub?.image,
+    hub?.imageLink,
+    item?.imageLink,
+    item?.imageUrl,
+    item?.imageURL,
+    item?.mainImage,
+    item?.photo,
+    item?.thumbnail,
+    item?.coverImage,
+    item?.extraFields?.["Image Link"],
+    item?.extraFields?.["Image URL"],
+    item?.extraFields?.["Image"],
+    item?.extraFields?.imageLink,
+    item?.extraFields?.imageUrl,
+    item?.extraFields?.image,
+  ];
+
+  const arrayValues = [
+    hub?.galleryImages,
+    hub?.gallery,
+    item?.imageLinks,
+    item?.links,
+    item?.images,
+    item?.gallery,
+    item?.extraFields?.imageLinks,
+    item?.extraFields?.links,
+    item?.extraFields?.images,
+  ];
+
+  for (const value of directValues) {
+    const text = String(value || "").trim();
+    if (/^https?:\/\//i.test(text) || text.startsWith("data:image/")) return text;
+  }
+
+  for (const value of arrayValues) {
+    const items = Array.isArray(value) ? value : String(value || "").split(/[\r\n,;]+/);
+    for (const entry of items) {
+      const text = String(entry || "").trim();
+      if (/^https?:\/\//i.test(text) || text.startsWith("data:image/")) return text;
+    }
+  }
+
+  return "";
+};
+
 function safeJson(value: string | null) {
   if (!value) return null;
   try { return JSON.parse(value); } catch { return null; }
@@ -461,8 +510,8 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
   }, [params.sku]);
 
   const legacyHub = useMemo(() => product?.productHub || {}, [product]);
-  const hero = firstText(productHubData?.heroImage, legacyHub.heroImage, product?.imageLink, product?.imageUrl);
-  const gallery = lines(productHubData?.gallery).filter((url) => url !== hero).slice(0, 6);
+  const hero = getFirstImageUrl(product, productHubData || legacyHub);
+  const gallery = lines(productHubData?.gallery || (productHubData as any)?.galleryImages).filter((url) => url !== hero).slice(0, 6);
   const introduction = firstText(productHubData?.introduction, legacyHub.intro);
   const features = lines(productHubData?.features || legacyHub.features);
   const specs = lines(productHubData?.specifications || legacyHub.specs);
@@ -506,7 +555,7 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
 
         <section className="emdc-product-hero-card">
           <div className="emdc-product-hero-wrap">
-            {hero ? <img src={hero} alt={product.productName || product.sku || "Product"} className="emdc-product-hero-img" loading="eager" decoding="async" referrerPolicy="no-referrer" /> : <div className="emdc-product-placeholder">No Image</div>}
+            {hero ? <img src={hero} alt={product.productName || product.sku || "Product"} className="emdc-product-hero-img" loading="eager" decoding="async" /> : <div className="emdc-product-placeholder">No Image</div>}
           </div>
 
           <div className="emdc-product-content">
@@ -533,7 +582,7 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
             <div className="emdc-product-gallery-grid">
               {gallery.map((url, index) => (
                 <div key={`${url}-${index}`} className="emdc-product-gallery-thumb-wrap">
-                  <img src={url} alt={`${product.productName || product.sku || "Product"} gallery ${index + 1}`} className="emdc-product-gallery-thumb" loading="eager" decoding="async" referrerPolicy="no-referrer" />
+                  <img src={url} alt={`${product.productName || product.sku || "Product"} gallery ${index + 1}`} className="emdc-product-gallery-thumb" loading="eager" decoding="async" />
                 </div>
               ))}
             </div>
@@ -552,11 +601,11 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
             <h2 className="emdc-product-h2">Related Products</h2>
             <div className="emdc-product-related-grid">
               {related.map((item: any) => {
-                const itemHero = item.productHub?.heroImage || item.imageLink || item.imageUrl || "";
+                const itemHero = getFirstImageUrl(item, item.productHub);
                 const itemSlug = item.productHub?.slug || item.sku || item.id || "";
                 const card = (
                   <>
-                    <div className="emdc-product-related-thumb-wrap">{itemHero ? <img src={itemHero} alt={item.productName || item.sku || "Product"} className="emdc-product-related-thumb" loading="eager" decoding="async" referrerPolicy="no-referrer" /> : <span className="emdc-product-related-no-image">{item.__missingRelated ? "Check SKU" : "No Image"}</span>}</div>
+                    <div className="emdc-product-related-thumb-wrap">{itemHero ? <img src={itemHero} alt={item.productName || item.sku || "Product"} className="emdc-product-related-thumb" loading="eager" decoding="async" /> : <span className="emdc-product-related-no-image">{item.__missingRelated ? "Check SKU" : "No Image"}</span>}</div>
                     <div className="emdc-product-related-name">{item.__missingRelated ? "SKU not found" : (item.productName || item.sku)}</div>
                     <div className="emdc-product-related-sku">{item.sku}</div>
                   </>
