@@ -59,9 +59,9 @@ const GlobalStyles = () => {
       #__next,main{max-width:100%;overflow-x:hidden;}
       input,select,button,textarea{font-family:inherit;max-width:100%;}
       textarea{display:block;}
-      ::-webkit-scrollbar{width:4px;height:4px;}
-      ::-webkit-scrollbar-track{background:transparent;}
-      ::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px;}
+      ::-webkit-scrollbar{width:12px;height:12px;}
+      ::-webkit-scrollbar-track{background:#F1F5F9;border-radius:999px;}
+      ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:999px;border:3px solid transparent;background-clip:content-box;}
       .emdc-btn:hover{opacity:.85;}
       .emdc-row:hover{background:#F9FAFB;}
       .emdc-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.07);}
@@ -14886,10 +14886,10 @@ ${url}`);
     setSkuColumnWidths(DEFAULT_SKU_COLUMN_WIDTHS);
     setSkuColumnWidthMode("manual");
   };
-  const skuActionsColumnWidth = "170px";
+  const skuActionsColumnWidth = "224px";
   const skuColumnWidthValues = skuTableColumns.map((c:any)=>getSkuColumnWidthPx(c));
   const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuColumnWidthValues.map((w:number)=>`${w}px`).join(" ")} ${skuActionsColumnWidth}`;
-  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+170+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
+  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+224+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
 
   const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
   const normalizeSkuCellUrl = (url:any) => {
@@ -15098,7 +15098,7 @@ ${url}`);
             ):(
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                 {!isMobile&&(
-                  <div style={{ overflowX:"auto",maxWidth:"100%" }}>
+                  <div style={{ overflowX:"auto",maxWidth:"100%",scrollbarWidth:"auto",scrollbarColor:"#CBD5E1 #F1F5F9" }}>
                     <div style={{ minWidth:skuTableMinWidth,width:"max-content",maxWidth:"none" }}>
                       <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
                         {skuTableEditMode&&<span style={{ padding:"9px 10px",fontSize:12,fontWeight:700,color:C.faint,letterSpacing:".02em",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center" }}>&#8942;&#8942;</span>}
@@ -15108,9 +15108,9 @@ ${url}`);
                             <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{col.label}</span>
                           </div>
                         ))}
-                        <span style={{ padding:"9px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}` }}>Actions</span>
+                        <span style={{ padding:"9px 12px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}`,minWidth:skuActionsColumnWidth }}>Actions</span>
                       </div>
-                      <div style={{ maxHeight:"calc(100vh - 330px)",overflowY:"auto" }}>
+                      <div style={{ maxHeight:"calc(100vh - 330px)",overflowY:"auto",scrollbarWidth:"auto",scrollbarColor:"#CBD5E1 #F1F5F9" }}>
                       {groupedSkus.map(group=>(
                         <div key={group.label}>
                           <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,alignItems:"center",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
@@ -15138,8 +15138,8 @@ ${url}`);
                                     {renderSkuDesktopCell(s,col,brand,st)}
                                   </div>
                                 ))}
-                                <div style={{ minHeight:40,padding:"6px 8px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:4,justifyContent:"flex-end",alignItems:"center",background:C.surface,flexWrap:"nowrap",whiteSpace:"nowrap",overflow:"hidden" }}>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHub(s)} title="Open public Product Hub page" style={{ height:24,background:C.accent,border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"24px" }}>Hub</button>
+                                <div style={{ minHeight:40,padding:"5px 10px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:5,justifyContent:"flex-end",alignItems:"center",background:C.surface,flexWrap:"nowrap",whiteSpace:"nowrap",overflow:"visible",minWidth:skuActionsColumnWidth }}>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHub(s)} title="Open public Product Hub page" style={{ height:24,background:C.accent,border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:800,padding:"0 8px",borderRadius:6,flexShrink:0,lineHeight:"24px" }}>Hub</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHubQr(s)} title="Open QR code" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>QR</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>copyProductHubLink(s)} title="Copy Product Hub link" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>Copy</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ height:24,background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"0 5px",borderRadius:5,flexShrink:0,lineHeight:"24px" }}>Edit</button>
