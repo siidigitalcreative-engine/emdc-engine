@@ -19764,33 +19764,52 @@ export default function App({
   const performSkuStorageCloudSave = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
 
-    // AUTHORITATIVE SKU SAVE:
-    // Add, edit, Paste Sheet, and delete now all save the exact current SKU list
-    // directly to the server's SKU file. Do not send skuItems: [] through app-patch,
-    // because that can accidentally overwrite the cloud SKU file with an empty list.
+    // DEFINITIVE SKU CLOUD SAVE:
+    // Save the exact current SKU list in small chunks, then consolidate on the server.
+    // This avoids Vercel/body-size limits that can happen when saving 3,000+ SKUs in one request.
+    // It is used for add, paste, edit, and delete so refresh always reloads the same list.
     const rowsToSave = Array.isArray(nextSkus) ? nextSkus : [];
-    markSkuLocalEditProtected(rowsToSave,"direct-authoritative-sku-cloud-save-start");
+    markSkuLocalEditProtected(rowsToSave,"chunked-definitive-sku-cloud-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
 
     try {
       setCloudSyncStatus("Saving SKUs...");
       const updatedAt = new Date().toISOString();
+      const saveId = `${updatedAt}-${cloudClientIdRef.current}-${Math.random().toString(36).slice(2)}`.replace(/[^a-zA-Z0-9._-]/g,"-");
+      const chunks:any[][] = [];
 
-      const res = await fetch("/api/emdc-state?mode=sku-items", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({
-          mode:"sku-items",
-          clientId:cloudClientIdRef.current,
-          updatedAt,
-          skuItems: rowsToSave,
-          resetDeletedSkuKeys: true,
-        }),
-      });
+      for (let i=0; i<rowsToSave.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
+        chunks.push(rowsToSave.slice(i,i+EMDC_CLOUD_SKU_CHUNK_SIZE));
+      }
 
-      if (!res.ok) throw new Error("Authoritative SKU save failed");
-      const data = await res.json().catch(()=>({}));
-      cloudLastUpdatedAtRef.current = data?.data?.updatedAt || updatedAt;
+      const total = Math.max(1, chunks.length);
+      if (!chunks.length) chunks.push([]);
+
+      for (let index=0; index<chunks.length; index++) {
+        const res = await fetch("/api/emdc-state?mode=sku-chunk", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({
+            mode:"sku-chunk",
+            clientId:cloudClientIdRef.current,
+            updatedAt,
+            saveId,
+            index,
+            total,
+            totalItems:rowsToSave.length,
+            rows:chunks[index],
+            resetDeletedSkuKeys:true,
+            consolidateToAll:index===chunks.length-1,
+          }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text().catch(()=>"");
+          throw new Error(text || "SKU chunk cloud save failed");
+        }
+      }
+
+      cloudLastUpdatedAtRef.current = updatedAt;
       clearSkuPendingSave();
       setCloudSyncStatus(`Synced ${rowsToSave.length} SKUs`);
     } catch (error:any) {
