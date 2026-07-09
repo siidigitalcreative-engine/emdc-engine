@@ -59,9 +59,9 @@ const GlobalStyles = () => {
       #__next,main{max-width:100%;overflow-x:hidden;}
       input,select,button,textarea{font-family:inherit;max-width:100%;}
       textarea{display:block;}
-      ::-webkit-scrollbar{width:4px;height:4px;}
-      ::-webkit-scrollbar-track{background:transparent;}
-      ::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px;}
+      ::-webkit-scrollbar{width:12px;height:12px;}
+      ::-webkit-scrollbar-track{background:#F1F5F9;border-radius:999px;}
+      ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:999px;border:3px solid transparent;background-clip:content-box;}
       .emdc-btn:hover{opacity:.85;}
       .emdc-row:hover{background:#F9FAFB;}
       .emdc-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.07);}
@@ -902,9 +902,13 @@ const shouldBlockEmptyEmdcState = (nextState:any) => {
 const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) ? "video" : "image");
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
-const PERF_IDLE_SAVE_DELAY = 1800;
-const PERF_CLOUD_SAVE_DELAY = 2500;
-const PERF_CLOUD_POLL_INTERVAL = 60000;
+const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP = 120;
+const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE = 36;
+const PERF_SKU_STORAGE_LOAD_MORE_DESKTOP = 120;
+const PERF_SKU_STORAGE_LOAD_MORE_MOBILE = 36;
+const PERF_IDLE_SAVE_DELAY = 450;
+const PERF_CLOUD_SAVE_DELAY = 150;
+const PERF_CLOUD_POLL_INTERVAL = 5000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
   if (typeof window === "undefined") return setTimeout(cb, 0);
@@ -12633,6 +12637,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 {linkedEvents.map((ev:any)=>(
                   <span key={ev.id} style={{ fontSize:11,color:ev.color||C.muted,background:(ev.color||C.accent)+"12",padding:"2px 8px",borderRadius:4,border:`1px solid ${(ev.color||C.accent)}33` }}>{ev.name}</span>
                 ))}
+                {hasMoreSkuRows&&(<div style={{ padding:"12px 16px",display:"flex",justifyContent:"center",borderTop:`1px solid ${C.border}`,background:C.surface }}>
+                  <Btn sm variant="outline" onClick={loadMoreSkuRows}>Load more SKUs ({Math.min(skuRenderLimit, filteredSkus.length)} / {filteredSkus.length})</Btn>
+                </div>)}
               </div>
             )}
           </div>
@@ -13976,6 +13983,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuSearch,setSkuSearch] = useState("");
   const deferredSkuSearch = useDeferredValue(skuSearch);
   const [activeSkuTag,setActiveSkuTag] = useState("all");
+  const [skuRenderLimit,setSkuRenderLimit] = useState(() => isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
   const DEFAULT_BULK_COLUMNS = [
     { key:"brand",       label:"Brand",      placeholder:"Quencha",                          locked:true },
     { key:"sku",         label:"SKU",        placeholder:"QNH-COOL12-TP",                    locked:true },
@@ -14073,6 +14081,28 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     return map;
   },[brands]);
 
+  const getSkuPublicPath = (s:any) => `/p/${encodeURIComponent(String(s?.sku || s?.value || s?.id || ""))}`;
+  const getSkuPublicUrl = (s:any) => {
+    const path = getSkuPublicPath(s);
+    if (typeof window === "undefined") return path;
+    return `${window.location.origin}${path}`;
+  };
+  const copySkuHubLink = async (s:any) => {
+    const url = getSkuPublicUrl(s);
+    try { await navigator.clipboard.writeText(url); alert("Product Hub link copied."); }
+    catch { prompt("Copy Product Hub link:", url); }
+  };
+  const downloadSkuQr = (s:any) => {
+    const url = getSkuPublicUrl(s);
+    const sku = String(s?.sku || s?.value || s?.id || "product").replace(/[^a-z0-9_-]+/gi,"-");
+    const a = document.createElement("a");
+    a.href = `/api/qr?url=${encodeURIComponent(url)}`;
+    a.download = `${sku}-qr.svg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   const skuCountByBrandId = useMemo(()=>{
     const counts:any = {};
     (skuStorage||[]).forEach((sku:any)=>{ counts[sku.brandId] = (counts[sku.brandId] || 0) + 1; });
@@ -14156,6 +14186,25 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       return a.label.localeCompare(b.label);
     });
   }, [filteredSkus]);
+
+  useEffect(()=>{
+    setSkuRenderLimit(isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
+  },[activeBrand,activeSkuTag,deferredSkuSearch,isMobile]);
+
+  const visibleGroupedSkus = useMemo(()=>{
+    let remaining = skuRenderLimit;
+    const out:any[] = [];
+    for (const group of groupedSkus) {
+      if (remaining <= 0) break;
+      const rows = Array.isArray(group.skus) ? group.skus : [];
+      const take = Math.min(rows.length, remaining);
+      if (take > 0) out.push({ ...group, total: rows.length, skus: rows.slice(0, take) });
+      remaining -= take;
+    }
+    return out;
+  },[groupedSkus,skuRenderLimit]);
+  const hasMoreSkuRows = filteredSkus.length > visibleGroupedSkus.reduce((sum:number,g:any)=>sum + (Array.isArray(g.skus) ? g.skus.length : 0), 0);
+  const loadMoreSkuRows = () => setSkuRenderLimit((n:number)=>n + (isMobile ? PERF_SKU_STORAGE_LOAD_MORE_MOBILE : PERF_SKU_STORAGE_LOAD_MORE_DESKTOP));
   const activeBrandObj = brandById[activeBrand];
   const bulkEditBrandObj = brandById[bulkEditBrandId];
   const addBrand  = ()=>{ if(!bForm.name.trim()) return; commitBrands((p:any[])=>[...p,{id:uid(),name:bForm.name.trim(),color:"#111827"}]); setBForm({name:"",color:"#111827"}); setBrandModal(false); };
@@ -14848,10 +14897,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     setSkuColumnWidths(DEFAULT_SKU_COLUMN_WIDTHS);
     setSkuColumnWidthMode("manual");
   };
-  const skuActionsColumnWidth = "104px";
+  const skuActionsColumnWidth = "220px";
   const skuColumnWidthValues = skuTableColumns.map((c:any)=>getSkuColumnWidthPx(c));
   const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuColumnWidthValues.map((w:number)=>`${w}px`).join(" ")} ${skuActionsColumnWidth}`;
-  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+104+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
+  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+220+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
 
   const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
   const normalizeSkuCellUrl = (url:any) => {
@@ -15073,7 +15122,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                         <span style={{ padding:"9px 10px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}` }}>Actions</span>
                       </div>
                       <div style={{ maxHeight:"calc(100vh - 330px)",overflowY:"auto" }}>
-                      {groupedSkus.map(group=>(
+                      {visibleGroupedSkus.map(group=>(
                         <div key={group.label}>
                           <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,alignItems:"center",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
                             <span style={{ gridColumn:"1 / -1",fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8,padding:"8px 16px" }}>
@@ -15100,9 +15149,12 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                                     {renderSkuDesktopCell(s,col,brand,st)}
                                   </div>
                                 ))}
-                                <div style={{ minHeight:48,padding:"8px 10px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center",background:C.surface }}>
+                                <div style={{ minHeight:48,padding:"7px 8px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:5,justifyContent:"flex-end",alignItems:"center",background:C.surface,whiteSpace:"nowrap",overflow:"hidden" }}>
+                                  <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",fontSize:11,fontWeight:800,color:C.textSub,padding:"4px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surfaceAlt }}>Hub</a>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>downloadSkuQr(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>QR</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>copySkuHubLink(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>Copy</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5 }}>Edit</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800 }}>&#215;</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,flexShrink:0 }}>&#215;</button>
                                 </div>
                               </div>
                             );
@@ -15120,7 +15172,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                     </div>
                   </div>
                 )}
-                {isMobile&&groupedSkus.map(group=>(
+                {isMobile&&visibleGroupedSkus.map(group=>(
                   <div key={group.label}>
                     <div style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8 }}>
@@ -15138,10 +15190,13 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                               <p style={{ margin:"0 0 2px",fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{renderClickableSkuCellText(s.productName,"—",{ color:C.text })}</p>
                               {renderClickableSkuCellText(s.sku,"—",{ fontSize:11,fontFamily:"monospace",color:C.muted,background:C.surfaceAlt,padding:"2px 7px",borderRadius:4,display:"inline-block" })}
                             </div>
-                            <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center" }}>
-                              {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint }}>&#8942;&#8942;</span>}
-                              <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
-                              <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
+                            <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center",overflowX:"auto",maxWidth:"50vw" }}>
+                              {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint,flexShrink:0 }}>&#8942;&#8942;</span>}
+                              <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Hub</a>
+                              <button onClick={()=>downloadSkuQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>QR</button>
+                              <button onClick={()=>copySkuHubLink(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Copy</button>
+                              <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600,whiteSpace:"nowrap" }}>Edit</button>
+                              <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>&#215;</button>
                             </div>
                           </div>
                           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
