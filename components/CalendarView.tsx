@@ -15251,6 +15251,7 @@ ${url}`);
             {activeBrandObj?<><div style={{ width:8,height:8,borderRadius:"50%",background:showSidebar?"#fff":activeBrandObj.color }} />{activeBrandObj.name}</>:"All Brands"} &#8250;
           </button>
           <Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done":"Edit"}</Btn>
+          <Btn sm variant="outline" onClick={manualSaveAllSkuStorage}>Save</Btn>
           <Btn sm onClick={openBulk} variant="outline">Paste</Btn>
           <Btn sm onClick={openAdd}>+ Add SKU</Btn>
         </div>
@@ -15272,7 +15273,7 @@ ${url}`);
                 {activeBrandObj&&<div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}><div style={{ width:12,height:12,borderRadius:"50%",background:activeBrandObj.color }} /><span style={{ fontSize:15,fontWeight:700,color:C.text }}>{activeBrandObj.name}</span></div>}
                 <span style={{ fontSize:12,color:C.muted }}>{filteredSkus.length} SKU{filteredSkus.length!==1?"s":""}</span>
               </div>
-              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm variant="outline" onClick={openEditSheet} disabled={!skuStorage.length}>Edit Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
+              {!isMobile&&(<div style={{ display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end" }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={manualSaveAllSkuStorage}>Save All Products</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm variant="outline" onClick={openEditSheet} disabled={!skuStorage.length}>Edit Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
             </div>
 
             <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:12,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px" }}>
@@ -19764,90 +19765,48 @@ export default function App({
   const performSkuStorageCloudSave = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
 
-    // AUTHORITATIVE SKU CLOUD SAVE:
-    // Save the exact current SKU list to the dedicated SKU Blob source.
-    // This is the only source used for SKU add/edit/delete persistence.
+    // DEFINITIVE SKU CLOUD SAVE:
+    // Save the exact current SKU list in small chunks, then consolidate on the server.
+    // This avoids Vercel/body-size limits that can happen when saving 3,000+ SKUs in one request.
+    // It is used for add, paste, edit, and delete so refresh always reloads the same list.
     const rowsToSave = Array.isArray(nextSkus) ? nextSkus : [];
-    markSkuLocalEditProtected(rowsToSave,"authoritative-sku-cloud-save-start");
+    markSkuLocalEditProtected(rowsToSave,"chunked-definitive-sku-cloud-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
-
-    const updatedAt = new Date().toISOString();
-    const saveId = `${updatedAt}-${cloudClientIdRef.current}-${Math.random().toString(36).slice(2)}`.replace(/[^a-zA-Z0-9._-]/g,"-");
-
-    const verifySkuSaveResponse = async (res:Response, expectedCount:number) => {
-      const payload:any = await res.json().catch(async () => {
-        const text = await res.text().catch(()=>"");
-        return { ok:false, error:text || "Invalid save response" };
-      });
-      if (!res.ok || payload?.ok === false) {
-        throw new Error(payload?.error || "SKU cloud save failed");
-      }
-      const savedCount = Number(payload?.count ?? payload?.data?.appState?.skuItemsExternalCount ?? expectedCount);
-      if (Number.isFinite(savedCount) && savedCount !== expectedCount) {
-        throw new Error(`SKU cloud save count mismatch. Expected ${expectedCount}, saved ${savedCount}.`);
-      }
-      return payload;
-    };
 
     try {
       setCloudSyncStatus("Saving SKUs...");
+      const updatedAt = new Date().toISOString();
+      const saveId = `${updatedAt}-${cloudClientIdRef.current}-${Math.random().toString(36).slice(2)}`.replace(/[^a-zA-Z0-9._-]/g,"-");
+      const chunks:any[][] = [];
 
-      // First try a single authoritative save. This is simpler and avoids stale chunk consolidation.
-      // If Vercel rejects the payload because it is too large, fall back to chunked save below.
-      try {
-        const directRes = await fetch("/api/emdc-state?mode=sku-items", {
+      for (let i=0; i<rowsToSave.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
+        chunks.push(rowsToSave.slice(i,i+EMDC_CLOUD_SKU_CHUNK_SIZE));
+      }
+
+      const total = Math.max(1, chunks.length);
+      if (!chunks.length) chunks.push([]);
+
+      for (let index=0; index<chunks.length; index++) {
+        const res = await fetch("/api/emdc-state?mode=sku-chunk", {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
           body:JSON.stringify({
-            mode:"sku-items",
+            mode:"sku-chunk",
             clientId:cloudClientIdRef.current,
             updatedAt,
             saveId,
+            index,
+            total,
+            totalItems:rowsToSave.length,
+            rows:chunks[index],
             resetDeletedSkuKeys:true,
-            skuItems:rowsToSave,
+            consolidateToAll:index===chunks.length-1,
           }),
         });
-        await verifySkuSaveResponse(directRes, rowsToSave.length);
-      } catch (directError:any) {
-        console.warn("[EMDC] Direct SKU save failed, trying chunked save:", directError);
 
-        const chunks:any[][] = [];
-        for (let i=0; i<rowsToSave.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
-          chunks.push(rowsToSave.slice(i,i+EMDC_CLOUD_SKU_CHUNK_SIZE));
-        }
-        if (!chunks.length) chunks.push([]);
-        const total = chunks.length;
-
-        for (let index=0; index<chunks.length; index++) {
-          const res = await fetch("/api/emdc-state?mode=sku-chunk", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({
-              mode:"sku-chunk",
-              clientId:cloudClientIdRef.current,
-              updatedAt,
-              saveId,
-              index,
-              total,
-              totalItems:rowsToSave.length,
-              rows:chunks[index],
-              resetDeletedSkuKeys:index===0,
-              consolidateToAll:index===chunks.length-1,
-            }),
-          });
-
-          if (!res.ok) {
-            const text = await res.text().catch(()=>"");
-            throw new Error(text || "SKU chunk cloud save failed");
-          }
-
-          if (index === chunks.length - 1) {
-            const payload:any = await res.json().catch(()=>null);
-            const savedCount = Number(payload?.totalSaved ?? payload?.data?.appState?.skuItemsExternalCount ?? rowsToSave.length);
-            if (Number.isFinite(savedCount) && savedCount !== rowsToSave.length) {
-              throw new Error(`SKU chunk save count mismatch. Expected ${rowsToSave.length}, saved ${savedCount}.`);
-            }
-          }
+        if (!res.ok) {
+          const text = await res.text().catch(()=>"");
+          throw new Error(text || "SKU chunk cloud save failed");
         }
       }
 
@@ -19888,6 +19847,53 @@ export default function App({
     };
 
     await run(safeNext);
+  };
+
+
+  const manualSaveAllSkuStorage = async () => {
+    const rowsToSave = Array.isArray(skuStorage) ? filterDeletedSkuItems(skuStorage) : [];
+    try {
+      markSkuLocalEditProtected(rowsToSave,"manual-save-all-products-click");
+      rememberProtectedSkuItems(rowsToSave,"manual-save-all-products-click");
+      setCloudSyncStatus("Saving all products...");
+
+      const updatedAt = new Date().toISOString();
+      const res = await fetch("/api/emdc-state?mode=sku-items", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"sku-items",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          skuItems:rowsToSave,
+          resetDeletedSkuKeys:true,
+        }),
+      });
+
+      const data = await res.json().catch(()=>null);
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || "Manual product save failed.");
+      }
+
+      cloudLastUpdatedAtRef.current = updatedAt;
+      clearSkuPendingSave();
+      setCloudSyncStatus(`Saved ${rowsToSave.length} products to cloud`);
+
+      // Verify immediately from the same Blob-backed endpoint so the user knows refresh should keep it.
+      window.setTimeout(async()=>{
+        try {
+          const verify = await fetch("/api/emdc-state?mode=current", { cache:"no-store" });
+          const json = await verify.json().catch(()=>null);
+          const loaded = json?.data?.appState?.skuItems;
+          const count = Array.isArray(loaded) ? loaded.length : Number(json?.data?.appState?.skuItemsExternalCount || 0);
+          setCloudSyncStatus(`Saved ${rowsToSave.length} products to cloud${Number.isFinite(count) ? ` • verified ${count}` : ""}`);
+        } catch {}
+      }, 900);
+    } catch (error:any) {
+      console.error("[EMDC] Manual product save failed:", error);
+      setCloudSyncStatus("Manual save failed - export backup now");
+      alert(`Manual Save failed: ${error?.message || "Unknown error"}`);
+    }
   };
 
   useEffect(() => {
@@ -19987,9 +19993,7 @@ export default function App({
   useEffect(() => {
     if (cloudApplyingRef.current) return;
     if (Array.isArray(skuStorage) && skuStorage.length) rememberProtectedSkuItems(skuStorage,"root-sku-storage-effect");
-    // SKU Storage is persisted by saveSkuStorageDirect() only.
-    // Do not also send skuItems through the generic app-patch autosave because
-    // that can race with Paste Sheet/add/delete operations and restore an older SKU list.
+    if (onStateChange) onStateChange({ skuItems: skuStorage });
   }, [skuStorage]);
   useEffect(() => { if (onStateChange) onStateChange({ skuTableColumns: sanitizeSkuTableColumns(skuTableColumns) }); }, [skuTableColumns]);
   useEffect(() => {
@@ -20158,7 +20162,7 @@ export default function App({
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleRootStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={handleRootStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} onSkuStorageDeleteDirect={saveSkuDeleteDirect} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} onSkuStorageDeleteDirect={saveSkuDeleteDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
