@@ -13950,6 +13950,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     hubTiktokLink:"",
     hubManualLink:"",
     hubVideoLink:"",
+    hubRelatedSkus:"",
     ...overrides,
   });
   const [sForm,setSForm] = useState<any>(()=>makeSkuForm());
@@ -14269,6 +14270,7 @@ ${url}`);
     tiktokLink: String(sForm.hubTiktokLink || "").trim(),
     manualLink: String(sForm.hubManualLink || "").trim(),
     videoLink: String(sForm.hubVideoLink || "").trim(),
+    relatedSkus: arrayTextToList(sForm.hubRelatedSkus),
   });
   const openAdd   = ()=>{ setSForm(makeSkuForm({brandId:activeBrand||brands[0]?.id||""})); setEditSkuId(null); setSkuModal(true); };
   const openEdit  = s=>{
@@ -14295,6 +14297,7 @@ ${url}`);
       hubTiktokLink:hub.tiktokLink || "",
       hubManualLink:hub.manualLink || "",
       hubVideoLink:hub.videoLink || "",
+      hubRelatedSkus:listToText(hub.relatedSkus),
     }));
     setEditSkuId(s.id);
     setSkuModal(true);
@@ -15538,6 +15541,9 @@ ${url}`);
               <Field label="Manual / PDF Link"><TI value={sForm.hubManualLink} onChange={v=>setSForm((f:any)=>({...f,hubManualLink:v}))} placeholder="https://..." /></Field>
               <Field label="Video Link"><TI value={sForm.hubVideoLink} onChange={v=>setSForm((f:any)=>({...f,hubVideoLink:v}))} placeholder="https://..." /></Field>
             </div>
+            <Field label="Selected Related Products" hint="Enter SKU codes only, one per line. The customer page will show these exact products first. If left blank, it will still show automatic related products from the same brand/category.">
+              <TA value={sForm.hubRelatedSkus} onChange={v=>setSForm((f:any)=>({...f,hubRelatedSkus:v}))} placeholder={"CRY-ACABS-2\nCRY-ACABS-4\nCRY-ACACS-3"} rows={4} />
+            </Field>
           </div>
           <Btn full onClick={saveSku} disabled={!sForm.productName.trim()||!sForm.sku.trim()}>{editSkuId?"Save Changes":"Add SKU"}</Btn>
           {editSkuId&&<Btn full variant="danger" onClick={()=>{ delSku(editSkuId); setSkuModal(false); setEditSkuId(null); }}>Delete Product Row</Btn>}
