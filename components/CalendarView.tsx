@@ -902,6 +902,10 @@ const shouldBlockEmptyEmdcState = (nextState:any) => {
 const recommendedCarouselMediaType = (index:number) => ([0,3,7].includes(index) ? "video" : "image");
 const PERF_SKU_PICKER_LIMIT = 80;
 const PERF_SKU_STORAGE_GROUP_LIMIT = 160;
+const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP = 120;
+const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE = 36;
+const PERF_SKU_STORAGE_LOAD_MORE_DESKTOP = 120;
+const PERF_SKU_STORAGE_LOAD_MORE_MOBILE = 36;
 const PERF_IDLE_SAVE_DELAY = 450;
 const PERF_CLOUD_SAVE_DELAY = 150;
 const PERF_CLOUD_POLL_INTERVAL = 5000;
@@ -14009,6 +14013,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuSearch,setSkuSearch] = useState("");
   const deferredSkuSearch = useDeferredValue(skuSearch);
   const [activeSkuTag,setActiveSkuTag] = useState("all");
+  const [skuRenderLimit,setSkuRenderLimit] = useState(()=>isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
+  useEffect(()=>{
+    setSkuRenderLimit(isMobile ? PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE : PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_DESKTOP);
+  },[isMobile,activeBrand,activeSkuTag,deferredSkuSearch]);
   const DEFAULT_BULK_COLUMNS = [
     { key:"brand",       label:"Brand",      placeholder:"Quencha",                          locked:true },
     { key:"sku",         label:"SKU",        placeholder:"QNH-COOL12-TP",                    locked:true },
@@ -14248,6 +14256,27 @@ ${url}`);
       return a.label.localeCompare(b.label);
     });
   }, [filteredSkus]);
+
+  // Performance guard: do not render all 3,000+ SKU rows at once.
+  // Rendering thousands of rows with buttons can freeze mobile Chrome.
+  const renderedSkuGroups = useMemo(() => {
+    let remaining = Math.max(0, Number(skuRenderLimit) || 0);
+    return groupedSkus
+      .map((group:any) => {
+        const totalCount = Array.isArray(group.skus) ? group.skus.length : 0;
+        if (remaining <= 0) return { ...group, skus: [], totalCount };
+        const visible = (group.skus || []).slice(0, remaining);
+        remaining -= visible.length;
+        return { ...group, skus: visible, totalCount };
+      })
+      .filter((group:any)=>group.skus.length > 0);
+  }, [groupedSkus,skuRenderLimit]);
+
+  const renderedSkuCount = useMemo(() => renderedSkuGroups.reduce((sum:number,group:any)=>sum + (group.skus?.length || 0),0), [renderedSkuGroups]);
+  const hiddenSkuCount = Math.max(0, filteredSkus.length - renderedSkuCount);
+  const loadMoreSkuRows = () => {
+    setSkuRenderLimit((prev:number)=>Math.min(filteredSkus.length, prev + (isMobile ? PERF_SKU_STORAGE_LOAD_MORE_MOBILE : PERF_SKU_STORAGE_LOAD_MORE_DESKTOP)));
+  };
   const activeBrandObj = brandById[activeBrand];
   const bulkEditBrandObj = brandById[bulkEditBrandId];
   const addBrand  = ()=>{ if(!bForm.name.trim()) return; commitBrands((p:any[])=>[...p,{id:uid(),name:bForm.name.trim(),color:"#111827"}]); setBForm({name:"",color:"#111827"}); setBrandModal(false); };
@@ -15230,18 +15259,17 @@ ${url}`);
                         <span style={{ padding:"9px 12px",fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",textAlign:"right",borderLeft:`1px solid ${C.border}`,minWidth:skuActionsColumnWidth }}>Actions</span>
                       </div>
                       <div style={{ maxHeight:"calc(100vh - 330px)",overflowY:"auto",scrollbarWidth:"auto",scrollbarColor:"#CBD5E1 #F1F5F9" }}>
-                      {groupedSkus.map(group=>(
+                      {renderedSkuGroups.map(group=>(
                         <div key={group.label}>
                           <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,alignItems:"center",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
                             <span style={{ gridColumn:"1 / -1",fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8,padding:"8px 16px" }}>
                               {group.label}
-                              <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
+                              <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.totalCount || group.skus.length} SKU{(group.totalCount || group.skus.length)!==1?"s":""}</span>
                             </span>
                           </div>
-                          {group.skus.slice(0,PERF_SKU_STORAGE_GROUP_LIMIT).map((s:any,i:number)=>{
+                          {group.skus.map((s:any,i:number)=>{
                             const brand=brandById[s.brandId], st=getSD(s);
-                            const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
-                            return (
+                                  return (
                               <div key={s.id} className="emdc-row"
                                 draggable={skuTableEditMode}
                                 onDragStart={()=>skuTableEditMode&&setSkuRowDragId(s.id)}
@@ -15268,7 +15296,7 @@ ${url}`);
                               </div>
                             );
                           })}
-                          {group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
+                          {false&&group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
                             <div style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt }}>
                               <div style={{ gridColumn:"1 / -1",padding:"10px 16px",fontSize:12,fontWeight:800,color:C.muted }}>
                                 Showing first {PERF_SKU_STORAGE_GROUP_LIMIT} of {group.skus.length} SKUs in this category. Use search to narrow results.
@@ -15281,17 +15309,16 @@ ${url}`);
                     </div>
                   </div>
                 )}
-                {isMobile&&groupedSkus.map(group=>(
+                {isMobile&&renderedSkuGroups.map(group=>(
                   <div key={group.label}>
                     <div style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:C.bg,borderBottom:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:11,fontWeight:800,color:C.textSub,textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:8 }}>
                         {group.label}
-                        <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.skus.length} SKU{group.skus.length!==1?"s":""}</span>
+                        <span style={{ fontSize:10,fontWeight:700,color:C.faint,background:C.surfaceAlt,padding:"1px 7px",borderRadius:10,textTransform:"none",letterSpacing:0 }}>{group.totalCount || group.skus.length} SKU{(group.totalCount || group.skus.length)!==1?"s":""}</span>
                       </span>
                     </div>
-                    {group.skus.slice(0,PERF_SKU_STORAGE_GROUP_LIMIT).map((s:any,i:number)=>{
+                    {group.skus.map((s:any,i:number)=>{
                       const brand=brandById[s.brandId], st=getSD(s);
-                      const flatIndex=filteredSkus.findIndex((x:any)=>x.id===s.id);
                       return (
                         <div key={s.id} className="emdc-row" style={{ padding:"12px 14px",borderBottom:i<group.skus.length-1?`1px solid ${C.border}`:`1px solid ${C.border}` }}>
                           <div style={{ minWidth:0,marginBottom:8 }}>
@@ -15321,13 +15348,20 @@ ${url}`);
                         </div>
                       );
                     })}
-                    {group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
+                    {false&&group.skus.length>PERF_SKU_STORAGE_GROUP_LIMIT&&(
                       <div style={{ padding:"10px 16px",fontSize:12,fontWeight:800,color:C.muted,background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
                         Showing first {PERF_SKU_STORAGE_GROUP_LIMIT} of {group.skus.length} SKUs in this category. Use search to narrow results.
                       </div>
                     )}
                   </div>
                 ))}
+                {hiddenSkuCount>0&&(
+                  <div style={{ padding:isMobile?"14px 16px":"14px 18px",display:"flex",justifyContent:"center",background:C.surface,borderTop:`1px solid ${C.border}` }}>
+                    <button type="button" onClick={loadMoreSkuRows} style={{ height:isMobile?38:34,padding:"0 16px",borderRadius:9,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:12,fontWeight:800,color:C.textSub }}>
+                      Load more SKUs ({hiddenSkuCount} remaining)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
