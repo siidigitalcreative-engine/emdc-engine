@@ -19279,7 +19279,7 @@ export default function App({
     }
   };
 
-  const saveCloudSkuItemsChunked = async (skuItems:any[] = [], updatedAt:string) => {
+  const saveCloudSkuItemsChunked = async (skuItems:any[] = [], updatedAt:string, resetDeletedSkuKeys=false) => {
     const saveId = encodeURIComponent(`${updatedAt}-${cloudClientIdRef.current}`);
     const chunks:any[][] = [];
     for (let i=0; i<skuItems.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
@@ -19299,7 +19299,8 @@ export default function App({
           total:chunks.length,
           totalItems:skuItems.length,
           rows:chunks[index],
-          deletedSkuKeys:Array.from(readDeletedSkuKeySet()),
+          resetDeletedSkuKeys,
+          deletedSkuKeys: resetDeletedSkuKeys ? [] : Array.from(readDeletedSkuKeySet()),
         }),
       });
       if (!res.ok) throw new Error("SKU chunk save failed");
@@ -19775,23 +19776,9 @@ export default function App({
       setCloudSyncStatus("Saving SKUs...");
       const updatedAt = new Date().toISOString();
 
-      const res = await fetch("/api/emdc-state?mode=sku-items", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        cache:"no-store",
-        body:JSON.stringify({
-          mode:"sku-items",
-          clientId:cloudClientIdRef.current,
-          updatedAt,
-          skuItems:rowsToSave,
-          resetDeletedSkuKeys:true,
-        }),
-      });
-
-      const saved = await res.json().catch(()=>null);
-      if (!res.ok || !saved?.ok) {
-        throw new Error(saved?.error || "SKU cloud save failed");
-      }
+      // Save in chunks instead of sending one giant 3000+ row request.
+      // The server now treats the latest chunk session as the authoritative SKU source.
+      await saveCloudSkuItemsChunked(rowsToSave, updatedAt, true);
 
       // Verify by reading the same cloud source back before showing Synced.
       const verifyRes = await fetch("/api/emdc-state", { cache:"no-store" });
