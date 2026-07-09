@@ -19279,7 +19279,7 @@ export default function App({
     }
   };
 
-  const saveCloudSkuItemsChunked = async (skuItems:any[] = [], updatedAt:string, resetDeletedSkuKeys=false) => {
+  const saveCloudSkuItemsChunked = async (skuItems:any[] = [], updatedAt:string) => {
     const saveId = encodeURIComponent(`${updatedAt}-${cloudClientIdRef.current}`);
     const chunks:any[][] = [];
     for (let i=0; i<skuItems.length; i+=EMDC_CLOUD_SKU_CHUNK_SIZE) {
@@ -19299,8 +19299,7 @@ export default function App({
           total:chunks.length,
           totalItems:skuItems.length,
           rows:chunks[index],
-          resetDeletedSkuKeys,
-          deletedSkuKeys: resetDeletedSkuKeys ? [] : Array.from(readDeletedSkuKeySet()),
+          deletedSkuKeys:Array.from(readDeletedSkuKeySet()),
         }),
       });
       if (!res.ok) throw new Error("SKU chunk save failed");
@@ -19765,38 +19764,46 @@ export default function App({
   const performSkuStorageCloudSave = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
 
-    // AUTHORITATIVE SKU SAVE (single source of truth):
-    // Save the exact current SKU Storage list directly to the Blob-backed sku-items endpoint.
-    // This avoids mixed chunk sessions and prevents refresh from loading an older SKU list.
-    const rowsToSave = Array.isArray(nextSkus) ? nextSkus : [];
-    markSkuLocalEditProtected(rowsToSave,"authoritative-single-sku-items-save-start");
+    // Dedicated SKU endpoint: this avoids mixed app-state saves and makes SKU Storage
+    // the authoritative cloud source for add, paste sheet, edit, and delete.
+    const rowsToSave = filterDeletedSkuItems(Array.isArray(nextSkus) ? nextSkus : []);
+    markSkuLocalEditProtected(rowsToSave,"dedicated-sku-items-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
 
     try {
-      setCloudSyncStatus("Saving SKUs...");
+      setCloudSyncStatus(`Saving ${rowsToSave.length} SKUs...`);
       const updatedAt = new Date().toISOString();
 
-      // Save in chunks instead of sending one giant 3000+ row request.
-      // The server now treats the latest chunk session as the authoritative SKU source.
-      await saveCloudSkuItemsChunked(rowsToSave, updatedAt, true);
+      const res = await fetch("/api/sku-items", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        cache:"no-store",
+        body:JSON.stringify({
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          skuItems:rowsToSave,
+        }),
+      });
 
-      // Verify by reading the same cloud source back before showing Synced.
-      const verifyRes = await fetch("/api/emdc-state", { cache:"no-store" });
-      const verifyJson = await verifyRes.json().catch(()=>null);
-      const verifiedRows = Array.isArray(verifyJson?.data?.appState?.skuItems)
-        ? verifyJson.data.appState.skuItems
-        : [];
-
-      if (verifiedRows.length !== rowsToSave.length) {
-        throw new Error(`SKU save verification failed. Sent ${rowsToSave.length}, read back ${verifiedRows.length}.`);
+      const saved = await res.json().catch(()=>null);
+      if (!res.ok || !saved?.ok) {
+        throw new Error(saved?.error || `SKU cloud save failed with status ${res.status}`);
       }
 
-      cloudLastUpdatedAtRef.current = updatedAt;
+      const verifyRes = await fetch("/api/sku-items", { cache:"no-store" });
+      const verifyJson = await verifyRes.json().catch(()=>null);
+      const verifiedCount = Number(verifyJson?.count ?? 0);
+
+      if (!verifyRes.ok || !verifyJson?.ok || verifiedCount !== rowsToSave.length) {
+        throw new Error(`SKU save verification failed. Sent ${rowsToSave.length}, read back ${verifiedCount}.`);
+      }
+
+      cloudLastUpdatedAtRef.current = String(saved?.updatedAt || updatedAt);
       clearSkuPendingSave();
       setCloudSyncStatus(`Synced ${rowsToSave.length} SKUs`);
     } catch (error:any) {
       console.error("[EMDC] SKU cloud save failed:", error);
-      setCloudSyncStatus("SKU save failed - export backup now");
+      setCloudSyncStatus(`SKU save failed: ${error?.message || "please export backup"}`);
       throw error;
     }
   };
