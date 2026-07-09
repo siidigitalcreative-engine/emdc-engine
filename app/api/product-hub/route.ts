@@ -4,20 +4,18 @@ import { get, put } from "@vercel/blob";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const HUB_PREFIX = "product-hub";
+const PRODUCT_HUB_PREFIX = "product-hub";
 
-function normalizeSku(value: any) {
-  return String(value ?? "")
+function cleanSku(value: unknown) {
+  return String(value || "")
     .trim()
-    .replace(/[^a-zA-Z0-9-_]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replace(/^\/+|\/+$/g, "")
+    .slice(0, 160);
 }
 
-function getHubPath(sku: string) {
-  const safeSku = normalizeSku(sku);
-  if (!safeSku) return "";
-  return `${HUB_PREFIX}/${safeSku}.json`;
+function pathForSku(sku: string) {
+  const safe = encodeURIComponent(sku);
+  return `${PRODUCT_HUB_PREFIX}/${safe}.json`;
 }
 
 async function streamToText(stream: any) {
@@ -56,85 +54,50 @@ async function writeJsonBlob(pathname: string, value: any) {
   } as any);
 }
 
-function splitLines(value: any) {
-  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
-  return String(value || "")
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function cleanHubData(raw: any, sku: string) {
-  const now = new Date().toISOString();
-  const incoming = raw && typeof raw === "object" ? raw : {};
-
-  return {
-    version: 1,
-    sku: normalizeSku(incoming.sku || sku),
-    enabled: incoming.enabled !== false,
-    slug: normalizeSku(incoming.slug || sku),
-    heroImage: String(incoming.heroImage || "").trim(),
-    introduction: String(incoming.introduction || incoming.intro || "").trim(),
-    features: splitLines(incoming.features),
-    specifications: splitLines(incoming.specifications || incoming.specs),
-    careUse: String(incoming.careUse || "").trim(),
-    warranty: String(incoming.warranty || "").trim(),
-    galleryImages: splitLines(incoming.galleryImages || incoming.gallery),
-    shopeeLink: String(incoming.shopeeLink || "").trim(),
-    lazadaLink: String(incoming.lazadaLink || "").trim(),
-    tiktokLink: String(incoming.tiktokLink || "").trim(),
-    websiteLink: String(incoming.websiteLink || "").trim(),
-    manualLink: String(incoming.manualLink || "").trim(),
-    catalogLink: String(incoming.catalogLink || "").trim(),
-    warrantyLink: String(incoming.warrantyLink || "").trim(),
-    videoLink: String(incoming.videoLink || "").trim(),
-    relatedSkus: splitLines(incoming.relatedSkus),
-    badges: splitLines(incoming.badges),
-    seoTitle: String(incoming.seoTitle || "").trim(),
-    seoDescription: String(incoming.seoDescription || "").trim(),
-    seoKeywords: splitLines(incoming.seoKeywords),
-    updatedAt: now,
-  };
-}
-
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const sku = normalizeSku(searchParams.get("sku") || "");
-    if (!sku) return NextResponse.json({ ok: false, error: "Missing sku" }, { status: 400 });
+    const sku = cleanSku(searchParams.get("sku"));
 
-    const path = getHubPath(sku);
-    const data = await readJsonBlob(path);
+    if (!sku) {
+      return NextResponse.json({ ok: false, error: "Missing sku" }, { status: 400 });
+    }
 
-    return NextResponse.json({
-      ok: true,
-      sku,
-      exists: !!data,
-      data: data || null,
-    });
+    const data = await readJsonBlob(pathForSku(sku));
+    return NextResponse.json({ ok: true, sku, data: data || null });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error?.message || "Unable to load Product Hub data" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Unable to read Product Hub data" },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const sku = normalizeSku(body?.sku || body?.data?.sku || "");
-    if (!sku) return NextResponse.json({ ok: false, error: "Missing sku" }, { status: 400 });
+    const sku = cleanSku(body?.sku);
 
-    const path = getHubPath(sku);
-    const clean = cleanHubData(body?.data || body, sku);
-    await writeJsonBlob(path, clean);
+    if (!sku) {
+      return NextResponse.json({ ok: false, error: "Missing sku" }, { status: 400 });
+    }
 
-    return NextResponse.json({
-      ok: true,
+    const incoming = body?.data && typeof body.data === "object" ? body.data : {};
+    const now = new Date().toISOString();
+
+    const data = {
+      ...incoming,
       sku,
-      path,
-      savedAt: clean.updatedAt,
-      data: clean,
-    });
+      updatedAt: now,
+      version: 1,
+    };
+
+    await writeJsonBlob(pathForSku(sku), data);
+    return NextResponse.json({ ok: true, sku, savedAt: now, data });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error?.message || "Unable to save Product Hub data" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Unable to save Product Hub data" },
+      { status: 500 }
+    );
   }
 }
