@@ -330,7 +330,14 @@ export async function POST(req: NextRequest) {
       const total = Number(body?.total);
       const saveIdRaw = String(body?.saveId || body?.updatedAt || "latest").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 140) || "latest";
       const sessionPrefix = `${SKU_SESSION_CHUNK_PREFIX}${saveIdRaw}/chunk-`;
-      const deletedSkuKeys = await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
+
+      // For an authoritative full SKU save, the incoming chunks are the exact list.
+      // Clear old delete tombstones so newly added/re-added SKUs are not removed during hydration.
+      const resetDeletedSkuKeys = body?.resetDeletedSkuKeys === true;
+      if (resetDeletedSkuKeys) {
+        await writeJsonBlob(SKU_DELETED_KEYS_PATH, { updatedAt: new Date().toISOString(), keys: [] }).catch(() => {});
+      }
+      const deletedSkuKeys = resetDeletedSkuKeys ? [] : await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
       const rows = filterDeletedSkuRows(safeArray(body?.rows), deletedSkuKeys);
 
       if (!Number.isInteger(index) || !Number.isInteger(total) || index < 0 || total <= 0 || index >= total || total > MAX_SKU_CHUNKS) {
@@ -360,7 +367,8 @@ export async function POST(req: NextRequest) {
         const chunks = await Promise.all(
           Array.from({ length: total }, (_, i) => readJsonBlob(`${sessionPrefix}${i}.json`))
         );
-        const allRows = filterDeletedSkuRows(chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []), await readDeletedSkuKeys());
+        const finalDeletedKeys = resetDeletedSkuKeys ? [] : await readDeletedSkuKeys();
+        const allRows = filterDeletedSkuRows(chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []), finalDeletedKeys);
 
         await writeJsonBlob(SKU_ALL_PATH, allRows);
 
