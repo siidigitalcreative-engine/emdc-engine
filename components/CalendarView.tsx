@@ -508,6 +508,7 @@ const EMDC_SKU_ITEMS_STORAGE_KEY = "emdc_sku_items_v1";
 const EMDC_SKU_ITEMS_COUNT_KEY = "emdc_sku_items_count_v1";
 const EMDC_SKU_ITEMS_LAST_GOOD_KEY = "emdc_sku_items_last_good_v1";
 const EMDC_SKU_ITEMS_EMPTY_MARKER_KEY = "emdc_sku_items_explicit_empty_v1";
+const EMDC_SKU_ITEMS_DELETED_KEYS_KEY = "emdc_sku_items_deleted_keys_v1";
 const EMDC_CALENDAR_MANUAL_EVENTS_KEY = "emdc_calendar_manual_events_v1";
 const EMDC_SEASONAL_EVENTS_STORAGE_KEY = "emdc_seasonal_events_v1";
 const EMDC_CALENDAR_TYPES_STORAGE_KEY = "emdc_calendar_types_v1";
@@ -727,6 +728,62 @@ const parseEmdcJson = (value:any) => {
   try { return typeof value === "string" ? JSON.parse(value) : value; } catch { return null; }
 };
 
+const normalizeSkuDeleteKey = (value:any) => String(value ?? "").trim().toLowerCase();
+const getSkuDeleteKeys = (row:any) => {
+  const keys:string[] = [];
+  const id = normalizeSkuDeleteKey(row?.id);
+  const sku = normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value);
+  if (id) keys.push(`id:${id}`);
+  if (sku) keys.push(`sku:${sku}`);
+  return keys;
+};
+const readDeletedSkuKeySet = () => {
+  const set = new Set<string>();
+  if (typeof window === "undefined") return set;
+  try {
+    const parsed:any = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_DELETED_KEYS_KEY));
+    const cutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    items.forEach((item:any)=>{
+      const key = String(item?.key || "");
+      const time = Date.parse(String(item?.deletedAt || ""));
+      if (key && (!Number.isFinite(time) || time >= cutoff)) set.add(key);
+    });
+  } catch {}
+  return set;
+};
+const writeDeletedSkuKeySet = (keys:Set<string>, reason="sku-delete") => {
+  if (typeof window === "undefined") return;
+  try {
+    const now = new Date().toISOString();
+    const items = Array.from(keys).slice(-12000).map(key=>({ key, deletedAt:now, reason }));
+    localStorage.setItem(EMDC_SKU_ITEMS_DELETED_KEYS_KEY, JSON.stringify({ updatedAt:now, items }));
+  } catch {}
+};
+const rememberDeletedSkuRows = (previous:any[] = [], next:any[] = [], reason="sku-delete") => {
+  if (typeof window === "undefined" || !Array.isArray(previous) || !Array.isArray(next)) return;
+  if (!previous.length || previous.length <= next.length) return;
+
+  const nextIds = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.id)).filter(Boolean));
+  const nextSkus = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value)).filter(Boolean));
+  const deleted = readDeletedSkuKeySet();
+
+  previous.forEach((row:any)=>{
+    const id = normalizeSkuDeleteKey(row?.id);
+    const sku = normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value);
+    if (id && !nextIds.has(id)) deleted.add(`id:${id}`);
+    if (sku && !nextSkus.has(sku)) deleted.add(`sku:${sku}`);
+  });
+
+  writeDeletedSkuKeySet(deleted, reason);
+};
+const filterDeletedSkuItems = (rows:any[] = []) => {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  const deleted = readDeletedSkuKeySet();
+  if (!deleted.size) return rows;
+  return rows.filter((row:any)=>!getSkuDeleteKeys(row).some(key=>deleted.has(key)));
+};
+
 const getExplicitEmptySkuStorageAt = () => {
   if (typeof window === "undefined") return "";
   try {
@@ -782,15 +839,15 @@ const readProtectedSkuItemsBackup = () => {
   try {
     const explicitEmptyAt = getExplicitEmptySkuStorageAt();
     const direct = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_STORAGE_KEY));
-    if (Array.isArray(direct) && direct.length) return direct;
+    if (Array.isArray(direct) && direct.length) return filterDeletedSkuItems(direct);
 
     const lastGood:any = parseEmdcJson(localStorage.getItem(EMDC_SKU_ITEMS_LAST_GOOD_KEY));
     const lastGoodAt = String(lastGood?.savedAt || "");
     if (explicitEmptyAt && (!lastGoodAt || !isIsoTimeNewer(lastGoodAt, explicitEmptyAt, 0))) return [];
-    if (Array.isArray(lastGood?.skuItems) && lastGood.skuItems.length) return lastGood.skuItems;
+    if (Array.isArray(lastGood?.skuItems) && lastGood.skuItems.length) return filterDeletedSkuItems(lastGood.skuItems);
 
     const appState:any = parseEmdcJson(localStorage.getItem("emdc_app_state_v1"));
-    if (Array.isArray(appState?.skuItems) && appState.skuItems.length) return appState.skuItems;
+    if (Array.isArray(appState?.skuItems) && appState.skuItems.length) return filterDeletedSkuItems(appState.skuItems);
   } catch {}
   return [];
 };
@@ -14086,6 +14143,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
       const nextRaw = typeof updater === "function" ? updater(prev) : updater;
       const next = Array.isArray(nextRaw) ? nextRaw : [];
 
+      // If rows were deleted, remember their ID/SKU in a small tombstone list.
+      // This prevents an older cloud/local backup from re-adding them on refresh/poll.
+      rememberDeletedSkuRows(Array.isArray(prev) ? prev : [], next, "sku-storage-delete");
+
       // Protect user-entered SKU Storage before any app/cloud save runs.
       // This separate key survives page/code updates and is used as the local source of truth.
       rememberProtectedSkuItems(next,"sku-storage-commit");
@@ -19137,6 +19198,20 @@ export default function App({
     const hasRecentLocalSkuEdit = Date.now() < skuLocalEditUntilRef.current || hasPendingSkuSave();
 
     let safeCloudAppState = cloudAppState;
+
+    // Always apply local delete tombstones to cloud SKU rows before hydrating the UI.
+    // Without this, a stale cloud payload can make a deleted SKU come back after refresh.
+    if (Array.isArray(safeCloudAppState?.skuItems) && safeCloudAppState.skuItems.length) {
+      const filteredCloudSkus = filterDeletedSkuItems(safeCloudAppState.skuItems);
+      if (filteredCloudSkus.length !== safeCloudAppState.skuItems.length) {
+        safeCloudAppState = {
+          ...safeCloudAppState,
+          skuItems:filteredCloudSkus,
+          skuItemsExternalCount:filteredCloudSkus.length,
+        };
+      }
+    }
+
     if (hasRecentLocalSkuEdit && bestLocalSkuItems.length) {
       safeCloudAppState = {
         ...cloudAppState,
@@ -19561,7 +19636,14 @@ export default function App({
       window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
 
-    saveAppPatchDirect(patch);
+    const patchForCloud:any = { ...patch };
+
+    // SKU Storage is saved by saveSkuStorageDirect() in chunks/all.json.
+    // Do not also send the full SKU array through app-patch, because that can race
+    // with deletes and cause old rows to re-appear after refresh.
+    if (Array.isArray(patchForCloud.skuItems)) delete patchForCloud.skuItems;
+
+    if (Object.keys(patchForCloud).length) saveAppPatchDirect(patchForCloud);
   };
   const readCurrentLocalSnapshot = () => {
     const snapshot:any = {};
@@ -19627,6 +19709,7 @@ export default function App({
 
   const saveSkuStorageDirect = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
+    nextSkus = filterDeletedSkuItems(nextSkus);
     markSkuLocalEditProtected(nextSkus,"direct-sku-cloud-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
 
