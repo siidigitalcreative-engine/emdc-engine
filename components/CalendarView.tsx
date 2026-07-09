@@ -19629,26 +19629,43 @@ export default function App({
     if (!Array.isArray(nextSkus)) return;
     markSkuLocalEditProtected(nextSkus,"direct-sku-cloud-save-start");
     if (!cloudHydrated || cloudApplyingRef.current) return;
+
     try {
       setCloudSyncStatus("Saving SKUs...");
       const updatedAt = new Date().toISOString();
+
+      // IMPORTANT: save SKU Storage in chunks, not as one huge request.
+      // Paste Sheet can create thousands of rows. A single big POST can fail silently
+      // or be interrupted, which made SKUs appear saved but disappear after refresh.
+      await saveCloudSkuItemsChunked(nextSkus, updatedAt);
+
+      // After all SKU chunks are saved and consolidated by /api/emdc-state, save only
+      // lightweight metadata in the main app state. Do NOT send the full SKU array here.
       const res = await fetch("/api/emdc-state", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({
-          mode:"sku-items",
+          mode:"app-patch",
           clientId:cloudClientIdRef.current,
           updatedAt,
-          skuItems:Array.isArray(nextSkus) ? nextSkus : [],
+          patch:{
+            skuItems:[],
+            skuItemsExternalCloud:true,
+            skuItemsExternalBlob:true,
+            skuItemsExternalCount:nextSkus.length,
+            skuItemsCloudChunkCount:Math.ceil(nextSkus.length/EMDC_CLOUD_SKU_CHUNK_SIZE),
+            skuItemsCloudUpdatedAt:updatedAt,
+          },
         }),
       });
 
-      if (!res.ok) throw new Error("SKU save failed");
+      if (!res.ok) throw new Error("SKU metadata save failed");
       cloudLastUpdatedAtRef.current = updatedAt;
       clearSkuPendingSave();
-      setCloudSyncStatus("Synced");
-    } catch {
-      setCloudSyncStatus("SKU save failed - local copy protected");
+      setCloudSyncStatus(`Synced ${nextSkus.length} SKUs`);
+    } catch (error:any) {
+      console.error("[EMDC] SKU chunked save failed:", error);
+      setCloudSyncStatus("SKU save failed - export backup now");
     }
   };
 
