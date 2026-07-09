@@ -14171,15 +14171,10 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
       if(onSkuStorageDirectSave) onSkuStorageDirectSave(next);
 
-      if(onStateChange){
-        if(immediate) {
-          if(skuStorageSaveTimer.current) clearTimeout(skuStorageSaveTimer.current);
-          onStateChange({ skuItems: next });
-        } else {
-          scheduleSkuStorageSave(next);
-        }
-      }
-      try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
+      // Do not send SKU items through the generic app-state save path.
+      // SKU Storage is saved only by the dedicated /api/sku-items endpoint above.
+      // Sending skuItems through onStateChange/local-sync causes /api/emdc-state
+      // reloads that can bring back the older SKU list after Paste Sheet imports.
       return next;
     });
   };
@@ -19262,7 +19257,7 @@ export default function App({
   };
 
   const fetchCloudState = async (mode:"initial"|"poll"="poll") => {
-    if (mode==="poll" && (cloudSavingRef.current || cloudApplyingRef.current)) return null;
+    if (cloudSavingRef.current || cloudApplyingRef.current || hasPendingSkuSave()) return null;
     try {
       const res = await fetch("/api/emdc-state", { cache:"no-store" });
       if (!res.ok) throw new Error("Cloud sync unavailable");
@@ -19685,12 +19680,19 @@ export default function App({
       try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
     }
 
-    try {
-      localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
-      window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch {}
-
     const patchForCloud:any = { ...patch };
+
+    // If the patch only contains SKU rows, do not trigger the generic cloud save.
+    // SKU rows have their own authoritative /api/sku-items save path.
+    const patchKeys = Object.keys(patchForCloud);
+    const onlySkuItemsPatch = patchKeys.length === 1 && Array.isArray(patchForCloud.skuItems);
+    if (!onlySkuItemsPatch) {
+      try {
+        localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
+        window.dispatchEvent(new Event("emdc-local-sync"));
+      } catch {}
+    }
+
 
     // SKU Storage is saved by saveSkuStorageDirect() in chunks/all.json.
     // Do not also send the full SKU array through app-patch, because that can race
@@ -19764,56 +19766,39 @@ export default function App({
   const performSkuStorageCloudSave = async (nextSkus:any[]) => {
     if (!Array.isArray(nextSkus)) return;
 
-    // FINAL AUTHORITATIVE SKU SAVE:
-    // Save SKU Storage through the dedicated /api/sku-items endpoint in chunks.
-    // This avoids oversized request bodies and prevents the full app-state autosave
-    // from overwriting newly imported SKUs with an older cloud copy.
-    const rowsToSave = Array.isArray(nextSkus) ? nextSkus : [];
-    markSkuLocalEditProtected(rowsToSave,"dedicated-sku-items-save-start");
-    if (!cloudHydrated || cloudApplyingRef.current) return;
+    // STABLE SKU SAVE:
+    // Use ONE dedicated SKU endpoint call. The previous chunk flow created many
+    // requests and could overlap with cloud hydration/polling, so imported rows
+    // appeared in the UI but were not committed before a refresh.
+    const rowsToSave = Array.isArray(nextSkus) ? filterDeletedSkuItems(nextSkus) : [];
+    markSkuLocalEditProtected(rowsToSave,"single-sku-items-save-start");
 
     const updatedAt = new Date().toISOString();
-    const saveId = `${updatedAt}-${cloudClientIdRef.current}`.replace(/[^a-zA-Z0-9._-]/g,"-");
-    const chunkSize = 200;
-    const chunks:any[][] = [];
-    for (let i=0; i<rowsToSave.length; i+=chunkSize) {
-      chunks.push(rowsToSave.slice(i,i+chunkSize));
-    }
+    cloudSavingRef.current = true;
 
     try {
-      setCloudSyncStatus(`Saving 0/${rowsToSave.length} SKUs...`);
+      setCloudSyncStatus(`Saving ${rowsToSave.length} SKUs...`);
 
-      const beginRes = await fetch("/api/sku-items", {
+      const res = await fetch("/api/sku-items", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         cache:"no-store",
-        body:JSON.stringify({ action:"begin", saveId, updatedAt, total:chunks.length, totalItems:rowsToSave.length }),
+        body:JSON.stringify({
+          action:"replace",
+          updatedAt,
+          clientId:cloudClientIdRef.current,
+          skuItems:rowsToSave,
+        }),
       });
-      const beginJson = await beginRes.json().catch(()=>null);
-      if (!beginRes.ok || !beginJson?.ok) throw new Error(beginJson?.error || "SKU save begin failed");
 
-      for (let index=0; index<chunks.length; index++) {
-        const chunkRes = await fetch("/api/sku-items", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          cache:"no-store",
-          body:JSON.stringify({ action:"chunk", saveId, updatedAt, index, total:chunks.length, totalItems:rowsToSave.length, rows:chunks[index] }),
-        });
-        const chunkJson = await chunkRes.json().catch(()=>null);
-        if (!chunkRes.ok || !chunkJson?.ok) throw new Error(chunkJson?.error || `SKU chunk ${index+1} save failed`);
-        setCloudSyncStatus(`Saving ${Math.min((index+1)*chunkSize, rowsToSave.length)}/${rowsToSave.length} SKUs...`);
+      const json = await res.json().catch(()=>null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "SKU save failed");
       }
 
-      const commitRes = await fetch("/api/sku-items", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        cache:"no-store",
-        body:JSON.stringify({ action:"commit", saveId, updatedAt, total:chunks.length, totalItems:rowsToSave.length, clientId:cloudClientIdRef.current }),
-      });
-      const commitJson = await commitRes.json().catch(()=>null);
-      if (!commitRes.ok || !commitJson?.ok) throw new Error(commitJson?.error || "SKU save commit failed");
-      if (Number(commitJson?.count || 0) !== rowsToSave.length) {
-        throw new Error(`SKU commit count mismatch. Sent ${rowsToSave.length}, saved ${commitJson?.count || 0}.`);
+      const savedCount = Number(json?.count || 0);
+      if (savedCount !== rowsToSave.length) {
+        throw new Error(`SKU save count mismatch. Sent ${rowsToSave.length}, saved ${savedCount}.`);
       }
 
       const verifyRes = await fetch(`/api/sku-items?ts=${Date.now()}`, { cache:"no-store" });
@@ -19823,13 +19808,15 @@ export default function App({
         throw new Error(`SKU save verification failed. Sent ${rowsToSave.length}, read back ${verifyCount}.`);
       }
 
-      cloudLastUpdatedAtRef.current = updatedAt;
+      cloudLastUpdatedAtRef.current = json?.updatedAt || updatedAt;
       clearSkuPendingSave();
       setCloudSyncStatus(`Synced ${rowsToSave.length} SKUs`);
     } catch (error:any) {
-      console.error("[EMDC] Dedicated SKU cloud save failed:", error);
+      console.error("[EMDC] SKU cloud save failed:", error);
       setCloudSyncStatus(`SKU save failed: ${error?.message || "unknown error"}`);
       throw error;
+    } finally {
+      cloudSavingRef.current = false;
     }
   };
 
