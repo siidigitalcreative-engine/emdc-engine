@@ -61,6 +61,26 @@ async function readDeletedSkuKeys() {
   return normalizeDeletedKeys(parsed);
 }
 
+async function readLatestChunkedSkuRows() {
+  const meta: any = (await readJsonBlob(SKU_META_PATH)) || {};
+  const chunkCount = Number(meta.chunkCount || 0);
+  if (!Number.isFinite(chunkCount) || chunkCount <= 0 || chunkCount > MAX_SKU_CHUNKS) return [];
+
+  const saveIdRaw = String(meta.saveId || "").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 140);
+  const prefix = saveIdRaw ? `${SKU_SESSION_CHUNK_PREFIX}${saveIdRaw}/chunk-` : SKU_CHUNK_PREFIX;
+  const chunks = await Promise.all(
+    Array.from({ length: chunkCount }, (_, index) => readJsonBlob(`${prefix}${index}.json`))
+  );
+  return chunks.flatMap((chunk: any) => Array.isArray(chunk) ? chunk : []);
+}
+
+async function readAuthoritativeSkuRows() {
+  const chunkRows = await readLatestChunkedSkuRows();
+  if (Array.isArray(chunkRows) && chunkRows.length) return chunkRows;
+  const allSkuItemsRaw = await readJsonBlob(SKU_ALL_PATH);
+  return Array.isArray(allSkuItemsRaw) ? allSkuItemsRaw : [];
+}
+
 async function mergeDeletedSkuKeys(incoming: any) {
   const next = normalizeDeletedKeys([...(await readDeletedSkuKeys()), ...normalizeDeletedKeys(incoming)]);
   if (next.length) {
@@ -128,22 +148,20 @@ async function hydrateSkuData(data: any) {
 
   const appState = data.appState;
 
-  // Preferred Blob SKU source: one dedicated private JSON file.
+  // Preferred source: latest chunked SKU session. This avoids rewriting one giant
+  // all.json file and makes Paste Sheet / Add SKU saves reliable for 3000+ rows.
   const deletedSkuKeys = await readDeletedSkuKeys();
-  const allSkuItemsRaw = await readJsonBlob(SKU_ALL_PATH);
-  const allSkuItems = filterDeletedSkuRows(Array.isArray(allSkuItemsRaw) ? allSkuItemsRaw : [], deletedSkuKeys);
-  if (Array.isArray(allSkuItems) && allSkuItems.length) {
-    if (Array.isArray(allSkuItemsRaw) && allSkuItemsRaw.length !== allSkuItems.length) {
-      await writeJsonBlob(SKU_ALL_PATH, allSkuItems).catch(() => {});
-    }
+  const latestSkuRowsRaw = await readAuthoritativeSkuRows();
+  const latestSkuRows = filterDeletedSkuRows(latestSkuRowsRaw, deletedSkuKeys);
+  if (Array.isArray(latestSkuRows) && latestSkuRows.length) {
     return {
       ...data,
       appState: {
         ...appState,
-        skuItems: allSkuItems,
+        skuItems: latestSkuRows,
         skuItemsExternalCloud: false,
         skuItemsExternalBlob: true,
-        skuItemsExternalCount: allSkuItems.length,
+        skuItemsExternalCount: latestSkuRows.length,
       },
     };
   }
@@ -289,10 +307,8 @@ export async function POST(req: NextRequest) {
       }
 
       const deletedSkuKeys = await mergeDeletedSkuKeys(incomingDeleted);
-      const existingRowsRaw = await readJsonBlob(SKU_ALL_PATH);
-      const existingRows = Array.isArray(existingRowsRaw) ? existingRowsRaw : [];
+      const existingRows = await readAuthoritativeSkuRows();
       const nextSkus = filterDeletedSkuRows(existingRows, deletedSkuKeys);
-      await writeJsonBlob(SKU_ALL_PATH, nextSkus);
 
       const existingRaw:any = await readJsonBlob(STATE_PATH);
       const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
@@ -396,6 +412,36 @@ export async function POST(req: NextRequest) {
             skuItems: [],
             skuItemsExternalBlob: true,
             skuItemsExternalCount: allRows.length,
+          },
+          localStorage: {},
+        };
+
+        await writeJsonBlob(STATE_PATH, payload);
+        await writeJsonBlob(LAST_GOOD_PATH, payload);
+      }
+
+      if (index === total - 1) {
+        const existingRaw:any = await readJsonBlob(STATE_PATH);
+        const existing:any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+          version: 1,
+          updatedAt: "",
+          appState: {},
+          localStorage: {},
+        };
+
+        const payload = {
+          ...existing,
+          version: 1,
+          clientId: body?.clientId || existing?.clientId || "",
+          updatedAt: body?.updatedAt || new Date().toISOString(),
+          appState: {
+            ...(isRecord(existing?.appState) ? existing.appState : {}),
+            skuItems: [],
+            skuItemsExternalBlob: true,
+            skuItemsExternalCloud: true,
+            skuItemsExternalCount: Number(body?.totalItems || 0),
+            skuItemsCloudChunkCount: total,
+            skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
           },
           localStorage: {},
         };
