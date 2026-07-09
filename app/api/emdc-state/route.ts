@@ -46,7 +46,13 @@ function getSkuDeleteKeys(row: any) {
 }
 
 function normalizeDeletedKeys(value: any) {
-  const raw = Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items.map((item: any) => item?.key || item) : [];
+  const raw = Array.isArray(value)
+    ? value
+    : Array.isArray(value?.keys)
+      ? value.keys
+      : Array.isArray(value?.items)
+        ? value.items.map((item: any) => item?.key || item)
+        : [];
   return Array.from(new Set(raw.map((item: any) => String(item?.key || item || "").trim().toLowerCase()).filter(Boolean))).slice(-20000);
 }
 
@@ -389,10 +395,7 @@ export async function POST(req: NextRequest) {
             ...(isRecord(existing?.appState) ? existing.appState : {}),
             skuItems: [],
             skuItemsExternalBlob: true,
-            skuItemsExternalCloud: true,
             skuItemsExternalCount: allRows.length,
-            skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
-            skuItemsSaveId: saveIdRaw,
           },
           localStorage: {},
         };
@@ -401,7 +404,7 @@ export async function POST(req: NextRequest) {
         await writeJsonBlob(LAST_GOOD_PATH, payload);
       }
 
-      return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length, totalSaved: index === total - 1 && body?.consolidateToAll === true ? Number(body?.totalItems || 0) : undefined, saveId: saveIdRaw });
+      return NextResponse.json({ ok: true, mode: "sku-chunk", index, total, count: rows.length, saveId: saveIdRaw });
     }
 
     if (mode === "app-patch" || body?.mode === "app-patch") {
@@ -490,10 +493,7 @@ export async function POST(req: NextRequest) {
           ...(isRecord(existing?.appState) ? existing.appState : {}),
           skuItems: [],
           skuItemsExternalBlob: true,
-          skuItemsExternalCloud: true,
           skuItemsExternalCount: nextSkus.length,
-          skuItemsCloudUpdatedAt: body?.updatedAt || new Date().toISOString(),
-          skuItemsSaveId: body?.saveId || "",
         },
         localStorage: {},
       };
