@@ -162,12 +162,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, action, saveId, count: rows.length, data: payload });
     }
 
-    // Optional full replace for small lists/tests.
+    // Full authoritative SKU replace.
+    // This is intentionally a single endpoint so SKU Storage does not fight
+    // the generic app-state sync. It writes the SKU file AND updates current.json
+    // metadata so refresh/new tabs load the same SKU count.
     if (action === "replace") {
       const rows = safeArray(body?.skuItems || body?.rows);
       await writeJsonBlob(SKU_DELETED_KEYS_PATH, { updatedAt, keys: [] }).catch(() => {});
       await writeJsonBlob(SKU_ALL_PATH, rows);
-      return NextResponse.json({ ok: true, action, count: rows.length });
+
+      const existingRaw: any = await readJsonBlob(STATE_PATH);
+      const existing: any = existingRaw && isRecord(existingRaw) ? existingRaw : {
+        version: 1,
+        updatedAt: "",
+        appState: {},
+        localStorage: {},
+      };
+
+      const payload = {
+        ...existing,
+        version: 1,
+        clientId: body?.clientId || existing?.clientId || "",
+        updatedAt,
+        appState: {
+          ...(isRecord(existing?.appState) ? existing.appState : {}),
+          skuItems: [],
+          skuItemsExternalBlob: true,
+          skuItemsExternalCloud: false,
+          skuItemsExternalCount: rows.length,
+          skuItemsCloudUpdatedAt: updatedAt,
+        },
+        localStorage: {},
+      };
+
+      await writeJsonBlob(STATE_PATH, payload);
+      await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      return NextResponse.json({ ok: true, action, count: rows.length, updatedAt, data: payload });
     }
 
     return NextResponse.json({ ok: false, error: "Unknown SKU action." }, { status: 400 });
