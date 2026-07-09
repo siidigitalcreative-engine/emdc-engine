@@ -777,6 +777,19 @@ const rememberDeletedSkuRows = (previous:any[] = [], next:any[] = [], reason="sk
 
   writeDeletedSkuKeySet(deleted, reason);
 };
+const getDeletedSkuKeysBetween = (previous:any[] = [], next:any[] = []) => {
+  if (!Array.isArray(previous) || !Array.isArray(next) || !previous.length || previous.length <= next.length) return [];
+  const nextIds = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.id)).filter(Boolean));
+  const nextSkus = new Set(next.map((row:any)=>normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value)).filter(Boolean));
+  const keys = new Set<string>();
+  previous.forEach((row:any)=>{
+    const id = normalizeSkuDeleteKey(row?.id);
+    const sku = normalizeSkuDeleteKey(row?.sku || row?.skuCode || row?.value);
+    if (id && !nextIds.has(id)) keys.add(`id:${id}`);
+    if (sku && !nextSkus.has(sku)) keys.add(`sku:${sku}`);
+  });
+  return Array.from(keys);
+};
 const filterDeletedSkuItems = (rows:any[] = []) => {
   if (!Array.isArray(rows) || !rows.length) return [];
   const deleted = readDeletedSkuKeySet();
@@ -13985,7 +13998,7 @@ const DEFAULT_GLOBAL_SKU_TABLE_COLUMNS = [
 // This intentionally ignores any previously saved column arrangement that may have broken the UI.
 const sanitizeSkuTableColumns = (columns:any[] = []) => DEFAULT_GLOBAL_SKU_TABLE_COLUMNS;
 
-const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, onSkuStorageDirectSave, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
+const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChange, onSkuStorageDirectSave, onSkuStorageDeleteDirect, skuTableColumns:controlledSkuTableColumns, setSkuTableColumns:controlledSetSkuTableColumns }) => {
   const { isMobile } = useBreakpoint();
   const [activeBrand,setActiveBrand]     = useState(null);
   const [skuModal,setSkuModal]           = useState(false);
@@ -14145,7 +14158,11 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
 
       // If rows were deleted, remember their ID/SKU in a small tombstone list.
       // This prevents an older cloud/local backup from re-adding them on refresh/poll.
+      const deletedKeysForThisChange = getDeletedSkuKeysBetween(Array.isArray(prev) ? prev : [], next);
       rememberDeletedSkuRows(Array.isArray(prev) ? prev : [], next, "sku-storage-delete");
+      if (deletedKeysForThisChange.length && onSkuStorageDeleteDirect) {
+        onSkuStorageDeleteDirect(deletedKeysForThisChange);
+      }
 
       // Protect user-entered SKU Storage before any app/cloud save runs.
       // This separate key survives page/code updates and is used as the local source of truth.
@@ -19605,6 +19622,32 @@ export default function App({
     }
   };
 
+  const saveSkuDeleteDirect = async (deletedKeys:any[] = []) => {
+    const keys = Array.from(new Set((Array.isArray(deletedKeys) ? deletedKeys : []).map((key:any)=>String(key || "").trim().toLowerCase()).filter(Boolean)));
+    if (!keys.length || cloudApplyingRef.current) return;
+    try {
+      setCloudSyncStatus("Deleting SKU...");
+      const updatedAt = new Date().toISOString();
+      const res = await fetch("/api/emdc-state?mode=sku-delete", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          mode:"sku-delete",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          deletedSkuKeys:keys,
+        }),
+      });
+      if (!res.ok) throw new Error("SKU delete save failed");
+      cloudLastUpdatedAtRef.current = updatedAt;
+      setCloudSyncStatus("SKU deleted and synced");
+      setTimeout(()=>setCloudSyncStatus("Synced"),1200);
+    } catch (error:any) {
+      console.error("[EMDC] SKU delete save failed:", error);
+      setCloudSyncStatus("SKU delete save failed");
+    }
+  };
+
   const handleRootStateChange = (patch:any = {}) => {
     if (!patch || typeof patch !== "object") return;
 
@@ -20050,7 +20093,7 @@ export default function App({
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleRootStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={handleRootStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
-          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
+          {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} onSkuStorageDeleteDirect={saveSkuDeleteDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
