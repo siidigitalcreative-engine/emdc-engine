@@ -6,10 +6,17 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const text = searchParams.get("text") || "";
+
+  // Accept both formats so old/new links work:
+  // /api/qr?text=https://...
+  // /api/qr?url=https://...
+  const text = searchParams.get("text") || searchParams.get("url") || "";
 
   if (!text.trim()) {
-    return NextResponse.json({ error: "Missing text" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing text. Use /api/qr?text=PRODUCT_URL or /api/qr?url=PRODUCT_URL" },
+      { status: 400 }
+    );
   }
 
   try {
