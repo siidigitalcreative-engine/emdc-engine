@@ -14143,6 +14143,27 @@ ${url}`);
     }
   };
 
+  const downloadProductHubQr = async (skuRow:any) => {
+    const qrUrl = getProductHubQrUrl(skuRow);
+    const skuCode = String(skuRow?.sku || "product").trim() || "product";
+    if (!qrUrl || typeof window === "undefined") return;
+    try {
+      const response = await fetch(qrUrl);
+      if (!response.ok) throw new Error("QR download failed");
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `${skuCode.replace(/[^a-zA-Z0-9-_]/g, "-")}-qr.svg`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      window.open(qrUrl, "_blank", "noopener,noreferrer");
+    }
+  };
+
   const skuCountByBrandId = useMemo(()=>{
     const counts:any = {};
     (skuStorage||[]).forEach((sku:any)=>{ counts[sku.brandId] = (counts[sku.brandId] || 0) + 1; });
@@ -14981,7 +15002,7 @@ ${url}`);
     setSkuColumnWidths(DEFAULT_SKU_COLUMN_WIDTHS);
     setSkuColumnWidthMode("manual");
   };
-  const skuActionsColumnWidth = "224px";
+  const skuActionsColumnWidth = "278px";
   const skuColumnWidthValues = skuTableColumns.map((c:any)=>getSkuColumnWidthPx(c));
   const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuColumnWidthValues.map((w:number)=>`${w}px`).join(" ")} ${skuActionsColumnWidth}`;
   const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+224+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
@@ -15236,6 +15257,7 @@ ${url}`);
                                 <div style={{ minHeight:40,padding:"5px 10px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:5,justifyContent:"flex-end",alignItems:"center",background:C.surface,flexWrap:"nowrap",whiteSpace:"nowrap",overflow:"visible",minWidth:skuActionsColumnWidth }}>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHub(s)} title="Open public Product Hub page" style={{ height:24,background:C.accent,border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:800,padding:"0 8px",borderRadius:6,flexShrink:0,lineHeight:"24px" }}>Hub</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHubQr(s)} title="Open QR code" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>QR</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>downloadProductHubQr(s)} title="Download QR code for packaging" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>DL QR</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>copyProductHubLink(s)} title="Copy Product Hub link" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>Copy</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ height:24,background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"0 5px",borderRadius:5,flexShrink:0,lineHeight:"24px" }}>Edit</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:24,height:24,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0 }}>&#215;</button>
@@ -15278,6 +15300,7 @@ ${url}`);
                               {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint }}>&#8942;&#8942;</span>}
                               <button onClick={()=>openProductHub(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.accent,border:"none",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:800 }}>Hub</button>
                               <button onClick={()=>openProductHubQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800 }}>QR</button>
+                              <button onClick={()=>downloadProductHubQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800 }}>DL QR</button>
                               <button onClick={()=>copyProductHubLink(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800 }}>Copy</button>
                               <button onClick={()=>openEdit(s)} style={{ padding:"5px 10px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600 }}>Edit</button>
                               <button onClick={()=>delSku(s.id)} style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center" }}>&#215;</button>
