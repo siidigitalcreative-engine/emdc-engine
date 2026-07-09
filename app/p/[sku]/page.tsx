@@ -42,11 +42,42 @@ const slugify = (value = "") =>
     .replace(/^-|-$/g, "");
 
 const normalize = (value = "") => slugify(value).toLowerCase();
+const PUBLIC_STATE_CACHE_KEY = "emdc_public_product_state_cache_v1";
+const PUBLIC_STATE_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+const RELATED_PRODUCT_LIMIT = 4;
 const list = (value: unknown) => Array.isArray(value) ? value.filter(Boolean).map(String) : [];
 
 function safeJson(value: string | null) {
   if (!value) return null;
   try { return JSON.parse(value); } catch { return null; }
+}
+
+function readCachedPublicState() {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed: any = safeJson(window.sessionStorage.getItem(PUBLIC_STATE_CACHE_KEY));
+    if (!parsed?.savedAt) return null;
+    if (Date.now() - Number(parsed.savedAt) > PUBLIC_STATE_CACHE_TTL_MS) return null;
+    const skuItems = Array.isArray(parsed.skuItems) ? parsed.skuItems : [];
+    const skuBrands = Array.isArray(parsed.skuBrands) ? parsed.skuBrands : [];
+    if (!skuItems.length) return null;
+    return { skuItems, skuBrands };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedPublicState(skuItems: SkuItem[], skuBrands: any[]) {
+  if (typeof window === "undefined" || !skuItems.length) return;
+  try {
+    window.sessionStorage.setItem(PUBLIC_STATE_CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      skuItems,
+      skuBrands,
+    }));
+  } catch {
+    // Cache is optional. Do nothing if the browser blocks storage.
+  }
 }
 
 function readLocalSkuItems() {
@@ -136,19 +167,27 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
         let skuItems: SkuItem[] = [];
         let brands: any[] = [];
 
-        try {
-          const res = await fetch("/api/emdc-state?mode=current", { cache: "no-store" });
-          const data = await res.json();
-          const source = data?.data?.appState || data?.appState || {};
-          skuItems = Array.isArray(source?.skuItems) ? source.skuItems : [];
-          brands = Array.isArray(source?.skuBrands) ? source.skuBrands : [];
-        } catch (error) {
-          console.warn("[EMDC] Product page /api/emdc-state load failed.", error);
+        const cached = readCachedPublicState();
+        if (cached?.skuItems?.length) {
+          skuItems = cached.skuItems;
+          brands = cached.skuBrands || [];
         }
 
         if (!skuItems.length || skuItems.length < 10) {
           try {
-            const res = await fetch("/api/load", { cache: "no-store" });
+            const res = await fetch("/api/emdc-state?mode=current", { cache: "force-cache" });
+            const data = await res.json();
+            const source = data?.data?.appState || data?.appState || {};
+            skuItems = Array.isArray(source?.skuItems) ? source.skuItems : [];
+            brands = Array.isArray(source?.skuBrands) ? source.skuBrands : [];
+          } catch (error) {
+            console.warn("[EMDC] Product page /api/emdc-state load failed.", error);
+          }
+        }
+
+        if (!skuItems.length || skuItems.length < 10) {
+          try {
+            const res = await fetch("/api/load", { cache: "force-cache" });
             const data = await res.json();
             const source = data?.appState || data || {};
             const redisSkuItems = Array.isArray(source?.skuItems) ? source.skuItems : [];
@@ -162,6 +201,7 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
 
         if (!skuItems.length) skuItems = readLocalSkuItems();
         if (!brands.length) brands = readLocalBrands();
+        if (skuItems.length) writeCachedPublicState(skuItems, brands);
 
         const found = findProduct(skuItems, params.sku);
         const category = getCategory(found);
@@ -174,8 +214,8 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
           .filter((item) => item?.brandId === found.brandId || getCategory(item) === category)
           .slice(0, 4) : [];
         const relatedItems = selectedRelatedItems.length
-          ? uniqueProducts(selectedRelatedItems).slice(0, 8)
-          : uniqueProducts(automaticRelatedItems).slice(0, 4);
+          ? uniqueProducts(selectedRelatedItems).slice(0, RELATED_PRODUCT_LIMIT)
+          : uniqueProducts(automaticRelatedItems).slice(0, RELATED_PRODUCT_LIMIT);
 
         if (!cancelled) {
           setProduct(found);
@@ -235,7 +275,7 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
 
         <section className="emdc-product-hero-card">
           <div className="emdc-product-hero-wrap">
-            {hero ? <img src={hero} alt={product.productName || product.sku || "Product"} className="emdc-product-hero-img" /> : <div className="emdc-product-placeholder">No Image</div>}
+            {hero ? <img src={hero} alt={product.productName || product.sku || "Product"} className="emdc-product-hero-img" loading="eager" decoding="async" /> : <div className="emdc-product-placeholder">No Image</div>}
           </div>
 
           <div className="emdc-product-content">
@@ -272,7 +312,7 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
                 const itemSlug = item.productHub?.slug || item.sku || item.id || "";
                 return (
                   <a key={item.id || item.sku} href={`/p/${encodeURIComponent(itemSlug)}`} className="emdc-product-related-item">
-                    <div className="emdc-product-related-thumb-wrap">{itemHero ? <img src={itemHero} alt={item.productName || item.sku || "Product"} className="emdc-product-related-thumb" /> : <span className="emdc-product-related-no-image">No Image</span>}</div>
+                    <div className="emdc-product-related-thumb-wrap">{itemHero ? <img src={itemHero} alt={item.productName || item.sku || "Product"} className="emdc-product-related-thumb" loading="lazy" decoding="async" /> : <span className="emdc-product-related-no-image">No Image</span>}</div>
                     <div className="emdc-product-related-name">{item.productName || item.sku}</div>
                     <div className="emdc-product-related-sku">{item.sku}</div>
                   </a>
