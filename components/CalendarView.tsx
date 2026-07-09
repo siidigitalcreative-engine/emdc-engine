@@ -14886,10 +14886,10 @@ ${url}`);
     setSkuColumnWidths(DEFAULT_SKU_COLUMN_WIDTHS);
     setSkuColumnWidthMode("manual");
   };
-  const skuActionsColumnWidth = "104px";
+  const skuActionsColumnWidth = "170px";
   const skuColumnWidthValues = skuTableColumns.map((c:any)=>getSkuColumnWidthPx(c));
   const skuGridTemplate = `${skuTableEditMode?"42px ":""}${skuColumnWidthValues.map((w:number)=>`${w}px`).join(" ")} ${skuActionsColumnWidth}`;
-  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+104+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
+  const skuTableMinWidth = Math.max(760,(skuTableEditMode?42:0)+170+skuColumnWidthValues.reduce((sum:number,w:number)=>sum+w,0));
 
   const skuCellUrlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)/gi;
   const normalizeSkuCellUrl = (url:any) => {
@@ -15130,20 +15130,20 @@ ${url}`);
                                 onDrop={e=>{ if(!skuTableEditMode) return; e.preventDefault(); if(skuRowDragId&&skuRowDragId!==s.id) reorderSkuRows(skuRowDragId,s.id); setSkuRowDragId(null); }}
                                 onDragEnd={()=>setSkuRowDragId(null)}
                                 style={{ display:"grid",gridTemplateColumns:skuGridTemplate,borderBottom:`1px solid ${C.border}`,alignItems:"center",background:skuTableEditMode&&skuRowDragId===s.id?C.surfaceAlt:C.surface }}>
-                                {skuTableEditMode&&<div title="Drag the 6-dot handle to reorder this row" style={{ minHeight:48,padding:"8px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"grab",color:C.faint }}>
+                                {skuTableEditMode&&<div title="Drag the 6-dot handle to reorder this row" style={{ minHeight:40,padding:"6px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"grab",color:C.faint }}>
                                   <span style={{ fontSize:13,lineHeight:1 }}>&#8942;&#8942;</span>
                                 </div>}
                                 {skuTableColumns.map((col:any)=>(
-                                  <div key={col.key} style={{ minHeight:48,padding:"10px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",minWidth:0,overflow:"hidden",maxWidth:"100%" }}>
+                                  <div key={col.key} style={{ minHeight:40,padding:"7px 10px",borderRight:`1px solid ${C.border}`,display:"flex",alignItems:"center",minWidth:0,overflow:"hidden",maxWidth:"100%" }}>
                                     {renderSkuDesktopCell(s,col,brand,st)}
                                   </div>
                                 ))}
-                                <div style={{ minHeight:48,padding:"8px 10px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center",background:C.surface,flexWrap:"wrap" }}>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHub(s)} title="Open public Product Hub page" style={{ background:C.accent,border:"none",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:800,padding:"5px 8px",borderRadius:6 }}>Hub</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHubQr(s)} title="Open QR code" style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"5px 8px",borderRadius:6 }}>QR</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>copyProductHubLink(s)} title="Copy Product Hub link" style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"5px 8px",borderRadius:6 }}>Copy</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.muted,fontWeight:700,padding:"4px 7px",borderRadius:5 }}>Edit</button>
-                                  <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:28,height:28,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800 }}>&#215;</button>
+                                <div style={{ minHeight:40,padding:"6px 8px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:4,justifyContent:"flex-end",alignItems:"center",background:C.surface,flexWrap:"nowrap",whiteSpace:"nowrap",overflow:"hidden" }}>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHub(s)} title="Open public Product Hub page" style={{ height:24,background:C.accent,border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"24px" }}>Hub</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openProductHubQr(s)} title="Open QR code" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>QR</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>copyProductHubLink(s)} title="Copy Product Hub link" style={{ height:24,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:10,color:C.textSub,fontWeight:800,padding:"0 7px",borderRadius:6,flexShrink:0,lineHeight:"22px" }}>Copy</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>openEdit(s)} style={{ height:24,background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.muted,fontWeight:700,padding:"0 5px",borderRadius:5,flexShrink:0,lineHeight:"24px" }}>Edit</button>
+                                  <button className="emdc-date-display-v3" type="button" onClick={()=>delSku(s.id)} title="Delete this product row" aria-label="Delete this product row" style={{ width:24,height:24,borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0 }}>&#215;</button>
                                 </div>
                               </div>
                             );
