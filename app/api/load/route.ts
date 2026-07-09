@@ -1,89 +1,42 @@
-import { NextResponse } from "next/server";
-import { get } from "@vercel/blob";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const STATE_PATH = "emdc-state/current.json";
-const SKU_ALL_PATH = "emdc-state/sku-items/all.json";
-const CHECKLIST_ITEMS_PATH = "emdc-state/checklist-items/all.json";
-const CHECKLIST_GROUPS_PATH = "emdc-state/checklist-groups/all.json";
-
-function isRecord(value: any) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-async function streamToText(stream: any) {
-  if (!stream) return "";
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let result = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    result += decoder.decode(value, { stream: true });
-  }
-
-  result += decoder.decode();
-  return result;
-}
-
-async function readJsonBlob(pathname: string) {
+export async function GET(req: NextRequest) {
   try {
-    const result: any = await get(pathname, { access: "private" } as any);
-    const text = await streamToText(result?.stream);
-    if (!text) return null;
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
+    const url = new URL(req.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
 
-export async function GET() {
-  try {
-    const state: any = await readJsonBlob(STATE_PATH);
-    const appState: any = isRecord(state?.appState) ? state.appState : {};
+    const res = await fetch(`${baseUrl}/api/emdc-state`, {
+      method: "GET",
+      cache: "no-store",
+    });
 
-    const [skuItemsBlob, checklistGroupsBlob, checklistItemsBlob] = await Promise.all([
-      readJsonBlob(SKU_ALL_PATH),
-      readJsonBlob(CHECKLIST_GROUPS_PATH),
-      readJsonBlob(CHECKLIST_ITEMS_PATH),
-    ]);
+    const data = await res.json().catch(() => null);
 
-    const skuItems = Array.isArray(skuItemsBlob)
-      ? skuItemsBlob
-      : Array.isArray(appState.skuItems)
-        ? appState.skuItems
-        : [];
+    if (!res.ok || !data?.ok) {
+      return NextResponse.json(
+        { error: data?.error || "Failed to load EMDC state" },
+        { status: res.status || 500 }
+      );
+    }
 
-    const checklistGroups = Array.isArray(checklistGroupsBlob)
-      ? checklistGroupsBlob
-      : Array.isArray(appState.checklistGroups)
-        ? appState.checklistGroups
-        : null;
+    const appState = data?.data?.appState || {};
 
-    const checklistItems = isRecord(checklistItemsBlob)
-      ? checklistItemsBlob
-      : isRecord(appState.checklistItems)
-        ? appState.checklistItems
-        : {};
-
+    // Keep the old /api/load response shape so CalendarView does not need changes.
     return NextResponse.json({
-      calendarEvents: Array.isArray(appState.calendarEvents) ? appState.calendarEvents : null,
-      calendarTypes: Array.isArray(appState.calendarTypes) ? appState.calendarTypes : null,
-      seasonalEvents: Array.isArray(appState.seasonalEvents) ? appState.seasonalEvents : null,
-      checklistGroups,
-      checklistItems,
-      checklistStatuses: Array.isArray(appState.checklistStatuses) ? appState.checklistStatuses : null,
-      skuBrands: Array.isArray(appState.skuBrands) ? appState.skuBrands : null,
-      skuItems,
-      skuTableColumns: Array.isArray(appState.skuTableColumns) ? appState.skuTableColumns : null,
-      source: "vercel-blob",
-      updatedAt: state?.updatedAt || "",
+      calendarEvents: appState.calendarEvents ?? null,
+      calendarTypes: appState.calendarTypes ?? null,
+      seasonalEvents: appState.seasonalEvents ?? null,
+      checklistGroups: appState.checklistGroups ?? null,
+      checklistItems: appState.checklistItems ?? {},
+      checklistStatuses: appState.checklistStatuses ?? null,
+      skuBrands: appState.skuBrands ?? null,
+      skuItems: appState.skuItems ?? null,
     });
   } catch (err) {
-    console.error("[EMDC] /api/load blob error:", err);
-    return NextResponse.json({ error: "Failed to load data from Vercel Blob" }, { status: 500 });
+    console.error("[EMDC] /api/load proxy error:", err);
+    return NextResponse.json({ error: "Failed to load data" }, { status: 500 });
   }
 }
