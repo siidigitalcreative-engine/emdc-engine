@@ -16,6 +16,7 @@ type ProductHub = {
   tiktokLink?: string;
   manualLink?: string;
   videoLink?: string;
+  relatedSkus?: string[];
 };
 
 type SkuItem = {
@@ -93,6 +94,29 @@ function findProduct(skuItems: SkuItem[], requested: string) {
   }) || null;
 }
 
+function findSkuByCode(skuItems: SkuItem[], code: string) {
+  const target = normalize(code || "");
+  if (!target) return null;
+  return skuItems.find((item) => {
+    const sku = normalize(item?.sku || "");
+    const hubSlug = normalize(item?.productHub?.slug || "");
+    const id = normalize(item?.id || "");
+    return sku === target || hubSlug === target || id === target;
+  }) || null;
+}
+
+function uniqueProducts(items: SkuItem[]) {
+  const seen = new Set<string>();
+  const output: SkuItem[] = [];
+  for (const item of items) {
+    const key = normalize(item?.sku || item?.id || item?.productName || "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(item);
+  }
+  return output;
+}
+
 function getCategory(product?: SkuItem | null) {
   return String(product?.collection || product?.category || product?.extraFields?.category || product?.extraFields?.collection || "").trim();
 }
@@ -141,10 +165,17 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
 
         const found = findProduct(skuItems, params.sku);
         const category = getCategory(found);
-        const relatedItems = found ? skuItems
-          .filter((item) => item?.sku !== found.sku)
+        const selectedRelatedSkus = Array.isArray(found?.productHub?.relatedSkus) ? found.productHub.relatedSkus : [];
+        const selectedRelatedItems = selectedRelatedSkus
+          .map((code) => findSkuByCode(skuItems, code))
+          .filter(Boolean) as SkuItem[];
+        const automaticRelatedItems = found ? skuItems
+          .filter((item) => normalize(item?.sku || "") !== normalize(found.sku || ""))
           .filter((item) => item?.brandId === found.brandId || getCategory(item) === category)
           .slice(0, 4) : [];
+        const relatedItems = selectedRelatedItems.length
+          ? uniqueProducts(selectedRelatedItems).slice(0, 8)
+          : uniqueProducts(automaticRelatedItems).slice(0, 4);
 
         if (!cancelled) {
           setProduct(found);
