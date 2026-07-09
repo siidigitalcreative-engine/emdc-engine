@@ -97,19 +97,12 @@ function getCategory(product?: SkuItem | null) {
   return String(product?.collection || product?.category || product?.extraFields?.category || product?.extraFields?.collection || "").trim();
 }
 
-function getPublicUrl(product?: SkuItem | null) {
-  if (typeof window === "undefined" || !product?.sku) return "";
-  const slug = String(product.productHub?.slug || product.sku || "").trim();
-  return `${window.location.origin}/p/${encodeURIComponent(slug)}`;
-}
-
 export default function ProductInfoPage({ params }: { params: { sku: string } }) {
   const [loading, setLoading] = useState(true);
   const [product, setProduct] = useState<SkuItem | null>(null);
   const [related, setRelated] = useState<SkuItem[]>([]);
   const [brand, setBrand] = useState<any>(null);
   const [debugCount, setDebugCount] = useState(0);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,8 +168,6 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
   const features = list(hub.features);
   const specs = list(hub.specs);
   const category = getCategory(product);
-  const publicUrl = getPublicUrl(product);
-  const qrUrl = publicUrl ? `/api/qr?url=${encodeURIComponent(publicUrl)}` : "";
   const links = [
     { label: "Shopee", href: hub.shopeeLink },
     { label: "Lazada", href: hub.lazadaLink },
@@ -184,17 +175,6 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
     { label: "Manual / PDF", href: hub.manualLink },
     { label: "Video", href: hub.videoLink },
   ].filter((x) => x.href);
-
-  const copyPageLink = async () => {
-    if (!publicUrl) return;
-    try {
-      await navigator.clipboard.writeText(publicUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
-    } catch {
-      window.prompt("Copy Product Hub link", publicUrl);
-    }
-  };
 
   if (loading) return <main style={styles.center}>Loading product information…</main>;
 
@@ -215,10 +195,9 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
       <section style={styles.shell}>
         <div style={styles.topBar}>
           <div>
-            <div style={styles.kicker}>Product Information Hub</div>
-            <div style={styles.smallMuted}>Scan, share, or save this page for product details.</div>
+            <div style={styles.kicker}>Product Information</div>
+            <div style={styles.smallMuted}>Product details, care guide, and where to buy.</div>
           </div>
-          <button type="button" onClick={copyPageLink} style={styles.copyTop}>{copied ? "Copied" : "Copy Link"}</button>
         </div>
 
         <section style={styles.heroCard}>
@@ -242,16 +221,6 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
               </div>
             )}
           </div>
-
-          <aside style={styles.qrCard}>
-            <div style={styles.qrTitle}>Product QR</div>
-            {qrUrl ? <img src={qrUrl} alt="Product QR Code" style={styles.qrImage} /> : <div style={styles.qrPlaceholder}>No QR</div>}
-            <div style={styles.qrSku}>{product.sku}</div>
-            <div style={styles.qrActions}>
-              {qrUrl && <a href={qrUrl} target="_blank" rel="noreferrer" style={styles.qrButton}>Open QR</a>}
-              {qrUrl && <a href={qrUrl} download={`${product.sku || "product"}-qr.svg`} style={styles.qrButtonLight}>Download</a>}
-            </div>
-          </aside>
         </section>
 
         <section style={styles.grid}>
@@ -299,8 +268,7 @@ const styles: Record<string, React.CSSProperties> = {
   topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 14, padding: "2px 2px 0" },
   kicker: { fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#111827", textTransform: "uppercase" },
   smallMuted: { fontSize: 12, color: "#6B7280", marginTop: 3 },
-  copyTop: { border: "1px solid #D1D5DB", background: "#FFFFFF", color: "#111827", borderRadius: 10, padding: "9px 12px", fontSize: 12, fontWeight: 900, cursor: "pointer" },
-  heroCard: { display: "grid", gridTemplateColumns: "minmax(260px, 430px) minmax(280px,1fr) 190px", gap: 22, background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 24, padding: 20, boxShadow: "0 18px 48px rgba(17,24,39,.08)", alignItems: "stretch" },
+  heroCard: { display: "grid", gridTemplateColumns: "minmax(260px, 430px) minmax(280px,1fr)", gap: 22, background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 24, padding: 20, boxShadow: "0 18px 48px rgba(17,24,39,.08)", alignItems: "stretch" },
   heroWrap: { minHeight: 340, borderRadius: 18, background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" },
   hero: { width: "100%", height: "100%", maxHeight: 440, objectFit: "contain" },
   placeholder: { color: "#9CA3AF", fontWeight: 800 },
@@ -315,14 +283,6 @@ const styles: Record<string, React.CSSProperties> = {
   introMuted: { margin: "0 0 20px", fontSize: 14, lineHeight: 1.65, color: "#9CA3AF", whiteSpace: "pre-wrap" },
   buttonRow: { display: "flex", gap: 10, flexWrap: "wrap" },
   button: { textDecoration: "none", background: "#111827", color: "#FFFFFF", borderRadius: 11, padding: "10px 14px", fontSize: 13, fontWeight: 900 },
-  qrCard: { border: "1px solid #E5E7EB", borderRadius: 18, background: "#FAFAFA", padding: 14, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 260 },
-  qrTitle: { fontSize: 13, fontWeight: 900, color: "#111827" },
-  qrImage: { width: 145, height: 145, background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", padding: 8, objectFit: "contain" },
-  qrPlaceholder: { width: 145, height: 145, background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF", fontSize: 12, fontWeight: 800 },
-  qrSku: { fontSize: 11, color: "#6B7280", fontWeight: 800, textAlign: "center", wordBreak: "break-word" },
-  qrActions: { display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" },
-  qrButton: { textDecoration: "none", background: "#111827", color: "#FFFFFF", borderRadius: 9, padding: "8px 10px", fontSize: 11, fontWeight: 900 },
-  qrButtonLight: { textDecoration: "none", background: "#FFFFFF", color: "#111827", border: "1px solid #D1D5DB", borderRadius: 9, padding: "8px 10px", fontSize: 11, fontWeight: 900 },
   grid: { marginTop: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 },
   infoCard: { background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 18, padding: 18, boxShadow: "0 10px 28px rgba(17,24,39,.04)" },
   h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 950, letterSpacing: "-.02em" },
