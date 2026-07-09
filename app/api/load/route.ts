@@ -1,61 +1,89 @@
 import { NextResponse } from "next/server";
-import redis from "@/lib/redis";
-import { KEYS } from "@/lib/store-keys";
+import { get } from "@vercel/blob";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const STATE_PATH = "emdc-state/current.json";
+const SKU_ALL_PATH = "emdc-state/sku-items/all.json";
+const CHECKLIST_ITEMS_PATH = "emdc-state/checklist-items/all.json";
+const CHECKLIST_GROUPS_PATH = "emdc-state/checklist-groups/all.json";
+
+function isRecord(value: any) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+async function streamToText(stream: any) {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let result = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    result += decoder.decode(value, { stream: true });
+  }
+
+  result += decoder.decode();
+  return result;
+}
+
+async function readJsonBlob(pathname: string) {
+  try {
+    const result: any = await get(pathname, { access: "private" } as any);
+    const text = await streamToText(result?.stream);
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export async function GET() {
   try {
-    const [
-      calendarEvents,
-      calendarTypes,
-      seasonalEvents,
-      checklistGroups,
-      checklistStatuses,
-      skuBrands,
-      skuItems,
-    ] = await Promise.all([
-      redis.get(KEYS.calendarEvents),
-      redis.get(KEYS.calendarTypes),
-      redis.get(KEYS.seasonalEvents),
-      redis.get(KEYS.checklistGroups),
-      redis.get(KEYS.checklistStatuses),
-      redis.get(KEYS.skuBrands),
-      redis.get(KEYS.skuItems),
+    const state: any = await readJsonBlob(STATE_PATH);
+    const appState: any = isRecord(state?.appState) ? state.appState : {};
+
+    const [skuItemsBlob, checklistGroupsBlob, checklistItemsBlob] = await Promise.all([
+      readJsonBlob(SKU_ALL_PATH),
+      readJsonBlob(CHECKLIST_GROUPS_PATH),
+      readJsonBlob(CHECKLIST_ITEMS_PATH),
     ]);
 
-    let checklistItems: Record<string, unknown> = {};
-    if (checklistGroups) {
-      const groups = typeof checklistGroups === "string"
-        ? JSON.parse(checklistGroups)
-        : checklistGroups;
-      if (Array.isArray(groups) && groups.length > 0) {
-        const itemEntries = await Promise.all(
-          groups.map(async (g: { id: string }) => {
-            const items = await redis.get(KEYS.checklistItems(g.id));
-            return [g.id, items ? (typeof items === "string" ? JSON.parse(items) : items) : null] as const;
-          })
-        );
-        checklistItems = Object.fromEntries(itemEntries.filter(([, v]) => v !== null));
-      }
-    }
+    const skuItems = Array.isArray(skuItemsBlob)
+      ? skuItemsBlob
+      : Array.isArray(appState.skuItems)
+        ? appState.skuItems
+        : [];
 
-    const parse = (v: unknown) => {
-      if (v === null || v === undefined) return null;
-      if (typeof v === "string") { try { return JSON.parse(v); } catch { return null; } }
-      return v;
-    };
+    const checklistGroups = Array.isArray(checklistGroupsBlob)
+      ? checklistGroupsBlob
+      : Array.isArray(appState.checklistGroups)
+        ? appState.checklistGroups
+        : null;
+
+    const checklistItems = isRecord(checklistItemsBlob)
+      ? checklistItemsBlob
+      : isRecord(appState.checklistItems)
+        ? appState.checklistItems
+        : {};
 
     return NextResponse.json({
-      calendarEvents:    parse(calendarEvents),
-      calendarTypes:     parse(calendarTypes),
-      seasonalEvents:    parse(seasonalEvents),
-      checklistGroups:   parse(checklistGroups),
+      calendarEvents: Array.isArray(appState.calendarEvents) ? appState.calendarEvents : null,
+      calendarTypes: Array.isArray(appState.calendarTypes) ? appState.calendarTypes : null,
+      seasonalEvents: Array.isArray(appState.seasonalEvents) ? appState.seasonalEvents : null,
+      checklistGroups,
       checklistItems,
-      checklistStatuses: parse(checklistStatuses),
-      skuBrands:         parse(skuBrands),
-      skuItems:          parse(skuItems),
+      checklistStatuses: Array.isArray(appState.checklistStatuses) ? appState.checklistStatuses : null,
+      skuBrands: Array.isArray(appState.skuBrands) ? appState.skuBrands : null,
+      skuItems,
+      skuTableColumns: Array.isArray(appState.skuTableColumns) ? appState.skuTableColumns : null,
+      source: "vercel-blob",
+      updatedAt: state?.updatedAt || "",
     });
   } catch (err) {
-    console.error("[EMDC] /api/load error:", err);
-    return NextResponse.json({ error: "Failed to load data" }, { status: 500 });
+    console.error("[EMDC] /api/load blob error:", err);
+    return NextResponse.json({ error: "Failed to load data from Vercel Blob" }, { status: 500 });
   }
 }
