@@ -35,7 +35,7 @@ type SeparateProductHub = {
   website?: string;
   manual?: string;
   video?: string;
-  relatedSkus?: string;
+  relatedSkus?: string | string[];
   metaTitle?: string;
   metaDescription?: string;
   keywords?: string;
@@ -168,24 +168,45 @@ function findProduct(skuItems: SkuItem[], requested: string) {
   }) || null;
 }
 
+function getSkuCandidateValues(item: any) {
+  const extraValues = item?.extraFields && typeof item.extraFields === "object"
+    ? Object.values(item.extraFields)
+    : [];
+  return [
+    item?.sku,
+    item?.skuCode,
+    item?.value,
+    item?.id,
+    item?.productCode,
+    item?.code,
+    item?.productHub?.slug,
+    item?.productHub?.sku,
+    ...extraValues,
+  ];
+}
+
 function findSkuByCode(skuItems: SkuItem[], code: string) {
   const target = normalize(code || "");
   const compactTarget = compactNormalize(code || "");
   if (!target && !compactTarget) return null;
 
-  // First pass: exact normalized SKU / slug / id match.
-  const exact = skuItems.find((item) => {
-    const values = [item?.sku, item?.productHub?.slug, item?.id, item?.skuCode, item?.value];
-    return values.some((value) => normalize(String(value || "")) === target);
-  });
+  const exact = skuItems.find((item: any) =>
+    getSkuCandidateValues(item).some((value) => normalize(String(value || "")) === target)
+  );
   if (exact) return exact;
 
-  // Second pass: compact match. This handles small formatting differences like
-  // CRY-OVB500 vs CRY OVB 500 without touching SKU Storage data.
-  return skuItems.find((item: any) => {
-    const values = [item?.sku, item?.productHub?.slug, item?.id, item?.skuCode, item?.value];
-    return values.some((value) => compactNormalize(String(value || "")) === compactTarget);
-  }) || null;
+  return skuItems.find((item: any) =>
+    getSkuCandidateValues(item).some((value) => compactNormalize(String(value || "")) === compactTarget)
+  ) || null;
+}
+
+function makeMissingRelatedProduct(code: string): SkuItem & { __missingRelated?: boolean } {
+  return {
+    id: `missing-${code}`,
+    sku: code,
+    productName: "SKU not found in SKU Storage",
+    __missingRelated: true,
+  } as any;
 }
 
 function uniqueProducts(items: SkuItem[]) {
@@ -280,8 +301,7 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
         ].map((code) => String(code || "").trim()).filter(Boolean)));
 
         const selectedRelatedItems = selectedRelatedSkus
-          .map((code) => findSkuByCode(skuItems, code))
-          .filter(Boolean) as SkuItem[];
+          .map((code) => findSkuByCode(skuItems, code) || makeMissingRelatedProduct(code)) as SkuItem[];
         const automaticRelatedItems = found ? skuItems
           .filter((item) => normalize(item?.sku || "") !== normalize(found.sku || ""))
           .filter((item) => item?.brandId === found.brandId || getCategory(item) === category)
@@ -399,15 +419,20 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
           <section className="emdc-product-related-card">
             <h2 className="emdc-product-h2">Related Products</h2>
             <div className="emdc-product-related-grid">
-              {related.map((item) => {
+              {related.map((item: any) => {
                 const itemHero = item.productHub?.heroImage || item.imageLink || item.imageUrl || "";
                 const itemSlug = item.productHub?.slug || item.sku || item.id || "";
-                return (
-                  <a key={item.id || item.sku} href={`/p/${encodeURIComponent(itemSlug)}`} className="emdc-product-related-item">
-                    <div className="emdc-product-related-thumb-wrap">{itemHero ? <img src={itemHero} alt={item.productName || item.sku || "Product"} className="emdc-product-related-thumb" loading="lazy" decoding="async" /> : <span className="emdc-product-related-no-image">No Image</span>}</div>
-                    <div className="emdc-product-related-name">{item.productName || item.sku}</div>
+                const card = (
+                  <>
+                    <div className="emdc-product-related-thumb-wrap">{itemHero ? <img src={itemHero} alt={item.productName || item.sku || "Product"} className="emdc-product-related-thumb" loading="lazy" decoding="async" /> : <span className="emdc-product-related-no-image">{item.__missingRelated ? "Check SKU" : "No Image"}</span>}</div>
+                    <div className="emdc-product-related-name">{item.__missingRelated ? "SKU not found" : (item.productName || item.sku)}</div>
                     <div className="emdc-product-related-sku">{item.sku}</div>
-                  </a>
+                  </>
+                );
+                return item.__missingRelated ? (
+                  <div key={item.id || item.sku} className="emdc-product-related-item emdc-product-related-missing">{card}</div>
+                ) : (
+                  <a key={item.id || item.sku} href={`/p/${encodeURIComponent(itemSlug)}`} className="emdc-product-related-item">{card}</a>
                 );
               })}
             </div>
@@ -678,6 +703,10 @@ function ResponsiveCss() {
         height: 100%;
         object-fit: contain;
         display: block;
+      }
+      .emdc-product-related-missing {
+        border-style: dashed;
+        background: #FFFBEB;
       }
       .emdc-product-related-no-image {
         color: #9CA3AF;
