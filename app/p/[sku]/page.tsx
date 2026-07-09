@@ -67,7 +67,7 @@ const slugify = (value = "") =>
 const normalize = (value = "") => slugify(value).toLowerCase();
 const PUBLIC_STATE_CACHE_KEY = "emdc_public_product_state_cache_v1";
 const PUBLIC_STATE_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const RELATED_PRODUCT_LIMIT = 12;
+const RELATED_PRODUCT_LIMIT = 4;
 const list = (value: unknown) => Array.isArray(value) ? value.filter(Boolean).map(String) : [];
 const lines = (value: unknown) => {
   if (Array.isArray(value)) {
@@ -302,13 +302,49 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
 
         const selectedRelatedItems = selectedRelatedSkus
           .map((code) => findSkuByCode(skuItems, code) || makeMissingRelatedProduct(code)) as SkuItem[];
+
+        const selectedKeys = new Set(
+          selectedRelatedItems
+            .flatMap((item: any) => [item?.sku, item?.id, item?.productName])
+            .map((value) => normalize(String(value || "")))
+            .filter(Boolean)
+        );
+        const currentSkuKey = normalize(found?.sku || found?.id || "");
+        const currentCategory = normalize(category);
+        const currentCollection = normalize(String(found?.collection || found?.extraFields?.collection || ""));
+        const currentBrand = normalize(String(found?.brandId || ""));
+
         const automaticRelatedItems = found ? skuItems
-          .filter((item) => normalize(item?.sku || "") !== normalize(found.sku || ""))
-          .filter((item) => item?.brandId === found.brandId || getCategory(item) === category)
-          .slice(0, 4) : [];
-        const relatedItems = selectedRelatedItems.length
-          ? uniqueProducts(selectedRelatedItems).slice(0, RELATED_PRODUCT_LIMIT)
-          : uniqueProducts(automaticRelatedItems).slice(0, RELATED_PRODUCT_LIMIT);
+          .filter((item: any) => {
+            const itemSkuKey = normalize(item?.sku || item?.id || "");
+            if (!itemSkuKey || itemSkuKey === currentSkuKey || selectedKeys.has(itemSkuKey)) return false;
+            const itemCategory = normalize(getCategory(item));
+            const itemCollection = normalize(String(item?.collection || item?.extraFields?.collection || ""));
+            const itemBrand = normalize(String(item?.brandId || ""));
+            return (
+              (currentCollection && itemCollection === currentCollection) ||
+              (currentCategory && itemCategory === currentCategory) ||
+              (currentBrand && itemBrand === currentBrand)
+            );
+          })
+          .sort((a: any, b: any) => {
+            const score = (item: any) => {
+              const itemCategory = normalize(getCategory(item));
+              const itemCollection = normalize(String(item?.collection || item?.extraFields?.collection || ""));
+              const itemBrand = normalize(String(item?.brandId || ""));
+              let value = 0;
+              if (currentCollection && itemCollection === currentCollection) value += 4;
+              if (currentCategory && itemCategory === currentCategory) value += 3;
+              if (currentBrand && itemBrand === currentBrand) value += 1;
+              return value;
+            };
+            return score(b) - score(a);
+          }) : [];
+
+        const relatedItems = uniqueProducts([
+          ...selectedRelatedItems,
+          ...automaticRelatedItems,
+        ]).slice(0, RELATED_PRODUCT_LIMIT);
 
         if (!cancelled) {
           setProduct(found);
