@@ -67,15 +67,21 @@ const slugify = (value = "") =>
 const normalize = (value = "") => slugify(value).toLowerCase();
 const PUBLIC_STATE_CACHE_KEY = "emdc_public_product_state_cache_v1";
 const PUBLIC_STATE_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const RELATED_PRODUCT_LIMIT = 4;
+const RELATED_PRODUCT_LIMIT = 12;
 const list = (value: unknown) => Array.isArray(value) ? value.filter(Boolean).map(String) : [];
 const lines = (value: unknown) => {
-  if (Array.isArray(value)) return value.filter(Boolean).map(String);
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => String(item || "").split(/[\r\n,;]+/))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
   return String(value || "")
-    .split(/\r?\n/)
+    .split(/[\r\n,;]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 };
+const compactNormalize = (value = "") => String(value || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 const firstText = (...values: unknown[]) => {
   for (const value of values) {
     const text = String(value || "").trim();
@@ -164,12 +170,21 @@ function findProduct(skuItems: SkuItem[], requested: string) {
 
 function findSkuByCode(skuItems: SkuItem[], code: string) {
   const target = normalize(code || "");
-  if (!target) return null;
-  return skuItems.find((item) => {
-    const sku = normalize(item?.sku || "");
-    const hubSlug = normalize(item?.productHub?.slug || "");
-    const id = normalize(item?.id || "");
-    return sku === target || hubSlug === target || id === target;
+  const compactTarget = compactNormalize(code || "");
+  if (!target && !compactTarget) return null;
+
+  // First pass: exact normalized SKU / slug / id match.
+  const exact = skuItems.find((item) => {
+    const values = [item?.sku, item?.productHub?.slug, item?.id, item?.skuCode, item?.value];
+    return values.some((value) => normalize(String(value || "")) === target);
+  });
+  if (exact) return exact;
+
+  // Second pass: compact match. This handles small formatting differences like
+  // CRY-OVB500 vs CRY OVB 500 without touching SKU Storage data.
+  return skuItems.find((item: any) => {
+    const values = [item?.sku, item?.productHub?.slug, item?.id, item?.skuCode, item?.value];
+    return values.some((value) => compactNormalize(String(value || "")) === compactTarget);
   }) || null;
 }
 
@@ -259,10 +274,11 @@ export default function ProductInfoPage({ params }: { params: { sku: string } })
         }
 
         const category = getCategory(found);
-        const selectedRelatedSkus = [
+        const selectedRelatedSkus = Array.from(new Set([
           ...lines(separateHub?.relatedSkus),
           ...(Array.isArray(found?.productHub?.relatedSkus) ? found.productHub.relatedSkus : []),
-        ];
+        ].map((code) => String(code || "").trim()).filter(Boolean)));
+
         const selectedRelatedItems = selectedRelatedSkus
           .map((code) => findSkuByCode(skuItems, code))
           .filter(Boolean) as SkuItem[];
