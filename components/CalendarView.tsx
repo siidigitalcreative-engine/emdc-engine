@@ -18675,7 +18675,13 @@ export default function App({
 }) {
   const { isMobile } = useBreakpoint();
   const [authEmail,setAuthEmail] = useState("");
+  const [authDisplayName,setAuthDisplayName] = useState("");
+  const [authNameInput,setAuthNameInput] = useState("");
   const [authBusy,setAuthBusy] = useState(false);
+  const [authSavingName,setAuthSavingName] = useState(false);
+  const [authSaveStatus,setAuthSaveStatus] = useState("");
+  const [authMenuOpen,setAuthMenuOpen] = useState(false);
+  const authMenuRef = useRef<any>(null);
 
   useEffect(()=>{
     let active = true;
@@ -18683,14 +18689,32 @@ export default function App({
 
     const loadUser = async () => {
       const { data } = await supabase.auth.getUser();
-      if (active) setAuthEmail(data.user?.email || "");
+      if (active) {
+        const user = data.user;
+        const savedName =
+          user?.user_metadata?.display_name ||
+          user?.user_metadata?.full_name ||
+          user?.user_metadata?.name ||
+          "";
+        setAuthEmail(user?.email || "");
+        setAuthNameInput(savedName);
+        setAuthDisplayName(savedName || user?.email || "");
+      }
     };
 
     loadUser();
     const { data:listener } = supabase.auth.onAuthStateChange((_event,session)=>{
       if (!active) return;
-      setAuthEmail(session?.user?.email || "");
-      if (!session?.user && typeof window !== "undefined") {
+      const user = session?.user;
+      const savedName =
+        user?.user_metadata?.display_name ||
+        user?.user_metadata?.full_name ||
+        user?.user_metadata?.name ||
+        "";
+      setAuthEmail(user?.email || "");
+      setAuthNameInput(savedName);
+      setAuthDisplayName(savedName || user?.email || "");
+      if (!user && typeof window !== "undefined") {
         window.location.replace("/login");
       }
     });
@@ -18709,6 +18733,50 @@ export default function App({
       await supabase.auth.signOut();
     } finally {
       if (typeof window !== "undefined") window.location.replace("/login");
+    }
+  };
+
+
+  useEffect(()=>{
+    const closeAuthMenu = (event:any) => {
+      if (authMenuRef.current && !authMenuRef.current.contains(event.target)) {
+        setAuthMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown",closeAuthMenu);
+    document.addEventListener("touchstart",closeAuthMenu);
+    return ()=>{
+      document.removeEventListener("mousedown",closeAuthMenu);
+      document.removeEventListener("touchstart",closeAuthMenu);
+    };
+  },[]);
+
+  const handleSaveDisplayName = async () => {
+    const nextName = authNameInput.trim();
+    if (!nextName || authSavingName) {
+      if (!nextName) setAuthSaveStatus("Enter a display name.");
+      return;
+    }
+
+    setAuthSavingName(true);
+    setAuthSaveStatus("");
+    try {
+      const supabase = createClient();
+      const { data,error } = await supabase.auth.updateUser({
+        data:{ display_name:nextName, full_name:nextName },
+      });
+      if (error) throw error;
+      const savedName =
+        data.user?.user_metadata?.display_name ||
+        data.user?.user_metadata?.full_name ||
+        nextName;
+      setAuthNameInput(savedName);
+      setAuthDisplayName(savedName);
+      setAuthSaveStatus("Name saved.");
+    } catch (error:any) {
+      setAuthSaveStatus(error?.message || "Unable to save name.");
+    } finally {
+      setAuthSavingName(false);
     }
   };
 
@@ -19782,20 +19850,58 @@ export default function App({
             <div style={{ display:"flex",alignItems:"center",gap:8 }}>
               {!isMobile&&<button onClick={copyCurrentPageLink} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>{copyLinkStatus || "Copy Link"}</button>}
               {isMobile&&<button onClick={copyCurrentPageLink} title="Copy page link" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:13,fontWeight:900 }}>↗</button>}
-              {!isMobile&&authEmail&&(
-                <span title={authEmail} style={{ maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11,color:C.muted,fontWeight:700 }}>
-                  {authEmail}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={authBusy}
-                title={isMobile ? (authEmail ? `Signed in as ${authEmail}` : "Log out") : "Log out"}
-                style={{ height:30,padding:isMobile?"0 9px":"0 11px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,cursor:authBusy?"not-allowed":"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",opacity:authBusy ? 0.6 : 1 }}
-              >
-                {authBusy ? "Signing out…" : "Log out"}
-              </button>
+              <div ref={authMenuRef} style={{ position:"relative" }}>
+                <button
+                  type="button"
+                  onClick={()=>{ setAuthMenuOpen(v=>!v); setAuthSaveStatus(""); }}
+                  title={authEmail ? `Signed in as ${authEmail}` : "User menu"}
+                  style={{ height:30,maxWidth:isMobile?120:220,padding:isMobile?"0 9px":"0 11px",display:"flex",alignItems:"center",gap:6,borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}
+                >
+                  <span aria-hidden="true">●</span>
+                  <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{isMobile ? "Account" : (authDisplayName || "Account")}</span>
+                  <span aria-hidden="true" style={{ fontSize:9,color:C.faint }}>▾</span>
+                </button>
+
+                {authMenuOpen&&(
+                  <div style={{ position:"absolute",right:0,top:36,width:isMobile?"min(310px,calc(100vw - 24px))":310,padding:14,borderRadius:12,border:`1px solid ${C.border}`,background:C.surface,boxShadow:"0 14px 40px rgba(15,23,42,.16)",zIndex:500 }}>
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:13,fontWeight:900,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{authDisplayName || "EMDC User"}</div>
+                      <div style={{ marginTop:2,fontSize:11,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{authEmail}</div>
+                    </div>
+
+                    <label style={{ display:"block",marginBottom:5,fontSize:10,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase",color:C.muted }}>Display name</label>
+                    <input
+                      value={authNameInput}
+                      onChange={e=>{ setAuthNameInput(e.target.value); setAuthSaveStatus(""); }}
+                      onKeyDown={e=>{ if(e.key==="Enter") handleSaveDisplayName(); }}
+                      placeholder="Enter your name"
+                      maxLength={80}
+                      style={{ width:"100%",height:38,padding:"0 11px",borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,fontSize:13,outline:"none",boxSizing:"border-box" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveDisplayName}
+                      disabled={authSavingName || !authNameInput.trim()}
+                      style={{ width:"100%",height:36,marginTop:8,borderRadius:8,border:"none",background:C.accent,color:"#fff",fontSize:12,fontWeight:800,cursor:authSavingName||!authNameInput.trim()?"not-allowed":"pointer",opacity:authSavingName||!authNameInput.trim()?.55:1 }}
+                    >
+                      {authSavingName ? "Saving…" : "Save display name"}
+                    </button>
+                    {authSaveStatus&&(
+                      <div style={{ marginTop:7,fontSize:11,color:authSaveStatus==="Name saved."?"#15803D":"#DC2626" }}>{authSaveStatus}</div>
+                    )}
+
+                    <div style={{ height:1,background:C.border,margin:"12px 0" }} />
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={authBusy}
+                      style={{ width:"100%",height:36,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:authBusy?"not-allowed":"pointer",fontSize:12,fontWeight:800,opacity:authBusy?.6:1 }}
+                    >
+                      {authBusy ? "Signing out…" : "Log out"}
+                    </button>
+                  </div>
+                )}
+              </div>
               <span className="hide-mobile" style={{ fontSize:11,color:C.faint,fontVariantNumeric:"tabular-nums" }}>{today.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}</span>
             </div>
           </div>
