@@ -1,10 +1,18 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = useMemo(() => searchParams.get("next") || "/", [searchParams]);
@@ -98,6 +106,18 @@ export default function LoginPage() {
         </form>
 
         <p style={styles.note}>Public QR product pages remain accessible without signing in.</p>
+      </section>
+    </main>
+  );
+}
+
+function LoginLoading() {
+  return (
+    <main style={styles.page}>
+      <section style={styles.card}>
+        <div style={styles.logo}>EMDC</div>
+        <p style={styles.eyebrow}>EMDC ENGINE</p>
+        <h1 style={styles.title}>Loading…</h1>
       </section>
     </main>
   );
