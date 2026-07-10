@@ -71,24 +71,7 @@ function LoginForm() {
     }
   }
 
-  async function signInWithGitHub() {
-    setLoading(true);
-    setMessage("");
 
-    try {
-      const supabase = createClient();
-      const redirectTo = `${window.location.origin}${nextPath.startsWith("/") ? nextPath : "/"}`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "github",
-        options: { redirectTo },
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      setMessageType("error");
-      setMessage(error?.message || "Unable to continue with GitHub.");
-      setLoading(false);
-    }
-  }
 
   return (
     <main style={styles.page}>
@@ -98,11 +81,6 @@ function LoginForm() {
         <h1 style={styles.title}>Sign in</h1>
         <p style={styles.subtitle}>Access SKU Storage, Product Hub, calendars, and internal tools.</p>
 
-        <button type="button" onClick={signInWithGitHub} disabled={loading} style={styles.githubButton}>
-          Continue with GitHub
-        </button>
-
-        <div style={styles.divider}><span style={styles.dividerLine} /><span>or</span><span style={styles.dividerLine} /></div>
 
         <form onSubmit={signInWithPassword} style={styles.form}>
           <label style={styles.label}>
@@ -194,19 +172,6 @@ const styles: Record<string, React.CSSProperties> = {
   eyebrow: { margin: "20px 0 6px", color: "#6B7280", fontSize: 11, fontWeight: 800, letterSpacing: ".12em" },
   title: { margin: 0, color: "#111827", fontSize: 30, lineHeight: 1.15 },
   subtitle: { margin: "10px 0 24px", color: "#6B7280", fontSize: 14, lineHeight: 1.55 },
-  githubButton: {
-    width: "100%",
-    padding: "12px 14px",
-    border: "1px solid #D1D5DB",
-    borderRadius: 10,
-    background: "#FFFFFF",
-    color: "#111827",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  divider: { display: "flex", alignItems: "center", gap: 10, margin: "20px 0", color: "#9CA3AF", fontSize: 12 },
-  dividerLine: { height: 1, flex: 1, background: "#E5E7EB" },
   form: { display: "flex", flexDirection: "column", gap: 14 },
   label: { display: "flex", flexDirection: "column", gap: 7, color: "#374151", fontSize: 13, fontWeight: 700 },
   input: {
