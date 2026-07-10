@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const C = {
@@ -18673,6 +18674,44 @@ export default function App({
   onStateChange?: (patch: Record<string, unknown>) => void;
 }) {
   const { isMobile } = useBreakpoint();
+  const [authEmail,setAuthEmail] = useState("");
+  const [authBusy,setAuthBusy] = useState(false);
+
+  useEffect(()=>{
+    let active = true;
+    const supabase = createClient();
+
+    const loadUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (active) setAuthEmail(data.user?.email || "");
+    };
+
+    loadUser();
+    const { data:listener } = supabase.auth.onAuthStateChange((_event,session)=>{
+      if (!active) return;
+      setAuthEmail(session?.user?.email || "");
+      if (!session?.user && typeof window !== "undefined") {
+        window.location.replace("/login");
+      }
+    });
+
+    return ()=>{
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  },[]);
+
+  const handleLogout = async () => {
+    if (authBusy) return;
+    setAuthBusy(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } finally {
+      if (typeof window !== "undefined") window.location.replace("/login");
+    }
+  };
+
   const initialRouteRef = useRef<any>(null);
   if(initialRouteRef.current===null) initialRouteRef.current = parseEmdcRoute();
   const [tab,setTab] = useState(()=>initialRouteRef.current.tab || "calendar");
@@ -19743,7 +19782,21 @@ export default function App({
             <div style={{ display:"flex",alignItems:"center",gap:8 }}>
               {!isMobile&&<button onClick={copyCurrentPageLink} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>{copyLinkStatus || "Copy Link"}</button>}
               {isMobile&&<button onClick={copyCurrentPageLink} title="Copy page link" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:13,fontWeight:900 }}>↗</button>}
-              <span style={{ fontSize:11,color:C.faint,fontVariantNumeric:"tabular-nums" }}>{today.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}</span>
+              {!isMobile&&authEmail&&(
+                <span title={authEmail} style={{ maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11,color:C.muted,fontWeight:700 }}>
+                  {authEmail}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={authBusy}
+                title={isMobile ? (authEmail ? `Signed in as ${authEmail}` : "Log out") : "Log out"}
+                style={{ height:30,padding:isMobile?"0 9px":"0 11px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,cursor:authBusy?"not-allowed":"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",opacity:authBusy ? 0.6 : 1 }}
+              >
+                {authBusy ? "Signing out…" : "Log out"}
+              </button>
+              <span className="hide-mobile" style={{ fontSize:11,color:C.faint,fontVariantNumeric:"tabular-nums" }}>{today.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}</span>
             </div>
           </div>
         </div>
