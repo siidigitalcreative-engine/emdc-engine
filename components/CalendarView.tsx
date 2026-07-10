@@ -1371,6 +1371,122 @@ const Select = ({ value, onChange, children, style={} }) => {
   );
 };
 
+
+
+const SearchableCreatableSelect = ({ value, onChange, options=[], placeholder="" }: any) => {
+  const [open,setOpen] = useState(false);
+  const [activeIndex,setActiveIndex] = useState(0);
+  const rootRef = useRef<any>(null);
+  const inputRef = useRef<any>(null);
+
+  const filteredOptions = useMemo(() => {
+    const query = String(value || "").trim().toLowerCase();
+    const unique = Array.from(new Set((Array.isArray(options) ? options : [])
+      .map((item:any)=>String(item || "").trim())
+      .filter(Boolean)));
+    if (!query) return unique.slice(0,80);
+    return unique
+      .filter((item:any)=>item.toLowerCase().includes(query))
+      .sort((a:any,b:any)=>{
+        const aStarts = a.toLowerCase().startsWith(query) ? 0 : 1;
+        const bStarts = b.toLowerCase().startsWith(query) ? 0 : 1;
+        return aStarts-bStarts || a.localeCompare(b);
+      })
+      .slice(0,80);
+  },[options,value]);
+
+  useEffect(()=>{
+    setActiveIndex(0);
+  },[value,open]);
+
+  useEffect(()=>{
+    const close = (event:any) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown",close);
+    document.addEventListener("touchstart",close);
+    return ()=>{
+      document.removeEventListener("mousedown",close);
+      document.removeEventListener("touchstart",close);
+    };
+  },[]);
+
+  const choose = (option:string) => {
+    onChange(option);
+    setOpen(false);
+    requestAnimationFrame(()=>inputRef.current?.focus?.());
+  };
+
+  return (
+    <div ref={rootRef} style={{ position:"relative",width:"100%",zIndex:open?80:1 }}>
+      <div style={{ position:"relative" }}>
+        <input
+          ref={inputRef}
+          value={value || ""}
+          placeholder={placeholder}
+          autoComplete="off"
+          onFocus={()=>setOpen(true)}
+          onClick={()=>setOpen(true)}
+          onChange={e=>{ onChange(e.target.value); setOpen(true); }}
+          onKeyDown={e=>{
+            if(e.key==="ArrowDown"){
+              e.preventDefault();
+              setOpen(true);
+              setActiveIndex((i:number)=>Math.min(i+1,Math.max(0,filteredOptions.length-1)));
+            } else if(e.key==="ArrowUp"){
+              e.preventDefault();
+              setOpen(true);
+              setActiveIndex((i:number)=>Math.max(0,i-1));
+            } else if(e.key==="Enter" && open && filteredOptions[activeIndex]){
+              e.preventDefault();
+              choose(filteredOptions[activeIndex] as string);
+            } else if(e.key==="Escape"){
+              e.preventDefault();
+              setOpen(false);
+            }
+          }}
+          style={{ width:"100%",height:38,padding:"9px 38px 9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${open?C.accent:C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box" }}
+        />
+        <button
+          type="button"
+          aria-label={open?"Close collection options":"Open collection options"}
+          onMouseDown={e=>e.preventDefault()}
+          onClick={()=>{ setOpen((v:boolean)=>!v); inputRef.current?.focus?.(); }}
+          style={{ position:"absolute",right:1,top:1,width:36,height:36,border:"none",borderRadius:"0 7px 7px 0",background:"transparent",color:C.textSub,cursor:"pointer",fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center" }}
+        >
+          {open?"▴":"▾"}
+        </button>
+      </div>
+
+      {open&&(
+        <div style={{ position:"absolute",left:0,right:0,top:"calc(100% + 6px)",zIndex:9999,maxHeight:220,overflowY:"auto",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,boxShadow:"0 16px 36px rgba(15,23,42,.16)",padding:6 }}>
+          {filteredOptions.length>0 ? filteredOptions.map((option:any,index:number)=>{
+            const selected = String(option).toLowerCase()===String(value||"").trim().toLowerCase();
+            const active = index===activeIndex;
+            return (
+              <button
+                type="button"
+                key={option}
+                onMouseDown={e=>e.preventDefault()}
+                onMouseEnter={()=>setActiveIndex(index)}
+                onClick={()=>choose(String(option))}
+                style={{ width:"100%",border:"none",borderRadius:7,background:selected?"#EEF2FF":active?C.surfaceAlt:"transparent",color:C.text,textAlign:"left",padding:"9px 10px",fontSize:13,fontWeight:selected?800:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10 }}
+              >
+                <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{option}</span>
+                {selected&&<span style={{ color:C.muted,fontSize:11 }}>Selected</span>}
+              </button>
+            );
+          }) : (
+            <div style={{ padding:"10px 11px",fontSize:12,color:C.muted,lineHeight:1.45 }}>
+              No existing match. Keep typing to create a new Collection / Category.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Divider = ({ my=16 }) => <div style={{ height:1,background:C.border,margin:`${my}px 0` }} />;
 
 const Modal = ({ open, onClose, onBack, title, width=480, children }) => {
@@ -15409,11 +15525,12 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
           </Field>
           <Field label="Product Name"><TI value={sForm.productName} onChange={v=>setSForm(f=>({...f,productName:v}))} placeholder="e.g. Quencha 750ml Tumbler Horizon" /></Field>
           <Field label="Collection / Category" hint="select existing or type new">
-            <input list="sku-collection-options" value={sForm.collection} placeholder="e.g. Horizon Collection" onChange={e=>setSForm(f=>({...f,collection:e.target.value}))}
-              style={{ width:"100%",height:38,padding:"9px 12px",fontSize:14,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none",boxSizing:"border-box" }} />
-            <datalist id="sku-collection-options">
-              {collectionOptions.map((c:any)=><option key={c} value={c} />)}
-            </datalist>
+            <SearchableCreatableSelect
+              value={sForm.collection}
+              options={collectionOptions}
+              placeholder="e.g. Horizon Collection"
+              onChange={(v:string)=>setSForm(f=>({...f,collection:v}))}
+            />
           </Field>
           <Field label="Tag"><TI value={sForm.tag} onChange={v=>setSForm(f=>({...f,tag:v}))} placeholder="e.g. PHASE OUT, New, Promo" /></Field>
           <Field label="SKU Code"><TI value={sForm.sku} onChange={v=>setSForm(f=>({...f,sku:v}))} placeholder="e.g. QNC-TBL-750-HRZ" /></Field>
