@@ -21,6 +21,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
 
   async function signInWithPassword(event: FormEvent) {
     event.preventDefault();
@@ -35,7 +36,36 @@ function LoginForm() {
       router.replace(nextPath.startsWith("/") ? nextPath : "/");
       router.refresh();
     } catch (error: any) {
+      setMessageType("error");
       setMessage(error?.message || "Unable to sign in.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendPasswordReset() {
+    if (!email.trim()) {
+      setMessageType("error");
+      setMessage("Enter your email address first.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const supabase = createClient();
+      const redirectTo = `${window.location.origin}/reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo,
+      });
+      if (error) throw error;
+
+      setMessageType("success");
+      setMessage("Password reset email sent. Open the newest email from Supabase.");
+    } catch (error: any) {
+      setMessageType("error");
+      setMessage(error?.message || "Unable to send password reset email.");
     } finally {
       setLoading(false);
     }
@@ -54,6 +84,7 @@ function LoginForm() {
       });
       if (error) throw error;
     } catch (error: any) {
+      setMessageType("error");
       setMessage(error?.message || "Unable to continue with GitHub.");
       setLoading(false);
     }
@@ -98,10 +129,16 @@ function LoginForm() {
             />
           </label>
 
-          {message ? <div style={styles.error}>{message}</div> : null}
+          <button type="button" onClick={sendPasswordReset} disabled={loading} style={styles.forgotButton}>
+            Forgot password?
+          </button>
+
+          {message ? (
+            <div style={messageType === "success" ? styles.success : styles.error}>{message}</div>
+          ) : null}
 
           <button type="submit" disabled={loading} style={styles.signInButton}>
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Please wait…" : "Sign in"}
           </button>
         </form>
 
@@ -183,7 +220,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     outline: "none",
   },
+  forgotButton: {
+    alignSelf: "flex-end",
+    padding: 0,
+    border: 0,
+    background: "transparent",
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   error: { padding: "10px 12px", borderRadius: 9, background: "#FEF2F2", color: "#B91C1C", fontSize: 13, lineHeight: 1.45 },
+  success: { padding: "10px 12px", borderRadius: 9, background: "#F0FDF4", color: "#166534", fontSize: 13, lineHeight: 1.45 },
   signInButton: {
     width: "100%",
     marginTop: 2,
