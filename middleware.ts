@@ -32,7 +32,10 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isLoginPage = pathname === "/login";
-  const isProtectedPage = pathname === "/" || pathname.startsWith("/producthub/");
+  const isProtectedPage =
+    pathname === "/" ||
+    pathname === "/users" ||
+    pathname.startsWith("/producthub/");
 
   if (!user && isProtectedPage) {
     const loginUrl = request.nextUrl.clone();
@@ -42,15 +45,16 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user && isLoginPage) {
-    const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = "/";
-    homeUrl.search = "";
-    return NextResponse.redirect(homeUrl);
+    const nextPath = request.nextUrl.searchParams.get("next");
+    const destination = request.nextUrl.clone();
+    destination.pathname = nextPath && nextPath.startsWith("/") ? nextPath : "/";
+    destination.search = "";
+    return NextResponse.redirect(destination);
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/", "/login", "/producthub/:path*"],
+  matcher: ["/", "/login", "/users", "/producthub/:path*"],
 };
