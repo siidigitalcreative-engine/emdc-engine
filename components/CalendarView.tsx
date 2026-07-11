@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from "react";
 import { createClient } from "@/lib/supabase/client";
+import NotificationBell from "@/components/NotificationBell";
+import { logActivity } from "@/lib/activity";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const C = {
@@ -18730,6 +18732,7 @@ export default function App({
     setAuthBusy(true);
     try {
       const supabase = createClient();
+      await logActivity({ action:"signed out", entityType:"auth", href:"/login" });
       await supabase.auth.signOut();
     } finally {
       if (typeof window !== "undefined") window.location.replace("/login");
@@ -18773,6 +18776,7 @@ export default function App({
       setAuthNameInput(savedName);
       setAuthDisplayName(savedName);
       setAuthSaveStatus("Name saved.");
+      await logActivity({ action:"updated their display name to", entityType:"profile", entityName:savedName, href:"/users" });
     } catch (error:any) {
       setAuthSaveStatus(error?.message || "Unable to save name.");
     } finally {
@@ -19850,6 +19854,7 @@ export default function App({
             <div style={{ display:"flex",alignItems:"center",gap:8 }}>
               {!isMobile&&<button onClick={copyCurrentPageLink} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>{copyLinkStatus || "Copy Link"}</button>}
               {!isMobile&&<button onClick={()=>{ window.location.href="/users"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>Users</button>}
+              <NotificationBell isMobile={isMobile} />
               {isMobile&&<button onClick={copyCurrentPageLink} title="Copy page link" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:13,fontWeight:900 }}>↗</button>}
               {isMobile&&<button onClick={()=>{ window.location.href="/users"; }} title="Open users" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:12,fontWeight:900 }}>U</button>}
               <div ref={authMenuRef} style={{ position:"relative" }}>
