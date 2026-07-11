@@ -4912,7 +4912,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
 };
 
 // ─── CHECKLIST ITEM ──────────────────────────────────────────────────────────
-const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
+const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete, onStatusChange }) => {
   const [expanded,setExpanded] = useState(false);
   const [copied,setCopied] = useState(false);
   const color=DEPTS[dept].color, status=statuses.find(s=>s.id===item.statusId);
@@ -4960,7 +4960,11 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete }) => {
           )}
         </div>
         <div style={{ display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0 }}>
-          <select value={item.statusId||""} onChange={e=>onUpdate({...item,statusId:e.target.value, ...(e.target.value==="done"?{done:true}:item.statusId==="done"?{done:false}:{})})} onClick={e=>e.stopPropagation()}
+          <select value={item.statusId||""} onChange={e=>{
+            const nextStatusId = e.target.value;
+            if (nextStatusId !== (item.statusId || "") && onStatusChange) onStatusChange(item, nextStatusId);
+            onUpdate({...item,statusId:nextStatusId, ...(nextStatusId==="done"?{done:true}:item.statusId==="done"?{done:false}:{})});
+          }} onClick={e=>e.stopPropagation()}
             style={{ fontSize:10,fontWeight:700,borderRadius:5,border:`1.5px solid ${status?.color||C.border}`,background:status?(status.color+"14"):C.surfaceAlt,color:status?.color||C.faint,cursor:"pointer",padding:"3px 6px",outline:"none",maxWidth:100 }}>
             <option value="">—</option>
             {statuses.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
@@ -12849,7 +12853,40 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
               <div style={{ padding:"10px 12px 4px" }}>
                 {di.length===0&&<Empty title="No tasks" sub="Add one below" />}
-                {di.map(item=>(<ChecklistItem key={item.id} item={item} dept={dept} statuses={statuses} onUpdate={i=>upd(dept,i)} onDelete={id=>del(dept,id)} />))}
+                {di.map(item=>(<ChecklistItem
+                  key={item.id}
+                  item={item}
+                  dept={dept}
+                  statuses={statuses}
+                  onUpdate={i=>upd(dept,i)}
+                  onDelete={id=>del(dept,id)}
+                  onStatusChange={(changedItem:any,nextStatusId:string)=>{
+                    const nextStatus = statuses.find((status:any)=>status.id===nextStatusId);
+                    const nextStatusLabel = nextStatus?.label || (nextStatusId ? nextStatusId : "No status");
+                    const groupLabel = String(group?.groupName || group?.name || "Checklist group");
+                    const departmentLabel = String(DEPTS?.[dept]?.label || dept || "Checklist");
+                    const href = typeof window !== "undefined"
+                      ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+                      : "/";
+                    void logActivity({
+                      action:`changed “${String(changedItem?.text || "Checklist item")}” status to`,
+                      entityType:"checklist_status",
+                      entityName:nextStatusLabel,
+                      description:`${groupLabel} · ${departmentLabel}`,
+                      href,
+                      metadata:{
+                        checklist_group_id:String(group?.id || ""),
+                        checklist_group:groupLabel,
+                        department:departmentLabel,
+                        checklist_item_id:String(changedItem?.id || ""),
+                        checklist_item:String(changedItem?.text || ""),
+                        previous_status_id:String(changedItem?.statusId || ""),
+                        status_id:String(nextStatusId || ""),
+                        status:nextStatusLabel,
+                      },
+                    });
+                  }}
+                />))}
               </div>
               <div style={{ padding:"8px 12px 12px",borderTop:`1px solid ${C.border}`,background:C.bg }}>
 
