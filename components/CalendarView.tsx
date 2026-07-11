@@ -13700,10 +13700,11 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onChecklistItemsDirectSave, onChecklistGroupsDirectSave, onRouteChange, groups, setGroups, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onChecklistItemsDirectSave, onChecklistGroupsDirectSave, onRouteChange, groups, setGroups, checklistTrash=[], setChecklistTrash, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
+  const [trashOpen,setTrashOpen] = useState(false);
 
   const persistChecklistItemsNow = (nextItems:any) => {
     if (typeof window === "undefined") return;
@@ -13942,13 +13943,44 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" });
     setCreating(false);
   };
-  const deleteGroup = id=>{
+  const persistChecklistTrash = (nextTrash:any[]) => {
+    if(setChecklistTrash) setChecklistTrash(nextTrash);
+    if(onStateChange) onStateChange({ checklistTrash:nextTrash });
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = raw ? parseEmdcJson(raw) : {};
+      safeSetEmdcAppStateLocal({ ...(parsed || {}), checklistTrash:nextTrash });
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(new Event("emdc-local-sync"));
+      window.dispatchEvent(new Event("emdc-force-cloud-save"));
+    } catch {}
+  };
+
+  const deleteGroup = (id:any) => {
     const groupToDelete = groups.find((g:any)=>g.id===id);
-    cleanupPhaseoutProductsForGroup(groupToDelete);
+    if(!groupToDelete) return;
+
+    const confirmed = window.confirm(
+      `Move "${groupToDelete.groupName || groupToDelete.name || "this checklist group"}" to Trash?\n\nIt will be hidden from active checklists but can still be restored.`
+    );
+    if(!confirmed) return;
+
+    const trashEntry = {
+      id:String(id),
+      group:JSON.parse(JSON.stringify(groupToDelete)),
+      items:JSON.parse(JSON.stringify(allGroupItems?.[id] || {})),
+      deletedAt:new Date().toISOString(),
+    };
+
+    const nextTrash = [
+      trashEntry,
+      ...(Array.isArray(checklistTrash) ? checklistTrash.filter((entry:any)=>String(entry?.id)!==String(id)) : []),
+    ];
+    persistChecklistTrash(nextTrash);
 
     setGroups((p:any)=>{
       const next=p.filter((g:any)=>g.id!==id);
-      if(onStateChange) onStateChange({checklistGroups:next, deletedGroupIds:[id]});
+      if(onStateChange) onStateChange({checklistGroups:next});
       if(onChecklistGroupsDirectSave) onChecklistGroupsDirectSave(JSON.parse(JSON.stringify(next)));
       return next;
     });
@@ -13957,7 +13989,6 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       if(!prev || !prev[id]) return prev;
       const next = { ...prev };
       delete next[id];
-      try { if (typeof window !== "undefined") localStorage.removeItem(getEmdcChecklistItemsBackupKey(id)); } catch {}
       persistChecklistItemsNow(next);
       if(onStateChange) onStateChange({checklistItems:next});
       return next;
@@ -13967,6 +13998,72 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       setActive(null);
       if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" });
     }
+
+    logActivity({
+      action:"moved a checklist group to Trash",
+      entityType:"checklist",
+      entityName:groupToDelete.groupName || groupToDelete.name || "Checklist group",
+      description:"Checklist Trash",
+      href:"/?tab=checklists",
+      metadata:{ groupId:id },
+    });
+  };
+
+  const restoreTrashGroup = (entry:any) => {
+    const group = entry?.group;
+    if(!group?.id) return;
+
+    const nextGroups = groups.some((item:any)=>String(item?.id)===String(group.id))
+      ? groups
+      : [...groups,group];
+
+    setGroups(nextGroups);
+    if(onStateChange) onStateChange({ checklistGroups:nextGroups });
+    if(onChecklistGroupsDirectSave) onChecklistGroupsDirectSave(JSON.parse(JSON.stringify(nextGroups)));
+
+    const nextItems = { ...(allGroupItems || {}), [group.id]:entry?.items || {} };
+    setAllGroupItems(nextItems);
+    persistChecklistItemsNow(nextItems);
+    if(onStateChange) onStateChange({ checklistItems:nextItems });
+
+    const nextTrash = (checklistTrash || []).filter((item:any)=>String(item?.id)!==String(entry.id));
+    persistChecklistTrash(nextTrash);
+
+    logActivity({
+      action:"restored a checklist group from Trash",
+      entityType:"checklist",
+      entityName:group.groupName || group.name || "Checklist group",
+      description:"Checklist Trash",
+      href:"/?tab=checklists",
+      metadata:{ groupId:group.id },
+    });
+  };
+
+  const permanentlyDeleteTrashGroup = (entry:any) => {
+    const group = entry?.group;
+    if(!group?.id) return;
+
+    const confirmed = window.confirm(
+      `Permanently delete "${group.groupName || group.name || "this checklist group"}"?\n\nThis cannot be undone.`
+    );
+    if(!confirmed) return;
+
+    cleanupPhaseoutProductsForGroup(group);
+    try { localStorage.removeItem(getEmdcChecklistItemsBackupKey(group.id)); } catch {}
+
+    const nextTrash = (checklistTrash || []).filter((item:any)=>String(item?.id)!==String(entry.id));
+    persistChecklistTrash(nextTrash);
+
+    if(onStateChange) onStateChange({ deletedGroupIds:[group.id] });
+
+    logActivity({
+      action:"permanently deleted a checklist group",
+      entityType:"checklist",
+      entityName:group.groupName || group.name || "Checklist group",
+      description:"Checklist Trash",
+      href:"/activity?tab=work",
+      metadata:{ groupId:group.id },
+    });
   };
 
   const updateGroup = (id:string, patch:any) => {
@@ -14014,9 +14111,39 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         <p style={{ margin:0,fontSize:13,color:C.muted }}>{groups.length===0?"No checklist groups yet.":`${groups.length} group${groups.length>1?"s":""}`}</p>
         <div style={{ display:"flex",gap:8 }}>
           <Btn variant="outline" onClick={()=>setTemplatesModal(true)}>Manage Templates</Btn>
+          <Btn variant="outline" onClick={()=>setTrashOpen(true)}>Trash{checklistTrash?.length?` (${checklistTrash.length})`:""}</Btn>
           {!creating&&<Btn onClick={()=>setCreating(true)}>+ New Group</Btn>}
         </div>
       </div>
+
+      <Modal open={trashOpen} onClose={()=>setTrashOpen(false)} title="Checklist Trash" width={620}>
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          {!checklistTrash?.length&&(
+            <div style={{ padding:28,textAlign:"center",color:C.muted,fontSize:13 }}>
+              Trash is empty.
+            </div>
+          )}
+          {(checklistTrash || []).map((entry:any)=>{
+            const group = entry?.group || {};
+            return (
+              <div key={entry.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,padding:12,border:`1px solid ${C.border}`,borderRadius:10,background:C.surface }}>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:13,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                    {group.groupName || group.name || "Checklist group"}
+                  </div>
+                  <div style={{ marginTop:4,fontSize:10,color:C.faint }}>
+                    Moved to Trash {entry.deletedAt ? new Date(entry.deletedAt).toLocaleString("en-PH") : ""}
+                  </div>
+                </div>
+                <div style={{ display:"flex",gap:7,flexShrink:0 }}>
+                  <Btn xs variant="outline" onClick={()=>restoreTrashGroup(entry)}>Restore</Btn>
+                  <Btn xs variant="danger" onClick={()=>permanentlyDeleteTrashGroup(entry)}>Delete forever</Btn>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
 
       <TemplateManagerModal open={templatesModal} onClose={()=>setTemplatesModal(false)} templates={templates} onChange={updateTemplatesAndChecklistItems} launchTypes={launchTypes} onLaunchTypesChange={updateLaunchTypesAndSync} />
       <GroupEditModal open={!!editingGroup} group={editingGroup} onClose={()=>setEditingGroup(null)} skuStorage={skuStorage} brands={brands} launchTypes={launchTypes} calendarTypes={calendarTypes} events={seasonalEvents||[]} onApplyPhaseoutAssignments={applyPhaseoutAssignments}
@@ -18854,6 +18981,7 @@ export default function App({
 
   // Lifted checklist state — owned by App so it survives switching away from and back to the Checklists tab
   const [checklistGroups,setChecklistGroups] = useState<any[]>(initialData?.checklistGroups ?? []);
+  const [checklistTrash,setChecklistTrash] = useState<any[]>(initialData?.checklistTrash ?? []);
   const [checklistAllItems,setChecklistAllItems] = useState<Record<string,any>>(initialData?.checklistItems ?? {});
   const [checklistStatuses,setChecklistStatuses] = useState<any[]>(initialData?.checklistStatuses ?? DEFAULT_STATUSES);
 
@@ -19101,6 +19229,7 @@ export default function App({
     skuItems: skuStorage,
     skuTableColumns: sanitizeSkuTableColumns(skuTableColumns),
     checklistGroups,
+    checklistTrash,
     checklistItems: checklistAllItems,
     checklistStatuses,
     calendarEvents: calendarManualEvents,
@@ -19126,6 +19255,10 @@ export default function App({
     if (Array.isArray(patch.calendarTypes)) {
       setCalendarEventTypes(patch.calendarTypes);
       try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
+    }
+
+    if (Array.isArray(patch.checklistTrash)) {
+      setChecklistTrash(patch.checklistTrash);
     }
 
     if (Array.isArray(patch.checklistStatuses)) {
@@ -19627,6 +19760,10 @@ export default function App({
       try { localStorage.setItem("emdc_seasonal_events_v1", JSON.stringify(patch.seasonalEvents)); } catch {}
     }
 
+    if (Array.isArray(patch.checklistTrash)) {
+      setChecklistTrash(patch.checklistTrash);
+    }
+
     if (Array.isArray(patch.calendarTypes)) {
       setCalendarEventTypes(patch.calendarTypes);
       try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
@@ -20016,7 +20153,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleRootStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={handleRootStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} checklistTrash={checklistTrash} setChecklistTrash={setChecklistTrash} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
