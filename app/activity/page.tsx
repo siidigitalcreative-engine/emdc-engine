@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -64,7 +64,7 @@ const TAB_LABELS: Record<ActivityTab, string> = {
   system: "System",
 };
 
-export default function ActivityPage() {
+function ActivityPageContent() {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
 
@@ -374,5 +374,40 @@ export default function ActivityPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+
+export default function ActivityPage() {
+  return (
+    <Suspense
+      fallback={
+        <main
+          style={{
+            minHeight: "100vh",
+            background: "#F8F9FA",
+            fontFamily: "Inter,system-ui,sans-serif",
+            padding: "28px 14px 48px",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 920,
+              margin: "0 auto",
+              background: "#FFFFFF",
+              border: "1px solid #E5E7EB",
+              borderRadius: 16,
+              padding: 26,
+              color: "#6B7280",
+              fontSize: 13,
+            }}
+          >
+            Loading Activity Center…
+          </div>
+        </main>
+      }
+    >
+      <ActivityPageContent />
+    </Suspense>
   );
 }
