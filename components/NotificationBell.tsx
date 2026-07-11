@@ -16,6 +16,21 @@ type ActivityRow = {
   created_at: string;
 };
 
+const SYSTEM_ENTITY_TYPES = new Set(["auth", "system", "profile", "user"]);
+const SYSTEM_ACTIONS = new Set([
+  "signed in",
+  "signed out",
+  "changed display name",
+  "requested password reset",
+  "changed password",
+]);
+
+const isNotificationActivity = (row: ActivityRow) => {
+  const entityType = String(row.entity_type || "").toLowerCase();
+  const action = String(row.action || "").toLowerCase();
+  return !SYSTEM_ENTITY_TYPES.has(entityType) && !SYSTEM_ACTIONS.has(action);
+};
+
 const timeAgo = (value: string) => {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
   if (seconds < 60) return "Just now";
@@ -45,7 +60,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
         .from("activity_logs")
         .select("id,display_name,email,action,entity_type,entity_name,description,href,created_at")
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(100),
       supabase
         .from("notification_reads")
         .select("last_read_at")
@@ -53,7 +68,8 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
         .maybeSingle(),
     ]);
 
-    setRows((activity || []) as ActivityRow[]);
+    const workRows = ((activity || []) as ActivityRow[]).filter(isNotificationActivity).slice(0, 20);
+    setRows(workRows);
     setLastReadAt(readRow?.last_read_at || null);
     setLoading(false);
   };
@@ -62,10 +78,12 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
     load();
     const timer = window.setInterval(load, 30000);
 
+    // Sign-ins are still retained in the Activity Center under the System tab,
+    // but they are filtered out of the notification bell.
     const key = "emdc_login_activity_logged_v1";
     if (!sessionStorage.getItem(key)) {
       sessionStorage.setItem(key, "1");
-      logActivity({ action: "signed in", entityType: "auth", href: "/" }).then(load);
+      logActivity({ action: "signed in", entityType: "auth", href: "/activity?tab=system" }).then(load);
     }
 
     return () => window.clearInterval(timer);
@@ -172,14 +190,14 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
           <div style={{ padding: "13px 14px", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 900, color: "#111827" }}>Notifications</div>
-              <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>Recent team activity</div>
+              <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>Work updates only</div>
             </div>
-            <button onClick={() => { window.location.href = "/activity"; }} style={{ border: "none", background: "transparent", color: "#374151", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>View all</button>
+            <button onClick={() => { window.location.href = "/activity?tab=work"; }} style={{ border: "none", background: "transparent", color: "#374151", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>View all</button>
           </div>
 
           <div style={{ maxHeight: isMobile ? "calc(100dvh - 250px)" : 390, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
             {loading && <div style={{ padding: 18, color: "#6B7280", fontSize: 12 }}>Loading…</div>}
-            {!loading && rows.length === 0 && <div style={{ padding: 22, color: "#6B7280", fontSize: 12, textAlign: "center" }}>No activity yet.</div>}
+            {!loading && rows.length === 0 && <div style={{ padding: 22, color: "#6B7280", fontSize: 12, textAlign: "center" }}>No work notifications yet.</div>}
             {rows.map(row => (
               <button
                 key={row.id}
