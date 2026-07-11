@@ -155,17 +155,19 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
 
       {open && (
         <div style={{
-          position: "absolute",
-          right: 0,
-          top: 38,
-          width: isMobile ? "min(350px,calc(100vw - 24px))" : 380,
-          maxHeight: 480,
+          position: isMobile ? "fixed" : "absolute",
+          right: isMobile ? 12 : 0,
+          left: isMobile ? 12 : "auto",
+          top: isMobile ? 76 : 38,
+          width: isMobile ? "auto" : 380,
+          maxWidth: isMobile ? "none" : "calc(100vw - 24px)",
+          maxHeight: isMobile ? "calc(100dvh - 170px)" : 480,
           overflow: "hidden",
           borderRadius: 14,
           border: "1px solid #E5E7EB",
           background: "#fff",
           boxShadow: "0 18px 50px rgba(15,23,42,.18)",
-          zIndex: 700,
+          zIndex: 9500,
         }}>
           <div style={{ padding: "13px 14px", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
@@ -175,7 +177,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
             <button onClick={() => { window.location.href = "/activity"; }} style={{ border: "none", background: "transparent", color: "#374151", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>View all</button>
           </div>
 
-          <div style={{ maxHeight: 390, overflowY: "auto" }}>
+          <div style={{ maxHeight: isMobile ? "calc(100dvh - 250px)" : 390, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
             {loading && <div style={{ padding: 18, color: "#6B7280", fontSize: 12 }}>Loading…</div>}
             {!loading && rows.length === 0 && <div style={{ padding: 22, color: "#6B7280", fontSize: 12, textAlign: "center" }}>No activity yet.</div>}
             {rows.map(row => (
