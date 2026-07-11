@@ -85,6 +85,26 @@ const GlobalStyles = () => {
         padding-bottom:env(safe-area-inset-bottom)!important;
         box-shadow:0 -8px 24px rgba(15,23,42,.08)!important;
       }
+      .emdc-top-nav{
+        background:#fff;
+      }
+      @media(max-width:759px){
+        .emdc-top-nav{
+          position:fixed!important;
+          top:0!important;
+          left:0!important;
+          right:0!important;
+          width:100%!important;
+          z-index:9100!important;
+          box-shadow:0 6px 18px rgba(15,23,42,.08)!important;
+        }
+        .emdc-top-nav-spacer{
+          display:block!important;
+          height:52px!important;
+          min-height:52px!important;
+          width:100%!important;
+        }
+      }
       @media(max-width:759px){
         .emdc-main-content{padding-bottom:calc(170px + env(safe-area-inset-bottom))!important;}
       }
@@ -19108,6 +19128,23 @@ export default function App({
       try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
     }
 
+    if (Array.isArray(patch.checklistStatuses)) {
+      const nextStatuses = patch.checklistStatuses.map((status:any)=>({
+        ...status,
+        color:String(status?.color || "#9CA3AF"),
+      }));
+      setChecklistStatuses(nextStatuses);
+      eventLocalEditUntilRef.current = Date.now() + 5000;
+      try {
+        const raw = localStorage.getItem("emdc_app_state_v1");
+        const parsed = raw ? parseEmdcJson(raw) : {};
+        localStorage.setItem("emdc_app_state_v1", JSON.stringify({
+          ...(parsed || {}),
+          checklistStatuses:nextStatuses,
+        }));
+      } catch {}
+    }
+
     try {
       window.dispatchEvent(new Event("emdc-local-sync"));
       window.dispatchEvent(new Event("emdc-force-cloud-save"));
@@ -19868,7 +19905,7 @@ export default function App({
       )}
 
         {/* ── Top nav ─────────────────────────────────────────────────────── */}
-        <div style={{ background:C.surface,borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:100 }}>
+        <div className="emdc-top-nav" style={{ background:C.surface,borderBottom:`1px solid ${C.border}`,position:isMobile?"fixed":"sticky",top:0,left:isMobile?0:undefined,right:isMobile?0:undefined,zIndex:isMobile?9100:100 }}>
           <div style={{ maxWidth:1280,margin:"0 auto",padding:isMobile?"0 12px":"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52,width:"100%",minWidth:0 }}>
             <div style={{ display:"flex",alignItems:"center",gap:9 }}>
               <div style={{ width:28,height:28,borderRadius:7,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center" }}>
@@ -19950,6 +19987,7 @@ export default function App({
             </div>
           </div>
         </div>
+        {isMobile&&<div className="emdc-top-nav-spacer" aria-hidden="true" />}
 
         {/* ── Page content ─────────────────────────────────────────────────── */}
         <div style={{ maxWidth:pageMaxWidth,margin:"0 auto",padding:pagePadding,width:"100%",minWidth:0,overflowX:"hidden" }}>
