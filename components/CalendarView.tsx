@@ -20066,7 +20066,7 @@ export default function App({
               {!isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>Feed</button>}
               {!isMobile&&<button onClick={()=>{ window.location.href="/users"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>Users</button>}
               <NotificationBell isMobile={isMobile} />
-              {isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} title="Open team feed" aria-label="Open team feed" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:14,fontWeight:900 }}>F</button>}
+              {isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} title="Open team feed" aria-label="Open team feed" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:14,fontWeight:900 }}>📰</button>}
               {isMobile&&<button onClick={()=>{ window.location.href="/users"; }} title="Open users" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:12,fontWeight:900 }}>U</button>}
               <div ref={authMenuRef} style={{ position:"relative" }}>
                 <button
