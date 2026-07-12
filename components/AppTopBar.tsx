@@ -155,7 +155,7 @@ export default function AppTopBar() {
         .emdc-app-topbar input,
         .emdc-app-topbar textarea,
         .emdc-app-topbar select {
-          font: inherit !important;
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
         }
       `}</style>
       <header
@@ -421,7 +421,7 @@ export default function AppTopBar() {
           </div>
         </div>
       </header>
-      <div aria-hidden="true" style={{ height: 52 }} />
+      <div aria-hidden="true" style={{ height: 52 }} />l
     </>
   );
 }
