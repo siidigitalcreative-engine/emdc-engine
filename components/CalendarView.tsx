@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from "react";
 import { createClient } from "@/lib/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
+import MaterialIcon from "@/components/MaterialIcon";
 import { logActivity } from "@/lib/activity";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
@@ -20063,11 +20064,11 @@ export default function App({
               </nav>
             )}
             <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-              {!isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>Feed</button>}
-              {!isMobile&&<button onClick={()=>{ window.location.href="/users"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}>Users</button>}
+              {!isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="dynamic_feed" size={15} />Feed</button>}
+              {!isMobile&&<button onClick={()=>{ window.location.href="/users"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="group" size={15} />Users</button>}
               <NotificationBell isMobile={isMobile} />
-              {isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} title="Open team feed" aria-label="Open team feed" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:14,fontWeight:900 }}><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style={{display:"block"}}><path d="M4 3.75A2.25 2.25 0 0 1 6.25 1.5h11.5A2.25 2.25 0 0 1 20 3.75v16.5a2.25 2.25 0 0 1-2.25 2.25H6.25A2.25 2.25 0 0 1 4 20.25V3.75Zm3 1.75v4h10v-4H7Zm0 6.5v1.5h10V12H7Zm0 3.5V17h10v-1.5H7Zm0 3.5v1.5h6V19H7Z"/></svg></button>}
-              {isMobile&&<button onClick={()=>{ window.location.href="/users"; }} title="Open users" aria-label="Open users" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style={{display:"block"}}><path d="M8.5 11A4.5 4.5 0 1 0 8.5 2a4.5 4.5 0 0 0 0 9Zm7-1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM1.5 19.25C1.5 15.8 4.3 13 7.75 13h1.5c3.45 0 6.25 2.8 6.25 6.25V22h-14v-2.75Zm15.8-6.18c2.95.4 5.2 2.92 5.2 5.93V22h-5v-2.75c0-2.4-.82-4.6-2.2-6.35.65.02 1.32.07 2 .17Z"/></svg></button>}
+              {isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} title="Open team feed" aria-label="Open team feed" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="dynamic_feed" size={18} /></button>}
+              {isMobile&&<button onClick={()=>{ window.location.href="/users"; }} title="Open users" aria-label="Open users" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="group" size={18} /></button>}
               <div ref={authMenuRef} style={{ position:"relative" }}>
                 <button
                   type="button"
@@ -20075,9 +20076,9 @@ export default function App({
                   title={authEmail ? `Signed in as ${authEmail}` : "User menu"}
                   style={{ height:30,maxWidth:isMobile?120:220,padding:isMobile?"0 9px":"0 11px",display:"flex",alignItems:"center",gap:6,borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}
                 >
-                  <span aria-hidden="true">●</span>
+                  <MaterialIcon name="account_circle" size={16} />
                   <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{isMobile ? "Account" : (authDisplayName || "Account")}</span>
-                  <span aria-hidden="true" style={{ fontSize:9,color:C.faint }}>▾</span>
+                  <MaterialIcon name="arrow_drop_down" size={16} fill={false} style={{ color:C.faint }} />
                 </button>
 
                 {authMenuOpen&&(
@@ -20161,13 +20162,22 @@ export default function App({
         {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
         {isMobile&&(
           <div className="emdc-mobile-bottom-nav" style={{ position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
-            {TABS.map(t=>(
-              <button key={t.id} onClick={()=>navigateMainTab(t.id)} style={{ flex:1,padding:"10px 4px 12px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3 }}>
-                <span style={{ fontSize:18,lineHeight:1 }}>{TAB_ICONS[t.id]}</span>
-                <span style={{ fontSize:10,fontWeight:tab===t.id?700:500,color:tab===t.id?C.accent:C.faint }}>{TAB_SHORT[t.id]}</span>
-                {tab===t.id&&<div style={{ width:4,height:4,borderRadius:"50%",background:C.accent }} />}
-              </button>
-            ))}
+            {TABS.map(t=>{
+              const materialIcons:any = {
+                calendar:"calendar_month",
+                events:"event_note",
+                checklists:"checklist",
+                skus:"inventory_2",
+                ai:"auto_awesome",
+              };
+              return (
+                <button key={t.id} onClick={()=>navigateMainTab(t.id)} style={{ flex:1,padding:"10px 4px 12px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:tab===t.id?C.accent:C.faint }}>
+                  <MaterialIcon name={materialIcons[t.id] || "circle"} size={21} fill={tab===t.id} weight={tab===t.id?600:450} />
+                  <span style={{ fontSize:10,fontWeight:tab===t.id?700:500,color:"currentColor" }}>{TAB_SHORT[t.id]}</span>
+                  {tab===t.id&&<div style={{ width:4,height:4,borderRadius:"50%",background:C.accent }} />}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
