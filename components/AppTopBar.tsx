@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
 import { logActivity } from "@/lib/activity";
+import MaterialIcon from "@/components/MaterialIcon";
 
 const C = {
   surface: "#FFFFFF",
@@ -220,7 +221,8 @@ export default function AppTopBar() {
                     fontWeight: 800,
                   }}
                 >
-                  Feed
+                  <MaterialIcon name="dynamic_feed" size={15} />
+                  <span style={{ marginLeft: 5 }}>Feed</span>
                 </button>
                 <button
                   type="button"
@@ -237,7 +239,8 @@ export default function AppTopBar() {
                     fontWeight: 800,
                   }}
                 >
-                  Users
+                  <MaterialIcon name="group" size={15} />
+                  <span style={{ marginLeft: 5 }}>Users</span>
                 </button>
               </>
             )}
@@ -253,9 +256,7 @@ export default function AppTopBar() {
                   aria-label="Open team feed"
                   style={iconButton}
                 >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d="M4 3.75A2.25 2.25 0 0 1 6.25 1.5h11.5A2.25 2.25 0 0 1 20 3.75v16.5a2.25 2.25 0 0 1-2.25 2.25H6.25A2.25 2.25 0 0 1 4 20.25V3.75Zm3 1.75v4h10v-4H7Zm0 6.5v1.5h10V12H7Zm0 3.5V17h10v-1.5H7Zm0 3.5v1.5h6V19H7Z"/>
-                  </svg>
+                  <MaterialIcon name="group" size={18} />
                 </button>
 
                 <button
@@ -296,11 +297,11 @@ export default function AppTopBar() {
                   whiteSpace: "nowrap",
                 }}
               >
-                <span aria-hidden="true">●</span>
+                <MaterialIcon name="account_circle" size={16} />
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                   {isMobile ? "Account" : displayName}
                 </span>
-                <span aria-hidden="true" style={{ fontSize: 9, color: C.faint }}>▾</span>
+                <MaterialIcon name="arrow_drop_down" size={16} fill={false} style={{ color: C.faint }} />
               </button>
 
               {menuOpen && (
