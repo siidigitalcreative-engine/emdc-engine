@@ -216,7 +216,27 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
   };
 
   return (
-    <div ref={rootRef} style={{ position: "relative" }}>
+    <div
+      ref={rootRef}
+      className="emdc-notification-root"
+      style={{
+        position: "relative",
+        fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      }}
+    >
+      <style>{`
+        .emdc-notification-root,
+        .emdc-notification-root * {
+          box-sizing: border-box;
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        }
+        .emdc-notification-root button,
+        .emdc-notification-root input,
+        .emdc-notification-root textarea,
+        .emdc-notification-root select {
+          font: inherit;
+        }
+      `}</style>
       <button
         type="button"
         onClick={toggle}
