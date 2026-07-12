@@ -235,7 +235,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
         .emdc-notification-root input,
         .emdc-notification-root textarea,
         .emdc-notification-root select {
-          font: inherit !important;
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
         }
       `}</style>
       <button
@@ -312,7 +312,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
                   {selectMode ? "Cancel" : "Select"}
                 </button>
               )}
-              <button onClick={() => { window.location.href = "/activity?tab=work"; }} style={{ border: "none", background: "transparent", color: "#374151", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>View all</button>
+              <button onClick={() => { window.location.href = "/activity?tab=work"; }} style={{ height: 28, padding: "0 6px", border: "none", background: "transparent", color: "#374151", fontSize: 11, lineHeight: 1, fontWeight: 800, cursor: "pointer" }}>View all</button>
             </div>
           </div>
 
@@ -344,7 +344,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
                 )}
                 <button
                   onClick={() => openDeleteDialog("all")}
-                  style={{ height: 28, padding: "0 9px", borderRadius: 7, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", fontSize: 10, fontWeight: 900, cursor: "pointer" }}
+                  style={{ height: 28, padding: "0 9px", borderRadius: 7, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", fontSize: 10, lineHeight: 1, fontWeight: 900, cursor: "pointer" }}
                 >
                   Delete all
                 </button>
