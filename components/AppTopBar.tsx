@@ -145,7 +145,21 @@ export default function AppTopBar() {
 
   return (
     <>
+      <style>{`
+        .emdc-app-topbar,
+        .emdc-app-topbar * {
+          box-sizing: border-box;
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        }
+        .emdc-app-topbar button,
+        .emdc-app-topbar input,
+        .emdc-app-topbar textarea,
+        .emdc-app-topbar select {
+          font: inherit !important;
+        }
+      `}</style>
       <header
+        className="emdc-app-topbar"
         style={{
           position: "fixed",
           top: 0,
