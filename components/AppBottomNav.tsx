@@ -62,7 +62,7 @@ export default function AppBottomNav() {
                 padding: "9px 2px 10px",
                 border: "none",
                 background: "transparent",
-                color: active ? "#111827" : "#6B7280",
+                color: "#111827",
                 cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",
@@ -73,14 +73,16 @@ export default function AppBottomNav() {
               <MaterialIcon
                 name={item.icon}
                 size={21}
-                fill={active}
-                weight={active ? 600 : 450}
+                fill={true}
+                weight={600}
+                style={{ opacity: active ? 1 : 0.42 }}
               />
 
               <span
                 style={{
                   fontSize: 9,
                   fontWeight: active ? 800 : 700,
+                  opacity: active ? 1 : 0.52,
                   whiteSpace: "nowrap",
                 }}
               >
