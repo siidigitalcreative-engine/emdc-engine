@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/activity";
+import MaterialIcon from "@/components/MaterialIcon";
 
 type ActivityRow = {
   id: string;
@@ -216,27 +217,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
   };
 
   return (
-    <div
-      ref={rootRef}
-      className="emdc-notification-root"
-      style={{
-        position: "relative",
-        fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      }}
-    >
-      <style>{`
-        .emdc-notification-root,
-        .emdc-notification-root * {
-          box-sizing: border-box;
-          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
-        }
-        .emdc-notification-root button,
-        .emdc-notification-root input,
-        .emdc-notification-root textarea,
-        .emdc-notification-root select {
-          font: inherit;
-        }
-      `}</style>
+    <div ref={rootRef} style={{ position: "relative" }}>
       <button
         type="button"
         onClick={toggle}
@@ -254,7 +235,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
           position: "relative",
         }}
       >
-        ♢
+        <MaterialIcon name="notifications" size={18} fill={unread > 0} />
         {unread > 0 && (
           <span style={{
             position: "absolute",
