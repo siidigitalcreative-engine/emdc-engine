@@ -3,6 +3,8 @@
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import AppTopBar from "@/components/AppTopBar";
+import AppBottomNav from "@/components/AppBottomNav";
 
 type ActivityTab = "all" | "work" | "system";
 
@@ -124,7 +126,9 @@ function ActivityPageContent() {
   };
 
   return (
-    <main
+    <>
+      <AppTopBar />
+      <main
       style={{
         minHeight: "100vh",
         background: "#F8F9FA",
@@ -133,25 +137,6 @@ function ActivityPageContent() {
       }}
     >
       <div style={{ maxWidth: 920, margin: "0 auto" }}>
-        <button
-          type="button"
-          onClick={() => {
-            window.location.href = "/";
-          }}
-          style={{
-            height: 38,
-            padding: "0 14px",
-            borderRadius: 9,
-            border: "1px solid #E5E7EB",
-            background: "#FFFFFF",
-            color: "#374151",
-            fontSize: 12,
-            fontWeight: 800,
-            cursor: "pointer",
-          }}
-        >
-          ← Back to EMDC Engine
-        </button>
 
         <div style={{ marginTop: 24 }}>
           <h1
@@ -373,7 +358,9 @@ function ActivityPageContent() {
             ))}
         </section>
       </div>
-    </main>
+      </main>
+      <AppBottomNav />
+    </>
   );
 }
 
