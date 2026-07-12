@@ -61,6 +61,10 @@ export default function FeedPage() {
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState("");
 
   const refresh = async () => {
@@ -135,6 +139,70 @@ export default function FeedPage() {
       description: "Team Feed",
       href: "/feed",
       metadata: { postId: data.id },
+    });
+  };
+
+  const startEditPost = (post: FeedPost) => {
+    if (!currentUser || post.user_id !== currentUser.id) return;
+    setEditingPostId(post.id);
+    setEditBody(post.body);
+    setEditImageUrl(post.image_url || "");
+    setError("");
+  };
+
+  const cancelEditPost = () => {
+    setEditingPostId(null);
+    setEditBody("");
+    setEditImageUrl("");
+    setSavingEdit(false);
+  };
+
+  const saveEditedPost = async (post: FeedPost) => {
+    if (!currentUser || post.user_id !== currentUser.id || savingEdit) return;
+
+    const body = editBody.trim();
+    const cleanImageUrl = editImageUrl.trim();
+
+    if (!body) {
+      setError("Post text cannot be empty.");
+      return;
+    }
+
+    setSavingEdit(true);
+    setError("");
+
+    const { data, error: updateError } = await supabase
+      .from("feed_posts")
+      .update({
+        body,
+        image_url: cleanImageUrl || null,
+      })
+      .eq("id", post.id)
+      .eq("user_id", currentUser.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      setError(updateError.message);
+      setSavingEdit(false);
+      return;
+    }
+
+    setPosts((previous) =>
+      previous.map((item) =>
+        item.id === post.id ? (data as FeedPost) : item
+      )
+    );
+
+    cancelEditPost();
+
+    await logActivity({
+      action: "edited a feed post",
+      entityType: "feed",
+      entityName: body.slice(0, 70),
+      description: "Team Feed",
+      href: "/feed",
+      metadata: { postId: post.id },
     });
   };
 
@@ -512,38 +580,148 @@ export default function FeedPage() {
                       </div>
 
                       {post.user_id === currentUser?.id && (
-                        <button
-                          type="button"
-                          onClick={() => deletePost(post)}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            color: "#DC2626",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Delete
-                        </button>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => startEditPost(post)}
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              color: COLORS.textSub,
+                              fontSize: 11,
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => deletePost(post)}
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              color: "#DC2626",
+                              fontSize: 11,
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </div>
 
-                    <div
-                      style={{
-                        marginTop: 13,
-                        whiteSpace: "pre-wrap",
-                        overflowWrap: "anywhere",
-                        fontSize: 14,
-                        lineHeight: 1.55,
-                        color: COLORS.textSub,
-                      }}
-                    >
-                      {post.body}
-                    </div>
+                    {editingPostId === post.id ? (
+                      <div style={{ marginTop: 13 }}>
+                        <textarea
+                          value={editBody}
+                          onChange={(event) => setEditBody(event.target.value)}
+                          rows={4}
+                          style={{
+                            width: "100%",
+                            resize: "vertical",
+                            minHeight: 96,
+                            border: `1px solid ${COLORS.border}`,
+                            borderRadius: 12,
+                            padding: 12,
+                            color: COLORS.text,
+                            font: "inherit",
+                            fontSize: 14,
+                            outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                        />
+
+                        <input
+                          value={editImageUrl}
+                          onChange={(event) => setEditImageUrl(event.target.value)}
+                          placeholder="Optional image URL"
+                          style={{
+                            width: "100%",
+                            height: 40,
+                            marginTop: 9,
+                            border: `1px solid ${COLORS.border}`,
+                            borderRadius: 10,
+                            padding: "0 12px",
+                            color: COLORS.text,
+                            font: "inherit",
+                            fontSize: 13,
+                            outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            gap: 8,
+                            marginTop: 10,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={cancelEditPost}
+                            disabled={savingEdit}
+                            style={{
+                              height: 36,
+                              padding: "0 14px",
+                              borderRadius: 9,
+                              border: `1px solid ${COLORS.border}`,
+                              background: COLORS.surface,
+                              color: COLORS.textSub,
+                              fontSize: 11,
+                              fontWeight: 800,
+                              cursor: savingEdit ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            Cancel
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => saveEditedPost(post)}
+                            disabled={!editBody.trim() || savingEdit}
+                            style={{
+                              height: 36,
+                              padding: "0 14px",
+                              borderRadius: 9,
+                              border: "none",
+                              background: COLORS.text,
+                              color: "#FFFFFF",
+                              fontSize: 11,
+                              fontWeight: 900,
+                              cursor:
+                                !editBody.trim() || savingEdit
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity: !editBody.trim() || savingEdit ? 0.45 : 1,
+                            }}
+                          >
+                            {savingEdit ? "Saving..." : "Save changes"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          marginTop: 13,
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                          fontSize: 14,
+                          lineHeight: 1.55,
+                          color: COLORS.textSub,
+                        }}
+                      >
+                        {post.body}
+                      </div>
+                    )}
                   </div>
 
-                  {post.image_url && (
+                  {post.image_url && editingPostId !== post.id && (
                     <img
                       src={post.image_url}
                       alt="Feed attachment"
