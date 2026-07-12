@@ -253,7 +253,7 @@ export default function AppTopBar() {
                     fontWeight: 800,
                   }}
                 >
-                  <MaterialIcon name="group" size={15} fill={true} weight={500} />
+                  <MaterialIcon name="groups" size={15} fill={true} weight={500} />
                   <span style={{ marginLeft: 5 }}>Users</span>
                 </button>
               </>
@@ -280,7 +280,7 @@ export default function AppTopBar() {
                   aria-label="Open users"
                   style={iconButton}
                 >
-                  <MaterialIcon name="group" size={18} fill={true} weight={500} />
+                  <MaterialIcon name="groups" size={18} fill={true} weight={500} />
                 </button>
               </>
             )}
