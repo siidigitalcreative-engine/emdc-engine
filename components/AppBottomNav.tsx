@@ -1,29 +1,27 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import MaterialIcon from "@/components/MaterialIcon";
 
 const ITEMS = [
-  { id: "calendar", label: "Calendar", short: "Calendar", icon: "calendar" },
-  { id: "events", label: "Events", short: "Events", icon: "events" },
-  { id: "checklists", label: "Checklists", short: "Checklists", icon: "checklists" },
-  { id: "skus", label: "SKUs", short: "SKUs", icon: "skus" },
-  { id: "ai", label: "AI", short: "AI", icon: "ai" },
+  { id: "calendar", label: "Calendar", icon: "calendar_month" },
+  { id: "events", label: "Events", icon: "event_note" },
+  { id: "checklists", label: "Checklists", icon: "checklist" },
+  { id: "skus", label: "SKUs", icon: "inventory_2" },
+  { id: "ai", label: "AI", icon: "auto_awesome" },
 ];
-
-const iconPath: Record<string, React.ReactNode> = {
-  calendar: <path d="M6 2v2M18 2v2M3.5 8h17M5.5 4h13a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>,
-  events: <path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/>,
-  checklists: <path d="m4 7 2 2 4-4M12 7h8m-16 7 2 2 4-4m2 2h8"/>,
-  skus: <path d="m12 2 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/>,
-  ai: <path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8m8.6 8.6 2.8 2.8M2 12h4m12 0h4M4.9 19.1l2.8-2.8m8.6-8.6 2.8-2.8M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>,
-};
 
 export default function AppBottomNav() {
   const [mobile, setMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState("calendar");
 
   useEffect(() => {
     const update = () => setMobile(window.innerWidth < 760);
     update();
+
+    const params = new URLSearchParams(window.location.search);
+    setActiveTab(params.get("tab") || "calendar");
+
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
@@ -33,6 +31,7 @@ export default function AppBottomNav() {
   return (
     <>
       <div aria-hidden="true" style={{ height: "calc(76px + env(safe-area-inset-bottom))" }} />
+
       <nav
         style={{
           position: "fixed",
@@ -47,45 +46,61 @@ export default function AppBottomNav() {
           boxShadow: "0 -8px 24px rgba(15,23,42,.08)",
         }}
       >
-        {ITEMS.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => {
-              window.location.href = `/?tab=${item.id}`;
-            }}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: "9px 2px 10px",
-              border: "none",
-              background: "transparent",
-              color: "#6B7280",
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              width="19"
-              height="19"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        {ITEMS.map((item) => {
+          const active = activeTab === item.id;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                window.location.href = `/?tab=${item.id}`;
+              }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: "9px 2px 10px",
+                border: "none",
+                background: "transparent",
+                color: active ? "#111827" : "#6B7280",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+              }}
             >
-              {iconPath[item.icon]}
-            </svg>
-            <span style={{ fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" }}>
-              {item.short}
-            </span>
-          </button>
-        ))}
+              <MaterialIcon
+                name={item.icon}
+                size={21}
+                fill={active}
+                weight={active ? 600 : 450}
+              />
+
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: active ? 800 : 700,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {item.label}
+              </span>
+
+              {active && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: 999,
+                    background: "#111827",
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
       </nav>
     </>
   );
