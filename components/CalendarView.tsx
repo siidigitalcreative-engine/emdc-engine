@@ -20064,11 +20064,11 @@ export default function App({
               </nav>
             )}
             <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-              {!isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="dynamic_feed" size={15} />Feed</button>}
-              {!isMobile&&<button onClick={()=>{ window.location.href="/users"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="group" size={15} />Users</button>}
+              {!isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="view_stream" size={15} fill={true} weight={500} />Feed</button>}
+              {!isMobile&&<button onClick={()=>{ window.location.href="/users"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="group" size={15} fill={true} weight={500} />Users</button>}
               <NotificationBell isMobile={isMobile} />
-              {isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} title="Open team feed" aria-label="Open team feed" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="dynamic_feed" size={18} /></button>}
-              {isMobile&&<button onClick={()=>{ window.location.href="/users"; }} title="Open users" aria-label="Open users" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="group" size={18} /></button>}
+              {isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} title="Open team feed" aria-label="Open team feed" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="view_stream" size={18} fill={true} weight={500} /></button>}
+              {isMobile&&<button onClick={()=>{ window.location.href="/users"; }} title="Open users" aria-label="Open users" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="group" size={18} fill={true} weight={500} /></button>}
               <div ref={authMenuRef} style={{ position:"relative" }}>
                 <button
                   type="button"
@@ -20076,7 +20076,7 @@ export default function App({
                   title={authEmail ? `Signed in as ${authEmail}` : "User menu"}
                   style={{ height:30,maxWidth:isMobile?120:220,padding:isMobile?"0 9px":"0 11px",display:"flex",alignItems:"center",gap:6,borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}
                 >
-                  <MaterialIcon name="account_circle" size={16} />
+                  <MaterialIcon name="account_circle" size={16} fill={true} weight={500} />
                   <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{isMobile ? "Account" : (authDisplayName || "Account")}</span>
                   <MaterialIcon name="arrow_drop_down" size={16} fill={false} style={{ color:C.faint }} />
                 </button>
