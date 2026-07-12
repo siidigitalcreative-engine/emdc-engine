@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
+import AppTopBar from "@/components/AppTopBar";
+import AppBottomNav from "@/components/AppBottomNav";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,7 +95,9 @@ export default async function UsersPage() {
   const { users, error } = await loadUsers();
 
   return (
-    <main
+    <>
+      <AppTopBar />
+      <main
       style={{
         minHeight: "100vh",
         background: "#F8F9FA",
@@ -104,23 +108,6 @@ export default async function UsersPage() {
       }}
     >
       <div style={{ width: "100%", maxWidth: 820, margin: "0 auto" }}>
-        <Link
-          href="/"
-          style={{
-            display: "inline-flex",
-            textDecoration: "none",
-            border: "1px solid #E5E7EB",
-            background: "#FFFFFF",
-            color: "#374151",
-            borderRadius: 8,
-            padding: "8px 13px",
-            fontSize: 13,
-            fontWeight: 700,
-            marginBottom: 22,
-          }}
-        >
-          ← Back to EMDC Engine
-        </Link>
 
         <div style={{ marginBottom: 20 }}>
           <h1
@@ -226,6 +213,8 @@ export default async function UsersPage() {
           )}
         </section>
       </div>
-    </main>
+      </main>
+      <AppBottomNav />
+    </>
   );
 }
