@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/activity";
+import AppTopBar from "@/components/AppTopBar";
+import AppBottomNav from "@/components/AppBottomNav";
 import {
   FeedComment,
   FeedLike,
@@ -268,7 +270,9 @@ export default function FeedPage() {
   };
 
   return (
-    <main
+    <>
+      <AppTopBar />
+      <main
       style={{
         minHeight: "100vh",
         background: COLORS.bg,
@@ -278,59 +282,11 @@ export default function FeedPage() {
       }}
     >
       <div style={{ width: "100%", maxWidth: 720, margin: "0 auto" }}>
-        <div
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 20,
-            background: "rgba(248,249,250,.95)",
-            backdropFilter: "blur(12px)",
-            padding: "4px 0 14px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
-            <div>
-              <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.1 }}>
-                Team Feed
-              </h1>
-              <p
-                style={{
-                  margin: "6px 0 0",
-                  color: COLORS.muted,
-                  fontSize: 12,
-                }}
-              >
-                Share updates, images, likes, and comments with the team.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = "/";
-              }}
-              style={{
-                height: 38,
-                padding: "0 13px",
-                borderRadius: 9,
-                border: `1px solid ${COLORS.border}`,
-                background: COLORS.surface,
-                color: COLORS.textSub,
-                fontWeight: 800,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              ← EMDC
-            </button>
-          </div>
+        <div style={{ marginBottom: 14 }}>
+          <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.1 }}>Team Feed</h1>
+          <p style={{ margin: "6px 0 0", color: COLORS.muted, fontSize: 12 }}>
+            Share updates, images, likes, and comments with the team.
+          </p>
         </div>
 
         <section
@@ -885,6 +841,8 @@ export default function FeedPage() {
           </div>
         )}
       </div>
-    </main>
+      </main>
+      <AppBottomNav />
+    </>
   );
 }
