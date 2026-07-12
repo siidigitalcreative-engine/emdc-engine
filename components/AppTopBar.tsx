@@ -221,7 +221,7 @@ export default function AppTopBar() {
                     fontWeight: 800,
                   }}
                 >
-                  <MaterialIcon name="dynamic_feed" size={15} />
+                  <MaterialIcon name="view_stream" size={15} fill={true} weight={500} />
                   <span style={{ marginLeft: 5 }}>Feed</span>
                 </button>
                 <button
@@ -239,7 +239,7 @@ export default function AppTopBar() {
                     fontWeight: 800,
                   }}
                 >
-                  <MaterialIcon name="group" size={15} />
+                  <MaterialIcon name="group" size={15} fill={true} weight={500} />
                   <span style={{ marginLeft: 5 }}>Users</span>
                 </button>
               </>
@@ -256,7 +256,7 @@ export default function AppTopBar() {
                   aria-label="Open team feed"
                   style={iconButton}
                 >
-                  <MaterialIcon name="group" size={18} />
+                  <MaterialIcon name="group" size={18} fill={true} weight={500} />
                 </button>
 
                 <button
@@ -297,7 +297,7 @@ export default function AppTopBar() {
                   whiteSpace: "nowrap",
                 }}
               >
-                <MaterialIcon name="account_circle" size={16} />
+                <MaterialIcon name="account_circle" size={16} fill={true} weight={500} />
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                   {isMobile ? "Account" : displayName}
                 </span>
