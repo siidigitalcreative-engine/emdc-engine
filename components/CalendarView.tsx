@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from "react";
 import { createClient } from "@/lib/supabase/client";
-import NotificationBell from "@/components/NotificationBell";
-import MaterialIcon from "@/components/MaterialIcon";
+import AppTopBar from "@/components/AppTopBar";
+import AppBottomNav from "@/components/AppBottomNav";
 import { logActivity } from "@/lib/activity";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
@@ -20042,90 +20042,53 @@ export default function App({
         </div>
       )}
 
-        {/* ── Top nav ─────────────────────────────────────────────────────── */}
-        <div className="emdc-top-nav" style={{ background:C.surface,borderBottom:`1px solid ${C.border}`,position:isMobile?"fixed":"sticky",top:0,left:isMobile?0:undefined,right:isMobile?0:undefined,zIndex:isMobile?9100:100 }}>
-          <div style={{ maxWidth:1280,margin:"0 auto",padding:isMobile?"0 12px":"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52,width:"100%",minWidth:0 }}>
-            <div style={{ display:"flex",alignItems:"center",gap:9 }}>
-              <div style={{ width:28,height:28,borderRadius:7,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2.5c2.8 1.6 4.6 4.6 4.6 8.9 0 2.1-.5 3.9-1.2 5.4h-6.8c-.7-1.5-1.2-3.3-1.2-5.4 0-4.3 1.8-7.3 4.6-8.9z" fill="#fff"/>
-                  <circle cx="12" cy="10" r="1.7" fill={C.accent}/>
-                  <path d="M8.6 16.8 6 21.5l3.6-1.6c.3-1 .5-2 .6-3.1h-1.6z" fill="#fff"/>
-                  <path d="M15.4 16.8 18 21.5l-3.6-1.6c-.3-1-.5-2-.6-3.1h1.6z" fill="#fff"/>
-                  <path d="M9.4 18.7c.3.9.9 1.7 1.6 2.3.3.2.7.2 1 0 .7-.6 1.3-1.4 1.6-2.3h-4.2z" fill="#fff" opacity=".7"/>
-                </svg>
-              </div>
-              <span style={{ fontSize:15,fontWeight:800,color:C.text,letterSpacing:"-.02em" }}>EMDC</span>
-            </div>
-            {/* Desktop nav */}
-            {!isMobile&&(
-              <nav style={{ display:"flex",height:"100%",alignItems:"stretch" }}>
-                {TABS.map(t=>(<button key={t.id} onClick={()=>navigateMainTab(t.id)} style={{ padding:"0 16px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:500,color:tab===t.id?C.text:C.muted,borderBottom:tab===t.id?`2px solid ${C.accent}`:"2px solid transparent",transition:"color .15s",letterSpacing:"-.01em",whiteSpace:"nowrap" }}>{t.label}</button>))}
-              </nav>
-            )}
-            <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-              {!isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="view_stream" size={15} fill={true} weight={500} />Feed</button>}
-              {!isMobile&&<button onClick={()=>{ window.location.href="/users"; }} style={{ height:28,padding:"0 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5 }}><MaterialIcon name="group" size={15} fill={true} weight={500} />Users</button>}
-              <NotificationBell isMobile={isMobile} />
-              {isMobile&&<button onClick={()=>{ window.location.href="/feed"; }} title="Open team feed" aria-label="Open team feed" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="view_stream" size={18} fill={true} weight={500} /></button>}
-              {isMobile&&<button onClick={()=>{ window.location.href="/users"; }} title="Open users" aria-label="Open users" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><MaterialIcon name="group" size={18} fill={true} weight={500} /></button>}
-              <div ref={authMenuRef} style={{ position:"relative" }}>
+        <AppTopBar />
+
+        {!isMobile&&(
+          <div
+            style={{
+              position:"sticky",
+              top:52,
+              zIndex:90,
+              background:C.surface,
+              borderBottom:`1px solid ${C.border}`,
+            }}
+          >
+            <nav
+              style={{
+                maxWidth:1280,
+                height:44,
+                margin:"0 auto",
+                padding:"0 20px",
+                display:"flex",
+                alignItems:"stretch",
+                overflowX:"auto",
+              }}
+            >
+              {TABS.map(t=>(
                 <button
-                  type="button"
-                  onClick={()=>{ setAuthMenuOpen(v=>!v); setAuthSaveStatus(""); }}
-                  title={authEmail ? `Signed in as ${authEmail}` : "User menu"}
-                  style={{ height:30,maxWidth:isMobile?120:220,padding:isMobile?"0 9px":"0 11px",display:"flex",alignItems:"center",gap:6,borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:C.textSub,cursor:"pointer",fontSize:11,fontWeight:800,whiteSpace:"nowrap" }}
+                  key={t.id}
+                  onClick={()=>navigateMainTab(t.id)}
+                  style={{
+                    padding:"0 16px",
+                    background:"none",
+                    border:"none",
+                    cursor:"pointer",
+                    fontSize:13,
+                    fontWeight:tab===t.id?700:500,
+                    color:tab===t.id?C.text:C.muted,
+                    borderBottom:tab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
+                    transition:"color .15s",
+                    letterSpacing:"-.01em",
+                    whiteSpace:"nowrap",
+                  }}
                 >
-                  <MaterialIcon name="account_circle" size={16} fill={true} weight={500} />
-                  <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{isMobile ? "Account" : (authDisplayName || "Account")}</span>
-                  <MaterialIcon name="arrow_drop_down" size={16} fill={false} style={{ color:C.faint }} />
+                  {t.label}
                 </button>
-
-                {authMenuOpen&&(
-                  <div style={{ position:"absolute",right:0,top:36,width:isMobile?"min(310px,calc(100vw - 24px))":310,padding:14,borderRadius:12,border:`1px solid ${C.border}`,background:C.surface,boxShadow:"0 14px 40px rgba(15,23,42,.16)",zIndex:500 }}>
-                    <div style={{ marginBottom:12 }}>
-                      <div style={{ fontSize:13,fontWeight:900,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{authDisplayName || "EMDC User"}</div>
-                      <div style={{ marginTop:2,fontSize:11,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{authEmail}</div>
-                    </div>
-
-                    <label style={{ display:"block",marginBottom:5,fontSize:10,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase",color:C.muted }}>Display name</label>
-                    <input
-                      value={authNameInput}
-                      onChange={e=>{ setAuthNameInput(e.target.value); setAuthSaveStatus(""); }}
-                      onKeyDown={e=>{ if(e.key==="Enter") handleSaveDisplayName(); }}
-                      placeholder="Enter your name"
-                      maxLength={80}
-                      style={{ width:"100%",height:38,padding:"0 11px",borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,fontSize:13,outline:"none",boxSizing:"border-box" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSaveDisplayName}
-                      disabled={authSavingName || !authNameInput.trim()}
-                      style={{ width:"100%",height:36,marginTop:8,borderRadius:8,border:"none",background:C.accent,color:"#fff",fontSize:12,fontWeight:800,cursor:authSavingName||!authNameInput.trim()?"not-allowed":"pointer",opacity:authSavingName||!authNameInput.trim()?.55:1 }}
-                    >
-                      {authSavingName ? "Saving…" : "Save display name"}
-                    </button>
-                    {authSaveStatus&&(
-                      <div style={{ marginTop:7,fontSize:11,color:authSaveStatus==="Name saved."?"#15803D":"#DC2626" }}>{authSaveStatus}</div>
-                    )}
-
-                    <div style={{ height:1,background:C.border,margin:"12px 0" }} />
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      disabled={authBusy}
-                      style={{ width:"100%",height:36,borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,cursor:authBusy?"not-allowed":"pointer",fontSize:12,fontWeight:800,opacity:authBusy?.6:1 }}
-                    >
-                      {authBusy ? "Signing out…" : "Log out"}
-                    </button>
-                  </div>
-                )}
-              </div>
-              <span className="hide-mobile" style={{ fontSize:11,color:C.faint,fontVariantNumeric:"tabular-nums" }}>{today.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}</span>
-            </div>
+              ))}
+            </nav>
           </div>
-        </div>
-        {isMobile&&<div className="emdc-top-nav-spacer" aria-hidden="true" />}
+        )}
 
         {/* ── Page content ─────────────────────────────────────────────────── */}
         <div style={{ maxWidth:pageMaxWidth,margin:"0 auto",padding:pagePadding,width:"100%",minWidth:0,overflowX:"hidden" }}>
@@ -20159,27 +20122,7 @@ export default function App({
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
-        {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
-        {isMobile&&(
-          <div className="emdc-mobile-bottom-nav" style={{ position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
-            {TABS.map(t=>{
-              const materialIcons:any = {
-                calendar:"calendar_month",
-                events:"event_note",
-                checklists:"checklist",
-                skus:"inventory_2",
-                ai:"auto_awesome",
-              };
-              return (
-                <button key={t.id} onClick={()=>navigateMainTab(t.id)} style={{ flex:1,padding:"10px 4px 12px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:tab===t.id?C.accent:C.faint }}>
-                  <MaterialIcon name={materialIcons[t.id] || "circle"} size={21} fill={tab===t.id} weight={tab===t.id?600:450} />
-                  <span style={{ fontSize:10,fontWeight:tab===t.id?700:500,color:"currentColor" }}>{TAB_SHORT[t.id]}</span>
-                  {tab===t.id&&<div style={{ width:4,height:4,borderRadius:"50%",background:C.accent }} />}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <AppBottomNav />
       </div>
     </>
   );
