@@ -16,14 +16,25 @@ export default function AppBottomNav() {
   const [activeTab, setActiveTab] = useState("calendar");
 
   useEffect(() => {
-    const update = () => setMobile(window.innerWidth < 760);
-    update();
+    const updateMobile = () => setMobile(window.innerWidth < 760);
 
-    const params = new URLSearchParams(window.location.search);
-    setActiveTab(params.get("tab") || "calendar");
+    const updateActiveTab = () => {
+      const rawHash = String(window.location.hash || "").replace(/^#\/?/, "");
+      const tabFromHash = rawHash.split("?")[0] || "calendar";
+      const allowed = ["calendar", "events", "checklists", "skus", "ai"];
+      setActiveTab(allowed.includes(tabFromHash) ? tabFromHash : "calendar");
+    };
 
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    updateMobile();
+    updateActiveTab();
+
+    window.addEventListener("resize", updateMobile);
+    window.addEventListener("hashchange", updateActiveTab);
+
+    return () => {
+      window.removeEventListener("resize", updateMobile);
+      window.removeEventListener("hashchange", updateActiveTab);
+    };
   }, []);
 
   if (!mobile) return null;
@@ -54,7 +65,7 @@ export default function AppBottomNav() {
               key={item.id}
               type="button"
               onClick={() => {
-                window.location.href = `/?tab=${item.id}`;
+                window.location.href = `/#/${item.id}`;
               }}
               style={{
                 flex: 1,
