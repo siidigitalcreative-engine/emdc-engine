@@ -256,7 +256,7 @@ export default function AppTopBar() {
                   aria-label="Open team feed"
                   style={iconButton}
                 >
-                  <MaterialIcon name="group" size={18} fill={true} weight={500} />
+                  <MaterialIcon name="view_stream" size={18} fill={true} weight={500} />
                 </button>
 
                 <button
@@ -266,9 +266,7 @@ export default function AppTopBar() {
                   aria-label="Open users"
                   style={iconButton}
                 >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d="M8.5 11A4.5 4.5 0 1 0 8.5 2a4.5 4.5 0 0 0 0 9Zm7-1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM1.5 19.25C1.5 15.8 4.3 13 7.75 13h1.5c3.45 0 6.25 2.8 6.25 6.25V22h-14v-2.75Zm15.8-6.18c2.95.4 5.2 2.92 5.2 5.93V22h-5v-2.75c0-2.4-.82-4.6-2.2-6.35.65.02 1.32.07 2 .17Z"/>
-                  </svg>
+                  <MaterialIcon name="group" size={18} fill={true} weight={500} />
                 </button>
               </>
             )}
