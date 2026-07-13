@@ -5550,8 +5550,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     }
   };
 
-  const mergeEcommerceSavedOutputs = (...lists:any[][]) => {
-    const deletedIds = new Set(readEcommerceDeletedOutputIds());
+  const mergeEcommerceSavedOutputs = (lists:any[][] = [], deletedOverride:any[] = []) => {
+    const deletedIds = new Set([
+      ...readEcommerceDeletedOutputIds(),
+      ...(Array.isArray(deletedOverride) ? deletedOverride : []),
+    ].map((item:any)=>String(item || "").trim()).filter(Boolean));
+
     const map = new Map();
     lists.flat().filter(Boolean).forEach((item:any)=>{
       const id = String(item?.id || "").trim();
@@ -5597,17 +5601,18 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       ...(Array.isArray(rawData?.deletedSavedOutputIds) ? rawData.deletedSavedOutputIds : []),
     ].map((item:any)=>String(item || "").trim()).filter(Boolean)));
 
-    writeEcommerceDeletedOutputIds(combinedDeletedIds);
-
     const localSavedOutputs = readEcommerceSavedOutputsFromLocal();
     return {
       ...persistedEcommerce,
       ...rawData,
       deletedSavedOutputIds:combinedDeletedIds,
       savedOutputs:mergeEcommerceSavedOutputs(
-        localSavedOutputs,
-        Array.isArray(persistedEcommerce.savedOutputs) ? persistedEcommerce.savedOutputs : [],
-        Array.isArray(rawData?.savedOutputs) ? rawData.savedOutputs : [],
+        [
+          localSavedOutputs,
+          Array.isArray(persistedEcommerce.savedOutputs) ? persistedEcommerce.savedOutputs : [],
+          Array.isArray(rawData?.savedOutputs) ? rawData.savedOutputs : [],
+        ],
+        combinedDeletedIds,
       ),
     };
   };
@@ -7219,8 +7224,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const output = String(data.generatedText || "").trim();
     if(!output) return;
     const saved = mergeEcommerceSavedOutputs(
-      readEcommerceSavedOutputsFromLocal(),
-      Array.isArray(data.savedOutputs) ? data.savedOutputs : []
+      [
+        readEcommerceSavedOutputsFromLocal(),
+        Array.isArray(data.savedOutputs) ? data.savedOutputs : [],
+      ],
+      Array.isArray(data.deletedSavedOutputIds) ? data.deletedSavedOutputIds : []
     );
     const now = new Date().toISOString();
     const savedEntry = {
@@ -7266,8 +7274,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
     const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
     const saved = mergeEcommerceSavedOutputs(
-      readEcommerceSavedOutputsFromLocal(),
-      Array.isArray(data.savedOutputs) ? data.savedOutputs : []
+      [
+        readEcommerceSavedOutputsFromLocal(),
+        Array.isArray(data.savedOutputs) ? data.savedOutputs : [],
+      ],
+      Array.isArray(data.deletedSavedOutputIds) ? data.deletedSavedOutputIds : []
     );
     const nextSaved = saved.filter((item:any)=>String(item?.id || "")!==cleanId);
 
