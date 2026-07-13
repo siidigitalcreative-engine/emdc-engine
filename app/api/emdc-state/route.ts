@@ -720,24 +720,6 @@ export async function POST(req: NextRequest) {
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
 
-      const nonSkuPatchKeys = Object.keys(patch).filter((key) =>
-        !["skuItems", "deletedSkuKeys"].includes(key)
-      );
-
-      if (nonSkuPatchKeys.length) {
-        await writeActivityRows(req, [{
-          action: "updated EMDC data",
-          entityType: "workspace",
-          entityName: nonSkuPatchKeys.slice(0, 4).join(", "),
-          description:
-            nonSkuPatchKeys.length > 4
-              ? `${nonSkuPatchKeys.length} sections updated`
-              : "Changes saved",
-          href: "/",
-          metadata: { keys: nonSkuPatchKeys },
-        }]);
-      }
-
       return NextResponse.json({ ok: true, mode: "app-patch", data: payload });
     }
 
@@ -814,15 +796,6 @@ export async function POST(req: NextRequest) {
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
 
-      await writeActivityRows(req, [{
-        action: "updated checklist groups",
-        entityType: "checklist",
-        entityName: `${nextGroups.length} group${nextGroups.length === 1 ? "" : "s"}`,
-        description: "Checklist group changes saved",
-        href: "/#/checklists",
-        metadata: { count: nextGroups.length },
-      }]);
-
       return NextResponse.json({ ok: true, mode: "checklist-groups", count: nextGroups.length, data: payload });
     }
 
@@ -853,15 +826,6 @@ export async function POST(req: NextRequest) {
 
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
-
-      await writeActivityRows(req, [{
-        action: "updated checklist items",
-        entityType: "checklist",
-        entityName: "Checklist",
-        description: "Checklist changes saved",
-        href: "/#/checklists",
-        metadata: { groupCount: Object.keys(nextItems).length },
-      }]);
 
       return NextResponse.json({ ok: true, mode: "checklist-items", data: payload });
     }
