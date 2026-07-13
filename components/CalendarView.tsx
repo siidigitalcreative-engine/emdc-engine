@@ -7121,47 +7121,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
-    const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
-    const liveMarketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
-
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
+    const marketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
+    const nextDeleted = (Array.isArray(marketing.deletedProductIntroTransferSignatures)
+      ? marketing.deletedProductIntroTransferSignatures
+      : []
+    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const nextDeleted = Array.from(new Set([
-      ...(Array.isArray(persistedMarketing.deletedProductIntroTransferSignatures) ? persistedMarketing.deletedProductIntroTransferSignatures : []),
-      ...(Array.isArray(liveMarketing.deletedProductIntroTransferSignatures) ? liveMarketing.deletedProductIntroTransferSignatures : []),
-    ])).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
-
-    const existingRows = mergeEcommerceTransferRows(
-      Array.isArray(persistedMarketing.productIntroMarketingRows) ? persistedMarketing.productIntroMarketingRows : [],
-      Array.isArray(liveMarketing.productIntroMarketingRows) ? liveMarketing.productIntroMarketingRows : [],
-      readEcommerceTransferRowsBackup("marketing","product_intro")
-    );
-
+    const existingRows = getProductIntroMarketingRows();
     const cleanRows = normalizeTransferRowsForStorage(
       mergeEcommerceTransferRows(existingRows, rowsToSend)
     );
-
-    // Save the backup without dispatching emdc-local-sync before the workspace
-    // patch. Dispatching first caused the old checklist group to reload and
-    // cancel the transfer.
-    try {
-      const key = getEcommerceTransferRowsBackupKey("marketing","product_intro");
-      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
-    } catch {}
-
+    writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
     updateAiWorkspace("marketing",{
       productIntroMarketingRows:cleanRows,
       productIntroMarketingRowsCleared:false,
       deletedProductIntroTransferSignatures:nextDeleted,
-      selectedMarketingProductKeys:[],
-      placedMarketingProductKeys:[],
       generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
-
-    markActionDone("product-intro-ecommerce-send-marketing-current");
   };
 
   const sendProductIntroEcommerceOutputToDigital = (sourceData:any) => {
@@ -7174,34 +7154,20 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
-    const persistedLivestream = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).livestream || {}) as any;
-    const liveLivestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
-
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
+    const livestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
+    const nextDeleted = (Array.isArray(livestream.deletedProductIntroTransferSignatures)
+      ? livestream.deletedProductIntroTransferSignatures
+      : []
+    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const nextDeleted = Array.from(new Set([
-      ...(Array.isArray(persistedLivestream.deletedProductIntroTransferSignatures) ? persistedLivestream.deletedProductIntroTransferSignatures : []),
-      ...(Array.isArray(liveLivestream.deletedProductIntroTransferSignatures) ? liveLivestream.deletedProductIntroTransferSignatures : []),
-    ])).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
-
-    const existingRows = mergeEcommerceTransferRows(
-      Array.isArray(persistedLivestream.productIntroLivestreamRows) ? persistedLivestream.productIntroLivestreamRows : [],
-      Array.isArray(liveLivestream.productIntroLivestreamRows) ? liveLivestream.productIntroLivestreamRows : [],
-      readEcommerceTransferRowsBackup("livestream","product_intro")
-    );
-
+    const existingRows = getProductIntroLivestreamRows();
     const cleanRows = normalizeTransferRowsForStorage(
       mergeEcommerceTransferRows(existingRows, rowsToSend)
     );
-
-    // Save the backup without firing a sync event before the actual group patch.
-    try {
-      const key = getEcommerceTransferRowsBackupKey("livestream","product_intro");
-      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
-    } catch {}
-
+    writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
     updateAiWorkspace("livestream",{
       productIntroLivestreamRows:cleanRows,
       productIntroLivestreamRowsCleared:false,
@@ -7210,8 +7176,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       placedProductKeys:[],
       generatedAt:new Date().toISOString(),
     });
-
-    markActionDone("product-intro-ecommerce-send-livestream-current");
   };
 
   const setEcommercePromptForProducts = (rows:any[]) => {
@@ -12573,8 +12537,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                           <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                             <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
-                            <TransferBtn id={`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>{ sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview); markActionDone(`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`); }} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</TransferBtn>
-                            <TransferBtn id={`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>{ sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview); markActionDone(`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`); }} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</TransferBtn>
                             <TransferBtn id={`product-intro-ecommerce-send-dc-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</TransferBtn>
                             <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(savedEcommercePreview,`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
@@ -19893,20 +19857,102 @@ export default function App({
         return;
       }
 
-      const confirmed = window.confirm("Import this backup and replace the current EMDC data?");
+      const confirmed = window.confirm(
+        "Import this backup safely? Existing checklist groups and checklist items will be preserved, while matching records from the backup will be restored."
+      );
       if (!confirmed) return;
 
-      setCloudSyncStatus("Importing backup...");
+      setCloudSyncStatus("Importing backup safely...");
+
+      // IMPORTANT: backups can be partial. Never let an import remove checklist
+      // groups/items that already exist in the current cloud/device state.
+      const currentState:any = {
+        checklistGroups:Array.isArray(checklistGroups) ? checklistGroups : [],
+        checklistTrash:Array.isArray(checklistTrash) ? checklistTrash : [],
+        checklistItems:checklistAllItems && typeof checklistAllItems === "object"
+          ? checklistAllItems
+          : {},
+        checklistStatuses:Array.isArray(checklistStatuses) ? checklistStatuses : [],
+      };
+
+      const mergeRowsById = (currentRows:any[] = [], importedRows:any[] = []) => {
+        const map = new Map<string,any>();
+        [...(Array.isArray(currentRows) ? currentRows : []), ...(Array.isArray(importedRows) ? importedRows : [])]
+          .forEach((row:any,index:number)=>{
+            const key = String(row?.id || row?.groupId || row?.name || row?.label || `row-${index}`).trim();
+            if (!key) return;
+            map.set(key,{ ...(map.get(key) || {}), ...row });
+          });
+        return Array.from(map.values());
+      };
+
+      const mergeChecklistItemsSafely = (currentItems:any = {}, importedItems:any = {}) => {
+        const next:any = {
+          ...(currentItems && typeof currentItems === "object" ? currentItems : {}),
+        };
+
+        Object.entries(
+          importedItems && typeof importedItems === "object" ? importedItems : {}
+        ).forEach(([groupId, importedGroupItems]:any)=>{
+          const currentGroupItems:any =
+            next[groupId] && typeof next[groupId] === "object" ? next[groupId] : {};
+          const incomingGroupItems:any =
+            importedGroupItems && typeof importedGroupItems === "object"
+              ? importedGroupItems
+              : {};
+
+          const mergedGroup:any = { ...currentGroupItems };
+
+          Object.keys(incomingGroupItems).forEach((dept:string)=>{
+            const currentRows = Array.isArray(currentGroupItems[dept])
+              ? currentGroupItems[dept]
+              : [];
+            const importedRows = Array.isArray(incomingGroupItems[dept])
+              ? incomingGroupItems[dept]
+              : [];
+
+            mergedGroup[dept] = dedupeChecklistItemsById([
+              ...currentRows,
+              ...importedRows,
+            ]);
+          });
+
+          next[groupId] = dedupeChecklistItemsObject(mergedGroup);
+        });
+
+        return next;
+      };
+
+      const safeImportedState:any = {
+        ...appState,
+        checklistGroups:mergeRowsById(
+          currentState.checklistGroups,
+          Array.isArray(appState.checklistGroups) ? appState.checklistGroups : []
+        ),
+        checklistTrash:mergeRowsById(
+          currentState.checklistTrash,
+          Array.isArray(appState.checklistTrash) ? appState.checklistTrash : []
+        ),
+        checklistItems:mergeChecklistItemsSafely(
+          currentState.checklistItems,
+          appState.checklistItems
+        ),
+        checklistStatuses:mergeRowsById(
+          currentState.checklistStatuses,
+          Array.isArray(appState.checklistStatuses) ? appState.checklistStatuses : []
+        ),
+      };
+
       cloudApplyingRef.current = true;
-      applyAppState(appState);
+      applyAppState(safeImportedState);
       setTimeout(()=>{ cloudApplyingRef.current = false; },0);
 
       const updatedAt = new Date().toISOString();
 
       // Large SKU backups must be uploaded through the existing SKU chunk endpoint.
       // This prevents the import POST from failing when the backup has thousands of SKUs.
-      const skuItems = Array.isArray(appState.skuItems) ? appState.skuItems : [];
-      let appStateForImport = appState;
+      const skuItems = Array.isArray(safeImportedState.skuItems) ? safeImportedState.skuItems : [];
+      let appStateForImport = safeImportedState;
       if (skuItems.length >= EMDC_LARGE_SKU_COUNT) {
         await saveCloudSkuItemsChunked(skuItems, updatedAt);
         appStateForImport = {
@@ -19944,8 +19990,42 @@ export default function App({
         throw new Error(detail || `Import save failed with status ${res.status}`);
       }
 
+      // The app also stores checklist groups/items in dedicated cloud blobs.
+      // Update those blobs during import, otherwise an older partial blob can
+      // overwrite the restored backup on the next refresh.
+      const [groupsRes, itemsRes] = await Promise.all([
+        fetch("/api/emdc-state?mode=checklist-groups", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          cache:"no-store",
+          body:JSON.stringify({
+            mode:"checklist-groups",
+            clientId:cloudClientIdRef.current,
+            updatedAt,
+            checklistGroups:safeImportedState.checklistGroups,
+          }),
+        }),
+        fetch("/api/emdc-state?mode=checklist-items", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          cache:"no-store",
+          body:JSON.stringify({
+            mode:"checklist-items",
+            clientId:cloudClientIdRef.current,
+            updatedAt,
+            checklistItems:safeImportedState.checklistItems,
+          }),
+        }),
+      ]);
+
+      if (!groupsRes.ok || !itemsRes.ok) {
+        throw new Error("Backup imported, but checklist cloud restoration was incomplete.");
+      }
+
+      safeSetEmdcAppStateLocal(safeImportedState);
+      rememberLastGoodEmdcAppState(safeImportedState);
       cloudLastUpdatedAtRef.current = updatedAt;
-      setCloudSyncStatus("Imported and synced");
+      setCloudSyncStatus("Imported safely and synced");
       setTimeout(()=>setCloudSyncStatus("Synced"),1200);
     } catch (error:any) {
       const message = error?.message || "Unknown import error.";
