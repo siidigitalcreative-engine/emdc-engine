@@ -7105,8 +7105,26 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const sendProductIntroEcommerceOutputToMarketing = (sourceData:any) => {
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
+
+    const signaturesToRestore = new Set(
+      rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
+    );
+    const marketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
+    const nextDeleted = (Array.isArray(marketing.deletedProductIntroTransferSignatures)
+      ? marketing.deletedProductIntroTransferSignatures
+      : []
+    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
+
     const existingRows = getProductIntroMarketingRows();
-    saveProductIntroMarketingRows([...existingRows, ...rowsToSend]);
+    const cleanRows = normalizeTransferRowsForStorage([...existingRows, ...rowsToSend]);
+    writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
+    updateAiWorkspace("marketing",{
+      productIntroMarketingRows:cleanRows,
+      productIntroMarketingRowsCleared:false,
+      deletedProductIntroTransferSignatures:nextDeleted,
+      generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+      generatedAt:new Date().toISOString(),
+    });
   };
 
   const sendProductIntroEcommerceOutputToDigital = (sourceData:any) => {
@@ -7118,8 +7136,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const sendProductIntroEcommerceOutputToLivestream = (sourceData:any) => {
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
+
+    const signaturesToRestore = new Set(
+      rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
+    );
+    const livestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
+    const nextDeleted = (Array.isArray(livestream.deletedProductIntroTransferSignatures)
+      ? livestream.deletedProductIntroTransferSignatures
+      : []
+    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
+
     const existingRows = getProductIntroLivestreamRows();
-    saveProductIntroLivestreamRows([...existingRows, ...rowsToSend]);
+    const cleanRows = normalizeTransferRowsForStorage([...existingRows, ...rowsToSend]);
+    writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
+    updateAiWorkspace("livestream",{
+      productIntroLivestreamRows:cleanRows,
+      productIntroLivestreamRowsCleared:false,
+      deletedProductIntroTransferSignatures:nextDeleted,
+      selectedProductKeys:[],
+      placedProductKeys:[],
+      generatedAt:new Date().toISOString(),
+    });
   };
 
   const setEcommercePromptForProducts = (rows:any[]) => {
