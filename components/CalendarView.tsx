@@ -20044,52 +20044,6 @@ export default function App({
 
         <AppTopBar />
 
-        {!isMobile&&(
-          <div
-            style={{
-              position:"sticky",
-              top:52,
-              zIndex:90,
-              background:C.surface,
-              borderBottom:`1px solid ${C.border}`,
-            }}
-          >
-            <nav
-              style={{
-                maxWidth:1280,
-                height:44,
-                margin:"0 auto",
-                padding:"0 20px",
-                display:"flex",
-                alignItems:"stretch",
-                overflowX:"auto",
-              }}
-            >
-              {TABS.map(t=>(
-                <button
-                  key={t.id}
-                  onClick={()=>navigateMainTab(t.id)}
-                  style={{
-                    padding:"0 16px",
-                    background:"none",
-                    border:"none",
-                    cursor:"pointer",
-                    fontSize:13,
-                    fontWeight:tab===t.id?700:500,
-                    color:tab===t.id?C.text:C.muted,
-                    borderBottom:tab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
-                    transition:"color .15s",
-                    letterSpacing:"-.01em",
-                    whiteSpace:"nowrap",
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        )}
-
         {/* ── Page content ─────────────────────────────────────────────────── */}
         <div style={{ maxWidth:pageMaxWidth,margin:"0 auto",padding:pagePadding,width:"100%",minWidth:0,overflowX:"hidden" }}>
           <div style={{ marginBottom:isMobile?16:20 }}>
