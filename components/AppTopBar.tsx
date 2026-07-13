@@ -218,72 +218,27 @@ export default function AppTopBar() {
           </button>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {!isMobile && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { window.location.href = "/feed"; }}
-                  style={{
-                    height: 28,
-                    padding: "0 10px",
-                    borderRadius: 7,
-                    border: `1px solid ${C.border}`,
-                    background: C.surfaceAlt,
-                    color: C.textSub,
-                    cursor: "pointer",
-                    fontSize: 11,
-                    fontWeight: 800,
-                  }}
-                >
-                  <MaterialIcon name="view_stream" size={15} fill={true} weight={500} />
-                  <span style={{ marginLeft: 5 }}>Feed</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { window.location.href = "/users"; }}
-                  style={{
-                    height: 28,
-                    padding: "0 10px",
-                    borderRadius: 7,
-                    border: `1px solid ${C.border}`,
-                    background: C.surfaceAlt,
-                    color: C.textSub,
-                    cursor: "pointer",
-                    fontSize: 11,
-                    fontWeight: 800,
-                  }}
-                >
-                  <MaterialIcon name="groups" size={15} fill={true} weight={500} />
-                  <span style={{ marginLeft: 5 }}>Users</span>
-                </button>
-              </>
-            )}
-
             <NotificationBell isMobile={isMobile} />
 
-            {isMobile && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { window.location.href = "/feed"; }}
-                  title="Open team feed"
-                  aria-label="Open team feed"
-                  style={iconButton}
-                >
-                  <MaterialIcon name="view_stream" size={18} fill={true} weight={500} />
-                </button>
+            <button
+              type="button"
+              onClick={() => { window.location.href = "/feed"; }}
+              title="Team Feed"
+              aria-label="Open Team Feed"
+              style={iconButton}
+            >
+              <MaterialIcon name="view_stream" size={18} fill={true} weight={500} />
+            </button>
 
-                <button
-                  type="button"
-                  onClick={() => { window.location.href = "/users"; }}
-                  title="Open users"
-                  aria-label="Open users"
-                  style={iconButton}
-                >
-                  <MaterialIcon name="groups" size={18} fill={true} weight={500} />
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => { window.location.href = "/users"; }}
+              title="Users"
+              aria-label="Open Users"
+              style={iconButton}
+            >
+              <MaterialIcon name="groups" size={18} fill={true} weight={500} />
+            </button>
 
             <div ref={menuRef} style={{ position: "relative" }}>
               <button
@@ -421,7 +376,7 @@ export default function AppTopBar() {
           </div>
         </div>
       </header>
-      <div aria-hidden="true" style={{ height: 52 }} />l
+      <div aria-hidden="true" style={{ height: 52 }} />
     </>
   );
 }
