@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { del, get, list, put } from "@vercel/blob";
+import { createServerClient } from "@supabase/ssr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +31,208 @@ function isRecord(value: any) {
 
 function safeArray(value: any) {
   return Array.isArray(value) ? value : [];
+}
+
+function skuKey(row: any) {
+  return String(row?.sku || row?.skuCode || row?.value || row?.id || "")
+    .trim()
+    .toLowerCase();
+}
+
+function skuLabel(row: any) {
+  return String(row?.sku || row?.skuCode || row?.value || row?.id || "Unknown SKU").trim();
+}
+
+function productLabel(row: any) {
+  return String(row?.productName || row?.product || row?.name || row?.title || "").trim();
+}
+
+function comparableValue(value: any) {
+  if (!value || typeof value !== "object") return value;
+  const clone = { ...value };
+  delete clone.updatedAt;
+  delete clone.createdAt;
+  delete clone.savedAt;
+  delete clone.lastModified;
+  return clone;
+}
+
+function diffSkuRows(beforeRows: any[] = [], afterRows: any[] = []) {
+  const before = new Map<string, any>();
+  const after = new Map<string, any>();
+
+  safeArray(beforeRows).forEach((row: any) => {
+    const key = skuKey(row);
+    if (key) before.set(key, row);
+  });
+
+  safeArray(afterRows).forEach((row: any) => {
+    const key = skuKey(row);
+    if (key) after.set(key, row);
+  });
+
+  const added: any[] = [];
+  const deleted: any[] = [];
+  const updated: Array<{ before: any; after: any; fields: string[] }> = [];
+
+  after.forEach((row, key) => {
+    const oldRow = before.get(key);
+    if (!oldRow) {
+      added.push(row);
+      return;
+    }
+
+    if (JSON.stringify(comparableValue(oldRow)) !== JSON.stringify(comparableValue(row))) {
+      const keys = Array.from(new Set([
+        ...Object.keys(oldRow || {}),
+        ...Object.keys(row || {}),
+      ]));
+
+      const fields = keys.filter((field) => {
+        if (["updatedAt", "createdAt", "savedAt", "lastModified"].includes(field)) return false;
+        return JSON.stringify(oldRow?.[field] ?? null) !== JSON.stringify(row?.[field] ?? null);
+      });
+
+      updated.push({ before: oldRow, after: row, fields });
+    }
+  });
+
+  before.forEach((row, key) => {
+    if (!after.has(key)) deleted.push(row);
+  });
+
+  return { added, updated, deleted };
+}
+
+async function getRequestUser(req: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !publishableKey) return { supabase: null, user: null };
+
+  const supabase = createServerClient(supabaseUrl, publishableKey, {
+    cookies: {
+      getAll() {
+        return req.cookies.getAll();
+      },
+      setAll() {
+        // This API route only reads the current auth session.
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return { supabase, user };
+}
+
+async function writeActivityRows(req: NextRequest, rows: any[]) {
+  try {
+    if (!rows.length) return;
+
+    const { supabase, user } = await getRequestUser(req);
+    if (!supabase || !user) return;
+
+    const displayName =
+      user.user_metadata?.display_name ||
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.email ||
+      "EMDC User";
+
+    await supabase.from("activity_logs").insert(
+      rows.map((row) => ({
+        user_id: user.id,
+        display_name: displayName,
+        email: user.email || "",
+        action: row.action,
+        entity_type: row.entityType || null,
+        entity_name: row.entityName || null,
+        description: row.description || null,
+        href: row.href || null,
+        metadata: row.metadata || {},
+      }))
+    );
+  } catch {
+    // Notifications must never interrupt or roll back a successful EMDC save.
+  }
+}
+
+async function logSkuDiff(
+  req: NextRequest,
+  previousRows: any[],
+  nextRows: any[],
+  source = "SKU Storage"
+) {
+  const diff = diffSkuRows(previousRows, nextRows);
+  const total = diff.added.length + diff.updated.length + diff.deleted.length;
+  if (!total) return;
+
+  const href = "/#/skus";
+  const rows: any[] = [];
+
+  if (total >= 8) {
+    const details = [
+      diff.added.length ? `${diff.added.length} added` : "",
+      diff.updated.length ? `${diff.updated.length} updated` : "",
+      diff.deleted.length ? `${diff.deleted.length} deleted` : "",
+    ].filter(Boolean);
+
+    rows.push({
+      action: `updated ${total} SKUs`,
+      entityType: "sku",
+      entityName: source,
+      description: details.join(" · "),
+      href,
+      metadata: {
+        source,
+        added: diff.added.length,
+        updated: diff.updated.length,
+        deleted: diff.deleted.length,
+        bulk: true,
+      },
+    });
+  } else {
+    diff.added.forEach((row) => rows.push({
+      action: "added SKU",
+      entityType: "sku",
+      entityName: skuLabel(row),
+      description: productLabel(row) || source,
+      href,
+      metadata: { source, sku: skuLabel(row), productName: productLabel(row) },
+    }));
+
+    diff.updated.forEach(({ after, fields }) => rows.push({
+      action: "updated SKU",
+      entityType: "sku",
+      entityName: skuLabel(after),
+      description: fields.length
+        ? `Changed: ${fields.slice(0, 6).join(", ")}${fields.length > 6 ? "…" : ""}`
+        : productLabel(after) || source,
+      href,
+      metadata: {
+        source,
+        sku: skuLabel(after),
+        productName: productLabel(after),
+        changedFields: fields,
+      },
+    }));
+
+    diff.deleted.forEach((row) => rows.push({
+      action: "deleted SKU",
+      entityType: "sku",
+      entityName: skuLabel(row),
+      description: productLabel(row) || source,
+      href,
+      metadata: { source, sku: skuLabel(row), productName: productLabel(row) },
+    }));
+  }
+
+  await writeActivityRows(req, rows);
 }
 
 function normalizeSkuDeleteKey(value: any) {
@@ -414,6 +617,9 @@ export async function POST(req: NextRequest) {
 
       const patch = isRecord(body?.patch) ? body.patch : {};
       const existingAppState:any = isRecord(existing?.appState) ? existing.appState : {};
+      const previousSkuRows = Array.isArray((patch as any).skuItems)
+        ? safeArray(await readJsonBlob(SKU_ALL_PATH))
+        : [];
       let nextAppState:any = { ...existingAppState, ...patch };
 
       if (Array.isArray((patch as any).deletedSkuKeys)) {
@@ -460,6 +666,33 @@ export async function POST(req: NextRequest) {
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
 
+      if (Array.isArray((patch as any).skuItems) && safeArray((patch as any).skuItems).length) {
+        await logSkuDiff(
+          req,
+          previousSkuRows,
+          safeArray((patch as any).skuItems),
+          String(body?.source || "SKU Storage")
+        );
+      }
+
+      const nonSkuPatchKeys = Object.keys(patch).filter((key) =>
+        !["skuItems", "deletedSkuKeys"].includes(key)
+      );
+
+      if (nonSkuPatchKeys.length) {
+        await writeActivityRows(req, [{
+          action: "updated EMDC data",
+          entityType: "workspace",
+          entityName: nonSkuPatchKeys.slice(0, 4).join(", "),
+          description:
+            nonSkuPatchKeys.length > 4
+              ? `${nonSkuPatchKeys.length} sections updated`
+              : "Changes saved",
+          href: "/",
+          metadata: { keys: nonSkuPatchKeys },
+        }]);
+      }
+
       return NextResponse.json({ ok: true, mode: "app-patch", data: payload });
     }
 
@@ -477,6 +710,7 @@ export async function POST(req: NextRequest) {
         await writeJsonBlob(SKU_DELETED_KEYS_PATH, { updatedAt: new Date().toISOString(), keys: [] }).catch(() => {});
       }
       const deletedSkuKeys = resetDeletedSkuKeys ? [] : await mergeDeletedSkuKeys(body?.deletedSkuKeys || body?.deletedKeys || []);
+      const previousSkuRows = safeArray(await readJsonBlob(SKU_ALL_PATH));
       const nextSkus = filterDeletedSkuRows(safeArray(body?.skuItems), deletedSkuKeys);
       await writeJsonBlob(SKU_ALL_PATH, nextSkus);
 
@@ -496,6 +730,13 @@ export async function POST(req: NextRequest) {
 
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      await logSkuDiff(
+        req,
+        previousSkuRows,
+        nextSkus,
+        String(body?.source || "SKU Storage")
+      );
 
       return NextResponse.json({ ok: true, mode: "sku-items", count: nextSkus.length, data: payload });
     }
@@ -528,6 +769,15 @@ export async function POST(req: NextRequest) {
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
 
+      await writeActivityRows(req, [{
+        action: "updated checklist groups",
+        entityType: "checklist",
+        entityName: `${nextGroups.length} group${nextGroups.length === 1 ? "" : "s"}`,
+        description: "Checklist group changes saved",
+        href: "/#/checklists",
+        metadata: { count: nextGroups.length },
+      }]);
+
       return NextResponse.json({ ok: true, mode: "checklist-groups", count: nextGroups.length, data: payload });
     }
 
@@ -558,6 +808,15 @@ export async function POST(req: NextRequest) {
 
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+      await writeActivityRows(req, [{
+        action: "updated checklist items",
+        entityType: "checklist",
+        entityName: "Checklist",
+        description: "Checklist changes saved",
+        href: "/#/checklists",
+        metadata: { groupCount: Object.keys(nextItems).length },
+      }]);
 
       return NextResponse.json({ ok: true, mode: "checklist-items", data: payload });
     }
@@ -599,6 +858,10 @@ export async function POST(req: NextRequest) {
     // Any POST that includes SKU rows becomes the authoritative SKU Blob file.
     // This covers adding 88 SKUs, editing SKUs, and importing backup files.
     let appStateForSave: any = incomingAppState;
+    const previousSkuRows = incomingSkuItems.length > 0
+      ? safeArray(await readJsonBlob(SKU_ALL_PATH))
+      : [];
+
     if (incomingSkuItems.length > 0) {
       await writeJsonBlob(SKU_ALL_PATH, incomingSkuItems);
       appStateForSave = {
@@ -629,6 +892,15 @@ export async function POST(req: NextRequest) {
 
     await writeJsonBlob(STATE_PATH, payload);
     await writeJsonBlob(LAST_GOOD_PATH, payload);
+
+    if (incomingSkuItems.length > 0) {
+      await logSkuDiff(
+        req,
+        previousSkuRows,
+        incomingSkuItems,
+        String(body?.source || "SKU Storage")
+      );
+    }
 
     return NextResponse.json({ ok: true, data: payload });
   } catch (error: any) {
