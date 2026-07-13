@@ -656,8 +656,8 @@ const mergeChecklistGroupsWithWorkspaceBackups = (groups:any[] = []) => {
     return {
       ...group,
       aiWorkspace:{
-        ...(group?.aiWorkspace || {}),
         ...(backup.aiWorkspace || {}),
+        ...(group?.aiWorkspace || {}),
       },
     };
   });
@@ -6723,13 +6723,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const marketing = ((group.aiWorkspace || {}).marketing || {}) as any;
     const stateRows = Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
     const persistedRows = Array.isArray(persistedMarketing.productIntroMarketingRows) ? persistedMarketing.productIntroMarketingRows : [];
-    const backupRows = readEcommerceTransferRowsBackup("marketing","product_intro");
     const deleted = Array.from(new Set([
       ...(Array.isArray(persistedMarketing.deletedProductIntroTransferSignatures) ? persistedMarketing.deletedProductIntroTransferSignatures : []),
       ...(Array.isArray(marketing.deletedProductIntroTransferSignatures) ? marketing.deletedProductIntroTransferSignatures : []),
     ]));
     return filterDeletedTransferCards(
-      mergeEcommerceTransferRows(persistedRows,stateRows,backupRows),
+      mergeEcommerceTransferRows(persistedRows,stateRows),
       deleted
     );
   };
@@ -6751,13 +6750,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const livestream = ((group.aiWorkspace || {}).livestream || {}) as any;
     const stateRows = Array.isArray(livestream.productIntroLivestreamRows) ? livestream.productIntroLivestreamRows : [];
     const persistedRows = Array.isArray(persistedLivestream.productIntroLivestreamRows) ? persistedLivestream.productIntroLivestreamRows : [];
-    const backupRows = readEcommerceTransferRowsBackup("livestream","product_intro");
     const deleted = Array.from(new Set([
       ...(Array.isArray(persistedLivestream.deletedProductIntroTransferSignatures) ? persistedLivestream.deletedProductIntroTransferSignatures : []),
       ...(Array.isArray(livestream.deletedProductIntroTransferSignatures) ? livestream.deletedProductIntroTransferSignatures : []),
     ]));
     return filterDeletedTransferCards(
-      mergeEcommerceTransferRows(persistedRows,stateRows,backupRows),
+      mergeEcommerceTransferRows(persistedRows,stateRows),
       deleted
     );
   };
@@ -7121,47 +7119,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
-    const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
-    const liveMarketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
-
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
+    const marketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
+    const nextDeleted = (Array.isArray(marketing.deletedProductIntroTransferSignatures)
+      ? marketing.deletedProductIntroTransferSignatures
+      : []
+    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const nextDeleted = Array.from(new Set([
-      ...(Array.isArray(persistedMarketing.deletedProductIntroTransferSignatures) ? persistedMarketing.deletedProductIntroTransferSignatures : []),
-      ...(Array.isArray(liveMarketing.deletedProductIntroTransferSignatures) ? liveMarketing.deletedProductIntroTransferSignatures : []),
-    ])).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
-
-    const existingRows = mergeEcommerceTransferRows(
-      Array.isArray(persistedMarketing.productIntroMarketingRows) ? persistedMarketing.productIntroMarketingRows : [],
-      Array.isArray(liveMarketing.productIntroMarketingRows) ? liveMarketing.productIntroMarketingRows : [],
-      readEcommerceTransferRowsBackup("marketing","product_intro")
-    );
-
+    const existingRows = getProductIntroMarketingRows();
     const cleanRows = normalizeTransferRowsForStorage(
       mergeEcommerceTransferRows(existingRows, rowsToSend)
     );
-
-    // Save the backup without dispatching emdc-local-sync before the workspace
-    // patch. Dispatching first caused the old checklist group to reload and
-    // cancel the transfer.
-    try {
-      const key = getEcommerceTransferRowsBackupKey("marketing","product_intro");
-      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
-    } catch {}
-
+    writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
     updateAiWorkspace("marketing",{
       productIntroMarketingRows:cleanRows,
       productIntroMarketingRowsCleared:false,
       deletedProductIntroTransferSignatures:nextDeleted,
-      selectedMarketingProductKeys:[],
-      placedMarketingProductKeys:[],
       generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
-
-    markActionDone("product-intro-ecommerce-send-marketing-current");
   };
 
   const sendProductIntroEcommerceOutputToDigital = (sourceData:any) => {
@@ -7174,34 +7152,20 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
-    const persistedLivestream = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).livestream || {}) as any;
-    const liveLivestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
-
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
+    const livestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
+    const nextDeleted = (Array.isArray(livestream.deletedProductIntroTransferSignatures)
+      ? livestream.deletedProductIntroTransferSignatures
+      : []
+    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const nextDeleted = Array.from(new Set([
-      ...(Array.isArray(persistedLivestream.deletedProductIntroTransferSignatures) ? persistedLivestream.deletedProductIntroTransferSignatures : []),
-      ...(Array.isArray(liveLivestream.deletedProductIntroTransferSignatures) ? liveLivestream.deletedProductIntroTransferSignatures : []),
-    ])).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
-
-    const existingRows = mergeEcommerceTransferRows(
-      Array.isArray(persistedLivestream.productIntroLivestreamRows) ? persistedLivestream.productIntroLivestreamRows : [],
-      Array.isArray(liveLivestream.productIntroLivestreamRows) ? liveLivestream.productIntroLivestreamRows : [],
-      readEcommerceTransferRowsBackup("livestream","product_intro")
-    );
-
+    const existingRows = getProductIntroLivestreamRows();
     const cleanRows = normalizeTransferRowsForStorage(
       mergeEcommerceTransferRows(existingRows, rowsToSend)
     );
-
-    // Save the backup without firing a sync event before the actual group patch.
-    try {
-      const key = getEcommerceTransferRowsBackupKey("livestream","product_intro");
-      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
-    } catch {}
-
+    writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
     updateAiWorkspace("livestream",{
       productIntroLivestreamRows:cleanRows,
       productIntroLivestreamRowsCleared:false,
@@ -7210,8 +7174,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       placedProductKeys:[],
       generatedAt:new Date().toISOString(),
     });
-
-    markActionDone("product-intro-ecommerce-send-livestream-current");
   };
 
   const setEcommercePromptForProducts = (rows:any[]) => {
@@ -8202,8 +8164,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
     const stateRows = Array.isArray(marketing.campaignMarketingRows) ? marketing.campaignMarketingRows : [];
     const persistedRows = Array.isArray(persistedMarketing.campaignMarketingRows) ? persistedMarketing.campaignMarketingRows : [];
-    const backupRows = readEcommerceTransferRowsBackup("marketing","campaign");
-    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+    return mergeEcommerceTransferRows(persistedRows,stateRows);
   };
 
   const getCampaignLivestreamRowsWithBackup = () => {
@@ -8211,8 +8172,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const persistedLivestream = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).livestream || {}) as any;
     const stateRows = Array.isArray(livestream.campaignLivestreamRows) ? livestream.campaignLivestreamRows : [];
     const persistedRows = Array.isArray(persistedLivestream.campaignLivestreamRows) ? persistedLivestream.campaignLivestreamRows : [];
-    const backupRows = readEcommerceTransferRowsBackup("livestream","campaign");
-    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+    return mergeEcommerceTransferRows(persistedRows,stateRows);
   };
 
   const sendEcommerceCampaignRowToMarketing = (row:any) => {
@@ -12573,8 +12533,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                           <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                             <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
-                            <TransferBtn id={`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>{ sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview); markActionDone(`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`); }} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</TransferBtn>
-                            <TransferBtn id={`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>{ sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview); markActionDone(`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`); }} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</TransferBtn>
                             <TransferBtn id={`product-intro-ecommerce-send-dc-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</TransferBtn>
                             <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(savedEcommercePreview,`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
