@@ -212,7 +212,43 @@ async function writeActivityRows(req: NextRequest, rows: any[]) {
     }
 
     if (candidates.length) {
-      await supabase.from("activity_logs").insert(candidates);
+      const { data: insertedRows } = await supabase
+        .from("activity_logs")
+        .insert(candidates)
+        .select("id, user_id, action, entity_type, entity_name, description, created_at");
+
+      // Parallel autosave requests can reach separate server instances at the
+      // same time. After insertion, collapse identical recent rows and keep
+      // only the oldest one.
+      await new Promise((resolve) => setTimeout(resolve, 350));
+
+      for (const inserted of Array.isArray(insertedRows) ? insertedRows : []) {
+        const createdAt = new Date(inserted.created_at || Date.now());
+        const cutoff = new Date(createdAt.getTime() - 20_000).toISOString();
+
+        let query = supabase
+          .from("activity_logs")
+          .select("id, created_at")
+          .eq("user_id", inserted.user_id)
+          .eq("action", inserted.action)
+          .eq("entity_type", inserted.entity_type)
+          .eq("entity_name", inserted.entity_name)
+          .eq("description", inserted.description)
+          .gte("created_at", cutoff)
+          .order("created_at", { ascending: true });
+
+        const { data: matches } = await query;
+
+        if (Array.isArray(matches) && matches.length > 1) {
+          const duplicateIds = matches.slice(1).map((row: any) => row.id);
+          if (duplicateIds.length) {
+            await supabase
+              .from("activity_logs")
+              .delete()
+              .in("id", duplicateIds);
+          }
+        }
+      }
     }
   } catch {
     // Notifications must never interrupt or roll back a successful EMDC save.
