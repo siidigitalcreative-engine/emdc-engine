@@ -6709,7 +6709,14 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const stateRows = Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
     const persistedRows = Array.isArray(persistedMarketing.productIntroMarketingRows) ? persistedMarketing.productIntroMarketingRows : [];
     const backupRows = readEcommerceTransferRowsBackup("marketing","product_intro");
-    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+    const deleted = Array.from(new Set([
+      ...(Array.isArray(persistedMarketing.deletedProductIntroTransferSignatures) ? persistedMarketing.deletedProductIntroTransferSignatures : []),
+      ...(Array.isArray(marketing.deletedProductIntroTransferSignatures) ? marketing.deletedProductIntroTransferSignatures : []),
+    ]));
+    return filterDeletedTransferCards(
+      mergeEcommerceTransferRows(persistedRows,stateRows,backupRows),
+      deleted
+    );
   };
 
   const saveProductIntroMarketingRows = (rows:any[]) => {
@@ -6730,7 +6737,14 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const stateRows = Array.isArray(livestream.productIntroLivestreamRows) ? livestream.productIntroLivestreamRows : [];
     const persistedRows = Array.isArray(persistedLivestream.productIntroLivestreamRows) ? persistedLivestream.productIntroLivestreamRows : [];
     const backupRows = readEcommerceTransferRowsBackup("livestream","product_intro");
-    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+    const deleted = Array.from(new Set([
+      ...(Array.isArray(persistedLivestream.deletedProductIntroTransferSignatures) ? persistedLivestream.deletedProductIntroTransferSignatures : []),
+      ...(Array.isArray(livestream.deletedProductIntroTransferSignatures) ? livestream.deletedProductIntroTransferSignatures : []),
+    ]));
+    return filterDeletedTransferCards(
+      mergeEcommerceTransferRows(persistedRows,stateRows,backupRows),
+      deleted
+    );
   };
 
   const saveProductIntroLivestreamRows = (rows:any[]) => {
@@ -6767,6 +6781,27 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return !!aSig && !!bSig && aSig === bSig;
   };
 
+
+  const getDeletedTransferSignatures = (tabName:string, transferType:string) => {
+    const tabData = (((group.aiWorkspace || {}) as any)[tabName] || {}) as any;
+    const key = transferType === "campaign"
+      ? "deletedCampaignTransferSignatures"
+      : "deletedProductIntroTransferSignatures";
+    return Array.isArray(tabData[key])
+      ? tabData[key].map((item:any)=>String(item || "").trim()).filter(Boolean)
+      : [];
+  };
+
+  const filterDeletedTransferCards = (rows:any[] = [], deleted:any[] = []) => {
+    const deletedSet = new Set(
+      (Array.isArray(deleted) ? deleted : [])
+        .map((item:any)=>String(item || "").trim())
+        .filter(Boolean)
+    );
+    if (!deletedSet.size) return rows;
+    return rows.filter((row:any)=>!deletedSet.has(getTransferProductSignature(row)));
+  };
+
   const deleteProductIntroMarketingTransfer = (transfer:any) => {
     const currentCards = normalizeProductIntroTransferCards(getProductIntroMarketingRows());
     const nextCards = currentCards.filter((card:any)=>!isSameProductIntroTransferCard(card,transfer));
@@ -6785,6 +6820,14 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const deleteProductIntroMarketingTransferAtIndex = (transferIndex:number) => {
     const currentCards = normalizeProductIntroTransferCards(getProductIntroMarketingRows());
+    const removed = currentCards[transferIndex];
+    const removedSignature = getTransferProductSignature(removed);
+    const currentDeleted = getDeletedTransferSignatures("marketing","product_intro");
+    const nextDeleted = Array.from(new Set([
+      ...currentDeleted,
+      removedSignature,
+    ].filter(Boolean)));
+
     const nextCards = currentCards
       .filter((_:any,idx:number)=>idx!==transferIndex)
       .map((card:any)=>({
@@ -6793,13 +6836,40 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         transferGroupId:card.transferGroupId || card.id || uid(),
       }));
 
-    saveProductIntroMarketingRows(nextCards);
+    const cleanRows = normalizeTransferRowsForStorage(nextCards);
+    writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
+    updateAiWorkspace("marketing",{
+      productIntroMarketingRows:cleanRows,
+      productIntroMarketingRowsCleared:cleanRows.length===0,
+      deletedProductIntroTransferSignatures:nextDeleted,
+      selectedMarketingProductKeys:[],
+      placedMarketingProductKeys:[],
+      generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
+      generatedAt:new Date().toISOString(),
+    });
   };
 
   const deleteProductIntroLivestreamTransferAtIndex = (transferIndex:number) => {
     const currentCards = normalizeProductIntroTransferCards(getProductIntroLivestreamRows());
+    const removed = currentCards[transferIndex];
+    const removedSignature = getTransferProductSignature(removed);
+    const currentDeleted = getDeletedTransferSignatures("livestream","product_intro");
+    const nextDeleted = Array.from(new Set([
+      ...currentDeleted,
+      removedSignature,
+    ].filter(Boolean)));
+
     const nextCards = currentCards.filter((_:any,idx:number)=>idx!==transferIndex);
-    saveProductIntroLivestreamRows(nextCards);
+    const cleanRows = normalizeTransferRowsForStorage(nextCards);
+    writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
+    updateAiWorkspace("livestream",{
+      productIntroLivestreamRows:cleanRows,
+      productIntroLivestreamRowsCleared:cleanRows.length===0,
+      deletedProductIntroTransferSignatures:nextDeleted,
+      selectedProductKeys:[],
+      placedProductKeys:[],
+      generatedAt:new Date().toISOString(),
+    });
   };
 
   const defaultEcommerceOutputSections = [
@@ -7266,23 +7336,22 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const cleanId = String(id || "").trim();
     if (!cleanId) return;
 
+    const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
     const deletedIds = Array.from(new Set([
       ...readEcommerceDeletedOutputIds(),
+      ...(Array.isArray(data.deletedSavedOutputIds) ? data.deletedSavedOutputIds : []),
       cleanId,
-    ]));
+    ].map((item:any)=>String(item || "").trim()).filter(Boolean)));
+
+    const currentSaved = Array.isArray(data.savedOutputs) ? data.savedOutputs : [];
+    const nextSaved = currentSaved.filter((item:any)=>String(item?.id || "").trim()!==cleanId);
+
     writeEcommerceDeletedOutputIds(deletedIds);
+    try {
+      const key = getEcommerceSavedOutputsLocalKey();
+      if (key) localStorage.setItem(key, JSON.stringify(nextSaved));
+    } catch {}
 
-    const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
-    const saved = mergeEcommerceSavedOutputs(
-      [
-        readEcommerceSavedOutputsFromLocal(),
-        Array.isArray(data.savedOutputs) ? data.savedOutputs : [],
-      ],
-      Array.isArray(data.deletedSavedOutputIds) ? data.deletedSavedOutputIds : []
-    );
-    const nextSaved = saved.filter((item:any)=>String(item?.id || "")!==cleanId);
-
-    writeEcommerceSavedOutputsToLocal(nextSaved);
     updateAiWorkspace("ecommerce",{
       savedOutputs:nextSaved,
       deletedSavedOutputIds:deletedIds,
@@ -8696,16 +8765,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                             const nextPlacedKeys = placedMarketingProductKeys.filter((key:string)=>!removedKeys.has(key));
 
                             if (isProductIntroductionChecklist) {
-                              const cleanRows = normalizeTransferRowsForStorage(nextCards);
-                              writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
-                              updateAiWorkspace("marketing",{
-                                productIntroMarketingRows:cleanRows,
-                                productIntroMarketingRowsCleared:cleanRows.length===0,
-                                selectedMarketingProductKeys:nextSelectedKeys,
-                                placedMarketingProductKeys:nextPlacedKeys,
-                                generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
-                                generatedAt:new Date().toISOString(),
-                              });
+                              deleteProductIntroMarketingTransferAtIndex(transferIndex);
                             } else {
                               const cleanRows = normalizeTransferRowsForStorage(nextCards);
                               writeEcommerceTransferRowsBackup("marketing","campaign",cleanRows);
