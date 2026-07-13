@@ -13940,6 +13940,21 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     setAllGroupItems((p:any)=>{ const next={...p,[g.id]:initialItems}; writeEmdcChecklistItemsBackup(g.id,initialItems); persistChecklistItemsNow(next); if(onStateChange) onStateChange({checklistItems:next}); return next; });
 
     if(onGroupCreated) onGroupCreated(g);
+
+    logActivity({
+      action:"created a checklist group",
+      entityType:"checklist",
+      entityName:g.groupName || "Checklist group",
+      description:`${(LAUNCH_TYPES?.[g.launchType]?.label || g.launchType || "Checklist")} · ${Array.isArray(g.skus) ? g.skus.length : 0} product${Array.isArray(g.skus) && g.skus.length === 1 ? "" : "s"}`,
+      href:`/#/checklists?group=${encodeURIComponent(g.id)}`,
+      metadata:{
+        groupId:g.id,
+        groupName:g.groupName || "",
+        launchType:g.launchType || "",
+        skuCount:Array.isArray(g.skus) ? g.skus.length : 0,
+      },
+    });
+
     setActive(g.id);
     if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" });
     setCreating(false);
