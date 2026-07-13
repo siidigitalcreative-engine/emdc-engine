@@ -19436,6 +19436,14 @@ export default function App({
   const lastDirectSkuSaveSignatureRef = useRef("");
   const skuDirectSaveTimerRef = useRef<any>(null);
 
+  // Checklist groups contain the complete AI workspace for every checklist.
+  // Keep only the newest pending snapshot and prevent cloud polling from
+  // replacing unsaved local input while that snapshot is being committed.
+  const checklistGroupsSaveTimerRef = useRef<any>(null);
+  const checklistGroupsQueuedRef = useRef<any[] | null>(null);
+  const checklistGroupsSaveSequenceRef = useRef(0);
+  const checklistGroupsPendingUntilRef = useRef(0);
+
   const EMDC_SYNC_LOCAL_KEYS = [
     "emdc_app_state_v1",
     "emdc_ai_saved_outputs",
@@ -19609,7 +19617,11 @@ export default function App({
     cloudApplyingRef.current = true;
     try {
       applyAppState(cloudAppState);
-      if (cloud?.localStorage && typeof cloud.localStorage === "object") {
+      if (
+        cloud?.localStorage &&
+        typeof cloud.localStorage === "object" &&
+        Date.now() >= checklistGroupsPendingUntilRef.current
+      ) {
         try {
           Object.entries(cloud.localStorage).forEach(([key,value]:any)=>{
             if (String(key || "").startsWith("emdc") && typeof value === "string") {
@@ -19626,7 +19638,15 @@ export default function App({
   };
 
   const fetchCloudState = async (mode:"initial"|"poll"="poll") => {
-    if (mode==="poll" && (cloudSavingRef.current || cloudApplyingRef.current)) return null;
+    if (
+      mode==="poll" &&
+      (
+        cloudSavingRef.current ||
+        cloudApplyingRef.current ||
+        Date.now() < checklistGroupsPendingUntilRef.current ||
+        !!checklistGroupsSaveTimerRef.current
+      )
+    ) return null;
     try {
       const res = await fetch("/api/emdc-state", { cache:"no-store" });
       if (!res.ok) throw new Error("Cloud sync unavailable");
@@ -20057,27 +20077,86 @@ export default function App({
       setCloudSyncStatus("Checklist save failed");
     }
   };
-  const saveChecklistGroupsDirect = async (nextGroups:any[]) => {
+  const flushChecklistGroupsSave = async () => {
     if (cloudApplyingRef.current) return;
+
+    const snapshot = checklistGroupsQueuedRef.current;
+    if (!Array.isArray(snapshot)) return;
+
+    checklistGroupsQueuedRef.current = null;
+    const sequence = ++checklistGroupsSaveSequenceRef.current;
+    const updatedAt = new Date().toISOString();
+
+    checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
+    cloudSavingRef.current = true;
+    setCloudSyncStatus("Saving checklist groups...");
+
     try {
-      setCloudSyncStatus("Saving checklist groups...");
-      const updatedAt = new Date().toISOString();
-      const res = await fetch("/api/emdc-state", {
+      const res = await fetch("/api/emdc-state?mode=checklist-groups", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
+        cache:"no-store",
         body:JSON.stringify({
           mode:"checklist-groups",
           clientId:cloudClientIdRef.current,
           updatedAt,
-          checklistGroups:Array.isArray(nextGroups) ? nextGroups : [],
+          checklistGroups:snapshot,
         }),
       });
-      if (!res.ok) throw new Error("Checklist groups save failed");
-      cloudLastUpdatedAtRef.current = updatedAt;
-      setCloudSyncStatus("Synced");
+
+      const json = await res.json().catch(()=>null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Checklist groups save failed");
+      }
+
+      // Only the newest completed request may update the sync marker.
+      if (sequence === checklistGroupsSaveSequenceRef.current) {
+        cloudLastUpdatedAtRef.current = updatedAt;
+        setCloudSyncStatus("Synced");
+      }
     } catch {
+      // Put the newest unsaved state back in the queue. Never replace a newer
+      // queued snapshot with the older failed snapshot.
+      if (!Array.isArray(checklistGroupsQueuedRef.current)) {
+        checklistGroupsQueuedRef.current = snapshot;
+      }
       setCloudSyncStatus("Checklist groups save failed");
+    } finally {
+      cloudSavingRef.current = false;
+
+      // Edits may have arrived while the request was in flight.
+      if (Array.isArray(checklistGroupsQueuedRef.current)) {
+        checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
+        checklistGroupsSaveTimerRef.current = setTimeout(() => {
+          checklistGroupsSaveTimerRef.current = null;
+          void flushChecklistGroupsSave();
+        }, 180);
+      } else {
+        checklistGroupsPendingUntilRef.current = Date.now() + 1200;
+      }
     }
+  };
+
+  const saveChecklistGroupsDirect = (nextGroups:any[]) => {
+    if (cloudApplyingRef.current) return;
+
+    // Deep-copy now so later React mutations cannot alter the queued payload.
+    checklistGroupsQueuedRef.current = JSON.parse(
+      JSON.stringify(Array.isArray(nextGroups) ? nextGroups : [])
+    );
+    checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
+    setCloudSyncStatus("Saving checklist groups...");
+
+    if (checklistGroupsSaveTimerRef.current) {
+      clearTimeout(checklistGroupsSaveTimerRef.current);
+    }
+
+    // Input fields can fire many updates per second. Send only the newest
+    // complete checklist snapshot instead of parallel out-of-order requests.
+    checklistGroupsSaveTimerRef.current = setTimeout(() => {
+      checklistGroupsSaveTimerRef.current = null;
+      void flushChecklistGroupsSave();
+    }, 420);
   };
 
   const saveAppPatchDirect = async (patch:any) => {
@@ -20100,6 +20179,14 @@ export default function App({
 
   const handleRootStateChange = (patch:any = {}) => {
     if (!patch || typeof patch !== "object") return;
+
+    if (
+      Array.isArray(patch.checklistGroups) ||
+      patch.checklistItems ||
+      Array.isArray(patch.checklistTrash)
+    ) {
+      checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
+    }
 
     if (Array.isArray(patch.calendarEvents)) {
       setCalendarManualEvents(patch.calendarEvents);
@@ -20230,6 +20317,14 @@ export default function App({
       if (skuDirectSaveTimerRef.current) clearTimeout(skuDirectSaveTimerRef.current);
     };
   }, [appStateHydrated, cloudHydrated, skuStorage]);
+
+  useEffect(() => {
+    return () => {
+      if (checklistGroupsSaveTimerRef.current) {
+        clearTimeout(checklistGroupsSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     cloudClientIdRef.current = uid();
