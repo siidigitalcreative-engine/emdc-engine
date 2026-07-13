@@ -656,8 +656,8 @@ const mergeChecklistGroupsWithWorkspaceBackups = (groups:any[] = []) => {
     return {
       ...group,
       aiWorkspace:{
-        ...(backup.aiWorkspace || {}),
         ...(group?.aiWorkspace || {}),
+        ...(backup.aiWorkspace || {}),
       },
     };
   });
@@ -5466,6 +5466,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const persistChecklistGroupPatchNow = (patch:any) => {
     if (typeof window === "undefined" || !group?.id || !patch || typeof patch !== "object") return;
+
     try {
       const raw = localStorage.getItem("emdc_app_state_v1");
       const parsed = raw ? JSON.parse(raw) : {};
@@ -5475,15 +5476,48 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         ? storedGroups.map((item:any)=>item?.id===group.id ? nextGroup : item)
         : [...storedGroups,nextGroup];
 
+      const updatedAt = new Date().toISOString();
       const nextAppState = {
         ...parsed,
         checklistGroups:nextGroups,
       };
+
+      // Update the current device immediately.
       safeSetEmdcAppStateLocal(nextAppState);
       if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(group.id, patch.aiWorkspace);
-      markEmdcLocalStateUpdated();
+      markEmdcLocalStateUpdated(updatedAt);
+
+      // Save the complete checklist-group list directly to the shared cloud
+      // source of truth. This makes Marketing/Livestream product row groups
+      // visible on desktop and mobile instead of remaining device-local only.
+      void fetch("/api/emdc-state?mode=checklist-groups", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        cache:"no-store",
+        body:JSON.stringify({
+          mode:"checklist-groups",
+          checklistGroups:nextGroups,
+          updatedAt,
+          source:"Checklist Workspace",
+        }),
+      })
+        .then(async (response)=>{
+          const json = await response.json().catch(()=>null);
+          if (!response.ok || !json?.ok) {
+            throw new Error(json?.error || "Checklist group cloud save failed.");
+          }
+          try {
+            window.dispatchEvent(new Event("emdc-cloud-saved"));
+          } catch {}
+        })
+        .catch((error)=>{
+          console.error("[EMDC] Checklist group direct cloud save failed.", error);
+        });
+
       window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch {}
+    } catch (error) {
+      console.error("[EMDC] Checklist group patch failed.", error);
+    }
   };
 
   const updateAiWorkspace = (tab:string, patch:any) => {
@@ -6723,12 +6757,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const marketing = ((group.aiWorkspace || {}).marketing || {}) as any;
     const stateRows = Array.isArray(marketing.productIntroMarketingRows) ? marketing.productIntroMarketingRows : [];
     const persistedRows = Array.isArray(persistedMarketing.productIntroMarketingRows) ? persistedMarketing.productIntroMarketingRows : [];
+    const backupRows = readEcommerceTransferRowsBackup("marketing","product_intro");
     const deleted = Array.from(new Set([
       ...(Array.isArray(persistedMarketing.deletedProductIntroTransferSignatures) ? persistedMarketing.deletedProductIntroTransferSignatures : []),
       ...(Array.isArray(marketing.deletedProductIntroTransferSignatures) ? marketing.deletedProductIntroTransferSignatures : []),
     ]));
     return filterDeletedTransferCards(
-      mergeEcommerceTransferRows(persistedRows,stateRows),
+      mergeEcommerceTransferRows(persistedRows,stateRows,backupRows),
       deleted
     );
   };
@@ -6750,12 +6785,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const livestream = ((group.aiWorkspace || {}).livestream || {}) as any;
     const stateRows = Array.isArray(livestream.productIntroLivestreamRows) ? livestream.productIntroLivestreamRows : [];
     const persistedRows = Array.isArray(persistedLivestream.productIntroLivestreamRows) ? persistedLivestream.productIntroLivestreamRows : [];
+    const backupRows = readEcommerceTransferRowsBackup("livestream","product_intro");
     const deleted = Array.from(new Set([
       ...(Array.isArray(persistedLivestream.deletedProductIntroTransferSignatures) ? persistedLivestream.deletedProductIntroTransferSignatures : []),
       ...(Array.isArray(livestream.deletedProductIntroTransferSignatures) ? livestream.deletedProductIntroTransferSignatures : []),
     ]));
     return filterDeletedTransferCards(
-      mergeEcommerceTransferRows(persistedRows,stateRows),
+      mergeEcommerceTransferRows(persistedRows,stateRows,backupRows),
       deleted
     );
   };
@@ -8164,7 +8200,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
     const stateRows = Array.isArray(marketing.campaignMarketingRows) ? marketing.campaignMarketingRows : [];
     const persistedRows = Array.isArray(persistedMarketing.campaignMarketingRows) ? persistedMarketing.campaignMarketingRows : [];
-    return mergeEcommerceTransferRows(persistedRows,stateRows);
+    const backupRows = readEcommerceTransferRowsBackup("marketing","campaign");
+    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
   };
 
   const getCampaignLivestreamRowsWithBackup = () => {
@@ -8172,7 +8209,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const persistedLivestream = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).livestream || {}) as any;
     const stateRows = Array.isArray(livestream.campaignLivestreamRows) ? livestream.campaignLivestreamRows : [];
     const persistedRows = Array.isArray(persistedLivestream.campaignLivestreamRows) ? persistedLivestream.campaignLivestreamRows : [];
-    return mergeEcommerceTransferRows(persistedRows,stateRows);
+    const backupRows = readEcommerceTransferRowsBackup("livestream","campaign");
+    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
   };
 
   const sendEcommerceCampaignRowToMarketing = (row:any) => {
