@@ -5482,12 +5482,14 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         checklistGroups:nextGroups,
       };
 
-      // Update this device immediately, but do not fire a reload event before
-      // the same checklist group has been committed to the shared cloud state.
+      // Update the current device immediately.
       safeSetEmdcAppStateLocal(nextAppState);
       if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(group.id, patch.aiWorkspace);
       markEmdcLocalStateUpdated(updatedAt);
 
+      // Save the complete checklist-group list directly to the shared cloud
+      // source of truth. This makes Marketing/Livestream product row groups
+      // visible on desktop and mobile instead of remaining device-local only.
       void fetch("/api/emdc-state?mode=checklist-groups", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -5506,12 +5508,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
           }
           try {
             window.dispatchEvent(new Event("emdc-cloud-saved"));
-            window.dispatchEvent(new Event("emdc-local-sync"));
           } catch {}
         })
         .catch((error)=>{
-          console.error("[EMDC] Checklist group cloud save failed.", error);
+          console.error("[EMDC] Checklist group direct cloud save failed.", error);
         });
+
+      window.dispatchEvent(new Event("emdc-local-sync"));
     } catch (error) {
       console.error("[EMDC] Checklist group patch failed.", error);
     }
@@ -7407,9 +7410,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     };
 
     const groupPatch = { aiWorkspace:nextWorkspace };
-
-    // Keep the current UI and parent checklist state in sync, then let the
-    // shared checklist-group save persist this exact workspace atomically.
+    writeEmdcGroupWorkspaceBackup(group.id,nextWorkspace);
     if (onUpdateGroup) onUpdateGroup(groupPatch);
     persistChecklistGroupPatchNow(groupPatch);
   };
