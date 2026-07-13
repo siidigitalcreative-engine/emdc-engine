@@ -5509,6 +5509,34 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const getEcommerceSavedOutputsLocalKey = () => group?.id ? `emdc_ecommerce_saved_outputs_v1_${group.id}` : "";
+  const getEcommerceDeletedOutputsLocalKey = () => group?.id ? `emdc_ecommerce_deleted_output_ids_v1_${group.id}` : "";
+
+  const readEcommerceDeletedOutputIds = () => {
+    if (typeof window === "undefined") return [];
+    const key = getEcommerceDeletedOutputsLocalKey();
+    if (!key) return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed)
+        ? Array.from(new Set(parsed.map((item:any)=>String(item || "").trim()).filter(Boolean)))
+        : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const writeEcommerceDeletedOutputIds = (ids:any[] = []) => {
+    if (typeof window === "undefined") return;
+    const key = getEcommerceDeletedOutputsLocalKey();
+    if (!key) return;
+    try {
+      const safeIds = Array.from(new Set((Array.isArray(ids) ? ids : [])
+        .map((item:any)=>String(item || "").trim())
+        .filter(Boolean)))
+        .slice(-200);
+      localStorage.setItem(key, JSON.stringify(safeIds));
+    } catch {}
+  };
 
   const readEcommerceSavedOutputsFromLocal = () => {
     if (typeof window === "undefined") return [];
@@ -5523,9 +5551,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const mergeEcommerceSavedOutputs = (...lists:any[][]) => {
+    const deletedIds = new Set(readEcommerceDeletedOutputIds());
     const map = new Map();
     lists.flat().filter(Boolean).forEach((item:any)=>{
       const id = String(item?.id || "").trim();
+      if (id && deletedIds.has(id)) return;
       const fallback = `${item?.title || ""}|${item?.createdAt || ""}|${String(item?.text || "").slice(0,120)}`;
       const key = id || fallback;
       if(!key.trim()) return;
@@ -5549,6 +5579,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         ecommerce:{
           ...(currentWorkspace.ecommerce || {}),
           savedOutputs:safeItems,
+          deletedSavedOutputIds:readEcommerceDeletedOutputIds(),
           savedOutputsUpdatedAt:new Date().toISOString(),
         },
       };
@@ -5560,10 +5591,19 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const getMergedEcommerceData = (rawData:any = {}) => {
     const persistedEcommerce = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}).ecommerce || {}) as any;
+    const combinedDeletedIds = Array.from(new Set([
+      ...readEcommerceDeletedOutputIds(),
+      ...(Array.isArray(persistedEcommerce.deletedSavedOutputIds) ? persistedEcommerce.deletedSavedOutputIds : []),
+      ...(Array.isArray(rawData?.deletedSavedOutputIds) ? rawData.deletedSavedOutputIds : []),
+    ].map((item:any)=>String(item || "").trim()).filter(Boolean)));
+
+    writeEcommerceDeletedOutputIds(combinedDeletedIds);
+
     const localSavedOutputs = readEcommerceSavedOutputsFromLocal();
     return {
       ...persistedEcommerce,
       ...rawData,
+      deletedSavedOutputIds:combinedDeletedIds,
       savedOutputs:mergeEcommerceSavedOutputs(
         localSavedOutputs,
         Array.isArray(persistedEcommerce.savedOutputs) ? persistedEcommerce.savedOutputs : [],
@@ -7193,6 +7233,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       updatedAt:now,
     };
     const nextSaved = [savedEntry,...saved].slice(0,60);
+    writeEcommerceDeletedOutputIds(
+      readEcommerceDeletedOutputIds().filter((item:any)=>String(item || "")!==String(savedEntry.id || ""))
+    );
     writeEcommerceSavedOutputsToLocal(nextSaved);
     updateAiWorkspace("ecommerce",{
       savedOutputs:nextSaved,
@@ -7212,14 +7255,32 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const deleteSavedEcommerceOutput = (id:string) => {
+    const cleanId = String(id || "").trim();
+    if (!cleanId) return;
+
+    const deletedIds = Array.from(new Set([
+      ...readEcommerceDeletedOutputIds(),
+      cleanId,
+    ]));
+    writeEcommerceDeletedOutputIds(deletedIds);
+
     const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
     const saved = mergeEcommerceSavedOutputs(
       readEcommerceSavedOutputsFromLocal(),
       Array.isArray(data.savedOutputs) ? data.savedOutputs : []
     );
-    const nextSaved = saved.filter((item:any)=>String(item?.id || "")!==String(id || ""));
+    const nextSaved = saved.filter((item:any)=>String(item?.id || "")!==cleanId);
+
     writeEcommerceSavedOutputsToLocal(nextSaved);
-    updateAiWorkspace("ecommerce",{ savedOutputs:nextSaved, savedOutputsUpdatedAt:new Date().toISOString() });
+    updateAiWorkspace("ecommerce",{
+      savedOutputs:nextSaved,
+      deletedSavedOutputIds:deletedIds,
+      savedOutputsUpdatedAt:new Date().toISOString(),
+    });
+
+    if (savedEcommercePreview && String(savedEcommercePreview?.id || "") === cleanId) {
+      setSavedEcommercePreview(null);
+    }
   };
 
   const cleanReadyToUseOutput = (value:any) => {
@@ -19363,7 +19424,6 @@ export default function App({
     }
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
     if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
-    if (Array.isArray(hydratedParsed?.checklistTrash)) setChecklistTrash(hydratedParsed.checklistTrash);
     if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") {
       const cleanAllItems:any = {};
       Object.entries(hydratedParsed.checklistItems).forEach(([groupId,groupItems]:any)=>{
