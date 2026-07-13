@@ -12781,6 +12781,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 {linkedEvents.map((ev:any)=>(
                   <span key={ev.id} style={{ fontSize:11,color:ev.color||C.muted,background:(ev.color||C.accent)+"12",padding:"2px 8px",borderRadius:4,border:`1px solid ${(ev.color||C.accent)}33` }}>{ev.name}</span>
                 ))}
+                {hasMoreSkuRows&&(<div style={{ padding:"12px 16px",display:"flex",justifyContent:"center",borderTop:`1px solid ${C.border}`,background:C.surface }}>
+                  <Btn sm variant="outline" onClick={loadMoreSkuRows}>Load more SKUs ({Math.min(skuRenderLimit, filteredSkus.length)} / {filteredSkus.length})</Btn>
+                </div>)}
               </div>
             )}
           </div>
@@ -19360,6 +19363,7 @@ export default function App({
     }
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
     if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
+    if (Array.isArray(hydratedParsed?.checklistTrash)) setChecklistTrash(hydratedParsed.checklistTrash);
     if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") {
       const cleanAllItems:any = {};
       Object.entries(hydratedParsed.checklistItems).forEach(([groupId,groupItems]:any)=>{
