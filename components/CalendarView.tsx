@@ -5466,7 +5466,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const persistChecklistGroupPatchNow = (patch:any) => {
     if (typeof window === "undefined" || !group?.id || !patch || typeof patch !== "object") return;
-
     try {
       const raw = localStorage.getItem("emdc_app_state_v1");
       const parsed = raw ? JSON.parse(raw) : {};
@@ -5476,48 +5475,15 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         ? storedGroups.map((item:any)=>item?.id===group.id ? nextGroup : item)
         : [...storedGroups,nextGroup];
 
-      const updatedAt = new Date().toISOString();
       const nextAppState = {
         ...parsed,
         checklistGroups:nextGroups,
       };
-
-      // Update the current device immediately.
       safeSetEmdcAppStateLocal(nextAppState);
       if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(group.id, patch.aiWorkspace);
-      markEmdcLocalStateUpdated(updatedAt);
-
-      // Save the complete checklist-group list directly to the shared cloud
-      // source of truth. This makes Marketing/Livestream product row groups
-      // visible on desktop and mobile instead of remaining device-local only.
-      void fetch("/api/emdc-state?mode=checklist-groups", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        cache:"no-store",
-        body:JSON.stringify({
-          mode:"checklist-groups",
-          checklistGroups:nextGroups,
-          updatedAt,
-          source:"Checklist Workspace",
-        }),
-      })
-        .then(async (response)=>{
-          const json = await response.json().catch(()=>null);
-          if (!response.ok || !json?.ok) {
-            throw new Error(json?.error || "Checklist group cloud save failed.");
-          }
-          try {
-            window.dispatchEvent(new Event("emdc-cloud-saved"));
-          } catch {}
-        })
-        .catch((error)=>{
-          console.error("[EMDC] Checklist group direct cloud save failed.", error);
-        });
-
+      markEmdcLocalStateUpdated();
       window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch (error) {
-      console.error("[EMDC] Checklist group patch failed.", error);
-    }
+    } catch {}
   };
 
   const updateAiWorkspace = (tab:string, patch:any) => {
@@ -7155,27 +7121,47 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
+    const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
+    const liveMarketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
+
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
-    const marketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
-    const nextDeleted = (Array.isArray(marketing.deletedProductIntroTransferSignatures)
-      ? marketing.deletedProductIntroTransferSignatures
-      : []
-    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const existingRows = getProductIntroMarketingRows();
+    const nextDeleted = Array.from(new Set([
+      ...(Array.isArray(persistedMarketing.deletedProductIntroTransferSignatures) ? persistedMarketing.deletedProductIntroTransferSignatures : []),
+      ...(Array.isArray(liveMarketing.deletedProductIntroTransferSignatures) ? liveMarketing.deletedProductIntroTransferSignatures : []),
+    ])).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
+
+    const existingRows = mergeEcommerceTransferRows(
+      Array.isArray(persistedMarketing.productIntroMarketingRows) ? persistedMarketing.productIntroMarketingRows : [],
+      Array.isArray(liveMarketing.productIntroMarketingRows) ? liveMarketing.productIntroMarketingRows : [],
+      readEcommerceTransferRowsBackup("marketing","product_intro")
+    );
+
     const cleanRows = normalizeTransferRowsForStorage(
       mergeEcommerceTransferRows(existingRows, rowsToSend)
     );
-    writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
+
+    // Save the backup without dispatching emdc-local-sync before the workspace
+    // patch. Dispatching first caused the old checklist group to reload and
+    // cancel the transfer.
+    try {
+      const key = getEcommerceTransferRowsBackupKey("marketing","product_intro");
+      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
+    } catch {}
+
     updateAiWorkspace("marketing",{
       productIntroMarketingRows:cleanRows,
       productIntroMarketingRowsCleared:false,
       deletedProductIntroTransferSignatures:nextDeleted,
+      selectedMarketingProductKeys:[],
+      placedMarketingProductKeys:[],
       generatedText:cleanRows.map((entry:any)=>`${entry.product || "Product"}\n${entry.imagePrompt || ""}`).join("\n\n---\n\n"),
       generatedAt:new Date().toISOString(),
     });
+
+    markActionDone("product-intro-ecommerce-send-marketing-current");
   };
 
   const sendProductIntroEcommerceOutputToDigital = (sourceData:any) => {
@@ -7188,20 +7174,34 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
+    const persistedLivestream = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).livestream || {}) as any;
+    const liveLivestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
+
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
-    const livestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
-    const nextDeleted = (Array.isArray(livestream.deletedProductIntroTransferSignatures)
-      ? livestream.deletedProductIntroTransferSignatures
-      : []
-    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const existingRows = getProductIntroLivestreamRows();
+    const nextDeleted = Array.from(new Set([
+      ...(Array.isArray(persistedLivestream.deletedProductIntroTransferSignatures) ? persistedLivestream.deletedProductIntroTransferSignatures : []),
+      ...(Array.isArray(liveLivestream.deletedProductIntroTransferSignatures) ? liveLivestream.deletedProductIntroTransferSignatures : []),
+    ])).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
+
+    const existingRows = mergeEcommerceTransferRows(
+      Array.isArray(persistedLivestream.productIntroLivestreamRows) ? persistedLivestream.productIntroLivestreamRows : [],
+      Array.isArray(liveLivestream.productIntroLivestreamRows) ? liveLivestream.productIntroLivestreamRows : [],
+      readEcommerceTransferRowsBackup("livestream","product_intro")
+    );
+
     const cleanRows = normalizeTransferRowsForStorage(
       mergeEcommerceTransferRows(existingRows, rowsToSend)
     );
-    writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
+
+    // Save the backup without firing a sync event before the actual group patch.
+    try {
+      const key = getEcommerceTransferRowsBackupKey("livestream","product_intro");
+      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
+    } catch {}
+
     updateAiWorkspace("livestream",{
       productIntroLivestreamRows:cleanRows,
       productIntroLivestreamRowsCleared:false,
@@ -7210,6 +7210,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       placedProductKeys:[],
       generatedAt:new Date().toISOString(),
     });
+
+    markActionDone("product-intro-ecommerce-send-livestream-current");
   };
 
   const setEcommercePromptForProducts = (rows:any[]) => {
@@ -12571,8 +12573,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                           <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
                             <Btn variant="outline" onClick={()=>setSavedEcommercePreview(null)}>Close</Btn>
-                            <TransferBtn id={`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</TransferBtn>
-                            <TransferBtn id={`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>{ sendProductIntroEcommerceOutputToMarketing(savedEcommercePreview); markActionDone(`product-intro-ecommerce-send-marketing-preview-${savedEcommercePreview?.id || "preview"}`); }} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Marketing</TransferBtn>
+                            <TransferBtn id={`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>{ sendProductIntroEcommerceOutputToLivestream(savedEcommercePreview); markActionDone(`product-intro-ecommerce-send-livestream-preview-${savedEcommercePreview?.id || "preview"}`); }} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to Livestream</TransferBtn>
                             <TransferBtn id={`product-intro-ecommerce-send-dc-preview-${savedEcommercePreview?.id || "preview"}`} onClick={()=>sendProductIntroEcommerceOutputToDigital(savedEcommercePreview)} disabled={!getEcommerceGeneratedProductRows(savedEcommercePreview).length}>Send to DC</TransferBtn>
                             <Btn variant={actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"primary":"outline"} onClick={()=>addProductIntroEcommerceOutputToOverview(savedEcommercePreview,`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)}>{actionDone(`overview-ecomm-preview-${savedEcommercePreview?.id || "preview"}`)?"✓ Added":"Add to Overview"}</Btn>
                             <Btn onClick={copySavedEcommerceOutput}>Copy Output</Btn>
