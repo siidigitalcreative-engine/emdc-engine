@@ -19241,6 +19241,10 @@ export default function App({
   );
 
   const syncSkuFromStorage = (sku:any, index:number = 0, allSkus:any[] = []) => {
+    // Product edits made inside a checklist group are deliberate local overrides.
+    // Do not immediately replace them with the master SKU Storage values.
+    if (sku?.localProductOverride === true) return sku;
+
     const clean = (value:any) => String(value||"").trim();
     const lower = (value:any) => clean(value).toLowerCase();
     const normalizeWords = (value:any) => lower(value)
@@ -19345,17 +19349,23 @@ export default function App({
     if(!skuStorage?.length) return;
 
     setChecklistGroups((prev:any[])=>{
-      let changed = false;
+      let anyChanged = false;
       const next = (prev||[]).map((group:any)=>{
         if(!Array.isArray(group.skus) || !group.skus.length) return group;
+
+        let groupChanged = false;
         const nextSkus = group.skus.map((sku:any,idx:number)=>{
           const synced = syncSkuFromStorage(sku,idx,group.skus || []);
-          if(synced !== sku && JSON.stringify(synced)!==JSON.stringify(sku)) changed = true;
+          if(synced !== sku && JSON.stringify(synced)!==JSON.stringify(sku)) {
+            groupChanged = true;
+            anyChanged = true;
+          }
           return synced;
         });
-        return changed ? { ...group, skus:nextSkus } : group;
+
+        return groupChanged ? { ...group, skus:nextSkus } : group;
       });
-      return changed ? next : prev;
+      return anyChanged ? next : prev;
     });
 
     setSeasonalEvents((prev:any[])=>{
