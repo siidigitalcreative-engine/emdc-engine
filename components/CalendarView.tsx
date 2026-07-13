@@ -19284,7 +19284,7 @@ const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
 
 // ─── SHAREABLE PAGE LINKS ────────────────────────────────────────────────────
 const safeRouteTab = (value:any) => ["calendar","events","checklists","skus","ai"].includes(String(value||"")) ? String(value) : "calendar";
-const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","marketing","digital","livestream","overview"].includes(String(value||"")) ? String(value) : "tasks";
+const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","budget","marketing","digital","livestream","overview"].includes(String(value||"")) ? String(value) : "tasks";
 
 const parseEmdcRoute = () => {
   if (typeof window === "undefined") return { tab:"calendar", groupId:null, groupTab:"tasks" };
