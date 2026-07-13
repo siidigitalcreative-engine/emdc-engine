@@ -130,6 +130,20 @@ async function getRequestUser(req: NextRequest) {
   return { supabase, user };
 }
 
+const activityDedupeStore: Map<string, number> =
+  (globalThis as any).__emdcActivityDedupeStore ||
+  ((globalThis as any).__emdcActivityDedupeStore = new Map<string, number>());
+
+function activityFingerprint(userId: string, row: any) {
+  return [
+    userId,
+    String(row?.action || ""),
+    String(row?.entityType || ""),
+    String(row?.entityName || ""),
+    String(row?.description || ""),
+  ].join("|").toLowerCase();
+}
+
 async function writeActivityRows(req: NextRequest, rows: any[]) {
   try {
     if (!rows.length) return;
@@ -144,8 +158,44 @@ async function writeActivityRows(req: NextRequest, rows: any[]) {
       user.email ||
       "EMDC User";
 
-    await supabase.from("activity_logs").insert(
-      rows.map((row) => ({
+    const now = Date.now();
+    const dedupeWindowMs = 20_000;
+    const recentCutoff = new Date(now - dedupeWindowMs).toISOString();
+
+    // Clean old in-memory fingerprints.
+    activityDedupeStore.forEach((timestamp, key) => {
+      if (now - timestamp > dedupeWindowMs) activityDedupeStore.delete(key);
+    });
+
+    const candidates: any[] = [];
+
+    for (const row of rows) {
+      const fingerprint = activityFingerprint(user.id, row);
+      const seenAt = activityDedupeStore.get(fingerprint);
+
+      // Stops repeated autosave requests handled by the same server instance.
+      if (seenAt && now - seenAt < dedupeWindowMs) continue;
+
+      // Also check Supabase in case another server instance handled the first request.
+      const { data: existingRows } = await supabase
+        .from("activity_logs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("action", row.action)
+        .eq("entity_type", row.entityType || null)
+        .eq("entity_name", row.entityName || null)
+        .eq("description", row.description || null)
+        .gte("created_at", recentCutoff)
+        .limit(1);
+
+      if (Array.isArray(existingRows) && existingRows.length > 0) {
+        activityDedupeStore.set(fingerprint, now);
+        continue;
+      }
+
+      activityDedupeStore.set(fingerprint, now);
+
+      candidates.push({
         user_id: user.id,
         display_name: displayName,
         email: user.email || "",
@@ -154,9 +204,16 @@ async function writeActivityRows(req: NextRequest, rows: any[]) {
         entity_name: row.entityName || null,
         description: row.description || null,
         href: row.href || null,
-        metadata: row.metadata || {},
-      }))
-    );
+        metadata: {
+          ...(row.metadata || {}),
+          dedupeFingerprint: fingerprint,
+        },
+      });
+    }
+
+    if (candidates.length) {
+      await supabase.from("activity_logs").insert(candidates);
+    }
   } catch {
     // Notifications must never interrupt or roll back a successful EMDC save.
   }
@@ -617,9 +674,6 @@ export async function POST(req: NextRequest) {
 
       const patch = isRecord(body?.patch) ? body.patch : {};
       const existingAppState:any = isRecord(existing?.appState) ? existing.appState : {};
-      const previousSkuRows = Array.isArray((patch as any).skuItems)
-        ? safeArray(await readJsonBlob(SKU_ALL_PATH))
-        : [];
       let nextAppState:any = { ...existingAppState, ...patch };
 
       if (Array.isArray((patch as any).deletedSkuKeys)) {
@@ -665,15 +719,6 @@ export async function POST(req: NextRequest) {
 
       await writeJsonBlob(STATE_PATH, payload);
       await writeJsonBlob(LAST_GOOD_PATH, payload);
-
-      if (Array.isArray((patch as any).skuItems) && safeArray((patch as any).skuItems).length) {
-        await logSkuDiff(
-          req,
-          previousSkuRows,
-          safeArray((patch as any).skuItems),
-          String(body?.source || "SKU Storage")
-        );
-      }
 
       const nonSkuPatchKeys = Object.keys(patch).filter((key) =>
         !["skuItems", "deletedSkuKeys"].includes(key)
@@ -858,10 +903,6 @@ export async function POST(req: NextRequest) {
     // Any POST that includes SKU rows becomes the authoritative SKU Blob file.
     // This covers adding 88 SKUs, editing SKUs, and importing backup files.
     let appStateForSave: any = incomingAppState;
-    const previousSkuRows = incomingSkuItems.length > 0
-      ? safeArray(await readJsonBlob(SKU_ALL_PATH))
-      : [];
-
     if (incomingSkuItems.length > 0) {
       await writeJsonBlob(SKU_ALL_PATH, incomingSkuItems);
       appStateForSave = {
@@ -892,15 +933,6 @@ export async function POST(req: NextRequest) {
 
     await writeJsonBlob(STATE_PATH, payload);
     await writeJsonBlob(LAST_GOOD_PATH, payload);
-
-    if (incomingSkuItems.length > 0) {
-      await logSkuDiff(
-        req,
-        previousSkuRows,
-        incomingSkuItems,
-        String(body?.source || "SKU Storage")
-      );
-    }
 
     return NextResponse.json({ ok: true, data: payload });
   } catch (error: any) {
