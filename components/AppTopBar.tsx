@@ -31,6 +31,7 @@ export default function AppTopBar() {
   const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [activeSection, setActiveSection] = useState("calendar");
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -42,6 +43,19 @@ export default function AppTopBar() {
       window.removeEventListener("resize", update);
       window.removeEventListener("orientationchange", update);
     };
+  }, []);
+
+  useEffect(() => {
+    const updateActiveSection = () => {
+      const rawHash = String(window.location.hash || "").replace(/^#\/?/, "");
+      const section = rawHash.split("?")[0] || "calendar";
+      const allowed = ["calendar", "events", "checklists", "skus", "ai"];
+      setActiveSection(allowed.includes(section) ? section : "calendar");
+    };
+
+    updateActiveSection();
+    window.addEventListener("hashchange", updateActiveSection);
+    return () => window.removeEventListener("hashchange", updateActiveSection);
   }, []);
 
   useEffect(() => {
@@ -376,7 +390,73 @@ export default function AppTopBar() {
           </div>
         </div>
       </header>
-      <div aria-hidden="true" style={{ height: 52 }} />
+
+      {!isMobile && (
+        <nav
+          className="emdc-app-topbar"
+          style={{
+            position: "fixed",
+            top: 52,
+            left: 0,
+            right: 0,
+            zIndex: 9000,
+            height: 44,
+            background: C.surface,
+            borderBottom: `1px solid ${C.border}`,
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 1280,
+              height: "100%",
+              margin: "0 auto",
+              padding: "0 20px",
+              display: "flex",
+              alignItems: "stretch",
+              gap: 0,
+              overflowX: "auto",
+            }}
+          >
+            {[
+              { id: "calendar", label: "Calendar" },
+              { id: "events", label: "Events & Seasons" },
+              { id: "checklists", label: "Checklists" },
+              { id: "skus", label: "SKU Storage" },
+              { id: "ai", label: "AI Engine" },
+            ].map((item) => {
+              const active = activeSection === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    window.location.href = `/#/${item.id}`;
+                  }}
+                  style={{
+                    height: "100%",
+                    padding: "0 16px",
+                    border: "none",
+                    borderBottom: active
+                      ? `2px solid ${C.accent}`
+                      : "2px solid transparent",
+                    background: "transparent",
+                    color: active ? C.text : C.muted,
+                    fontSize: 13,
+                    fontWeight: active ? 700 : 500,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
+      <div aria-hidden="true" style={{ height: isMobile ? 52 : 96 }} />
     </>
   );
 }
