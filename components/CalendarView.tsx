@@ -5508,6 +5508,51 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     persistChecklistGroupPatchNow(groupPatch);
   };
 
+
+  // Commit one AI-workspace tab as a single coherent update. This avoids the
+  // transfer/local-backup event firing before the checklist group itself is
+  // updated, which previously caused transferred rows and saved outputs to be
+  // overwritten by a stale autosave.
+  const commitAiWorkspaceTabNow = (tab:string, nextTabData:any) => {
+    if (typeof window === "undefined" || !group?.id) return;
+
+    const persistedGroup = getPersistedChecklistGroup() || group || {};
+    const storedWorkspace = ((persistedGroup.aiWorkspace || {}) as any);
+    const liveWorkspace = ((group.aiWorkspace || {}) as any);
+    const nextWorkspace = {
+      ...storedWorkspace,
+      ...liveWorkspace,
+      [tab]: {
+        ...(storedWorkspace[tab] || {}),
+        ...(liveWorkspace[tab] || {}),
+        ...(nextTabData || {}),
+      },
+    };
+
+    const groupPatch = { aiWorkspace:nextWorkspace };
+
+    // Write the exact workspace to both local sources before emitting sync.
+    writeEmdcGroupWorkspaceBackup(group.id,nextWorkspace);
+    try {
+      const raw = localStorage.getItem("emdc_app_state_v1");
+      const parsed = raw ? parseEmdcJson(raw) : {};
+      const storedGroups = Array.isArray(parsed?.checklistGroups) ? parsed.checklistGroups : [];
+      const baseGroup = storedGroups.find((item:any)=>item?.id===group.id) || persistedGroup || group;
+      const nextGroup = { ...baseGroup, aiWorkspace:nextWorkspace };
+      const nextGroups = storedGroups.some((item:any)=>item?.id===group.id)
+        ? storedGroups.map((item:any)=>item?.id===group.id ? nextGroup : item)
+        : [...storedGroups,nextGroup];
+      safeSetEmdcAppStateLocal({ ...(parsed || {}), checklistGroups:nextGroups });
+    } catch {}
+
+    if (onUpdateGroup) onUpdateGroup(groupPatch);
+    markEmdcLocalStateUpdated();
+    try {
+      window.dispatchEvent(new Event("emdc-local-sync"));
+      window.dispatchEvent(new Event("emdc-force-cloud-save"));
+    } catch {}
+  };
+
   const getEcommerceSavedOutputsLocalKey = () => group?.id ? `emdc_ecommerce_saved_outputs_v1_${group.id}` : "";
   const getEcommerceDeletedOutputsLocalKey = () => group?.id ? `emdc_ecommerce_deleted_output_ids_v1_${group.id}` : "";
 
@@ -7121,21 +7166,34 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
+    const persistedGroup = getPersistedChecklistGroup() || group || {};
+    const storedMarketing = ((((persistedGroup.aiWorkspace || {}) as any).marketing || {}) as any);
+    const liveMarketing = ((((group.aiWorkspace || {}) as any).marketing || {}) as any);
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
-    const marketing = (((group.aiWorkspace || {}) as any).marketing || {}) as any;
-    const nextDeleted = (Array.isArray(marketing.deletedProductIntroTransferSignatures)
-      ? marketing.deletedProductIntroTransferSignatures
-      : []
-    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
+    const nextDeleted = Array.from(new Set([
+      ...(Array.isArray(storedMarketing.deletedProductIntroTransferSignatures) ? storedMarketing.deletedProductIntroTransferSignatures : []),
+      ...(Array.isArray(liveMarketing.deletedProductIntroTransferSignatures) ? liveMarketing.deletedProductIntroTransferSignatures : []),
+    ].map((item:any)=>String(item || "")).filter(Boolean)))
+      .filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const existingRows = getProductIntroMarketingRows();
     const cleanRows = normalizeTransferRowsForStorage(
-      mergeEcommerceTransferRows(existingRows, rowsToSend)
-    );
-    writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
-    updateAiWorkspace("marketing",{
+      mergeEcommerceTransferRows(
+        Array.isArray(storedMarketing.productIntroMarketingRows) ? storedMarketing.productIntroMarketingRows : [],
+        Array.isArray(liveMarketing.productIntroMarketingRows) ? liveMarketing.productIntroMarketingRows : [],
+        readEcommerceTransferRowsBackup("marketing","product_intro"),
+        rowsToSend,
+      )
+    ).filter((row:any)=>!nextDeleted.includes(getTransferProductSignature(row)));
+
+    // Quiet backup write; commitAiWorkspaceTabNow emits the single sync event.
+    try {
+      const key = getEcommerceTransferRowsBackupKey("marketing","product_intro");
+      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
+    } catch {}
+
+    commitAiWorkspaceTabNow("marketing",{
       productIntroMarketingRows:cleanRows,
       productIntroMarketingRowsCleared:false,
       deletedProductIntroTransferSignatures:nextDeleted,
@@ -7154,21 +7212,33 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rowsToSend = makeProductIntroTransferRowsForEcommerceOutput(sourceData);
     if (!rowsToSend.length) return;
 
+    const persistedGroup = getPersistedChecklistGroup() || group || {};
+    const storedLivestream = ((((persistedGroup.aiWorkspace || {}) as any).livestream || {}) as any);
+    const liveLivestream = ((((group.aiWorkspace || {}) as any).livestream || {}) as any);
     const signaturesToRestore = new Set(
       rowsToSend.map((row:any)=>getTransferProductSignature(row)).filter(Boolean)
     );
-    const livestream = (((group.aiWorkspace || {}) as any).livestream || {}) as any;
-    const nextDeleted = (Array.isArray(livestream.deletedProductIntroTransferSignatures)
-      ? livestream.deletedProductIntroTransferSignatures
-      : []
-    ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
+    const nextDeleted = Array.from(new Set([
+      ...(Array.isArray(storedLivestream.deletedProductIntroTransferSignatures) ? storedLivestream.deletedProductIntroTransferSignatures : []),
+      ...(Array.isArray(liveLivestream.deletedProductIntroTransferSignatures) ? liveLivestream.deletedProductIntroTransferSignatures : []),
+    ].map((item:any)=>String(item || "")).filter(Boolean)))
+      .filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
-    const existingRows = getProductIntroLivestreamRows();
     const cleanRows = normalizeTransferRowsForStorage(
-      mergeEcommerceTransferRows(existingRows, rowsToSend)
-    );
-    writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
-    updateAiWorkspace("livestream",{
+      mergeEcommerceTransferRows(
+        Array.isArray(storedLivestream.productIntroLivestreamRows) ? storedLivestream.productIntroLivestreamRows : [],
+        Array.isArray(liveLivestream.productIntroLivestreamRows) ? liveLivestream.productIntroLivestreamRows : [],
+        readEcommerceTransferRowsBackup("livestream","product_intro"),
+        rowsToSend,
+      )
+    ).filter((row:any)=>!nextDeleted.includes(getTransferProductSignature(row)));
+
+    try {
+      const key = getEcommerceTransferRowsBackupKey("livestream","product_intro");
+      if (key) localStorage.setItem(key, JSON.stringify(cleanRows));
+    } catch {}
+
+    commitAiWorkspaceTabNow("livestream",{
       productIntroLivestreamRows:cleanRows,
       productIntroLivestreamRowsCleared:false,
       deletedProductIntroTransferSignatures:nextDeleted,
@@ -7375,10 +7445,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       },
     };
 
-    const groupPatch = { aiWorkspace:nextWorkspace };
-    writeEmdcGroupWorkspaceBackup(group.id,nextWorkspace);
-    if (onUpdateGroup) onUpdateGroup(groupPatch);
-    persistChecklistGroupPatchNow(groupPatch);
+    commitAiWorkspaceTabNow("ecommerce", nextWorkspace.ecommerce);
   };
 
   const saveEcommerceOutput = () => {
