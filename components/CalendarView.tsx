@@ -5020,6 +5020,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
+  const [budgetSelectedCell,setBudgetSelectedCell] = useState("D14");
   const setActiveGroupTab = (nextTab:any) => {
     const safeTab = safeChecklistInnerTab(nextTab);
     setActiveGroupTabState(safeTab);
@@ -5399,6 +5400,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const workspaceTabs:any[] = [
     { id:"tasks", label:"Tasks", sub:"Checklist board" },
     { id:"ecommerce", label:"E-commerce", sub:"Listing copy and marketplace assets" },
+    { id:"budget", label:"Budget", sub:"Launch budget and allocation sheet" },
     { id:"marketing", label:"Marketing", sub:"Campaign copy and ads direction" },
     { id:"digital", label:"Digital Creative", sub:"Creative briefs and image prompts" },
     { id:"livestream", label:"Livestream", sub:"Live selling plan and scripts" },
@@ -5406,10 +5408,19 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   ];
 
   const checklistTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
-  const canShowLivestreamTab = checklistTypeLabel.includes("product introduction") || checklistTypeLabel.includes("product reactivation") || checklistTypeLabel.includes("campaign");
-  const visibleWorkspaceTabs = workspaceTabs.filter((tab:any)=>tab.id!=="livestream" || canShowLivestreamTab);
+  const isProductIntroOrReactivation = checklistTypeLabel.includes("product introduction") || checklistTypeLabel.includes("product reactivation");
+  const canShowLivestreamTab = isProductIntroOrReactivation || checklistTypeLabel.includes("campaign");
+  const visibleWorkspaceTabs = workspaceTabs.filter((tab:any)=>{
+    if(tab.id==="livestream") return canShowLivestreamTab;
+    if(tab.id==="budget") return isProductIntroOrReactivation;
+    return true;
+  });
 
   const workspaceConfig:any = {
+    budget:{
+      title:"Budget",
+      description:"Editable launch budget worksheet with formulas, allocations, and per-platform spending calculations.",
+    },
     ecommerce:{
       title:"E-commerce Overview",
       description:"Build listing text, marketplace copy, SEO titles, bullets, and product image prompts for the selected products.",
@@ -8398,6 +8409,244 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     updateEcommerceCampaignBuilder({ savedOutputs:saved.filter((item:any)=>item.id!==id) });
   };
 
+  const BUDGET_COLUMNS = Array.from({length:15},(_,index)=>String.fromCharCode(65+index));
+  const BUDGET_DEFAULT_ROW_COUNT = 16;
+
+  const makeDefaultBudgetCells = () => {
+    const cells:any = {
+      B2:"QTY ordered", C2:"SRP", D2:"SRP value",
+      F2:"Ads spend", I2:"External Traffic push",
+      K2:"Promotions", L1:"X", L2:"Early bird", M2:"Flash sales", N2:"Affiliate", O2:"Total",
+      F3:"8.50%", I3:"2.50%", K3:"1.00%", L3:"0.00%", M3:"0.50%", N3:"0.50%", O3:"12.00%",
+      A4:"SKU 1", A5:"SKU 2", A6:"SKU 3", A7:"SKU 4", A8:"SKU 5", A9:"SKU 6",
+      A10:"SKU 7", A11:"SKU 8", A12:"SKU 9", A13:"SKU 10",
+      B4:"720", B5:"720", B6:"720", B7:"600", B8:"600", B9:"600",
+      C4:"1300", C5:"1500", C6:"1700", C7:"2000", C8:"2800", C9:"2400",
+      D4:"=B4*C4", D5:"=B5*C5", D6:"=B6*C6", D7:"=B7*C7", D8:"=B8*C8", D9:"=B9*C9",
+      D14:"=SUM(D4:D13)",
+      F4:"=D14*F3", G4:"=F4*32.5%",
+      F6:"=D14*3.25%", G6:"3.25%", H6:"Lazada",
+      F7:"=D14*4.25%", G7:"4.25%", H7:"Shoppee",
+      F8:"=D14*2.50%", G8:"2.50%", H8:"Tiktok",
+      F10:"=F6/6", G10:"6 Months", H10:"Lazada",
+      F11:"=F7/6", G11:"6 Months", H11:"Shoppee",
+      F12:"=F8/6", G12:"6 Months", H12:"Tiktok",
+      F14:"=F10/30", G14:"Per day", H14:"Lazada",
+      F15:"=F11/30", G15:"Per day", H15:"Shoppee",
+      F16:"=F12/30", G16:"Per day", H16:"Tiktok",
+      I4:"=D14*I3", K4:"=D14*K3",
+    };
+
+    for(let row=4; row<=9; row++){
+      cells[`L${row}`] = "=ROUND(B"+row+"*$L$3,0)";
+      cells[`M${row}`] = "=ROUND(B"+row+"*$M$3,0)";
+      cells[`N${row}`] = "=ROUND(B"+row+"*$N$3,0)";
+      // Matches the reference count column: 720 → 7, 600 → 6.
+      cells[`O${row}`] = "=ROUND(B"+row+"*1%,0)";
+    }
+
+    return cells;
+  };
+
+  const normalizeBudgetSheet = (raw:any = {}) => ({
+    cells:raw?.cells && typeof raw.cells === "object" ? raw.cells : makeDefaultBudgetCells(),
+    rowCount:Math.max(BUDGET_DEFAULT_ROW_COUNT, Number(raw?.rowCount || BUDGET_DEFAULT_ROW_COUNT)),
+    updatedAt:String(raw?.updatedAt || ""),
+  });
+
+  const budgetCellToNumber = (value:any) => {
+    const clean = String(value ?? "").trim().replace(/,/g,"");
+    if(!clean) return 0;
+    if(/^[-+]?\d+(?:\.\d+)?%$/.test(clean)) return Number(clean.replace("%",""))/100;
+    const num = Number(clean);
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const evaluateBudgetCell = (address:string, cells:any, stack = new Set<string>()):any => {
+    const key = String(address || "").toUpperCase();
+    if(stack.has(key)) return "#CYCLE!";
+    const raw = cells?.[key];
+    if(raw===undefined || raw===null || raw==="") return "";
+    if(typeof raw === "number") return raw;
+    const textValue = String(raw).trim();
+    if(!textValue.startsWith("=")) return textValue;
+
+    const nextStack = new Set(stack);
+    nextStack.add(key);
+
+    const getNumeric = (cellAddress:string) => {
+      const result = evaluateBudgetCell(cellAddress,cells,nextStack);
+      return typeof result === "number" ? result : budgetCellToNumber(result);
+    };
+
+    const expandRange = (start:string,end:string) => {
+      const matchA = /^([A-Z]+)(\d+)$/.exec(start.toUpperCase());
+      const matchB = /^([A-Z]+)(\d+)$/.exec(end.toUpperCase());
+      if(!matchA || !matchB) return [];
+      const colA = matchA[1].charCodeAt(0)-65;
+      const colB = matchB[1].charCodeAt(0)-65;
+      const rowA = Number(matchA[2]);
+      const rowB = Number(matchB[2]);
+      const out:string[] = [];
+      for(let col=Math.min(colA,colB); col<=Math.max(colA,colB); col++){
+        for(let row=Math.min(rowA,rowB); row<=Math.max(rowA,rowB); row++){
+          out.push(`${String.fromCharCode(65+col)}${row}`);
+        }
+      }
+      return out;
+    };
+
+    try {
+      let expr = textValue.slice(1).toUpperCase();
+      expr = expr.replace(/\$([A-Z]+)\$(\d+)/g,"$1$2");
+      expr = expr.replace(/\$([A-Z]+)(\d+)/g,"$1$2");
+      expr = expr.replace(/([A-Z]+)\$(\d+)/g,"$1$2");
+
+      expr = expr.replace(/SUM\(([A-Z]+\d+):([A-Z]+\d+)\)/g,(_:string,start:string,end:string)=>
+        String(expandRange(start,end).reduce((sum:number,item:string)=>sum+getNumeric(item),0))
+      );
+      expr = expr.replace(/AVERAGE\(([A-Z]+\d+):([A-Z]+\d+)\)/g,(_:string,start:string,end:string)=>{
+        const range = expandRange(start,end);
+        return String(range.length ? range.reduce((sum:number,item:string)=>sum+getNumeric(item),0)/range.length : 0);
+      });
+      expr = expr.replace(/ROUND\(([^,]+),\s*(\d+)\)/g,(_:string,inner:string,digits:string)=>{
+        const safeInner = inner.replace(/([A-Z]+\d+)/g,(cell:string)=>String(getNumeric(cell))).replace(/(\d+(?:\.\d+)?)%/g,"($1/100)");
+        if(!/^[0-9+\-*/().\s]+$/.test(safeInner)) return "0";
+        const value = Function(`"use strict";return (${safeInner})`)();
+        const precision = Math.pow(10,Number(digits));
+        return String(Math.round(Number(value)*precision)/precision);
+      });
+      expr = expr.replace(/([A-Z]+\d+)/g,(cell:string)=>String(getNumeric(cell)));
+      expr = expr.replace(/(\d+(?:\.\d+)?)%/g,"($1/100)");
+      if(!/^[0-9+\-*/().\s]+$/.test(expr)) return "#ERROR!";
+      const result = Function(`"use strict";return (${expr})`)();
+      return Number.isFinite(Number(result)) ? Number(result) : "#ERROR!";
+    } catch {
+      return "#ERROR!";
+    }
+  };
+
+  const formatBudgetDisplay = (address:string, raw:any, calculated:any) => {
+    const source = String(raw ?? "").trim();
+    const isPercentageCell = /^(F3|I3|K3|L3|M3|N3|O3|G6|G7|G8)$/.test(address);
+    if(isPercentageCell){
+      const value = typeof calculated === "number" ? calculated : budgetCellToNumber(calculated);
+      return `${(value*100).toFixed(2)}%`;
+    }
+    if(typeof calculated === "number"){
+      const decimals = /^(C|D|F|G4|I|K)/.test(address) ? 2 : 0;
+      return calculated.toLocaleString("en-US",{minimumFractionDigits:decimals,maximumFractionDigits:decimals});
+    }
+    return String(calculated ?? "");
+  };
+
+  const renderBudgetWorkspace = (rawData:any = {}) => {
+    const sheet = normalizeBudgetSheet(rawData?.sheet || rawData);
+    const cells = sheet.cells;
+    const selectedRaw = String(cells?.[budgetSelectedCell] ?? "");
+
+    const setBudgetCell = (address:string,value:string) => {
+      updateAiWorkspace("budget",{
+        sheet:{
+          ...sheet,
+          cells:{...cells,[address]:value},
+          updatedAt:new Date().toISOString(),
+        },
+      });
+    };
+
+    const resetBudgetTemplate = () => {
+      if(typeof window!=="undefined" && !window.confirm("Reset the Budget tab to the original template?")) return;
+      updateAiWorkspace("budget",{
+        sheet:{cells:makeDefaultBudgetCells(),rowCount:BUDGET_DEFAULT_ROW_COUNT,updatedAt:new Date().toISOString()},
+      });
+    };
+
+    const addBudgetRow = () => {
+      updateAiWorkspace("budget",{
+        sheet:{...sheet,rowCount:sheet.rowCount+1,updatedAt:new Date().toISOString()},
+      });
+    };
+
+    const headerCells = new Set(["B2","C2","D2","F2","I2","K2","L2","M2","N2","O2"]);
+    const orangeCells = new Set(["F3","I3","K3"]);
+    const percentHeaderCells = new Set(["L3","M3","N3","O3"]);
+    const redValueCells = new Set(["D4","D5","D6","D7","D8","D9","D14","F4","G4","I4","K4","L4","M4","N4","O4","L5","M5","N5","O5","L6","M6","N6","O6","L7","M7","N7","O7","L8","M8","N8","O8","L9","M9","N9","O9"]);
+
+    return (
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:isMobile?"stretch":"center",flexDirection:isMobile?"column":"row"}}>
+          <div>
+            <h3 style={{margin:0,fontSize:16,fontWeight:900,color:C.text}}>Product Introduction / Reactivation Budget</h3>
+            <p style={{margin:"4px 0 0",fontSize:11,color:C.muted,lineHeight:1.45}}>Edit values or enter formulas beginning with =. Supported formulas include SUM, AVERAGE, ROUND, cell references, percentages, and arithmetic.</p>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <Btn sm variant="outline" onClick={addBudgetRow}>+ Add Row</Btn>
+            <Btn sm variant="outline" onClick={resetBudgetTemplate}>Reset Template</Btn>
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"76px minmax(0,1fr)",gap:8,alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surface}}>
+          <div style={{fontSize:11,fontWeight:900,color:C.textSub}}>{budgetSelectedCell}</div>
+          <input
+            value={selectedRaw}
+            onChange={(event)=>setBudgetCell(budgetSelectedCell,event.target.value)}
+            placeholder="Enter a value or formula, e.g. =B4*C4"
+            style={{width:"100%",height:34,border:`1px solid ${C.border}`,borderRadius:7,padding:"0 10px",fontSize:12,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",outline:"none"}}
+          />
+        </div>
+
+        <div style={{border:`1px solid ${C.borderStrong}`,borderRadius:10,overflow:"auto",background:C.surface,maxHeight:isMobile?560:680,WebkitOverflowScrolling:"touch"}}>
+          <div style={{minWidth:1380}}>
+            <div style={{display:"grid",gridTemplateColumns:"44px repeat(15,minmax(84px,1fr))",position:"sticky",top:0,zIndex:5}}>
+              <div style={{height:32,background:"#F3F4F6",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}} />
+              {BUDGET_COLUMNS.map((col:string)=><div key={col} style={{height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:C.textSub,background:budgetSelectedCell.startsWith(col)?"#DBEAFE":"#F3F4F6",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}}>{col}</div>)}
+            </div>
+
+            {Array.from({length:sheet.rowCount},(_,rowIndex)=>rowIndex+1).map((row:number)=>(
+              <div key={row} style={{display:"grid",gridTemplateColumns:"44px repeat(15,minmax(84px,1fr))"}}>
+                <div style={{minHeight:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.muted,background:budgetSelectedCell.endsWith(String(row))?"#DBEAFE":"#F9FAFB",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}}>{row}</div>
+                {BUDGET_COLUMNS.map((col:string)=>{
+                  const address = `${col}${row}`;
+                  const raw = cells?.[address] ?? "";
+                  const calculated = evaluateBudgetCell(address,cells);
+                  const display = formatBudgetDisplay(address,raw,calculated);
+                  const selected = budgetSelectedCell===address;
+                  const isHeader = headerCells.has(address);
+                  const isOrange = orangeCells.has(address);
+                  const isPercentHeader = percentHeaderCells.has(address);
+                  const isRed = redValueCells.has(address);
+                  const bg = isOrange ? "#F59E0B" : isPercentHeader ? (address==="O3"?"#F4FF00":"#D1D5DB") : isHeader ? "#FFFFFF" : "#FFFFFF";
+
+                  return (
+                    <input
+                      key={address}
+                      value={selected ? String(raw) : display}
+                      onFocus={()=>setBudgetSelectedCell(address)}
+                      onClick={()=>setBudgetSelectedCell(address)}
+                      onChange={(event)=>setBudgetCell(address,event.target.value)}
+                      style={{
+                        minHeight:34,width:"100%",border:"none",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,
+                        padding:"5px 8px",fontSize:11,fontWeight:isHeader||isOrange||isPercentHeader||isRed?800:500,
+                        color:isRed?"#EF0000":C.text,background:selected?"#EFF6FF":bg,outline:selected?"2px solid #2563EB":"none",outlineOffset:-2,
+                        textAlign:/^(B|C|D|F|G|I|K|L|M|N|O)/.test(address)?"right":"left",
+                        fontVariantNumeric:"tabular-nums",boxSizing:"border-box",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surfaceAlt,fontSize:11,color:C.muted,lineHeight:1.5}}>
+          <strong style={{color:C.textSub}}>Template formulas:</strong> SRP Value = Quantity × SRP; total value = SUM of SKU values; Ads Spend = 8.5%; External Traffic Push = 2.5%; Promotions = 1%; six-month platform budgets divide the allocation by 6; daily budgets divide the monthly amount by 30.
+        </div>
+      </div>
+    );
+  };
+
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
     const backupWorkspace = ((readEmdcGroupWorkspaceBackups()[String(group?.id || "")] || {}).aiWorkspace || {}) as any;
@@ -8408,6 +8657,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rawData = { ...backupTabData, ...persistedTabData, ...groupTabData };
     const data = tab === "ecommerce" ? getMergedEcommerceData(rawData) : rawData;
     if(!cfg) return null;
+
+    if(tab==="budget"){
+      return renderBudgetWorkspace(data);
+    }
 
     if(tab==="overview"){
       const overviewItems = getOverviewItems();
