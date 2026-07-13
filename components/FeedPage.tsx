@@ -49,6 +49,89 @@ const displayNameFromUser = (user: any) =>
   user?.email ||
   "EMDC User";
 
+
+const normalizeImageUrl = (value: string) => {
+  const url = String(value || "").trim();
+  if (!url) return "";
+
+  const patterns = [
+    /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+    /drive\.google\.com\/open\?id=([^&#]+)/i,
+    /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&#]+)/i,
+    /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&#]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match?.[1]) {
+      return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+        match[1]
+      )}&sz=w1600`;
+    }
+  }
+
+  return url;
+};
+
+const ImagePreview = ({
+  value,
+  alt,
+  compact = false,
+}: {
+  value: string;
+  alt: string;
+  compact?: boolean;
+}) => {
+  const src = normalizeImageUrl(value);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: compact ? 9 : 0,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: compact ? 10 : 0,
+        overflow: "hidden",
+        background: COLORS.surfaceAlt,
+      }}
+    >
+      {!failed ? (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          style={{
+            display: "block",
+            width: "100%",
+            maxHeight: compact ? 280 : 540,
+            objectFit: "contain",
+            background: COLORS.surfaceAlt,
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            padding: 14,
+            color: COLORS.muted,
+            fontSize: 11,
+            lineHeight: 1.45,
+          }}
+        >
+          Image preview could not load. Make sure the Google Drive file is set to
+          <strong> Anyone with the link — Viewer</strong>.
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function FeedPage() {
   const supabase = useMemo(() => createClient(), []);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -171,7 +254,7 @@ export default function FeedPage() {
     setSavingEdit(true);
     setError("");
 
-    const { data, error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from("feed_posts")
       .update({
         body,
@@ -179,8 +262,7 @@ export default function FeedPage() {
       })
       .eq("id", post.id)
       .eq("user_id", currentUser.id)
-      .select()
-      .single();
+      .select();
 
     if (updateError) {
       setError(updateError.message);
@@ -188,9 +270,19 @@ export default function FeedPage() {
       return;
     }
 
+    const updatedPost = Array.isArray(updatedRows)
+      ? (updatedRows[0] as FeedPost | undefined)
+      : undefined;
+
+    if (!updatedPost) {
+      setError("The post was not updated. Please refresh and try again.");
+      setSavingEdit(false);
+      return;
+    }
+
     setPosts((previous) =>
       previous.map((item) =>
-        item.id === post.id ? (data as FeedPost) : item
+        item.id === post.id ? updatedPost : item
       )
     );
 
@@ -408,7 +500,7 @@ export default function FeedPage() {
               <input
                 value={imageUrl}
                 onChange={(event) => setImageUrl(event.target.value)}
-                placeholder="Optional image URL"
+                placeholder="Optional image URL or Google Drive link"
                 style={{
                   width: "100%",
                   height: 40,
@@ -423,6 +515,14 @@ export default function FeedPage() {
                   boxSizing: "border-box",
                 }}
               />
+
+              {imageUrl.trim() && (
+                <ImagePreview
+                  value={imageUrl}
+                  alt="New post image preview"
+                  compact
+                />
+              )}
 
               <div
                 style={{
@@ -638,7 +738,7 @@ export default function FeedPage() {
                         <input
                           value={editImageUrl}
                           onChange={(event) => setEditImageUrl(event.target.value)}
-                          placeholder="Optional image URL"
+                          placeholder="Optional image URL or Google Drive link"
                           style={{
                             width: "100%",
                             height: 40,
@@ -653,6 +753,14 @@ export default function FeedPage() {
                             boxSizing: "border-box",
                           }}
                         />
+
+                        {editImageUrl.trim() && (
+                          <ImagePreview
+                            value={editImageUrl}
+                            alt="Edited post image preview"
+                            compact
+                          />
+                        )}
 
                         <div
                           style={{
@@ -722,20 +830,17 @@ export default function FeedPage() {
                   </div>
 
                   {post.image_url && editingPostId !== post.id && (
-                    <img
-                      src={post.image_url}
-                      alt="Feed attachment"
-                      loading="lazy"
+                    <div
                       style={{
-                        display: "block",
-                        width: "100%",
-                        maxHeight: 540,
-                        objectFit: "contain",
-                        background: COLORS.surfaceAlt,
                         borderTop: `1px solid ${COLORS.border}`,
                         borderBottom: `1px solid ${COLORS.border}`,
                       }}
-                    />
+                    >
+                      <ImagePreview
+                        value={post.image_url}
+                        alt="Feed attachment"
+                      />
+                    </div>
                   )}
 
                   <div
