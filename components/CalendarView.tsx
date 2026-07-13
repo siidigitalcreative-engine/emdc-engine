@@ -6308,11 +6308,17 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const getTransferRowIdentity = (row:any, idx:number=0) => {
     const products = Array.isArray(row?.products) && row.products.length ? row.products : [row];
     const productSig = products
-      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || "").trim())
+      .map((item:any)=>String(item?.sku || item?.skuCode || item?.product || item?.productName || "").trim().toLowerCase())
       .filter(Boolean)
       .sort()
       .join("|");
-    return String(row?.sourceRowId || row?.transferGroupId || row?.id || productSig || `row-${idx}`);
+
+    // Product row groups are semantically identical when they contain the same
+    // SKUs/products. Prefer that stable signature over temporary transfer IDs,
+    // otherwise the same transfer can appear once from state, once from backup,
+    // and once from persisted workspace data.
+    if (productSig) return `products:${productSig}`;
+    return String(row?.sourceRowId || row?.transferGroupId || row?.id || `row-${idx}`);
   };
 
   const normalizeTransferRowsForStorage = (rows:any[] = []) => (Array.isArray(rows) ? rows : []).filter(Boolean).map((row:any)=>({
@@ -6347,7 +6353,16 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const map = new Map<string,any>();
     lists.flat().filter(Boolean).forEach((row:any,idx:number)=>{
       const normalized = normalizeTransferRowsForStorage([row])[0] || row;
-      map.set(getTransferRowIdentity(normalized,idx), normalized);
+      const key = getTransferRowIdentity(normalized,idx);
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, normalized);
+        return;
+      }
+
+      const existingTime = Date.parse(String(existing?.updatedAt || existing?.createdAt || "")) || 0;
+      const nextTime = Date.parse(String(normalized?.updatedAt || normalized?.createdAt || "")) || 0;
+      map.set(key, nextTime >= existingTime ? { ...existing, ...normalized } : { ...normalized, ...existing });
     });
     return Array.from(map.values());
   };
@@ -7116,7 +7131,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
     const existingRows = getProductIntroMarketingRows();
-    const cleanRows = normalizeTransferRowsForStorage([...existingRows, ...rowsToSend]);
+    const cleanRows = normalizeTransferRowsForStorage(
+      mergeEcommerceTransferRows(existingRows, rowsToSend)
+    );
     writeEcommerceTransferRowsBackup("marketing","product_intro",cleanRows);
     updateAiWorkspace("marketing",{
       productIntroMarketingRows:cleanRows,
@@ -7147,7 +7164,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     ).filter((signature:any)=>!signaturesToRestore.has(String(signature || "")));
 
     const existingRows = getProductIntroLivestreamRows();
-    const cleanRows = normalizeTransferRowsForStorage([...existingRows, ...rowsToSend]);
+    const cleanRows = normalizeTransferRowsForStorage(
+      mergeEcommerceTransferRows(existingRows, rowsToSend)
+    );
     writeEcommerceTransferRowsBackup("livestream","product_intro",cleanRows);
     updateAiWorkspace("livestream",{
       productIntroLivestreamRows:cleanRows,
@@ -7326,6 +7345,42 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     try { await navigator.clipboard.writeText(output); } catch {}
   };
 
+  const commitEcommerceSavedOutputs = (nextSaved:any[] = [], deletedIds:any[] = []) => {
+    const safeSaved = Array.isArray(nextSaved) ? nextSaved.filter(Boolean).slice(0,60) : [];
+    const safeDeleted = Array.from(new Set(
+      (Array.isArray(deletedIds) ? deletedIds : [])
+        .map((item:any)=>String(item || "").trim())
+        .filter(Boolean)
+    ));
+
+    try {
+      const savedKey = getEcommerceSavedOutputsLocalKey();
+      const deletedKey = getEcommerceDeletedOutputsLocalKey();
+      if (savedKey) localStorage.setItem(savedKey, JSON.stringify(safeSaved));
+      if (deletedKey) localStorage.setItem(deletedKey, JSON.stringify(safeDeleted));
+    } catch {}
+
+    const persistedGroup = getPersistedChecklistGroup() || group || {};
+    const storedWorkspace = ((persistedGroup.aiWorkspace || {}) as any);
+    const liveWorkspace = ((group.aiWorkspace || {}) as any);
+    const nextWorkspace = {
+      ...storedWorkspace,
+      ...liveWorkspace,
+      ecommerce:{
+        ...(storedWorkspace.ecommerce || {}),
+        ...(liveWorkspace.ecommerce || {}),
+        savedOutputs:safeSaved,
+        deletedSavedOutputIds:safeDeleted,
+        savedOutputsUpdatedAt:new Date().toISOString(),
+      },
+    };
+
+    const groupPatch = { aiWorkspace:nextWorkspace };
+    writeEmdcGroupWorkspaceBackup(group.id,nextWorkspace);
+    if (onUpdateGroup) onUpdateGroup(groupPatch);
+    persistChecklistGroupPatchNow(groupPatch);
+  };
+
   const saveEcommerceOutput = () => {
     const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
     const output = String(data.generatedText || "").trim();
@@ -7348,14 +7403,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       updatedAt:now,
     };
     const nextSaved = [savedEntry,...saved].slice(0,60);
-    writeEcommerceDeletedOutputIds(
-      readEcommerceDeletedOutputIds().filter((item:any)=>String(item || "")!==String(savedEntry.id || ""))
-    );
-    writeEcommerceSavedOutputsToLocal(nextSaved);
-    updateAiWorkspace("ecommerce",{
-      savedOutputs:nextSaved,
-      savedOutputsUpdatedAt:now,
-    });
+    const nextDeleted = readEcommerceDeletedOutputIds()
+      .filter((item:any)=>String(item || "")!==String(savedEntry.id || ""));
+    commitEcommerceSavedOutputs(nextSaved,nextDeleted);
     markActionDone(`ecommerce-save-output-${savedEntry.id}`);
   };
 
@@ -7383,17 +7433,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const currentSaved = Array.isArray(data.savedOutputs) ? data.savedOutputs : [];
     const nextSaved = currentSaved.filter((item:any)=>String(item?.id || "").trim()!==cleanId);
 
-    writeEcommerceDeletedOutputIds(deletedIds);
-    try {
-      const key = getEcommerceSavedOutputsLocalKey();
-      if (key) localStorage.setItem(key, JSON.stringify(nextSaved));
-    } catch {}
-
-    updateAiWorkspace("ecommerce",{
-      savedOutputs:nextSaved,
-      deletedSavedOutputIds:deletedIds,
-      savedOutputsUpdatedAt:new Date().toISOString(),
-    });
+    commitEcommerceSavedOutputs(nextSaved,deletedIds);
 
     if (savedEcommercePreview && String(savedEcommercePreview?.id || "") === cleanId) {
       setSavedEcommercePreview(null);
