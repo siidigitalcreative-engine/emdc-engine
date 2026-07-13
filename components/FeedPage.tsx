@@ -254,15 +254,14 @@ export default function FeedPage() {
     setSavingEdit(true);
     setError("");
 
-    const { data: updatedRows, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from("feed_posts")
       .update({
         body,
         image_url: cleanImageUrl || null,
       })
       .eq("id", post.id)
-      .eq("user_id", currentUser.id)
-      .select();
+      .eq("user_id", currentUser.id);
 
     if (updateError) {
       setError(updateError.message);
@@ -270,15 +269,11 @@ export default function FeedPage() {
       return;
     }
 
-    const updatedPost = Array.isArray(updatedRows)
-      ? (updatedRows[0] as FeedPost | undefined)
-      : undefined;
-
-    if (!updatedPost) {
-      setError("The post was not updated. Please refresh and try again.");
-      setSavingEdit(false);
-      return;
-    }
+    const updatedPost: FeedPost = {
+      ...post,
+      body,
+      image_url: cleanImageUrl || null,
+    };
 
     setPosts((previous) =>
       previous.map((item) =>
