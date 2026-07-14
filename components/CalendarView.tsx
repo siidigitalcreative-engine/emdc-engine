@@ -15256,6 +15256,37 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         [groupId]:cleanGroupItems,
       };
 
+      const departmentSummary:any = {};
+      let summaryDone = 0;
+      let summaryTotal = 0;
+      Object.entries(cleanGroupItems || {}).forEach(([department,rows]:any)=>{
+        const departmentRows = Array.isArray(rows) ? rows : [];
+        const departmentDone = departmentRows.filter((item:any)=>!!item?.done).length;
+        departmentSummary[department] = {
+          done:departmentDone,
+          total:departmentRows.length,
+        };
+        summaryDone += departmentDone;
+        summaryTotal += departmentRows.length;
+      });
+
+      setGroups((currentGroups:any[])=>
+        currentGroups.map((currentGroup:any)=>
+          String(currentGroup?.id)===String(groupId)
+            ? {
+                ...currentGroup,
+                progressSummary:{
+                  done:summaryDone,
+                  total:summaryTotal,
+                  departmentCount:Object.keys(departmentSummary).length,
+                  departments:departmentSummary,
+                  updatedAt:new Date().toISOString(),
+                },
+              }
+            : currentGroup
+        )
+      );
+
       // Keep the current UI/device immediately updated, but do not also send an
       // app-patch request. The dedicated checklist-items endpoint is the single
       // authoritative save path for task status, done, link, note and assignee.
@@ -15801,7 +15832,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
               const bStatus = b.arrivalStatus || (b.productsArrived ? "arrived" : "waiting");
               return (rank[aStatus] ?? 3) - (rank[bStatus] ?? 3);
             })
-            .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id] || {}; const deptOrder=["ecommerce","marketing","digital"]; return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
+            .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const compactSummary=(g?.progressSummary && typeof g.progressSummary==="object") ? g.progressSummary : {}; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id]; const deptOrder=["ecommerce","marketing","digital"]; if(gItems){ return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); } const summaryDepartments=(compactSummary?.departments && typeof compactSummary.departments==="object") ? compactSummary.departments : {}; return deptOrder.filter((dept:string)=>Number(summaryDepartments?.[dept]?.total || 0)>0 && Number(summaryDepartments?.[dept]?.done || 0)>=Number(summaryDepartments?.[dept]?.total || 0)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
             <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px",minWidth:0 }}>
                 <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",alignItems:"flex-start",gap:8,marginBottom:10,minWidth:0 }}>
@@ -15840,7 +15871,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
                     ))}
                   </div>
                 )}
-                {(()=>{ const gItems=allGroupItems[g.id]; if(gItems){ const all=Object.values(gItems).flat() as any[]; const done=all.filter((i:any)=>i.done).length; const pct=all.length?Math.round(done/all.length*100):0; return (<div style={{ marginTop:10 }}><div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}><span style={{ fontSize:10,color:C.muted }}>Progress</span><span style={{ fontSize:10,fontWeight:700,color:C.accent }}>{done}/{all.length} · {pct}%</span></div><div style={{ height:4,background:C.border,borderRadius:2,overflow:"hidden" }}><div style={{ height:"100%",width:`${pct}%`,background:pct===100?"#22C55E":groupColor,borderRadius:2,transition:"width .3s" }} /></div></div>); } return <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>3 departments · tap to view</p>; })()}
+                {(()=>{ const gItems=allGroupItems[g.id]; let done=0; let total=0; if(gItems){ const all=Object.values(gItems).flat() as any[]; done=all.filter((i:any)=>i.done).length; total=all.length; } else { done=Number(compactSummary?.done || 0); total=Number(compactSummary?.total || 0); } if(total>0){ const pct=Math.round(done/total*100); return (<div style={{ marginTop:10 }}><div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}><span style={{ fontSize:10,color:C.muted }}>Progress</span><span style={{ fontSize:10,fontWeight:700,color:C.accent }}>{done}/{total} · {pct}%</span></div><div style={{ height:4,background:C.border,borderRadius:2,overflow:"hidden" }}><div style={{ height:"100%",width:`${pct}%`,background:pct===100?"#22C55E":groupColor,borderRadius:2,transition:"width .3s" }} /></div></div>); } const departmentCount=Number(compactSummary?.departmentCount || 3); return <p style={{ margin:"10px 0 0",fontSize:11,color:C.faint }}>{departmentCount} departments · tap to view</p>; })()}
               </div>
             </div>
           );})}
