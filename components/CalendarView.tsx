@@ -9330,9 +9330,46 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         updateProductIntroDigitalAssetRows(nextRows);
         markActionDone(`reorder-digital-asset-${rowId}`);
       };
+      const readCurrentProductIntroDigitalAssetRows = () => {
+        if(typeof document === "undefined") return productIntroDigitalAssetRows;
+
+        return productIntroDigitalAssetRows.map((row:any)=>{
+          const nameInput = document.querySelector(
+            `[data-product-intro-asset-name="${String(row.id)}"]`
+          ) as HTMLInputElement | null;
+          const linkInput = document.querySelector(
+            `[data-product-intro-asset-link="${String(row.id)}"]`
+          ) as HTMLInputElement | null;
+
+          return {
+            ...row,
+            name:nameInput ? String(nameInput.value || "") : String(row.name || ""),
+            link:linkInput ? String(linkInput.value || "").trim() : String(row.link || ""),
+          };
+        });
+      };
+
+      const commitCurrentProductIntroDigitalAssetRows = () => {
+        const currentRows = readCurrentProductIntroDigitalAssetRows();
+        updateProductIntroDigitalAssetRows(currentRows);
+        return currentRows;
+      };
+
       const addProductIntroDigitalAssetTableToOverview = () => {
-        const lines = productIntroDigitalAssetRows.map((row:any,index:number)=>`${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`);
-        addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table", { tab:"digital", type:"productIntroAssetLinks" });
+        // Read directly from the visible inputs. The fields intentionally save
+        // on blur, so React state may still contain the previous link when this
+        // button is clicked immediately after pasting.
+        const currentRows = commitCurrentProductIntroDigitalAssetRows();
+        const lines = currentRows.map((row:any,index:number)=>
+          `${index+1}. ${row.name || "Untitled Asset"}${row.link ? `\n   Link: ${row.link}` : "\n   Link: "}`
+        );
+        addToOverview(
+          "Digital Creative",
+          "Product Introduction Digital Creative Asset Links",
+          lines.join("\n\n"),
+          "Asset Link Table",
+          { tab:"digital", type:"productIntroAssetLinks" }
+        );
         markActionDone("overview-product-intro-digital-assets");
       };
 
@@ -12350,6 +12387,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   xs
                   variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"}
                   onClick={()=>{
+                    commitCurrentProductIntroDigitalAssetRows();
                     markActionDone("save-product-intro-digital-assets");
                   }}
                 >
@@ -12381,6 +12419,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
                         <input
                           key={`asset-name-${row.id}`}
+                          data-product-intro-asset-name={String(row.id)}
                           defaultValue={row.name || ""}
                           onBlur={(e:any)=>{
                             const value = String(e.currentTarget.value || "");
@@ -12395,6 +12434,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       <td style={{ padding:"8px 10px",verticalAlign:"top" }}>
                         <input
                           key={`asset-link-${row.id}`}
+                          data-product-intro-asset-link={String(row.id)}
                           defaultValue={row.link || ""}
                           onBlur={(e:any)=>{
                             const value = String(e.currentTarget.value || "").trim();
