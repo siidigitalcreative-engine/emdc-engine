@@ -57,11 +57,33 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
   const [deleteError, setDeleteError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const userRef = useRef<any>(null);
+  const loadedRef = useRef(false);
+  const loadingRef = useRef(false);
 
-  const load = async () => {
+  const getCurrentUser = async () => {
+    if (userRef.current) return userRef.current;
+
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    userRef.current = user || null;
+    return userRef.current;
+  };
+
+  const load = async (force = false) => {
+    if (loadingRef.current) return;
+    if (loadedRef.current && !force) return;
+
+    loadingRef.current = true;
+
+    const supabase = createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      loadingRef.current = false;
+      setLoading(false);
+      return;
+    }
 
     const [{ data: activity }, { data: readRow }, { data: adminRow }] = await Promise.all([
       supabase
@@ -86,19 +108,23 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
     setLastReadAt(readRow?.last_read_at || null);
     setIsAdmin(!!adminRow);
     setLoading(false);
+    loadedRef.current = true;
+    loadingRef.current = false;
   };
 
   useEffect(() => {
-    load();
-    const timer = window.setInterval(load, 30000);
-
+    // Notifications are loaded only when the bell is opened. This removes
+    // activity_logs, notification_reads, emdc_admins, and one auth request
+    // from every normal page startup.
     const key = "emdc_login_activity_logged_v1";
     if (!sessionStorage.getItem(key)) {
       sessionStorage.setItem(key, "1");
-      logActivity({ action: "signed in", entityType: "auth", href: "/activity?tab=system" }).then(load);
+      void logActivity({
+        action: "signed in",
+        entityType: "auth",
+        href: "/activity?tab=system",
+      });
     }
-
-    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -122,7 +148,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
 
   const markAllRead = async () => {
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (!user) return;
     const now = new Date().toISOString();
     await supabase.from("notification_reads").upsert(
@@ -136,7 +162,8 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
     const next = !open;
     setOpen(next);
     if (next) {
-      await load();
+      setLoading(!loadedRef.current);
+      await load(true);
       await markAllRead();
     } else {
       setSelectMode(false);
@@ -208,7 +235,7 @@ export default function NotificationBell({ isMobile = false }: { isMobile?: bool
       setPassword("");
       setSelectedIds([]);
       setSelectMode(false);
-      await load();
+      await load(true);
     } catch (error: any) {
       setDeleteError(error?.message || "Unable to delete notifications.");
     } finally {
