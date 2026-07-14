@@ -931,8 +931,8 @@ const PERF_SKU_STORAGE_INITIAL_RENDER_LIMIT_MOBILE = 36;
 const PERF_SKU_STORAGE_LOAD_MORE_DESKTOP = 120;
 const PERF_SKU_STORAGE_LOAD_MORE_MOBILE = 36;
 const PERF_IDLE_SAVE_DELAY = 450;
-const PERF_CLOUD_SAVE_DELAY = 150;
-const PERF_CLOUD_POLL_INTERVAL = 5000;
+const PERF_CLOUD_SAVE_DELAY = 30000;
+const PERF_CLOUD_POLL_INTERVAL = 300000;
 
 const scheduleIdleWork = (cb:()=>void, timeout=900) => {
   if (typeof window === "undefined") return setTimeout(cb, 0);
@@ -20553,6 +20553,7 @@ export default function App({
 
   const saveCloudState = async () => {
     if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current || cloudSavingRef.current) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
 
     cloudSavingRef.current = true;
     const updatedAt = new Date().toISOString();
@@ -21155,8 +21156,25 @@ export default function App({
 
   useEffect(() => {
     if (!cloudHydrated) return;
-    const timer = setInterval(()=>fetchCloudState("poll"), PERF_CLOUD_POLL_INTERVAL);
-    return () => clearInterval(timer);
+
+    const pollVisibleTab = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void fetchCloudState("poll");
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchCloudState("poll");
+      }
+    };
+
+    const timer = setInterval(pollVisibleTab, PERF_CLOUD_POLL_INTERVAL);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [cloudHydrated]);
 
   useEffect(() => {
@@ -21179,8 +21197,6 @@ export default function App({
     brands,
     skuStorage,
     skuTableColumns,
-    checklistGroups,
-    checklistAllItems,
     checklistStatuses,
     calendarManualEvents,
     calendarEventTypes,
