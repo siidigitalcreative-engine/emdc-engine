@@ -5145,11 +5145,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
   const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; checklistBoardLocalEditRef.current = true; setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
+    checklistBoardItemsRef.current = next;
     if(onItemsChange) onItemsChange(next);
     return next;
   }); setNewText((p:any)=>({...p,[dept]:""})); };
   const addFromSKU=(dept,s)=>{ checklistBoardLocalEditRef.current = true; const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
+    checklistBoardItemsRef.current = next;
     if(onItemsChange) onItemsChange(next);
     return next;
   }); setSkuPickDept(null); };
@@ -14522,7 +14524,6 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         checklistItems:nextItems,
       }));
       markEmdcLocalStateUpdated();
-      window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
   };
 
@@ -20792,7 +20793,7 @@ export default function App({
         checklistItemsSaveTimerRef.current = setTimeout(() => {
           checklistItemsSaveTimerRef.current = null;
           void flushChecklistItemsSave();
-        }, 160);
+        }, 20);
       } else {
         checklistItemsPendingUntilRef.current = Date.now() + 1200;
       }
