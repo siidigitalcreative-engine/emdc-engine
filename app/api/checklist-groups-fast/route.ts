@@ -39,10 +39,75 @@ async function bump(updatedAt: string) {
   return next;
 }
 
-export async function GET() {
-  const checklistGroups = await readJson(DATA_PATH, []);
+function toChecklistIndexRow(group: any) {
+  return {
+    id: group?.id,
+    groupName: group?.groupName || group?.name || "",
+    name: group?.name || group?.groupName || "",
+    launchType: group?.launchType || "",
+    arrivalStatus:
+      group?.arrivalStatus ||
+      (group?.productsArrived ? "arrived" : "waiting"),
+    productsArrived: !!group?.productsArrived,
+    arrivedAt: group?.arrivedAt || "",
+    deadline: group?.deadline || "",
+    deadlineEnd: group?.deadlineEnd || "",
+    dateMode: group?.dateMode || "",
+    monthOnlyMonths: Array.isArray(group?.monthOnlyMonths)
+      ? group.monthOnlyMonths
+      : [],
+    calendarType: group?.calendarType || "",
+    calendarColor: group?.calendarColor || "",
+    linkedEventIds: Array.isArray(group?.linkedEventIds)
+      ? group.linkedEventIds
+      : [],
+    createdAt: group?.createdAt || "",
+  };
+}
+
+export async function GET(req: NextRequest) {
+  const checklistGroupsRaw = await readJson(DATA_PATH, []);
+  const checklistGroups = Array.isArray(checklistGroupsRaw)
+    ? checklistGroupsRaw
+    : [];
+
+  const groupId = String(
+    req.nextUrl.searchParams.get("groupId") || ""
+  ).trim();
+  const mode = String(
+    req.nextUrl.searchParams.get("mode") || ""
+  ).trim();
+
+  if (groupId) {
+    const group = checklistGroups.find(
+      (row: any) => String(row?.id) === groupId
+    );
+
+    if (!group) {
+      return NextResponse.json(
+        { ok: false, error: "Checklist group not found." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      { ok: true, group },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  }
+
+  if (mode === "index") {
+    return NextResponse.json(
+      {
+        ok: true,
+        checklistGroups: checklistGroups.map(toChecklistIndexRow),
+      },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  }
+
   return NextResponse.json(
-    { ok: true, checklistGroups: Array.isArray(checklistGroups) ? checklistGroups : [] },
+    { ok: true, checklistGroups },
     { headers: { "Cache-Control": "private, no-store" } }
   );
 }
