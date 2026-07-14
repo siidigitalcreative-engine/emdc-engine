@@ -5052,6 +5052,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignCtaInstructionDraft,setCampaignCtaInstructionDraft] = useState("");
   const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
   const [overviewEdit,setOverviewEdit] = useState<any>(null);
+  const [assetAnnouncementOpen,setAssetAnnouncementOpen] = useState(false);
+  const [assetAnnouncementTab,setAssetAnnouncementTab] = useState<"email"|"viber"|"internal">("email");
+  const [assetAnnouncementBusy,setAssetAnnouncementBusy] = useState(false);
+  const [assetAnnouncementError,setAssetAnnouncementError] = useState("");
+  const [assetAnnouncementEmailBusy,setAssetAnnouncementEmailBusy] = useState("");
   const [actionDoneIds,setActionDoneIds] = useState<string[]>([]);
   const markActionDone = (id:any) => {
     const key = String(id || uid());
@@ -9373,6 +9378,287 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         markActionDone("overview-product-intro-digital-assets");
       };
 
+
+      const assetCompletionStatusId = String(
+        digitalData.assetCompletionStatusId || ""
+      );
+      const assetCompletionStatus = statuses.find(
+        (status:any)=>String(status?.id)===assetCompletionStatusId
+      );
+      const assetCompletionIsDone =
+        String(assetCompletionStatus?.label || "").trim().toLowerCase()==="done" ||
+        assetCompletionStatusId.trim().toLowerCase()==="done";
+
+      const assetAnnouncementData = {
+        type:String(digitalData.assetAnnouncementType || "Assets Completed"),
+        tone:String(digitalData.assetAnnouncementTone || "professional"),
+        instructions:String(digitalData.assetAnnouncementInstructions || ""),
+        to:String(digitalData.assetAnnouncementTo || ""),
+        cc:String(digitalData.assetAnnouncementCc || ""),
+        drafts:{
+          email:{
+            subject:String(digitalData.assetAnnouncementDrafts?.email?.subject || ""),
+            body:String(digitalData.assetAnnouncementDrafts?.email?.body || ""),
+          },
+          viber:{
+            body:String(digitalData.assetAnnouncementDrafts?.viber?.body || ""),
+          },
+          internal:{
+            body:String(digitalData.assetAnnouncementDrafts?.internal?.body || ""),
+          },
+        },
+      };
+
+      const patchAssetAnnouncement = (patch:any) => {
+        updateAiWorkspace("digital",patch);
+      };
+
+      const parseAnnouncementJson = (source:any) => {
+        const raw = String(source || "")
+          .trim()
+          .replace(/^```(?:json)?\s*/i,"")
+          .replace(/\s*```$/,"");
+        try {
+          const parsed = JSON.parse(raw);
+          return {
+            email:{
+              subject:String(parsed?.email?.subject || ""),
+              body:String(parsed?.email?.body || ""),
+            },
+            viber:{
+              body:String(parsed?.viber?.body || ""),
+            },
+            internal:{
+              body:String(parsed?.internal?.body || ""),
+            },
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      const generateAssetAnnouncements = async () => {
+        if(assetAnnouncementBusy) return;
+
+        const currentRows = commitCurrentProductIntroDigitalAssetRows();
+        const completedAssets = currentRows
+          .filter((row:any)=>String(row?.link || "").trim())
+          .map((row:any)=>({
+            name:String(row?.name || "Untitled Asset"),
+            link:String(row?.link || "").trim(),
+          }));
+
+        if(!completedAssets.length){
+          setAssetAnnouncementError(
+            "Add at least one final asset link before generating announcements."
+          );
+          return;
+        }
+
+        const products = productRows.map((row:any)=>({
+          brand:row.brand || "",
+          product:row.product || "",
+          sku:row.skuCode || "",
+          collection:row.collection || "",
+        }));
+
+        setAssetAnnouncementBusy(true);
+        setAssetAnnouncementError("");
+
+        try {
+          const response = await fetch("/api/ai/generate-text",{
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              task:"asset_completion_announcement",
+              tone:assetAnnouncementData.tone,
+              taskLabel:`${assetAnnouncementData.type}: ${group.groupName || "Checklist Group"}`,
+              maxOutputTokens:2400,
+              instruction:[
+                "Create three polished completion announcements for the supplied product launch or reactivation assets.",
+                "Return strict JSON only. Do not use markdown code fences.",
+                'Required shape: {"email":{"subject":"","body":""},"viber":{"body":""},"internal":{"body":""}}.',
+                "The email should be professional and complete, with a greeting, concise completion summary, finished deliverables, access link or links, and a useful closing.",
+                "The Viber message should be concise, easy to scan, and suitable for partner or sales group chats.",
+                "The internal team message should clearly state what is complete, where files are stored, and the next action required.",
+                "Do not claim that an asset is complete unless a link is supplied.",
+                "Avoid em dashes.",
+                assetAnnouncementData.instructions
+                  ? `Additional instruction: ${assetAnnouncementData.instructions}`
+                  : "",
+              ].filter(Boolean).join("\\n"),
+              input:JSON.stringify({
+                announcementType:assetAnnouncementData.type,
+                checklistName:group.groupName || "",
+                launchType:launchTypes?.[group.launchType]?.label || group.launchType || "",
+                products,
+                completedAssets,
+              },null,2),
+            }),
+          });
+
+          const json = await response.json().catch(()=>null);
+          if(!response.ok){
+            throw new Error(json?.error || "Unable to generate announcements.");
+          }
+
+          const drafts = parseAnnouncementJson(json?.text);
+          if(!drafts){
+            throw new Error(
+              "AI returned an invalid announcement format. Please generate again."
+            );
+          }
+
+          patchAssetAnnouncement({
+            assetAnnouncementDrafts:drafts,
+            assetAnnouncementGeneratedAt:new Date().toISOString(),
+          });
+          setAssetAnnouncementTab("email");
+        } catch(error:any){
+          setAssetAnnouncementError(
+            error?.message || "Unable to generate announcements."
+          );
+        } finally {
+          setAssetAnnouncementBusy(false);
+        }
+      };
+
+      const copyAnnouncementText = async (value:any,actionId:string) => {
+        try {
+          await navigator.clipboard.writeText(String(value || ""));
+          markActionDone(actionId);
+        } catch {}
+      };
+
+      const openGmailAnnouncement = () => {
+        const email = assetAnnouncementData.drafts.email;
+        const params = new URLSearchParams({
+          view:"cm",
+          fs:"1",
+          to:assetAnnouncementData.to,
+          cc:assetAnnouncementData.cc,
+          su:email.subject,
+          body:email.body,
+        });
+        window.open(
+          `https://mail.google.com/mail/?${params.toString()}`,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      };
+
+      const submitAnnouncementEmail = async (action:"draft"|"send") => {
+        const email = assetAnnouncementData.drafts.email;
+        if(!assetAnnouncementData.to.trim()){
+          setAssetAnnouncementError("Enter at least one email recipient.");
+          return;
+        }
+        if(!email.subject.trim() || !email.body.trim()){
+          setAssetAnnouncementError(
+            "Generate or enter the email subject and message first."
+          );
+          return;
+        }
+        if(
+          action==="send" &&
+          typeof window!=="undefined" &&
+          !window.confirm("Send this announcement email now?")
+        ) return;
+
+        setAssetAnnouncementEmailBusy(action);
+        setAssetAnnouncementError("");
+
+        try {
+          const response = await fetch("/api/communications/email",{
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              action,
+              to:assetAnnouncementData.to,
+              cc:assetAnnouncementData.cc,
+              subject:email.subject,
+              body:email.body,
+            }),
+          });
+          const json = await response.json().catch(()=>null);
+          if(!response.ok || !json?.ok){
+            throw new Error(
+              json?.error ||
+              "Gmail server sending is not configured. Use Open Gmail instead."
+            );
+          }
+          markActionDone(
+            action==="draft"
+              ? "announcement-gmail-draft"
+              : "announcement-email-sent"
+          );
+          await logActivity({
+            action:action==="draft"
+              ? "created an email draft for"
+              : "sent an email announcement for",
+            entityType:"checklist",
+            entityName:group.groupName || "Digital Creative Assets",
+            href:"/#/checklists",
+          });
+        } catch(error:any){
+          setAssetAnnouncementError(
+            error?.message ||
+            "Unable to process the email. Use Open Gmail instead."
+          );
+        } finally {
+          setAssetAnnouncementEmailBusy("");
+        }
+      };
+
+      const postAnnouncementToTeamFeed = async () => {
+        const body = assetAnnouncementData.drafts.internal.body.trim();
+        if(!body){
+          setAssetAnnouncementError(
+            "Generate or enter the internal team message first."
+          );
+          return;
+        }
+
+        setAssetAnnouncementEmailBusy("internal");
+        setAssetAnnouncementError("");
+
+        try {
+          const supabase = createClient();
+          const { data:{ user } } = await supabase.auth.getUser();
+          if(!user) throw new Error("You must be signed in.");
+
+          const displayName =
+            user.user_metadata?.display_name ||
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email ||
+            "EMDC User";
+
+          const { error } = await supabase.from("feed_posts").insert({
+            user_id:user.id,
+            display_name:displayName,
+            email:user.email || "",
+            body,
+            image_url:null,
+          });
+          if(error) throw error;
+
+          markActionDone("announcement-team-post");
+          await logActivity({
+            action:"posted a completion announcement for",
+            entityType:"feed",
+            entityName:group.groupName || "Digital Creative Assets",
+            href:"/#/feed",
+          });
+        } catch(error:any){
+          setAssetAnnouncementError(
+            error?.message || "Unable to post the internal message."
+          );
+        } finally {
+          setAssetAnnouncementEmailBusy("");
+        }
+      };
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -12382,6 +12668,64 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>Add editable asset names and final output links for Product Image, banners, feed, story, and video deliverables.</p>
               </div>
               <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <select
+                  value={assetCompletionStatusId}
+                  onChange={(event:any)=>{
+                    const nextStatusId = String(event.target.value || "");
+                    const nextStatus = statuses.find(
+                      (status:any)=>String(status?.id)===nextStatusId
+                    );
+                    patchAssetAnnouncement({
+                      assetCompletionStatusId:nextStatusId,
+                      assetCompletionStatusUpdatedAt:new Date().toISOString(),
+                    });
+                    if(nextStatusId!==assetCompletionStatusId){
+                      void logActivity({
+                        action:"changed Digital Creative Asset Links status to",
+                        entityType:"checklist",
+                        entityName:nextStatus?.label || "No status",
+                        description:group.groupName || "",
+                        href:"/#/checklists",
+                        metadata:{
+                          groupId:group.id,
+                          statusId:nextStatusId,
+                        },
+                      });
+                    }
+                  }}
+                  style={{
+                    height:30,
+                    minWidth:118,
+                    border:`1px solid ${assetCompletionStatus?.color || C.border}`,
+                    borderRadius:7,
+                    padding:"0 9px",
+                    background:assetCompletionStatus
+                      ? `${assetCompletionStatus.color}12`
+                      : C.surface,
+                    color:assetCompletionStatus?.color || C.textSub,
+                    fontSize:11,
+                    fontWeight:800,
+                    outline:"none",
+                  }}
+                >
+                  <option value="">Set status</option>
+                  {statuses.map((status:any)=>(
+                    <option key={status.id} value={status.id}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+                {assetCompletionIsDone&&(
+                  <Btn
+                    xs
+                    onClick={()=>{
+                      setAssetAnnouncementError("");
+                      setAssetAnnouncementOpen(true);
+                    }}
+                  >
+                    Prepare Announcement
+                  </Btn>
+                )}
                 <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
                 <Btn
                   xs
@@ -12463,6 +12807,302 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </table>
             </div>
           </div>
+
+          <Modal
+            open={assetAnnouncementOpen}
+            onClose={()=>setAssetAnnouncementOpen(false)}
+            title="Prepare Completion Announcement"
+            width={860}
+          >
+            <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+              <div style={{
+                padding:12,
+                border:`1px solid ${C.border}`,
+                borderRadius:10,
+                background:C.surfaceAlt,
+                display:"grid",
+                gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",
+                gap:10,
+              }}>
+                <Field label="Announcement Type">
+                  <select
+                    value={assetAnnouncementData.type}
+                    onChange={(event:any)=>patchAssetAnnouncement({
+                      assetAnnouncementType:event.target.value,
+                    })}
+                    style={{
+                      width:"100%",height:38,border:`1px solid ${C.border}`,
+                      borderRadius:8,padding:"0 10px",background:C.surface,
+                      color:C.textSub,fontSize:12,fontWeight:700,
+                    }}
+                  >
+                    <option>Assets Completed</option>
+                    <option>Product Launch</option>
+                    <option>New Arrival</option>
+                    <option>Product Reactivation</option>
+                  </select>
+                </Field>
+                <Field label="Tone">
+                  <select
+                    value={assetAnnouncementData.tone}
+                    onChange={(event:any)=>patchAssetAnnouncement({
+                      assetAnnouncementTone:event.target.value,
+                    })}
+                    style={{
+                      width:"100%",height:38,border:`1px solid ${C.border}`,
+                      borderRadius:8,padding:"0 10px",background:C.surface,
+                      color:C.textSub,fontSize:12,fontWeight:700,
+                    }}
+                  >
+                    <option value="professional">Professional</option>
+                    <option value="premium">Premium</option>
+                    <option value="casual">Friendly</option>
+                    <option value="short">Concise</option>
+                    <option value="taglish">Taglish</option>
+                  </select>
+                </Field>
+                <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
+                  <Field label="Additional AI Instructions">
+                    <textarea
+                      value={assetAnnouncementData.instructions}
+                      onChange={(event:any)=>patchAssetAnnouncement({
+                        assetAnnouncementInstructions:event.target.value,
+                      })}
+                      placeholder="Example: Mention that Shopee, Lazada, and YouTube uploads are complete. Ask Sales to begin sharing the launch materials."
+                      style={{
+                        width:"100%",minHeight:78,border:`1px solid ${C.border}`,
+                        borderRadius:8,padding:10,resize:"vertical",
+                        fontSize:12,color:C.textSub,background:C.surface,
+                        outline:"none",
+                      }}
+                    />
+                  </Field>
+                </div>
+                <div style={{ gridColumn:isMobile?"auto":"1 / -1",display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                  <Btn
+                    onClick={generateAssetAnnouncements}
+                    disabled={assetAnnouncementBusy}
+                  >
+                    {assetAnnouncementBusy
+                      ? "Generating..."
+                      : assetAnnouncementData.drafts.email.body
+                        ? "Regenerate Messages"
+                        : "Generate Messages"}
+                  </Btn>
+                </div>
+              </div>
+
+              {assetAnnouncementError&&(
+                <div style={{
+                  padding:"10px 12px",borderRadius:8,
+                  border:"1px solid #FCA5A5",background:"#FEF2F2",
+                  color:"#B91C1C",fontSize:12,fontWeight:700,
+                }}>
+                  {assetAnnouncementError}
+                </div>
+              )}
+
+              <div style={{ display:"flex",gap:7,flexWrap:"wrap" }}>
+                {[
+                  { id:"email",label:"Email Message" },
+                  { id:"viber",label:"Viber Message" },
+                  { id:"internal",label:"Internal Team Message" },
+                ].map((item:any)=>(
+                  <button
+                    key={item.id}
+                    onClick={()=>setAssetAnnouncementTab(item.id)}
+                    style={{
+                      height:34,padding:"0 12px",borderRadius:8,
+                      border:`1px solid ${assetAnnouncementTab===item.id?C.accent:C.border}`,
+                      background:assetAnnouncementTab===item.id?C.accent:C.surface,
+                      color:assetAnnouncementTab===item.id?"#fff":C.textSub,
+                      fontSize:11,fontWeight:800,cursor:"pointer",
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {assetAnnouncementTab==="email"&&(
+                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                  <div style={{
+                    display:"grid",
+                    gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",
+                    gap:10,
+                  }}>
+                    <Field label="To">
+                      <TI
+                        value={assetAnnouncementData.to}
+                        onChange={(value:any)=>patchAssetAnnouncement({
+                          assetAnnouncementTo:value,
+                        })}
+                        placeholder="partner@example.com, sales@example.com"
+                      />
+                    </Field>
+                    <Field label="CC">
+                      <TI
+                        value={assetAnnouncementData.cc}
+                        onChange={(value:any)=>patchAssetAnnouncement({
+                          assetAnnouncementCc:value,
+                        })}
+                        placeholder="Optional CC recipients"
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Subject">
+                    <TI
+                      value={assetAnnouncementData.drafts.email.subject}
+                      onChange={(value:any)=>patchAssetAnnouncement({
+                        assetAnnouncementDrafts:{
+                          ...assetAnnouncementData.drafts,
+                          email:{
+                            ...assetAnnouncementData.drafts.email,
+                            subject:value,
+                          },
+                        },
+                      })}
+                      placeholder="[Product Launch] Collection Name"
+                    />
+                  </Field>
+                  <Field label="Email Body">
+                    <textarea
+                      value={assetAnnouncementData.drafts.email.body}
+                      onChange={(event:any)=>patchAssetAnnouncement({
+                        assetAnnouncementDrafts:{
+                          ...assetAnnouncementData.drafts,
+                          email:{
+                            ...assetAnnouncementData.drafts.email,
+                            body:event.target.value,
+                          },
+                        },
+                      })}
+                      style={{
+                        width:"100%",minHeight:300,border:`1px solid ${C.border}`,
+                        borderRadius:9,padding:12,resize:"vertical",
+                        fontSize:12.5,lineHeight:1.55,color:C.textSub,
+                        background:C.surface,outline:"none",
+                      }}
+                    />
+                  </Field>
+                  <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                    <Btn
+                      variant="outline"
+                      onClick={()=>copyAnnouncementText(
+                        `${assetAnnouncementData.drafts.email.subject}\n\n${assetAnnouncementData.drafts.email.body}`,
+                        "copy-announcement-email"
+                      )}
+                    >
+                      {actionDone("copy-announcement-email")?"✓ Copied":"Copy"}
+                    </Btn>
+                    <Btn variant="outline" onClick={openGmailAnnouncement}>
+                      Open Gmail
+                    </Btn>
+                    <Btn
+                      variant="outline"
+                      disabled={!!assetAnnouncementEmailBusy}
+                      onClick={()=>submitAnnouncementEmail("draft")}
+                    >
+                      {assetAnnouncementEmailBusy==="draft"
+                        ? "Creating..."
+                        : actionDone("announcement-gmail-draft")
+                          ? "✓ Draft Created"
+                          : "Create Gmail Draft"}
+                    </Btn>
+                    <Btn
+                      disabled={!!assetAnnouncementEmailBusy}
+                      onClick={()=>submitAnnouncementEmail("send")}
+                    >
+                      {assetAnnouncementEmailBusy==="send"
+                        ? "Sending..."
+                        : actionDone("announcement-email-sent")
+                          ? "✓ Sent"
+                          : "Send Email"}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+
+              {assetAnnouncementTab==="viber"&&(
+                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                  <Field label="Viber Message">
+                    <textarea
+                      value={assetAnnouncementData.drafts.viber.body}
+                      onChange={(event:any)=>patchAssetAnnouncement({
+                        assetAnnouncementDrafts:{
+                          ...assetAnnouncementData.drafts,
+                          viber:{ body:event.target.value },
+                        },
+                      })}
+                      style={{
+                        width:"100%",minHeight:240,border:`1px solid ${C.border}`,
+                        borderRadius:9,padding:12,resize:"vertical",
+                        fontSize:12.5,lineHeight:1.55,color:C.textSub,
+                        background:C.surface,outline:"none",
+                      }}
+                    />
+                  </Field>
+                  <div style={{ display:"flex",justifyContent:"flex-end" }}>
+                    <Btn
+                      onClick={()=>copyAnnouncementText(
+                        assetAnnouncementData.drafts.viber.body,
+                        "copy-announcement-viber"
+                      )}
+                    >
+                      {actionDone("copy-announcement-viber")
+                        ? "✓ Copied"
+                        : "Copy Viber Message"}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+
+              {assetAnnouncementTab==="internal"&&(
+                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                  <Field label="Internal Team Message">
+                    <textarea
+                      value={assetAnnouncementData.drafts.internal.body}
+                      onChange={(event:any)=>patchAssetAnnouncement({
+                        assetAnnouncementDrafts:{
+                          ...assetAnnouncementData.drafts,
+                          internal:{ body:event.target.value },
+                        },
+                      })}
+                      style={{
+                        width:"100%",minHeight:240,border:`1px solid ${C.border}`,
+                        borderRadius:9,padding:12,resize:"vertical",
+                        fontSize:12.5,lineHeight:1.55,color:C.textSub,
+                        background:C.surface,outline:"none",
+                      }}
+                    />
+                  </Field>
+                  <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                    <Btn
+                      variant="outline"
+                      onClick={()=>copyAnnouncementText(
+                        assetAnnouncementData.drafts.internal.body,
+                        "copy-announcement-internal"
+                      )}
+                    >
+                      {actionDone("copy-announcement-internal")
+                        ? "✓ Copied"
+                        : "Copy"}
+                    </Btn>
+                    <Btn
+                      disabled={assetAnnouncementEmailBusy==="internal"}
+                      onClick={postAnnouncementToTeamFeed}
+                    >
+                      {assetAnnouncementEmailBusy==="internal"
+                        ? "Posting..."
+                        : actionDone("announcement-team-post")
+                          ? "✓ Posted to Team Feed"
+                          : "Post to Team Feed"}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Modal>
 
           {sourceRows.length===0 ? (
             <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
