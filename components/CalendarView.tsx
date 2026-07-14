@@ -13772,6 +13772,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
   const [skus,setSkus]           = useState([{id:uid(),value:""}]);
   const [selType,setSelType]     = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
   const [groupName,setGroupName] = useState("");
+  const [productsArrived,setProductsArrived] = useState(false);
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
   const [dateMode,setDateMode] = useState("specific");
@@ -13853,6 +13854,17 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
+        <Field label="Product Arrival">
+          <button type="button" onClick={()=>setProductsArrived((value:boolean)=>!value)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${productsArrived?"#86EFAC":C.border}`,background:productsArrived?"#F0FDF4":C.surface,cursor:"pointer",textAlign:"left"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:C.text}}>Products already arrived</div>
+              <div style={{marginTop:2,fontSize:11,color:C.muted}}>Shows an Arrived tag on the checklist card.</div>
+            </div>
+            <div style={{width:42,height:24,borderRadius:999,padding:3,background:productsArrived?"#22C55E":"#D1D5DB",display:"flex",justifyContent:productsArrived?"flex-end":"flex-start",transition:"all .15s",flexShrink:0}}>
+              <span style={{width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}} />
+            </div>
+          </button>
+        </Field>
         <Field label="Operational Type" hint="choose this before SKU/date">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
@@ -13946,7 +13958,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
           )}
         </Field>
 
-        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
+        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,productsArrived,arrivedAt:productsArrived?new Date().toISOString():"",deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
   );
@@ -13956,6 +13968,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
 const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes, calendarTypes=DEFAULT_EVENT_TYPES, events=[], onApplyPhaseoutAssignments }: any) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [groupName,setGroupName] = useState("");
+  const [productsArrived,setProductsArrived] = useState(false);
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
   const [dateMode,setDateMode] = useState("specific");
@@ -13979,6 +13992,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       const useStorageMode = !!group.skus?.length && storageMatches.length === group.skus.length;
 
       setGroupName(group.groupName||"");
+      setProductsArrived(!!group.productsArrived);
       setDeadline(group.deadline||"");
       setDeadlineEnd(group.deadlineEnd||"");
       const existingMonths = Array.isArray(group.monthOnlyMonths) ? group.monthOnlyMonths : (Array.isArray(group.months) ? group.months : []);
@@ -14052,6 +14066,17 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     <Modal open={open} onClose={onClose} title="Edit Group" width={520}>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
+        <Field label="Product Arrival">
+          <button type="button" onClick={()=>setProductsArrived((value:boolean)=>!value)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${productsArrived?"#86EFAC":C.border}`,background:productsArrived?"#F0FDF4":C.surface,cursor:"pointer",textAlign:"left"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:C.text}}>Products already arrived</div>
+              <div style={{marginTop:2,fontSize:11,color:C.muted}}>Mark this group as ready for priority work.</div>
+            </div>
+            <div style={{width:42,height:24,borderRadius:999,padding:3,background:productsArrived?"#22C55E":"#D1D5DB",display:"flex",justifyContent:productsArrived?"flex-end":"flex-start",transition:"all .15s",flexShrink:0}}>
+              <span style={{width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}} />
+            </div>
+          </button>
+        </Field>
         <Field label="Month Only" hint="optional, no specific date needed">
           <MonthOnlyPicker value={monthOnlyMonths} onChange={(months:any[])=>{ setMonthOnlyMonths(months); setDateMode(months.length?"months":"specific"); if(months.length){ setDeadline(""); setDeadlineEnd(""); } }} />
         </Field>
@@ -14156,7 +14181,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
-        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),productsArrived,arrivedAt:productsArrived?(group?.arrivedAt || new Date().toISOString()):"",deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
   );
@@ -14475,6 +14500,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
   const [trashOpen,setTrashOpen] = useState(false);
+  const [arrivalFilter,setArrivalFilter] = useState<"all"|"arrived"|"waiting">("all");
 
   const persistChecklistItemsNow = (nextItems:any) => {
     if (typeof window === "undefined") return;
@@ -14904,7 +14930,12 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     <div>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8 }}>
         <p style={{ margin:0,fontSize:13,color:C.muted }}>{groups.length===0?"No checklist groups yet.":`${groups.length} group${groups.length>1?"s":""}`}</p>
-        <div style={{ display:"flex",gap:8 }}>
+        <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+          <select value={arrivalFilter} onChange={event=>setArrivalFilter(event.target.value as any)} style={{height:34,border:`1px solid ${C.border}`,borderRadius:7,padding:"0 10px",background:C.surface,color:C.textSub,fontSize:12,fontWeight:700,outline:"none"}}>
+            <option value="all">All arrivals</option>
+            <option value="arrived">Arrived only</option>
+            <option value="waiting">Waiting only</option>
+          </select>
           <Btn variant="outline" onClick={()=>setTemplatesModal(true)}>Manage Templates</Btn>
           <Btn variant="outline" onClick={()=>setTrashOpen(true)}>Trash{checklistTrash?.length?` (${checklistTrash.length})`:""}</Btn>
           {!creating&&<Btn onClick={()=>setCreating(true)}>+ New Group</Btn>}
@@ -14960,7 +14991,10 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         </div>
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
-          {groups.map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id] || {}; const deptOrder=["ecommerce","marketing","digital"]; return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
+          {[...groups]
+            .filter((group:any)=>arrivalFilter==="all" ? true : arrivalFilter==="arrived" ? !!group.productsArrived : !group.productsArrived)
+            .sort((a:any,b:any)=>Number(!!b.productsArrived)-Number(!!a.productsArrived))
+            .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id] || {}; const deptOrder=["ecommerce","marketing","digital"]; return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
             <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px",minWidth:0 }}>
                 <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",alignItems:"flex-start",gap:8,marginBottom:10,minWidth:0 }}>
@@ -14972,6 +15006,11 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                   <Tag color={groupColor} sm>{lt.label}</Tag>
+                  {g.productsArrived&&(
+                    <span title={g.arrivedAt ? `Arrived ${new Date(g.arrivedAt).toLocaleString("en-PH")}` : "Products arrived"} style={{fontSize:10,color:"#166534",fontWeight:900,background:"#DCFCE7",padding:"2px 7px",borderRadius:5,border:"1px solid #86EFAC",display:"inline-flex",alignItems:"center",gap:4}}>
+                      ✓ Arrived
+                    </span>
+                  )}
                   {g.calendarType&&<Tag color={groupColor} sm>{(calendarTypes.find((t:any)=>t.id===g.calendarType)?.label)||g.calendarType}</Tag>}
                   {g.deadline&&<span style={{ fontSize:10,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"1px 7px",borderRadius:4,border:"1px solid #DDD6FE" }}>{g.deadlineEnd?`${g.deadline} → ${g.deadlineEnd}`:`Due ${g.deadline}`}</span>}
                   {!g.deadline&&Array.isArray(g.monthOnlyMonths)&&g.monthOnlyMonths.length>0&&<span style={{ fontSize:10,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"1px 7px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(g.monthOnlyMonths)}</span>}
@@ -20651,66 +20690,25 @@ export default function App({
     setCloudSyncStatus("Saving checklist...");
 
     try {
-      // Save the same newest snapshot to both checklist persistence layers.
-      // The dedicated checklist-items blob powers fast checklist loading, while
-      // appState.checklistItems is still read during full refresh/hydration.
-      // Previously only one layer was updated, so refresh could restore the old
-      // status even though the activity notification was created successfully.
-      const [itemsResponse, appPatchResponse] = await Promise.all([
-        fetch("/api/emdc-state?mode=checklist-items", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          cache:"no-store",
-          body:JSON.stringify({
-            mode:"checklist-items",
-            clientId:cloudClientIdRef.current,
-            updatedAt,
-            checklistItems:snapshot,
-          }),
-        }),
-        fetch("/api/emdc-state", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          cache:"no-store",
-          body:JSON.stringify({
-            mode:"app-patch",
-            clientId:cloudClientIdRef.current,
-            updatedAt,
-            patch:{ checklistItems:snapshot },
-          }),
-        }),
-      ]);
-
-      const [itemsJson, appPatchJson] = await Promise.all([
-        itemsResponse.json().catch(()=>null),
-        appPatchResponse.json().catch(()=>null),
-      ]);
-
-      if (!itemsResponse.ok || !itemsJson?.ok) {
-        throw new Error(itemsJson?.error || "Checklist-items cloud save failed");
-      }
-
-      if (!appPatchResponse.ok || !appPatchJson?.ok) {
-        throw new Error(appPatchJson?.error || "Checklist app-state save failed");
-      }
-
-      // Keep the local app-state cache aligned with the confirmed cloud write.
-      try {
-        const currentLocal:any = readStoredEmdcAppState() || {};
-        const nextLocal = {
-          ...currentLocal,
+      const res = await fetch("/api/emdc-state?mode=checklist-items", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        cache:"no-store",
+        body:JSON.stringify({
+          mode:"checklist-items",
+          clientId:cloudClientIdRef.current,
+          updatedAt,
           checklistItems:snapshot,
-        };
-        safeSetEmdcAppStateLocal(nextLocal);
-        rememberLastGoodEmdcAppState(nextLocal);
-        markEmdcLocalStateUpdated(updatedAt);
-      } catch {}
+        }),
+      });
+
+      const json = await res.json().catch(()=>null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Checklist save failed");
+      }
 
       if (sequence === checklistItemsSaveSequenceRef.current) {
-        cloudLastUpdatedAtRef.current =
-          appPatchJson?.data?.updatedAt ||
-          itemsJson?.data?.updatedAt ||
-          updatedAt;
+        cloudLastUpdatedAtRef.current = updatedAt;
         setCloudSyncStatus("Synced");
       }
     } catch {
