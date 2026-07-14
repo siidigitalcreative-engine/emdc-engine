@@ -14621,7 +14621,10 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       persistChecklistItemsNow(next);
 
       if (onChecklistItemsDirectSave) {
-        onChecklistItemsDirectSave(JSON.parse(JSON.stringify(next)));
+        onChecklistItemsDirectSave(
+          groupId,
+          JSON.parse(JSON.stringify(cleanGroupItems))
+        );
       }
 
       return next;
@@ -20215,6 +20218,7 @@ export default function App({
   const syncV2VersionRef = useRef(0);
   const syncV2GroupsVersionRef = useRef(0);
   const syncV2ItemsVersionRef = useRef(0);
+  const syncV2ItemGroupVersionsRef = useRef<Record<string,number>>({});
   const syncV2EtagRef = useRef("");
   const syncV2ApplyingRef = useRef(false);
   const lastDirectSkuSaveSignatureRef = useRef("");
@@ -20442,17 +20446,28 @@ export default function App({
     }
   };
 
-  const fetchChecklistItemsV2 = async () => {
-    const res = await fetch("/api/checklist-items-fast", { cache:"no-store" });
+  const fetchChecklistItemsGroupV2 = async (groupId:string) => {
+    if(!groupId) return;
+
+    const res = await fetch(
+      `/api/checklist-items-fast?groupId=${encodeURIComponent(groupId)}`,
+      { cache:"no-store" }
+    );
     const json = await res.json().catch(()=>null);
-    if(!res.ok || !json?.ok || !json?.checklistItems) return;
-    const clean:any = {};
-    Object.entries(json.checklistItems).forEach(([groupId,groupItems]:any)=>{
-      clean[groupId] = dedupeChecklistItemsObject(groupItems);
-    });
+
+    if(!res.ok || !json?.ok || !json?.groupItems || typeof json.groupItems!=="object") {
+      return;
+    }
+
+    const cleanGroupItems = dedupeChecklistItemsObject(json.groupItems);
+
     syncV2ApplyingRef.current = true;
     try {
-      setChecklistAllItems(clean);
+      setChecklistAllItems((previous:any)=>({
+        ...(previous || {}),
+        [groupId]:cleanGroupItems,
+      }));
+      try { writeEmdcChecklistItemsBackup(groupId,cleanGroupItems); } catch {}
     } finally {
       setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
     }
@@ -20479,17 +20494,29 @@ export default function App({
       const data = json?.data || {};
       const groupVersion = Number(data.checklistGroupsVersion || 0);
       const itemVersion = Number(data.checklistItemsVersion || 0);
+      const remoteItemGroupVersions =
+        data?.checklistItemGroupVersions &&
+        typeof data.checklistItemGroupVersions === "object"
+          ? data.checklistItemGroupVersions
+          : {};
       const jobs:Promise<any>[] = [];
 
       if(groupVersion > syncV2GroupsVersionRef.current){
         jobs.push(fetchChecklistGroupsV2());
         syncV2GroupsVersionRef.current = groupVersion;
       }
-      if(itemVersion > syncV2ItemsVersionRef.current){
-        jobs.push(fetchChecklistItemsV2());
-        syncV2ItemsVersionRef.current = itemVersion;
-      }
 
+      Object.entries(remoteItemGroupVersions).forEach(([groupId,version]:any)=>{
+        const remoteVersion = Number(version || 0);
+        const localVersion = Number(syncV2ItemGroupVersionsRef.current[groupId] || 0);
+
+        if(remoteVersion > localVersion){
+          jobs.push(fetchChecklistItemsGroupV2(groupId));
+          syncV2ItemGroupVersionsRef.current[groupId] = remoteVersion;
+        }
+      });
+
+      syncV2ItemsVersionRef.current = Math.max(syncV2ItemsVersionRef.current,itemVersion);
       syncV2VersionRef.current = Number(data.version || 0);
       if(jobs.length){
         setCloudSyncStatus("Receiving team updates...");
@@ -20898,7 +20925,12 @@ export default function App({
     if (cloudApplyingRef.current || checklistItemsSaveInFlightRef.current) return;
 
     const snapshot = checklistItemsQueuedRef.current;
-    if (!snapshot || typeof snapshot !== "object") return;
+    if (
+      !snapshot ||
+      typeof snapshot !== "object" ||
+      !snapshot.groupId ||
+      !snapshot.groupItems
+    ) return;
 
     checklistItemsQueuedRef.current = null;
     checklistItemsSaveInFlightRef.current = true;
@@ -20916,7 +20948,8 @@ export default function App({
         body:JSON.stringify({
           clientId:cloudClientIdRef.current,
           updatedAt,
-          checklistItems:snapshot,
+          groupId:snapshot.groupId,
+          groupItems:snapshot.groupItems,
         }),
       });
 
@@ -20927,8 +20960,20 @@ export default function App({
 
       if (sequence === checklistItemsSaveSequenceRef.current) {
         cloudLastUpdatedAtRef.current = updatedAt;
-        syncV2VersionRef.current = Math.max(syncV2VersionRef.current, Number(json?.syncVersion || 0));
-        syncV2ItemsVersionRef.current = Math.max(syncV2ItemsVersionRef.current, Number(json?.checklistItemsVersion || 0));
+        syncV2VersionRef.current = Math.max(
+          syncV2VersionRef.current,
+          Number(json?.syncVersion || 0)
+        );
+        syncV2ItemsVersionRef.current = Math.max(
+          syncV2ItemsVersionRef.current,
+          Number(json?.checklistItemsVersion || 0)
+        );
+        if(json?.groupId){
+          syncV2ItemGroupVersionsRef.current[String(json.groupId)] = Math.max(
+            Number(syncV2ItemGroupVersionsRef.current[String(json.groupId)] || 0),
+            Number(json?.groupVersion || 0)
+          );
+        }
         syncV2EtagRef.current = "";
         setCloudSyncStatus("Synced");
       }
@@ -20954,25 +20999,27 @@ export default function App({
     }
   };
 
-  const saveChecklistItemsDirect = (nextItems:any) => {
-    if (cloudApplyingRef.current) return;
+  const saveChecklistItemsDirect = (groupId:string, groupItems:any) => {
+    if (cloudApplyingRef.current || !groupId) return;
 
-    checklistItemsQueuedRef.current = JSON.parse(
-      JSON.stringify(nextItems && typeof nextItems === "object" ? nextItems : {})
-    );
+    checklistItemsQueuedRef.current = {
+      groupId:String(groupId),
+      groupItems:JSON.parse(
+        JSON.stringify(groupItems && typeof groupItems === "object" ? groupItems : {})
+      ),
+    };
+
     checklistItemsPendingUntilRef.current = Date.now() + 10_000;
-    setCloudSyncStatus("Saving checklist...");
+    setCloudSyncStatus("Saved locally • syncing...");
 
     if (checklistItemsSaveTimerRef.current) {
       clearTimeout(checklistItemsSaveTimerRef.current);
     }
 
-    // A status dropdown can fire state/local/cloud updates very close together.
-    // Save only the newest complete checklist snapshot.
     checklistItemsSaveTimerRef.current = setTimeout(() => {
       checklistItemsSaveTimerRef.current = null;
       void flushChecklistItemsSave();
-    }, 260);
+    }, 25);
   };
   const flushChecklistGroupsSave = async () => {
     if (cloudApplyingRef.current) return;
