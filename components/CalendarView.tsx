@@ -20754,15 +20754,14 @@ export default function App({
 
     const sequence = ++checklistItemsSaveSequenceRef.current;
     const updatedAt = new Date().toISOString();
-    setCloudSyncStatus("Saving checklist...");
+    setCloudSyncStatus("Saved locally • syncing...");
 
     try {
-      const res = await fetch("/api/emdc-state?mode=checklist-items", {
+      const res = await fetch("/api/checklist-items-fast", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         cache:"no-store",
         body:JSON.stringify({
-          mode:"checklist-items",
           clientId:cloudClientIdRef.current,
           updatedAt,
           checklistItems:snapshot,
