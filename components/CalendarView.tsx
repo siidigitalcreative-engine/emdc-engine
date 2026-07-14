@@ -14917,6 +14917,21 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     const currentGroup = groups.find((g:any)=>g.id===id);
     const typeChanged = !!patch?.launchType && currentGroup?.launchType !== patch.launchType;
 
+    const previousArrivalStatus =
+      currentGroup?.arrivalStatus ||
+      (currentGroup?.productsArrived ? "arrived" : "waiting");
+
+    const nextArrivalStatusFromPatch =
+      patch?.arrivalStatus === "arriving" || patch?.arrivalStatus === "arrived"
+        ? patch.arrivalStatus
+        : patch?.arrivalStatus === "waiting"
+          ? "waiting"
+          : previousArrivalStatus;
+
+    const arrivalStatusChanged =
+      patch?.arrivalStatus !== undefined &&
+      previousArrivalStatus !== nextArrivalStatusFromPatch;
+
     setGroups((previous:any)=>{
       const next = previous.map((group:any)=>{
         if(group.id!==id) return group;
@@ -14958,6 +14973,29 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
       return next;
     });
+
+    if(arrivalStatusChanged){
+      const statusLabel =
+        nextArrivalStatusFromPatch === "arrived"
+          ? "Arrived"
+          : nextArrivalStatusFromPatch === "arriving"
+            ? "Arriving"
+            : "Waiting";
+
+      void logActivity({
+        action:"changed product arrival status to",
+        entityType:"checklist",
+        entityName:statusLabel,
+        description:currentGroup?.groupName || currentGroup?.name || "Checklist group",
+        href:"/#/checklists",
+        metadata:{
+          groupId:id,
+          checklistGroup:currentGroup?.groupName || currentGroup?.name || "",
+          previousArrivalStatus,
+          arrivalStatus:nextArrivalStatusFromPatch,
+        },
+      });
+    }
 
     if(typeChanged){
       cleanupPhaseoutProductsForGroup(currentGroup);
