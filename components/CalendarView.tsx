@@ -20221,6 +20221,9 @@ export default function App({
   const syncV2ItemGroupVersionsRef = useRef<Record<string,number>>({});
   const syncV2EtagRef = useRef("");
   const syncV2ApplyingRef = useRef(false);
+  const checklistGroupDetailsLoadedRef = useRef<Record<string,boolean>>({});
+  const skuItemsLoadedRef = useRef(false);
+  const skuItemsLoadingRef = useRef(false);
   const lastDirectSkuSaveSignatureRef = useRef("");
   const skuDirectSaveTimerRef = useRef<any>(null);
 
@@ -20434,15 +20437,120 @@ export default function App({
     }
   };
 
+  const mergeChecklistGroupIndexRows = (
+    previous:any[] = [],
+    incoming:any[] = []
+  ) => {
+    const previousMap = new Map(
+      (Array.isArray(previous) ? previous : []).map(
+        (group:any)=>[String(group?.id || ""),group]
+      )
+    );
+
+    return (Array.isArray(incoming) ? incoming : []).map((indexRow:any)=>{
+      const existing = previousMap.get(String(indexRow?.id || ""));
+      return existing
+        ? { ...existing, ...indexRow }
+        : indexRow;
+    });
+  };
+
   const fetchChecklistGroupsV2 = async () => {
-    const res = await fetch("/api/checklist-groups-fast", { cache:"no-store" });
+    const res = await fetch(
+      "/api/checklist-groups-fast?mode=index",
+      { cache:"no-store" }
+    );
     const json = await res.json().catch(()=>null);
-    if(!res.ok || !json?.ok || !Array.isArray(json.checklistGroups)) return;
+
+    if(!res.ok || !json?.ok || !Array.isArray(json.checklistGroups)) {
+      return;
+    }
+
     syncV2ApplyingRef.current = true;
     try {
-      setChecklistGroups(json.checklistGroups);
+      setChecklistGroups((previous:any[])=>
+        mergeChecklistGroupIndexRows(previous,json.checklistGroups)
+      );
     } finally {
       setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
+    }
+  };
+
+  const fetchChecklistGroupDetailV2 = async (
+    groupId:string,
+    force=false
+  ) => {
+    if(!groupId) return;
+    if(checklistGroupDetailsLoadedRef.current[groupId] && !force) return;
+
+    const res = await fetch(
+      `/api/checklist-groups-fast?groupId=${encodeURIComponent(groupId)}`,
+      { cache:"no-store" }
+    );
+    const json = await res.json().catch(()=>null);
+
+    if(!res.ok || !json?.ok || !json?.group) return;
+
+    checklistGroupDetailsLoadedRef.current[groupId] = true;
+
+    syncV2ApplyingRef.current = true;
+    try {
+      setChecklistGroups((previous:any[])=>
+        previous.some((group:any)=>String(group?.id)===String(groupId))
+          ? previous.map((group:any)=>
+              String(group?.id)===String(groupId)
+                ? { ...group, ...json.group }
+                : group
+            )
+          : [...previous,json.group]
+      );
+    } finally {
+      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
+    }
+  };
+
+  const fetchSkuItemsV2 = async () => {
+    if(skuItemsLoadedRef.current || skuItemsLoadingRef.current) return;
+
+    skuItemsLoadingRef.current = true;
+    try {
+      const res = await fetch("/api/sku-items-fast", {
+        cache:"no-store",
+      });
+      const json = await res.json().catch(()=>null);
+
+      if(!res.ok || !json?.ok || !Array.isArray(json.skuItems)) {
+        return;
+      }
+
+      skuItemsLoadedRef.current = true;
+      setSkuStorage(json.skuItems);
+
+      const loadedSkus:any[] = json.skuItems;
+      const count = loadedSkus.length;
+      const first = count
+        ? String(loadedSkus[0]?.id || loadedSkus[0]?.sku || "")
+        : "";
+      const last = count
+        ? String(
+            loadedSkus[count-1]?.id ||
+            loadedSkus[count-1]?.sku ||
+            ""
+          )
+        : "";
+      const checksum = loadedSkus.reduce(
+        (sum:any,row:any)=>
+          sum +
+          String(row?.sku || "").length +
+          String(row?.productName || "").length +
+          String(row?.imageLink || "").length +
+          String(row?.srp || "").length,
+        0
+      );
+      lastDirectSkuSaveSignatureRef.current =
+        `${count}:${first}:${last}:${checksum}`;
+    } finally {
+      skuItemsLoadingRef.current = false;
     }
   };
 
@@ -20503,6 +20611,19 @@ export default function App({
 
       if(groupVersion > syncV2GroupsVersionRef.current){
         jobs.push(fetchChecklistGroupsV2());
+
+        if(routeGroupId){
+          checklistGroupDetailsLoadedRef.current[
+            String(routeGroupId)
+          ] = false;
+          jobs.push(
+            fetchChecklistGroupDetailV2(
+              String(routeGroupId),
+              true
+            )
+          );
+        }
+
         syncV2GroupsVersionRef.current = groupVersion;
       }
 
@@ -21259,12 +21380,50 @@ export default function App({
 
     (async()=>{
       try {
-        const cloud = await fetchCloudState("initial");
-        if (cancelled) return;
-        if (cloud?.updatedAt) cloudLastUpdatedAtRef.current = cloud.updatedAt;
+        setCloudSyncStatus("Loading synced data...");
+
+        const [bootstrapRes,groupsRes] = await Promise.all([
+          fetch("/api/emdc-bootstrap-lite", { cache:"no-store" }),
+          fetch("/api/checklist-groups-fast?mode=index", {
+            cache:"no-store",
+          }),
+        ]);
+
+        const bootstrapJson = await bootstrapRes
+          .json()
+          .catch(()=>null);
+        const groupsJson = await groupsRes
+          .json()
+          .catch(()=>null);
+
+        if(cancelled) return;
+
+        if(bootstrapRes.ok && bootstrapJson?.ok){
+          const cloud = bootstrapJson.data;
+          if(cloud?.appState) applyAppState(cloud.appState);
+          if(cloud?.updatedAt){
+            cloudLastUpdatedAtRef.current = cloud.updatedAt;
+          }
+        }
+
+        if(
+          groupsRes.ok &&
+          groupsJson?.ok &&
+          Array.isArray(groupsJson.checklistGroups)
+        ){
+          setChecklistGroups((previous:any[])=>
+            mergeChecklistGroupIndexRows(
+              previous,
+              groupsJson.checklistGroups
+            )
+          );
+        }
+
+        setCloudSyncStatus("Synced");
+      } catch {
+        if(!cancelled) setCloudSyncStatus("Local fallback");
       } finally {
-        // Always unlock the app, including when the full cloud request fails.
-        if (!cancelled) setCloudHydrated(true);
+        if(!cancelled) setCloudHydrated(true);
       }
     })();
 
@@ -21295,6 +21454,18 @@ export default function App({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [cloudHydrated]);
+
+  useEffect(() => {
+    if(!cloudHydrated || !routeGroupId) return;
+    void fetchChecklistGroupDetailV2(String(routeGroupId));
+    void fetchChecklistItemsGroupV2(String(routeGroupId));
+    void fetchSkuItemsV2();
+  }, [cloudHydrated,routeGroupId]);
+
+  useEffect(() => {
+    if(!cloudHydrated) return;
+    if(tab==="skus") void fetchSkuItemsV2();
+  }, [cloudHydrated,tab]);
 
   useEffect(() => {
     // Sync v2 uses targeted feature saves. Full app-state autosaves are paused
