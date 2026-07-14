@@ -20831,15 +20831,14 @@ export default function App({
 
     checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
     cloudSavingRef.current = true;
-    setCloudSyncStatus("Saving checklist groups...");
+    setCloudSyncStatus("Saved locally • syncing group...");
 
     try {
-      const res = await fetch("/api/emdc-state?mode=checklist-groups", {
+      const res = await fetch("/api/checklist-groups-fast", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         cache:"no-store",
         body:JSON.stringify({
-          mode:"checklist-groups",
           clientId:cloudClientIdRef.current,
           updatedAt,
           checklistGroups:snapshot,
@@ -20872,7 +20871,7 @@ export default function App({
         checklistGroupsSaveTimerRef.current = setTimeout(() => {
           checklistGroupsSaveTimerRef.current = null;
           void flushChecklistGroupsSave();
-        }, 180);
+        }, 20);
       } else {
         checklistGroupsPendingUntilRef.current = Date.now() + 1200;
       }
@@ -20887,7 +20886,7 @@ export default function App({
       JSON.stringify(Array.isArray(nextGroups) ? nextGroups : [])
     );
     checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
-    setCloudSyncStatus("Saving checklist groups...");
+    setCloudSyncStatus("Saved locally • syncing group...");
 
     if (checklistGroupsSaveTimerRef.current) {
       clearTimeout(checklistGroupsSaveTimerRef.current);
@@ -20898,7 +20897,7 @@ export default function App({
     checklistGroupsSaveTimerRef.current = setTimeout(() => {
       checklistGroupsSaveTimerRef.current = null;
       void flushChecklistGroupsSave();
-    }, 420);
+    }, 25);
   };
 
   const saveAppPatchDirect = async (patch:any) => {
