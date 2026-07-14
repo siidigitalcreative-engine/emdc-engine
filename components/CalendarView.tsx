@@ -21276,23 +21276,65 @@ export default function App({
   useEffect(() => {
     if (!cloudHydrated) return;
 
-    const heartbeat = () => {
-      void pollSyncV2();
+    let stopped = false;
+    let timer:number | null = null;
+    let lastActivityAt = Date.now();
+
+    const markActive = () => {
+      lastActivityAt = Date.now();
+    };
+
+    const scheduleNextHeartbeat = () => {
+      if (stopped) return;
+
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+
+      const idleForMs = Date.now() - lastActivityAt;
+
+      // While the user is actively working, other users receive changes within
+      // about five seconds. After one minute without interaction, reduce the
+      // heartbeat to every thirty seconds.
+      const delay =
+        document.visibilityState !== "visible"
+          ? 60_000
+          : idleForMs >= 60_000
+            ? 30_000
+            : 5_000;
+
+      timer = window.setTimeout(async()=>{
+        if (document.visibilityState === "visible") {
+          await pollSyncV2();
+        }
+        scheduleNextHeartbeat();
+      }, delay);
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        markActive();
         void pollSyncV2();
       }
+      scheduleNextHeartbeat();
     };
 
-    const timer = window.setInterval(heartbeat, 3000);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const activityEvents = ["pointerdown","keydown","touchstart"] as const;
+    activityEvents.forEach((eventName)=>{
+      window.addEventListener(eventName,markActive,{ passive:true });
+    });
+    document.addEventListener("visibilitychange",handleVisibilityChange);
+
     void pollSyncV2();
+    scheduleNextHeartbeat();
 
     return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      stopped = true;
+      if (timer !== null) window.clearTimeout(timer);
+      activityEvents.forEach((eventName)=>{
+        window.removeEventListener(eventName,markActive);
+      });
+      document.removeEventListener("visibilitychange",handleVisibilityChange);
     };
   }, [cloudHydrated]);
 
