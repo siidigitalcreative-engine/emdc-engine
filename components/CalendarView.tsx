@@ -20651,25 +20651,66 @@ export default function App({
     setCloudSyncStatus("Saving checklist...");
 
     try {
-      const res = await fetch("/api/emdc-state?mode=checklist-items", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        cache:"no-store",
-        body:JSON.stringify({
-          mode:"checklist-items",
-          clientId:cloudClientIdRef.current,
-          updatedAt,
-          checklistItems:snapshot,
+      // Save the same newest snapshot to both checklist persistence layers.
+      // The dedicated checklist-items blob powers fast checklist loading, while
+      // appState.checklistItems is still read during full refresh/hydration.
+      // Previously only one layer was updated, so refresh could restore the old
+      // status even though the activity notification was created successfully.
+      const [itemsResponse, appPatchResponse] = await Promise.all([
+        fetch("/api/emdc-state?mode=checklist-items", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          cache:"no-store",
+          body:JSON.stringify({
+            mode:"checklist-items",
+            clientId:cloudClientIdRef.current,
+            updatedAt,
+            checklistItems:snapshot,
+          }),
         }),
-      });
+        fetch("/api/emdc-state", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          cache:"no-store",
+          body:JSON.stringify({
+            mode:"app-patch",
+            clientId:cloudClientIdRef.current,
+            updatedAt,
+            patch:{ checklistItems:snapshot },
+          }),
+        }),
+      ]);
 
-      const json = await res.json().catch(()=>null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || "Checklist save failed");
+      const [itemsJson, appPatchJson] = await Promise.all([
+        itemsResponse.json().catch(()=>null),
+        appPatchResponse.json().catch(()=>null),
+      ]);
+
+      if (!itemsResponse.ok || !itemsJson?.ok) {
+        throw new Error(itemsJson?.error || "Checklist-items cloud save failed");
       }
 
+      if (!appPatchResponse.ok || !appPatchJson?.ok) {
+        throw new Error(appPatchJson?.error || "Checklist app-state save failed");
+      }
+
+      // Keep the local app-state cache aligned with the confirmed cloud write.
+      try {
+        const currentLocal:any = readStoredEmdcAppState() || {};
+        const nextLocal = {
+          ...currentLocal,
+          checklistItems:snapshot,
+        };
+        safeSetEmdcAppStateLocal(nextLocal);
+        rememberLastGoodEmdcAppState(nextLocal);
+        markEmdcLocalStateUpdated(updatedAt);
+      } catch {}
+
       if (sequence === checklistItemsSaveSequenceRef.current) {
-        cloudLastUpdatedAtRef.current = updatedAt;
+        cloudLastUpdatedAtRef.current =
+          appPatchJson?.data?.updatedAt ||
+          itemsJson?.data?.updatedAt ||
+          updatedAt;
         setCloudSyncStatus("Synced");
       }
     } catch {
