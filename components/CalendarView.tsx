@@ -12346,7 +12346,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
               <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
-                <Btn xs variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"} onClick={()=>{ updateProductIntroDigitalAssetRows(productIntroDigitalAssetRows); markActionDone("save-product-intro-digital-assets"); }}>{actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}</Btn>
+                <Btn
+                  xs
+                  variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"}
+                  onClick={()=>{
+                    markActionDone("save-product-intro-digital-assets");
+                  }}
+                >
+                  {actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}
+                </Btn>
                 <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
               </div>
             </div>
@@ -12372,16 +12380,33 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       </td>
                       <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
                         <input
-                          value={row.name || ""}
-                          onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ name:e.target.value })}
+                          key={`asset-name-${row.id}`}
+                          defaultValue={row.name || ""}
+                          onBlur={(e:any)=>{
+                            const value = String(e.currentTarget.value || "");
+                            if(value !== String(row.name || "")){
+                              updateProductIntroDigitalAssetRow(row.id,{ name:value });
+                            }
+                          }}
                           placeholder="Asset name"
                           style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,fontWeight:700,color:C.text,outline:"none",background:C.surface }}
                         />
                       </td>
                       <td style={{ padding:"8px 10px",verticalAlign:"top" }}>
                         <input
-                          value={row.link || ""}
-                          onChange={(e:any)=>updateProductIntroDigitalAssetRow(row.id,{ link:e.target.value })}
+                          key={`asset-link-${row.id}`}
+                          defaultValue={row.link || ""}
+                          onBlur={(e:any)=>{
+                            const value = String(e.currentTarget.value || "").trim();
+                            if(value !== String(row.link || "")){
+                              updateProductIntroDigitalAssetRow(row.id,{ link:value });
+                            }
+                          }}
+                          onPaste={(e:any)=>{
+                            // Keep the pasted value in the field immediately. Saving occurs
+                            // on blur, avoiding a cloud rerender on every character.
+                            requestAnimationFrame(()=>e.currentTarget?.focus());
+                          }}
                           placeholder="Paste final output link here"
                           style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,color:C.text,outline:"none",background:C.surface }}
                         />
