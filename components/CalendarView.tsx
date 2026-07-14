@@ -5017,6 +5017,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
   const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
+  const checklistBoardItemsRef = useRef<any>(items);
+  const checklistBoardLocalEditRef = useRef(false);
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
@@ -5088,33 +5090,65 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
 
   useEffect(()=>{
+    checklistBoardItemsRef.current = items;
+  },[items]);
+
+  useEffect(()=>{
     if(!initialItems) return;
-    setItems(dedupeChecklistItemsObject(initialItems));
+
+    const incoming = dedupeChecklistItemsObject(initialItems);
+    const incomingSignature = JSON.stringify(incoming);
+    const currentSignature = JSON.stringify(checklistBoardItemsRef.current || {});
+
+    // Parent caught up with the local edit. Keep the same visible state and
+    // release the local lock.
+    if (incomingSignature === currentSignature) {
+      checklistBoardLocalEditRef.current = false;
+      return;
+    }
+
+    // Ignore stale parent/cloud props while a local status edit is still being
+    // propagated. This prevents the dropdown from visibly reverting.
+    if (checklistBoardLocalEditRef.current) return;
+
+    setItems(incoming);
   },[initialItems]);
 
   useEffect(()=>{
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
   },[initialGroupTab]);
 
-  const upd    = (dept:string,item:any) => setItems((p:any)=>{
-    const prevDeptItems = Array.isArray(p?.[dept]) ? p[dept] : [];
-    const nextDeptItems = prevDeptItems.map((i:any)=>String(i?.id)===String(item?.id)?{...i,...item}:i);
-    const next={...p,[dept]:dedupeChecklistItemsById(nextDeptItems)};
-    if(onItemsChange) onItemsChange(next);
-    try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
-    return next;
-  });
-  const del    = (dept:string,id:string) => setItems((p:any)=>{
+  const upd = (dept:string,item:any) => {
+    checklistBoardLocalEditRef.current = true;
+    setItems((previous:any)=>{
+      const prevDeptItems = Array.isArray(previous?.[dept]) ? previous[dept] : [];
+      const nextDeptItems = prevDeptItems.map((existing:any)=>
+        String(existing?.id)===String(item?.id) ? {...existing,...item} : existing
+      );
+      const next = {
+        ...previous,
+        [dept]:dedupeChecklistItemsById(nextDeptItems),
+      };
+      checklistBoardItemsRef.current = next;
+      if(onItemsChange) onItemsChange(next);
+      return next;
+    });
+  };
+  const del = (dept:string,id:string) => {
+    checklistBoardLocalEditRef.current = true;
+    setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById((p?.[dept]||[]).filter((i:any)=>String(i?.id)!==String(id)))};
     if(onItemsChange) onItemsChange(next);
+    checklistBoardItemsRef.current = next;
     return next;
   });
-  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; setItems((p:any)=>{
+  };
+  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; checklistBoardLocalEditRef.current = true; setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
     if(onItemsChange) onItemsChange(next);
     return next;
   }); setNewText((p:any)=>({...p,[dept]:""})); };
-  const addFromSKU=(dept,s)=>{ const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
+  const addFromSKU=(dept,s)=>{ checklistBoardLocalEditRef.current = true; const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
     if(onItemsChange) onItemsChange(next);
     return next;
@@ -14471,13 +14505,23 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
 
   const updateGroupItems = (groupId:string, items:any) => {
-    setAllGroupItems((p:any)=>{
-      const next={...(p||{}),[groupId]:dedupeChecklistItemsObject(items)};
-      writeEmdcChecklistItemsBackup(groupId,items);
+    setAllGroupItems((previous:any)=>{
+      const cleanGroupItems = dedupeChecklistItemsObject(items);
+      const next = {
+        ...(previous || {}),
+        [groupId]:cleanGroupItems,
+      };
+
+      // Keep the current UI/device immediately updated, but do not also send an
+      // app-patch request. The dedicated checklist-items endpoint is the single
+      // authoritative save path for task status, done, link, note and assignee.
+      writeEmdcChecklistItemsBackup(groupId,cleanGroupItems);
       persistChecklistItemsNow(next);
-      if(onStateChange) onStateChange({checklistItems:next});
-      if(onChecklistItemsDirectSave) onChecklistItemsDirectSave(JSON.parse(JSON.stringify(next)));
-      try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
+
+      if (onChecklistItemsDirectSave) {
+        onChecklistItemsDirectSave(JSON.parse(JSON.stringify(next)));
+      }
+
       return next;
     });
   };
@@ -19970,6 +20014,15 @@ export default function App({
   const checklistGroupsSaveSequenceRef = useRef(0);
   const checklistGroupsPendingUntilRef = useRef(0);
 
+  // Checklist item/status edits previously used both app-patch and
+  // checklist-items saves at the same time. Those parallel requests could
+  // finish out of order and restore the old status. Keep one newest snapshot.
+  const checklistItemsSaveTimerRef = useRef<any>(null);
+  const checklistItemsQueuedRef = useRef<any>(null);
+  const checklistItemsSaveInFlightRef = useRef(false);
+  const checklistItemsSaveSequenceRef = useRef(0);
+  const checklistItemsPendingUntilRef = useRef(0);
+
   const EMDC_SYNC_LOCAL_KEYS = [
     "emdc_app_state_v1",
     "emdc_ai_saved_outputs",
@@ -20170,7 +20223,10 @@ export default function App({
         cloudSavingRef.current ||
         cloudApplyingRef.current ||
         Date.now() < checklistGroupsPendingUntilRef.current ||
-        !!checklistGroupsSaveTimerRef.current
+        !!checklistGroupsSaveTimerRef.current ||
+        Date.now() < checklistItemsPendingUntilRef.current ||
+        !!checklistItemsSaveTimerRef.current ||
+        checklistItemsSaveInFlightRef.current
       )
     ) return null;
     try {
@@ -20580,28 +20636,83 @@ export default function App({
     }
   };
 
-  const saveChecklistItemsDirect = async (nextItems:any) => {
-    if (cloudApplyingRef.current) return;
+  const flushChecklistItemsSave = async () => {
+    if (cloudApplyingRef.current || checklistItemsSaveInFlightRef.current) return;
+
+    const snapshot = checklistItemsQueuedRef.current;
+    if (!snapshot || typeof snapshot !== "object") return;
+
+    checklistItemsQueuedRef.current = null;
+    checklistItemsSaveInFlightRef.current = true;
+    checklistItemsPendingUntilRef.current = Date.now() + 10_000;
+
+    const sequence = ++checklistItemsSaveSequenceRef.current;
+    const updatedAt = new Date().toISOString();
+    setCloudSyncStatus("Saving checklist...");
+
     try {
-      setCloudSyncStatus("Saving checklist...");
-      const updatedAt = new Date().toISOString();
-      const res = await fetch("/api/emdc-state", {
+      const res = await fetch("/api/emdc-state?mode=checklist-items", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
+        cache:"no-store",
         body:JSON.stringify({
           mode:"checklist-items",
           clientId:cloudClientIdRef.current,
           updatedAt,
-          checklistItems:nextItems,
+          checklistItems:snapshot,
         }),
       });
 
-      if (!res.ok) throw new Error("Checklist save failed");
-      cloudLastUpdatedAtRef.current = updatedAt;
-      setCloudSyncStatus("Synced");
+      const json = await res.json().catch(()=>null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Checklist save failed");
+      }
+
+      if (sequence === checklistItemsSaveSequenceRef.current) {
+        cloudLastUpdatedAtRef.current = updatedAt;
+        setCloudSyncStatus("Synced");
+      }
     } catch {
+      // Keep the newest unsaved version. Do not let a failed older request
+      // replace a newer queued snapshot.
+      if (!checklistItemsQueuedRef.current) {
+        checklistItemsQueuedRef.current = snapshot;
+      }
       setCloudSyncStatus("Checklist save failed");
+    } finally {
+      checklistItemsSaveInFlightRef.current = false;
+
+      if (checklistItemsQueuedRef.current) {
+        checklistItemsPendingUntilRef.current = Date.now() + 10_000;
+        checklistItemsSaveTimerRef.current = setTimeout(() => {
+          checklistItemsSaveTimerRef.current = null;
+          void flushChecklistItemsSave();
+        }, 160);
+      } else {
+        checklistItemsPendingUntilRef.current = Date.now() + 1200;
+      }
     }
+  };
+
+  const saveChecklistItemsDirect = (nextItems:any) => {
+    if (cloudApplyingRef.current) return;
+
+    checklistItemsQueuedRef.current = JSON.parse(
+      JSON.stringify(nextItems && typeof nextItems === "object" ? nextItems : {})
+    );
+    checklistItemsPendingUntilRef.current = Date.now() + 10_000;
+    setCloudSyncStatus("Saving checklist...");
+
+    if (checklistItemsSaveTimerRef.current) {
+      clearTimeout(checklistItemsSaveTimerRef.current);
+    }
+
+    // A status dropdown can fire state/local/cloud updates very close together.
+    // Save only the newest complete checklist snapshot.
+    checklistItemsSaveTimerRef.current = setTimeout(() => {
+      checklistItemsSaveTimerRef.current = null;
+      void flushChecklistItemsSave();
+    }, 260);
   };
   const flushChecklistGroupsSave = async () => {
     if (cloudApplyingRef.current) return;
@@ -20738,7 +20849,12 @@ export default function App({
       window.dispatchEvent(new Event("emdc-local-sync"));
     } catch {}
 
-    saveAppPatchDirect(patch);
+    const patchForGeneralSave = { ...patch };
+    delete patchForGeneralSave.checklistItems;
+
+    if (Object.keys(patchForGeneralSave).length) {
+      saveAppPatchDirect(patchForGeneralSave);
+    }
   };
   const readCurrentLocalSnapshot = () => {
     const snapshot:any = {};
@@ -20848,6 +20964,9 @@ export default function App({
     return () => {
       if (checklistGroupsSaveTimerRef.current) {
         clearTimeout(checklistGroupsSaveTimerRef.current);
+      }
+      if (checklistItemsSaveTimerRef.current) {
+        clearTimeout(checklistItemsSaveTimerRef.current);
       }
     };
   }, []);
