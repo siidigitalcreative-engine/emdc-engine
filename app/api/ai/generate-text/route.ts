@@ -25,6 +25,8 @@ const taskInstructions: Record<string, string> = {
     "Read catalog references and selected products, then create a complete AI prompt that can generate an e-commerce marketplace listing. The prompt itself must instruct the next AI output to avoid markdown heading symbols, numbered section headers, and the Recommended Final Listing Structure section.",
   phaseout_matcher:
     "Analyze products and match them to the best campaign/event opportunities. Return exactly what the user requested.",
+  asset_completion_announcement:
+    "Create an email announcement, a concise Viber message, and an internal team message for completed Digital Creative assets. Return strict JSON only using the requested structure. Do not use markdown code fences.",
 };
 
 const toneInstructions: Record<string, string> = {
@@ -176,7 +178,11 @@ export async function POST(req: NextRequest) {
             },
           ],
           generationConfig: {
-            temperature: task === "ecommerce_listing" ? 0.45 : 0.7,
+            temperature:
+              task === "ecommerce_listing" ||
+              task === "asset_completion_announcement"
+                ? 0.45
+                : 0.7,
             topP: 0.9,
             maxOutputTokens,
           },
