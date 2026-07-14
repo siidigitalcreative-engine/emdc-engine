@@ -13772,7 +13772,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
   const [skus,setSkus]           = useState([{id:uid(),value:""}]);
   const [selType,setSelType]     = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
   const [groupName,setGroupName] = useState("");
-  const [productsArrived,setProductsArrived] = useState(false);
+  const [arrivalStatus,setArrivalStatus] = useState<"waiting"|"arriving"|"arrived">("waiting");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
   const [dateMode,setDateMode] = useState("specific");
@@ -13854,16 +13854,18 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
-        <Field label="Product Arrival">
-          <button type="button" onClick={()=>setProductsArrived((value:boolean)=>!value)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${productsArrived?"#86EFAC":C.border}`,background:productsArrived?"#F0FDF4":C.surface,cursor:"pointer",textAlign:"left"}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:800,color:C.text}}>Products already arrived</div>
-              <div style={{marginTop:2,fontSize:11,color:C.muted}}>Shows an Arrived tag on the checklist card.</div>
-            </div>
-            <div style={{width:42,height:24,borderRadius:999,padding:3,background:productsArrived?"#22C55E":"#D1D5DB",display:"flex",justifyContent:productsArrived?"flex-end":"flex-start",transition:"all .15s",flexShrink:0}}>
-              <span style={{width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}} />
-            </div>
-          </button>
+        <Field label="Product Arrival Status">
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+            {[
+              {id:"waiting",label:"Waiting",color:"#6B7280",bg:"#F3F4F6",border:"#D1D5DB"},
+              {id:"arriving",label:"Arriving",color:"#B45309",bg:"#FFF7ED",border:"#FDBA74"},
+              {id:"arrived",label:"Arrived",color:"#166534",bg:"#F0FDF4",border:"#86EFAC"},
+            ].map((option:any)=>(
+              <button key={option.id} type="button" onClick={()=>setArrivalStatus(option.id)} style={{height:42,borderRadius:9,border:`1.5px solid ${arrivalStatus===option.id?option.border:C.border}`,background:arrivalStatus===option.id?option.bg:C.surface,color:arrivalStatus===option.id?option.color:C.textSub,fontSize:12,fontWeight:800,cursor:"pointer"}}>
+                {option.label}
+              </button>
+            ))}
+          </div>
         </Field>
         <Field label="Operational Type" hint="choose this before SKU/date">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
@@ -13958,7 +13960,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
           )}
         </Field>
 
-        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,productsArrived,arrivedAt:productsArrived?new Date().toISOString():"",deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
+        <Btn full onClick={()=>onNext({skus:finalSkus,launchType:selType,groupName,arrivalStatus,productsArrived:arrivalStatus==="arrived",arrivedAt:arrivalStatus==="arrived"?new Date().toISOString():"",deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,linkedEventIds})} disabled={!canNext}>Generate Checklists &#8250;</Btn>
       </div>
     </div>
   );
@@ -13968,7 +13970,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
 const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, launchTypes, calendarTypes=DEFAULT_EVENT_TYPES, events=[], onApplyPhaseoutAssignments }: any) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [groupName,setGroupName] = useState("");
-  const [productsArrived,setProductsArrived] = useState(false);
+  const [arrivalStatus,setArrivalStatus] = useState<"waiting"|"arriving"|"arrived">("waiting");
   const [deadline,setDeadline]   = useState("");
   const [deadlineEnd,setDeadlineEnd] = useState("");
   const [dateMode,setDateMode] = useState("specific");
@@ -13992,7 +13994,13 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       const useStorageMode = !!group.skus?.length && storageMatches.length === group.skus.length;
 
       setGroupName(group.groupName||"");
-      setProductsArrived(!!group.productsArrived);
+      setArrivalStatus(
+        group.arrivalStatus === "arriving" || group.arrivalStatus === "arrived"
+          ? group.arrivalStatus
+          : group.productsArrived
+            ? "arrived"
+            : "waiting"
+      );
       setDeadline(group.deadline||"");
       setDeadlineEnd(group.deadlineEnd||"");
       const existingMonths = Array.isArray(group.monthOnlyMonths) ? group.monthOnlyMonths : (Array.isArray(group.months) ? group.months : []);
@@ -14066,16 +14074,18 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     <Modal open={open} onClose={onClose} title="Edit Group" width={520}>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
         <Field label="Group Name"><TI value={groupName} onChange={setGroupName} placeholder="e.g. Quencha Horizon Collection Q3" /></Field>
-        <Field label="Product Arrival">
-          <button type="button" onClick={()=>setProductsArrived((value:boolean)=>!value)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${productsArrived?"#86EFAC":C.border}`,background:productsArrived?"#F0FDF4":C.surface,cursor:"pointer",textAlign:"left"}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:800,color:C.text}}>Products already arrived</div>
-              <div style={{marginTop:2,fontSize:11,color:C.muted}}>Mark this group as ready for priority work.</div>
-            </div>
-            <div style={{width:42,height:24,borderRadius:999,padding:3,background:productsArrived?"#22C55E":"#D1D5DB",display:"flex",justifyContent:productsArrived?"flex-end":"flex-start",transition:"all .15s",flexShrink:0}}>
-              <span style={{width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}} />
-            </div>
-          </button>
+        <Field label="Product Arrival Status">
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+            {[
+              {id:"waiting",label:"Waiting",color:"#6B7280",bg:"#F3F4F6",border:"#D1D5DB"},
+              {id:"arriving",label:"Arriving",color:"#B45309",bg:"#FFF7ED",border:"#FDBA74"},
+              {id:"arrived",label:"Arrived",color:"#166534",bg:"#F0FDF4",border:"#86EFAC"},
+            ].map((option:any)=>(
+              <button key={option.id} type="button" onClick={()=>setArrivalStatus(option.id)} style={{height:42,borderRadius:9,border:`1.5px solid ${arrivalStatus===option.id?option.border:C.border}`,background:arrivalStatus===option.id?option.bg:C.surface,color:arrivalStatus===option.id?option.color:C.textSub,fontSize:12,fontWeight:800,cursor:"pointer"}}>
+                {option.label}
+              </button>
+            ))}
+          </div>
         </Field>
         <Field label="Month Only" hint="optional, no specific date needed">
           <MonthOnlyPicker value={monthOnlyMonths} onChange={(months:any[])=>{ setMonthOnlyMonths(months); setDateMode(months.length?"months":"specific"); if(months.length){ setDeadline(""); setDeadlineEnd(""); } }} />
@@ -14181,7 +14191,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
-        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),productsArrived,arrivedAt:productsArrived?(group?.arrivedAt || new Date().toISOString()):"",deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
+        <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),arrivalStatus,productsArrived:arrivalStatus==="arrived",arrivedAt:arrivalStatus==="arrived"?(group?.arrivedAt || new Date().toISOString()):"",deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
   );
@@ -14500,7 +14510,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
   const [trashOpen,setTrashOpen] = useState(false);
-  const [arrivalFilter,setArrivalFilter] = useState<"all"|"arrived"|"waiting">("all");
+  const [arrivalFilter,setArrivalFilter] = useState<"all"|"arrived"|"arriving"|"waiting">("all");
 
   const persistChecklistItemsNow = (nextItems:any) => {
     if (typeof window === "undefined") return;
@@ -14932,8 +14942,9 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         <p style={{ margin:0,fontSize:13,color:C.muted }}>{groups.length===0?"No checklist groups yet.":`${groups.length} group${groups.length>1?"s":""}`}</p>
         <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
           <select value={arrivalFilter} onChange={event=>setArrivalFilter(event.target.value as any)} style={{height:34,border:`1px solid ${C.border}`,borderRadius:7,padding:"0 10px",background:C.surface,color:C.textSub,fontSize:12,fontWeight:700,outline:"none"}}>
-            <option value="all">All arrivals</option>
+            <option value="all">All arrival statuses</option>
             <option value="arrived">Arrived only</option>
+            <option value="arriving">Arriving only</option>
             <option value="waiting">Waiting only</option>
           </select>
           <Btn variant="outline" onClick={()=>setTemplatesModal(true)}>Manage Templates</Btn>
@@ -14992,8 +15003,16 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
           {[...groups]
-            .filter((group:any)=>arrivalFilter==="all" ? true : arrivalFilter==="arrived" ? !!group.productsArrived : !group.productsArrived)
-            .sort((a:any,b:any)=>Number(!!b.productsArrived)-Number(!!a.productsArrived))
+            .filter((group:any)=>{
+              const status = group.arrivalStatus || (group.productsArrived ? "arrived" : "waiting");
+              return arrivalFilter==="all" ? true : status===arrivalFilter;
+            })
+            .sort((a:any,b:any)=>{
+              const rank:any = {arrived:0,arriving:1,waiting:2};
+              const aStatus = a.arrivalStatus || (a.productsArrived ? "arrived" : "waiting");
+              const bStatus = b.arrivalStatus || (b.productsArrived ? "arrived" : "waiting");
+              return (rank[aStatus] ?? 3) - (rank[bStatus] ?? 3);
+            })
             .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id] || {}; const deptOrder=["ecommerce","marketing","digital"]; return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
             <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px",minWidth:0 }}>
@@ -15005,12 +15024,20 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
                   </div>
                 </div>
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                  {(()=>{
+                    const status = g.arrivalStatus || (g.productsArrived ? "arrived" : "waiting");
+                    const meta:any = {
+                      arrived:{label:"✓ Arrived",color:"#166534",background:"#DCFCE7",border:"#86EFAC"},
+                      arriving:{label:"↗ Arriving",color:"#B45309",background:"#FFF7ED",border:"#FDBA74"},
+                      waiting:{label:"Waiting",color:"#4B5563",background:"#F3F4F6",border:"#D1D5DB"},
+                    }[status];
+                    return (
+                      <span title={status==="arrived" && g.arrivedAt ? `Arrived ${new Date(g.arrivedAt).toLocaleString("en-PH")}` : meta.label} style={{fontSize:10,color:meta.color,fontWeight:900,background:meta.background,padding:"2px 7px",borderRadius:5,border:`1px solid ${meta.border}`,display:"inline-flex",alignItems:"center",gap:4}}>
+                        {meta.label}
+                      </span>
+                    );
+                  })()}
                   <Tag color={groupColor} sm>{lt.label}</Tag>
-                  {g.productsArrived&&(
-                    <span title={g.arrivedAt ? `Arrived ${new Date(g.arrivedAt).toLocaleString("en-PH")}` : "Products arrived"} style={{fontSize:10,color:"#166534",fontWeight:900,background:"#DCFCE7",padding:"2px 7px",borderRadius:5,border:"1px solid #86EFAC",display:"inline-flex",alignItems:"center",gap:4}}>
-                      ✓ Arrived
-                    </span>
-                  )}
                   {g.calendarType&&<Tag color={groupColor} sm>{(calendarTypes.find((t:any)=>t.id===g.calendarType)?.label)||g.calendarType}</Tag>}
                   {g.deadline&&<span style={{ fontSize:10,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"1px 7px",borderRadius:4,border:"1px solid #DDD6FE" }}>{g.deadlineEnd?`${g.deadline} → ${g.deadlineEnd}`:`Due ${g.deadline}`}</span>}
                   {!g.deadline&&Array.isArray(g.monthOnlyMonths)&&g.monthOnlyMonths.length>0&&<span style={{ fontSize:10,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"1px 7px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(g.monthOnlyMonths)}</span>}
