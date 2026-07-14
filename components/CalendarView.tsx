@@ -21382,17 +21382,21 @@ export default function App({
       try {
         setCloudSyncStatus("Loading synced data...");
 
-        const [bootstrapRes,groupsRes] = await Promise.all([
+        const [bootstrapRes,groupsRes,syncRes] = await Promise.all([
           fetch("/api/emdc-bootstrap-lite", { cache:"no-store" }),
           fetch("/api/checklist-groups-fast?mode=index", {
             cache:"no-store",
           }),
+          fetch("/api/sync-version", { cache:"no-store" }),
         ]);
 
         const bootstrapJson = await bootstrapRes
           .json()
           .catch(()=>null);
         const groupsJson = await groupsRes
+          .json()
+          .catch(()=>null);
+        const syncJson = await syncRes
           .json()
           .catch(()=>null);
 
@@ -21417,6 +21421,25 @@ export default function App({
               groupsJson.checklistGroups
             )
           );
+        }
+
+        if(syncRes.ok && syncJson?.ok && syncJson?.data){
+          const syncData = syncJson.data;
+          syncV2VersionRef.current = Number(syncData.version || 0);
+          syncV2GroupsVersionRef.current = Number(
+            syncData.checklistGroupsVersion || 0
+          );
+          syncV2ItemsVersionRef.current = Number(
+            syncData.checklistItemsVersion || 0
+          );
+          syncV2ItemGroupVersionsRef.current =
+            syncData.checklistItemGroupVersions &&
+            typeof syncData.checklistItemGroupVersions === "object"
+              ? { ...syncData.checklistItemGroupVersions }
+              : {};
+
+          const etag = syncRes.headers.get("etag") || "";
+          if(etag) syncV2EtagRef.current = etag;
         }
 
         setCloudSyncStatus("Synced");
@@ -21447,7 +21470,6 @@ export default function App({
 
     const timer = window.setInterval(heartbeat, 3000);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    void pollSyncV2();
 
     return () => {
       window.clearInterval(timer);
@@ -21459,7 +21481,6 @@ export default function App({
     if(!cloudHydrated || !routeGroupId) return;
     void fetchChecklistGroupDetailV2(String(routeGroupId));
     void fetchChecklistItemsGroupV2(String(routeGroupId));
-    void fetchSkuItemsV2();
   }, [cloudHydrated,routeGroupId]);
 
   useEffect(() => {
