@@ -14748,10 +14748,25 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
 
   const createGroup = cfg=>{
-    const g={id:uid(),...cfg};
+    const normalizedArrivalStatus =
+      cfg?.arrivalStatus === "arriving" || cfg?.arrivalStatus === "arrived"
+        ? cfg.arrivalStatus
+        : cfg?.productsArrived
+          ? "arrived"
+          : "waiting";
+
+    const g={
+      id:uid(),
+      ...cfg,
+      arrivalStatus:normalizedArrivalStatus,
+      productsArrived:normalizedArrivalStatus==="arrived",
+      arrivedAt:normalizedArrivalStatus==="arrived"
+        ? (cfg?.arrivedAt || new Date().toISOString())
+        : "",
+    };
     const initialItems = buildChecklistItemsFromTemplates(g.launchType,templates,null);
 
-    setGroups((p:any)=>{ const next=[...p,g]; if(onStateChange) onStateChange({checklistGroups:next}); if(onChecklistGroupsDirectSave) onChecklistGroupsDirectSave(JSON.parse(JSON.stringify(next))); return next; });
+    setGroups((p:any)=>{ const next=[...p,g]; if(onChecklistGroupsDirectSave) onChecklistGroupsDirectSave(JSON.parse(JSON.stringify(next))); return next; });
     setAllGroupItems((p:any)=>{ const next={...p,[g.id]:initialItems}; writeEmdcChecklistItemsBackup(g.id,initialItems); persistChecklistItemsNow(next); if(onStateChange) onStateChange({checklistItems:next}); return next; });
 
     if(onGroupCreated) onGroupCreated(g);
@@ -14901,9 +14916,31 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     const currentGroup = groups.find((g:any)=>g.id===id);
     const typeChanged = !!patch?.launchType && currentGroup?.launchType !== patch.launchType;
 
-    setGroups((p:any)=>{
-      const next=p.map((g:any)=>g.id===id?{...g,...patch}:g);
+    setGroups((previous:any)=>{
+      const next = previous.map((group:any)=>{
+        if(group.id!==id) return group;
+
+        const nextArrivalStatus =
+          patch?.arrivalStatus === "arriving" || patch?.arrivalStatus === "arrived"
+            ? patch.arrivalStatus
+            : patch?.arrivalStatus === "waiting"
+              ? "waiting"
+              : group.arrivalStatus || (group.productsArrived ? "arrived" : "waiting");
+
+        return {
+          ...group,
+          ...patch,
+          arrivalStatus:nextArrivalStatus,
+          productsArrived:nextArrivalStatus==="arrived",
+          arrivedAt:
+            nextArrivalStatus==="arrived"
+              ? (patch?.arrivedAt || group.arrivedAt || new Date().toISOString())
+              : "",
+        };
+      });
+
       if (patch?.aiWorkspace) writeEmdcGroupWorkspaceBackup(id,patch.aiWorkspace);
+
       try {
         const raw = localStorage.getItem("emdc_app_state_v1");
         const parsed = raw ? parseEmdcJson(raw) : {};
@@ -14912,10 +14949,12 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
           checklistGroups:mergeChecklistGroupsWithWorkspaceBackups(next),
         }));
         markEmdcLocalStateUpdated();
-        window.dispatchEvent(new Event("emdc-local-sync"));
       } catch {}
-      if(onStateChange) onStateChange({checklistGroups:next});
-      if(onChecklistGroupsDirectSave) onChecklistGroupsDirectSave(JSON.parse(JSON.stringify(next)));
+
+      if(onChecklistGroupsDirectSave) {
+        onChecklistGroupsDirectSave(JSON.parse(JSON.stringify(next)));
+      }
+
       return next;
     });
 
