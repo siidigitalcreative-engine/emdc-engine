@@ -20212,6 +20212,11 @@ export default function App({
   const cloudSaveTimerRef = useRef<any>(null);
   const eventLocalEditUntilRef = useRef(0);
   const cloudClientIdRef = useRef("");
+  const syncV2VersionRef = useRef(0);
+  const syncV2GroupsVersionRef = useRef(0);
+  const syncV2ItemsVersionRef = useRef(0);
+  const syncV2EtagRef = useRef("");
+  const syncV2ApplyingRef = useRef(false);
   const lastDirectSkuSaveSignatureRef = useRef("");
   const skuDirectSaveTimerRef = useRef<any>(null);
 
@@ -20425,6 +20430,75 @@ export default function App({
     }
   };
 
+  const fetchChecklistGroupsV2 = async () => {
+    const res = await fetch("/api/checklist-groups-fast", { cache:"no-store" });
+    const json = await res.json().catch(()=>null);
+    if(!res.ok || !json?.ok || !Array.isArray(json.checklistGroups)) return;
+    syncV2ApplyingRef.current = true;
+    try {
+      setChecklistGroups(json.checklistGroups);
+    } finally {
+      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
+    }
+  };
+
+  const fetchChecklistItemsV2 = async () => {
+    const res = await fetch("/api/checklist-items-fast", { cache:"no-store" });
+    const json = await res.json().catch(()=>null);
+    if(!res.ok || !json?.ok || !json?.checklistItems) return;
+    const clean:any = {};
+    Object.entries(json.checklistItems).forEach(([groupId,groupItems]:any)=>{
+      clean[groupId] = dedupeChecklistItemsObject(groupItems);
+    });
+    syncV2ApplyingRef.current = true;
+    try {
+      setChecklistAllItems(clean);
+    } finally {
+      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
+    }
+  };
+
+  const pollSyncV2 = async () => {
+    if(typeof document!=="undefined" && document.visibilityState!=="visible") return;
+    if(
+      cloudApplyingRef.current || cloudSavingRef.current || syncV2ApplyingRef.current ||
+      Date.now() < checklistGroupsPendingUntilRef.current ||
+      Date.now() < checklistItemsPendingUntilRef.current
+    ) return;
+
+    try {
+      const headers:any = {};
+      if(syncV2EtagRef.current) headers["If-None-Match"] = syncV2EtagRef.current;
+      const res = await fetch("/api/sync-version", { cache:"no-store", headers });
+      if(res.status===304 || !res.ok) return;
+
+      const etag = res.headers.get("etag") || "";
+      if(etag) syncV2EtagRef.current = etag;
+
+      const json = await res.json().catch(()=>null);
+      const data = json?.data || {};
+      const groupVersion = Number(data.checklistGroupsVersion || 0);
+      const itemVersion = Number(data.checklistItemsVersion || 0);
+      const jobs:Promise<any>[] = [];
+
+      if(groupVersion > syncV2GroupsVersionRef.current){
+        jobs.push(fetchChecklistGroupsV2());
+        syncV2GroupsVersionRef.current = groupVersion;
+      }
+      if(itemVersion > syncV2ItemsVersionRef.current){
+        jobs.push(fetchChecklistItemsV2());
+        syncV2ItemsVersionRef.current = itemVersion;
+      }
+
+      syncV2VersionRef.current = Number(data.version || 0);
+      if(jobs.length){
+        setCloudSyncStatus("Receiving team updates...");
+        await Promise.all(jobs);
+        setCloudSyncStatus("Synced");
+      }
+    } catch {}
+  };
+
   const fetchCloudState = async (mode:"initial"|"poll"="poll") => {
     if (
       mode==="poll" &&
@@ -20544,35 +20618,9 @@ export default function App({
   };
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const w:any = window as any;
-
-    const trigger = () => scheduleLocalSnapshotSave();
-
-    if (!w.__emdcLocalStoragePatchedForBlob) {
-      w.__emdcLocalStoragePatchedForBlob = true;
-      const originalSetItem = localStorage.setItem.bind(localStorage);
-      const originalRemoveItem = localStorage.removeItem.bind(localStorage);
-
-      localStorage.setItem = (key:string, value:string) => {
-        originalSetItem(key,value);
-        if (String(key || "").startsWith("emdc")) {
-          try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
-        }
-      };
-
-      localStorage.removeItem = (key:string) => {
-        originalRemoveItem(key);
-        if (String(key || "").startsWith("emdc")) {
-          try { window.dispatchEvent(new Event("emdc-local-sync")); } catch {}
-        }
-      };
-    }
-
-    window.addEventListener("emdc-local-sync", trigger);
-    trigger();
-
-    return () => window.removeEventListener("emdc-local-sync", trigger);
+    // Sync v2 no longer uploads the entire EMDC localStorage snapshot after
+    // every edit. Full recovery remains available through manual backup.
+    return;
   }, [cloudHydrated]);
 
   const makeCloudAppStatePayload = async (updatedAt:string) => {
@@ -20879,6 +20927,9 @@ export default function App({
 
       if (sequence === checklistItemsSaveSequenceRef.current) {
         cloudLastUpdatedAtRef.current = updatedAt;
+        syncV2VersionRef.current = Math.max(syncV2VersionRef.current, Number(json?.syncVersion || 0));
+        syncV2ItemsVersionRef.current = Math.max(syncV2ItemsVersionRef.current, Number(json?.checklistItemsVersion || 0));
+        syncV2EtagRef.current = "";
         setCloudSyncStatus("Synced");
       }
     } catch {
@@ -20957,6 +21008,9 @@ export default function App({
       // Only the newest completed request may update the sync marker.
       if (sequence === checklistGroupsSaveSequenceRef.current) {
         cloudLastUpdatedAtRef.current = updatedAt;
+        syncV2VersionRef.current = Math.max(syncV2VersionRef.current, Number(json?.syncVersion || 0));
+        syncV2GroupsVersionRef.current = Math.max(syncV2GroupsVersionRef.current, Number(json?.checklistGroupsVersion || 0));
+        syncV2EtagRef.current = "";
         setCloudSyncStatus("Synced");
       }
     } catch {
@@ -21146,102 +21200,10 @@ export default function App({
   };
 
   useEffect(() => {
-    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
-    if (!Array.isArray(skuStorage)) return;
-
-    const count = skuStorage.length;
-    const first = count ? String(skuStorage[0]?.id || skuStorage[0]?.sku || "") : "";
-    const last = count ? String(skuStorage[count-1]?.id || skuStorage[count-1]?.sku || "") : "";
-    const checksum = skuStorage.reduce((sum:any,row:any)=>sum + String(row?.sku||"").length + String(row?.productName||"").length + String(row?.imageLink||"").length + String(row?.srp||"").length, 0);
-    const signature = `${count}:${first}:${last}:${checksum}`;
-
-    if (signature === lastDirectSkuSaveSignatureRef.current) return;
-    lastDirectSkuSaveSignatureRef.current = signature;
-
-    if (skuDirectSaveTimerRef.current) clearTimeout(skuDirectSaveTimerRef.current);
-    skuDirectSaveTimerRef.current = setTimeout(() => {
-      saveSkuStorageDirect(skuStorage);
-    }, 350);
-
-    return () => {
-      if (skuDirectSaveTimerRef.current) clearTimeout(skuDirectSaveTimerRef.current);
-    };
-  }, [appStateHydrated, cloudHydrated, skuStorage]);
-
-  useEffect(() => {
-    return () => {
-      if (checklistGroupsSaveTimerRef.current) {
-        clearTimeout(checklistGroupsSaveTimerRef.current);
-      }
-      if (checklistItemsSaveTimerRef.current) {
-        clearTimeout(checklistItemsSaveTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    cloudClientIdRef.current = uid();
-    setCloudSyncStatus("Loading cloud...");
-    setAppStateHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!appStateHydrated) return;
-    (async()=>{
-      const cloud = await fetchCloudState("initial");
-      if (cloud?.updatedAt) cloudLastUpdatedAtRef.current = cloud.updatedAt;
-      setCloudHydrated(true);
-    })();
-  }, [appStateHydrated]);
-
-  useEffect(() => {
-    if (!cloudHydrated) return;
-
-    const pollVisibleTab = () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      void fetchCloudState("poll");
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void fetchCloudState("poll");
-      }
-    };
-
-    const timer = setInterval(pollVisibleTab, PERF_CLOUD_POLL_INTERVAL);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [cloudHydrated]);
-
-  useEffect(() => {
-    const fn = () => setLocalSyncTick(v=>v+1);
-    window.addEventListener("emdc-local-sync", fn);
-    return () => window.removeEventListener("emdc-local-sync", fn);
-  }, []);
-
-  useEffect(() => {
-    if (!appStateHydrated || !cloudHydrated || cloudApplyingRef.current) return;
-    if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    cloudSaveTimerRef.current = setTimeout(()=>saveCloudState(), PERF_CLOUD_SAVE_DELAY);
-    return () => {
-      if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    };
-  }, [
-    appStateHydrated,
-    cloudHydrated,
-    localSyncTick,
-    brands,
-    skuStorage,
-    skuTableColumns,
-    checklistStatuses,
-    calendarManualEvents,
-    calendarEventTypes,
-    seasonalEvents,
-  ]);
+    // Sync v2 uses targeted feature saves. Full app-state autosaves are paused
+    // to prevent large repeated origin transfer.
+    return;
+  }, [appStateHydrated, cloudHydrated]);
 
   useEffect(() => { if (onStateChange) onStateChange({ skuBrands: brands }); }, [brands]);
   useEffect(() => { if (onStateChange) onStateChange({ skuItems: skuStorage }); }, [skuStorage]);
