@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const LEGACY_ALL_ITEMS_PATH = "emdc-state/checklist-items/all.json";
+const SUMMARY_PATH = "emdc-sync/v2/checklist-progress/index.json";
 const VERSION_PATH = "emdc-sync/v2/version.json";
 
 const EMPTY_VERSION = {
@@ -34,6 +35,30 @@ async function readJson(path: string, fallback: any) {
   } catch {
     return fallback;
   }
+}
+
+function summarizeGroupItems(groupItems: any) {
+  const departments: Record<string,{ done:number; total:number }> = {};
+  let done = 0;
+  let total = 0;
+
+  Object.entries(isRecord(groupItems) ? groupItems : {}).forEach(
+    ([department,rows]: any) => {
+      const items = Array.isArray(rows) ? rows : [];
+      const departmentDone = items.filter((item:any)=>!!item?.done).length;
+      departments[department] = { done:departmentDone, total:items.length };
+      done += departmentDone;
+      total += items.length;
+    }
+  );
+
+  return {
+    done,
+    total,
+    departmentCount:Object.keys(departments).length,
+    departments,
+    updatedAt:new Date().toISOString(),
+  };
 }
 
 async function readGroupItems(groupId: string) {
@@ -85,6 +110,19 @@ export async function POST(req: NextRequest) {
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: "application/json",
+    } as any);
+
+    const existingSummaryIndex = await readJson(SUMMARY_PATH, {});
+    const nextSummaryIndex = {
+      ...(isRecord(existingSummaryIndex) ? existingSummaryIndex : {}),
+      [groupId]:summarizeGroupItems(groupItems),
+    };
+
+    await put(SUMMARY_PATH, JSON.stringify(nextSummaryIndex), {
+      access:"private",
+      addRandomSuffix:false,
+      allowOverwrite:true,
+      contentType:"application/json",
     } as any);
 
     const current = {
