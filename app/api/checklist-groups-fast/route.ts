@@ -94,16 +94,92 @@ async function bump(updatedAt: string) {
 }
 
 function compactSku(row: any) {
+  // Older checklist groups may store selected products as a plain SKU/id
+  // string instead of a complete object. Preserve that value so the client can
+  // still match it against SKU Storage after the group is opened.
+  if (
+    typeof row === "string" ||
+    typeof row === "number"
+  ) {
+    const value = String(row || "").trim();
+
+    return {
+      id:"",
+      value,
+      sourceId:value,
+      storageId:value,
+      skuStorageId:value,
+      brandId:"",
+      brand:"",
+      productName:"",
+      product:"",
+      name:"",
+      sku:value,
+      skuCode:value,
+      collection:"",
+      category:"",
+      imageLink:"",
+      imageUrl:"",
+      imageLinks:[],
+      links:[],
+    };
+  }
+
+  const sourceId =
+    row?.sourceId ||
+    row?.storageId ||
+    row?.skuStorageId ||
+    row?.id ||
+    "";
+
+  const sku =
+    row?.sku ||
+    row?.skuCode ||
+    row?.value ||
+    "";
+
+  const productName =
+    row?.productName ||
+    row?.product ||
+    row?.name ||
+    "";
+
+  const imageLink =
+    row?.imageLink ||
+    row?.imageUrl ||
+    row?.image ||
+    (Array.isArray(row?.imageLinks) ? row.imageLinks[0] : "") ||
+    (Array.isArray(row?.links) ? row.links[0] : "") ||
+    "";
+
   return {
-    id:row?.id || "",
+    id:row?.id || sourceId,
+    sourceId,
+    storageId:row?.storageId || sourceId,
+    skuStorageId:row?.skuStorageId || sourceId,
+    value:row?.value || sku || productName,
+    brandId:row?.brandId || "",
     brand:row?.brand || "",
-    productName:row?.productName || row?.product || "",
-    product:row?.product || row?.productName || "",
-    sku:row?.sku || row?.skuCode || "",
-    skuCode:row?.skuCode || row?.sku || "",
+    productName,
+    product:row?.product || productName,
+    name:row?.name || productName,
+    sku,
+    skuCode:row?.skuCode || sku,
     collection:row?.collection || row?.category || "",
     category:row?.category || row?.collection || "",
-    imageLink:row?.imageLink || row?.image || "",
+    imageLink,
+    imageUrl:row?.imageUrl || imageLink,
+    imageLinks:Array.isArray(row?.imageLinks)
+      ? row.imageLinks
+      : imageLink
+        ? [imageLink]
+        : [],
+    links:Array.isArray(row?.links)
+      ? row.links
+      : imageLink
+        ? [imageLink]
+        : [],
+    localProductOverride:!!row?.localProductOverride,
   };
 }
 
