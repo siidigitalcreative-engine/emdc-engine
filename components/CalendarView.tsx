@@ -5021,6 +5021,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [activeDept,setActiveDept]   = useState("all");
   const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
   const [budgetSelectedCell,setBudgetSelectedCell] = useState("D14");
+  const [budgetUndoStack,setBudgetUndoStack] = useState<any[]>([]);
+  const [budgetRedoStack,setBudgetRedoStack] = useState<any[]>([]);
+  const [budgetClipboard,setBudgetClipboard] = useState<any>(null);
+  const budgetImportInputRef = useRef<any>(null);
   const setActiveGroupTab = (nextTab:any) => {
     const safeTab = safeChecklistInnerTab(nextTab);
     setActiveGroupTabState(safeTab);
@@ -8450,6 +8454,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const normalizeBudgetSheet = (raw:any = {}) => ({
     cells:raw?.cells && typeof raw.cells === "object" ? raw.cells : makeDefaultBudgetCells(),
+    formats:raw?.formats && typeof raw.formats === "object" ? raw.formats : {},
     rowCount:Math.max(BUDGET_DEFAULT_ROW_COUNT, Number(raw?.rowCount || BUDGET_DEFAULT_ROW_COUNT)),
     updatedAt:String(raw?.updatedAt || ""),
   });
@@ -8543,29 +8548,226 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const renderBudgetWorkspace = (rawData:any = {}) => {
     const sheet = normalizeBudgetSheet(rawData?.sheet || rawData);
     const cells = sheet.cells;
+    const formats = sheet.formats || {};
     const selectedRaw = String(cells?.[budgetSelectedCell] ?? "");
+    const selectedFormat = formats?.[budgetSelectedCell] || {};
 
-    const setBudgetCell = (address:string,value:string) => {
+    const pushBudgetHistory = (currentSheet:any) => {
+      setBudgetUndoStack((previous:any[])=>[
+        ...previous.slice(-39),
+        JSON.parse(JSON.stringify(currentSheet)),
+      ]);
+      setBudgetRedoStack([]);
+    };
+
+    const saveBudgetSheet = (nextSheet:any, remember = true) => {
+      if (remember) pushBudgetHistory(sheet);
       updateAiWorkspace("budget",{
         sheet:{
-          ...sheet,
-          cells:{...cells,[address]:value},
+          ...nextSheet,
           updatedAt:new Date().toISOString(),
         },
       });
     };
 
+    const setBudgetCell = (address:string,value:string) => {
+      saveBudgetSheet({
+        ...sheet,
+        cells:{...cells,[address]:value},
+      });
+    };
+
+    const patchBudgetCellFormat = (patch:any) => {
+      saveBudgetSheet({
+        ...sheet,
+        formats:{
+          ...formats,
+          [budgetSelectedCell]:{
+            ...(formats?.[budgetSelectedCell] || {}),
+            ...patch,
+          },
+        },
+      });
+    };
+
+    const undoBudget = () => {
+      const previous = budgetUndoStack[budgetUndoStack.length-1];
+      if(!previous) return;
+      setBudgetRedoStack((rows:any[])=>[
+        ...rows.slice(-39),
+        JSON.parse(JSON.stringify(sheet)),
+      ]);
+      setBudgetUndoStack((rows:any[])=>rows.slice(0,-1));
+      updateAiWorkspace("budget",{sheet:{...previous,updatedAt:new Date().toISOString()}});
+    };
+
+    const redoBudget = () => {
+      const next = budgetRedoStack[budgetRedoStack.length-1];
+      if(!next) return;
+      setBudgetUndoStack((rows:any[])=>[
+        ...rows.slice(-39),
+        JSON.parse(JSON.stringify(sheet)),
+      ]);
+      setBudgetRedoStack((rows:any[])=>rows.slice(0,-1));
+      updateAiWorkspace("budget",{sheet:{...next,updatedAt:new Date().toISOString()}});
+    };
+
+    const copyBudgetCell = async () => {
+      const payload = {
+        value:String(cells?.[budgetSelectedCell] ?? ""),
+        format:{...(formats?.[budgetSelectedCell] || {})},
+      };
+      setBudgetClipboard(payload);
+      try { await navigator.clipboard?.writeText(payload.value); } catch {}
+    };
+
+    const pasteBudgetCell = async () => {
+      let payload = budgetClipboard;
+      if(!payload){
+        try {
+          const value = await navigator.clipboard?.readText();
+          payload = {value,format:{}};
+        } catch {}
+      }
+      if(!payload) return;
+      saveBudgetSheet({
+        ...sheet,
+        cells:{...cells,[budgetSelectedCell]:String(payload.value ?? "")},
+        formats:{
+          ...formats,
+          [budgetSelectedCell]:{...(payload.format || {})},
+        },
+      });
+    };
+
+    const clearBudgetCell = () => {
+      const nextCells = {...cells};
+      const nextFormats = {...formats};
+      delete nextCells[budgetSelectedCell];
+      delete nextFormats[budgetSelectedCell];
+      saveBudgetSheet({...sheet,cells:nextCells,formats:nextFormats});
+    };
+
+    const selectedBudgetRow = Math.max(
+      1,
+      Number((/\d+/.exec(budgetSelectedCell) || ["1"])[0])
+    );
+
+    const shiftBudgetRows = (direction:"insert"|"delete") => {
+      const nextCells:any = {};
+      const nextFormats:any = {};
+      const row = selectedBudgetRow;
+
+      Object.entries(cells).forEach(([address,value]:any)=>{
+        const match = /^([A-Z]+)(\d+)$/.exec(address);
+        if(!match) return;
+        const currentRow = Number(match[2]);
+        if(direction==="delete" && currentRow===row) return;
+        const nextRow = direction==="insert"
+          ? (currentRow>row ? currentRow+1 : currentRow)
+          : (currentRow>row ? currentRow-1 : currentRow);
+        nextCells[`${match[1]}${nextRow}`] = value;
+      });
+
+      Object.entries(formats).forEach(([address,value]:any)=>{
+        const match = /^([A-Z]+)(\d+)$/.exec(address);
+        if(!match) return;
+        const currentRow = Number(match[2]);
+        if(direction==="delete" && currentRow===row) return;
+        const nextRow = direction==="insert"
+          ? (currentRow>row ? currentRow+1 : currentRow)
+          : (currentRow>row ? currentRow-1 : currentRow);
+        nextFormats[`${match[1]}${nextRow}`] = value;
+      });
+
+      saveBudgetSheet({
+        ...sheet,
+        cells:nextCells,
+        formats:nextFormats,
+        rowCount:direction==="insert"
+          ? sheet.rowCount+1
+          : Math.max(BUDGET_DEFAULT_ROW_COUNT,sheet.rowCount-1),
+      });
+    };
+
     const resetBudgetTemplate = () => {
       if(typeof window!=="undefined" && !window.confirm("Reset the Budget tab to the original template?")) return;
-      updateAiWorkspace("budget",{
-        sheet:{cells:makeDefaultBudgetCells(),rowCount:BUDGET_DEFAULT_ROW_COUNT,updatedAt:new Date().toISOString()},
+      saveBudgetSheet({
+        cells:makeDefaultBudgetCells(),
+        formats:{},
+        rowCount:BUDGET_DEFAULT_ROW_COUNT,
       });
     };
 
     const addBudgetRow = () => {
-      updateAiWorkspace("budget",{
-        sheet:{...sheet,rowCount:sheet.rowCount+1,updatedAt:new Date().toISOString()},
+      saveBudgetSheet({...sheet,rowCount:sheet.rowCount+1});
+    };
+
+    const exportBudgetCsv = () => {
+      const quote = (value:any) => {
+        const text = String(value ?? "");
+        return /[",\n]/.test(text) ? `"${text.replace(/"/g,'""')}"` : text;
+      };
+      const rows = Array.from({length:sheet.rowCount},(_,index)=>index+1).map((row:number)=>
+        BUDGET_COLUMNS.map((col:string)=>quote(cells?.[`${col}${row}`] ?? "")).join(",")
+      );
+      const blob = new Blob([rows.join("\n")],{type:"text/csv;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${String(group?.groupName || "EMDC Budget").replace(/[^a-z0-9]+/gi,"-")}-budget.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
+    const importBudgetCsv = async (file:any) => {
+      if(!file) return;
+      const source = await file.text();
+      const parseRow = (line:string) => {
+        const values:string[] = [];
+        let current = "";
+        let quoted = false;
+        for(let index=0; index<line.length; index++){
+          const char = line[index];
+          if(char==='"'){
+            if(quoted && line[index+1]==='"'){ current += '"'; index++; }
+            else quoted = !quoted;
+          } else if(char==="," && !quoted){
+            values.push(current); current = "";
+          } else current += char;
+        }
+        values.push(current);
+        return values;
+      };
+      const lines = source.replace(/\r/g,"").split("\n");
+      const nextCells:any = {};
+      lines.forEach((line:string,rowIndex:number)=>{
+        parseRow(line).slice(0,BUDGET_COLUMNS.length).forEach((value:string,colIndex:number)=>{
+          if(value!=="") nextCells[`${BUDGET_COLUMNS[colIndex]}${rowIndex+1}`] = value;
+        });
       });
+      saveBudgetSheet({
+        ...sheet,
+        cells:nextCells,
+        rowCount:Math.max(BUDGET_DEFAULT_ROW_COUNT,lines.length),
+      });
+      if(budgetImportInputRef.current) budgetImportInputRef.current.value = "";
+    };
+
+    const toolbarButtonStyle:any = {
+      width:32,
+      height:30,
+      padding:0,
+      border:`1px solid ${C.border}`,
+      borderRadius:6,
+      background:C.surface,
+      color:C.textSub,
+      fontSize:12,
+      fontWeight:800,
+      cursor:"pointer",
+      display:"inline-flex",
+      alignItems:"center",
+      justifyContent:"center",
     };
 
     const headerCells = new Set(["B2","C2","D2","F2","I2","K2","L2","M2","N2","O2"]);
@@ -8584,6 +8786,59 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <Btn sm variant="outline" onClick={addBudgetRow}>+ Add Row</Btn>
             <Btn sm variant="outline" onClick={resetBudgetTemplate}>Reset Template</Btn>
           </div>
+        </div>
+
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",padding:"8px 10px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,overflowX:"auto"}}>
+          <button title="Undo" onClick={undoBudget} disabled={!budgetUndoStack.length} style={{...toolbarButtonStyle,opacity:budgetUndoStack.length?1:.35}}>↶</button>
+          <button title="Redo" onClick={redoBudget} disabled={!budgetRedoStack.length} style={{...toolbarButtonStyle,opacity:budgetRedoStack.length?1:.35}}>↷</button>
+          <span style={{width:1,height:24,background:C.border,margin:"0 2px"}} />
+          <button title="Copy cell" onClick={copyBudgetCell} style={toolbarButtonStyle}>⧉</button>
+          <button title="Paste cell" onClick={pasteBudgetCell} style={toolbarButtonStyle}>▣</button>
+          <button title="Clear cell" onClick={clearBudgetCell} style={{...toolbarButtonStyle,color:"#DC2626"}}>⌫</button>
+          <span style={{width:1,height:24,background:C.border,margin:"0 2px"}} />
+          <button title="Bold" onClick={()=>patchBudgetCellFormat({bold:!selectedFormat.bold})} style={{...toolbarButtonStyle,background:selectedFormat.bold?"#E5E7EB":C.surface}}>B</button>
+          <button title="Italic" onClick={()=>patchBudgetCellFormat({italic:!selectedFormat.italic})} style={{...toolbarButtonStyle,fontStyle:"italic",background:selectedFormat.italic?"#E5E7EB":C.surface}}>I</button>
+          <button title="Underline" onClick={()=>patchBudgetCellFormat({underline:!selectedFormat.underline})} style={{...toolbarButtonStyle,textDecoration:"underline",background:selectedFormat.underline?"#E5E7EB":C.surface}}>U</button>
+          <select
+            title="Text alignment"
+            value={selectedFormat.align || "auto"}
+            onChange={event=>patchBudgetCellFormat({align:event.target.value})}
+            style={{height:30,border:`1px solid ${C.border}`,borderRadius:6,padding:"0 7px",fontSize:11,fontWeight:700,background:C.surface,color:C.textSub}}
+          >
+            <option value="auto">Align</option>
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+          <select
+            title="Number format"
+            value={selectedFormat.numberFormat || "auto"}
+            onChange={event=>patchBudgetCellFormat({numberFormat:event.target.value})}
+            style={{height:30,border:`1px solid ${C.border}`,borderRadius:6,padding:"0 7px",fontSize:11,fontWeight:700,background:C.surface,color:C.textSub}}
+          >
+            <option value="auto">123</option>
+            <option value="number">Number</option>
+            <option value="currency">₱ Currency</option>
+            <option value="percent">% Percent</option>
+            <option value="text">Plain text</option>
+          </select>
+          <button title="Decrease decimals" onClick={()=>patchBudgetCellFormat({decimals:Math.max(0,Number(selectedFormat.decimals ?? 2)-1)})} style={toolbarButtonStyle}>.0←</button>
+          <button title="Increase decimals" onClick={()=>patchBudgetCellFormat({decimals:Math.min(6,Number(selectedFormat.decimals ?? 0)+1)})} style={toolbarButtonStyle}>.00→</button>
+          <label title="Text color" style={{...toolbarButtonStyle,position:"relative",overflow:"hidden"}}>
+            A
+            <span style={{position:"absolute",left:6,right:6,bottom:4,height:3,background:selectedFormat.color || C.text}} />
+            <input type="color" value={selectedFormat.color || "#111827"} onChange={event=>patchBudgetCellFormat({color:event.target.value})} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}} />
+          </label>
+          <label title="Fill color" style={{...toolbarButtonStyle,position:"relative",overflow:"hidden",background:selectedFormat.background || C.surface}}>
+            ▧
+            <input type="color" value={selectedFormat.background || "#ffffff"} onChange={event=>patchBudgetCellFormat({background:event.target.value})} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}} />
+          </label>
+          <span style={{width:1,height:24,background:C.border,margin:"0 2px"}} />
+          <button title="Insert row below selected row" onClick={()=>shiftBudgetRows("insert")} style={{...toolbarButtonStyle,width:"auto",padding:"0 9px"}}>+ Row</button>
+          <button title="Delete selected row" onClick={()=>shiftBudgetRows("delete")} style={{...toolbarButtonStyle,width:"auto",padding:"0 9px",color:"#DC2626"}}>− Row</button>
+          <Btn xs variant="outline" onClick={exportBudgetCsv}>Export CSV</Btn>
+          <Btn xs variant="outline" onClick={()=>budgetImportInputRef.current?.click()}>Import CSV</Btn>
+          <input ref={budgetImportInputRef} type="file" accept=".csv,text/csv" onChange={event=>importBudgetCsv(event.target.files?.[0])} style={{display:"none"}} />
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"76px minmax(0,1fr)",gap:8,alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surface}}>
@@ -8610,7 +8865,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   const address = `${col}${row}`;
                   const raw = cells?.[address] ?? "";
                   const calculated = evaluateBudgetCell(address,cells);
-                  const display = formatBudgetDisplay(address,raw,calculated);
+                  const cellFormat = formats?.[address] || {};
+                  let display = formatBudgetDisplay(address,raw,calculated);
+                  if(cellFormat.numberFormat==="currency" && typeof calculated==="number"){
+                    display = `₱${Number(calculated).toLocaleString("en-US",{minimumFractionDigits:Number(cellFormat.decimals ?? 2),maximumFractionDigits:Number(cellFormat.decimals ?? 2)})}`;
+                  } else if(cellFormat.numberFormat==="percent"){
+                    const numeric = typeof calculated==="number" ? calculated : budgetCellToNumber(calculated);
+                    display = `${(numeric*100).toFixed(Number(cellFormat.decimals ?? 2))}%`;
+                  } else if(cellFormat.numberFormat==="number" && typeof calculated==="number"){
+                    display = Number(calculated).toLocaleString("en-US",{minimumFractionDigits:Number(cellFormat.decimals ?? 0),maximumFractionDigits:Number(cellFormat.decimals ?? 0)});
+                  } else if(cellFormat.numberFormat==="text"){
+                    display = String(raw ?? "");
+                  }
                   const selected = budgetSelectedCell===address;
                   const isHeader = headerCells.has(address);
                   const isOrange = orangeCells.has(address);
@@ -8627,9 +8893,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                       onChange={(event)=>setBudgetCell(address,event.target.value)}
                       style={{
                         minHeight:34,width:"100%",border:"none",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,
-                        padding:"5px 8px",fontSize:11,fontWeight:isHeader||isOrange||isPercentHeader||isRed?800:500,
-                        color:isRed?"#EF0000":C.text,background:selected?"#EFF6FF":bg,outline:selected?"2px solid #2563EB":"none",outlineOffset:-2,
-                        textAlign:/^(B|C|D|F|G|I|K|L|M|N|O)/.test(address)?"right":"left",
+                        padding:"5px 8px",fontSize:11,
+                        fontWeight:cellFormat.bold?900:(isHeader||isOrange||isPercentHeader||isRed?800:500),
+                        fontStyle:cellFormat.italic?"italic":"normal",
+                        textDecoration:cellFormat.underline?"underline":"none",
+                        color:cellFormat.color || (isRed?"#EF0000":C.text),
+                        background:selected?"#EFF6FF":(cellFormat.background || bg),
+                        outline:selected?"2px solid #2563EB":"none",outlineOffset:-2,
+                        textAlign:cellFormat.align && cellFormat.align!=="auto"
+                          ? cellFormat.align
+                          : (/^(B|C|D|F|G|I|K|L|M|N|O)/.test(address)?"right":"left"),
                         fontVariantNumeric:"tabular-nums",boxSizing:"border-box",
                       }}
                     />
