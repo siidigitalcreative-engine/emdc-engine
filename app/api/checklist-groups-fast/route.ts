@@ -5,6 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DATA_PATH = "emdc-state/checklist-groups/all.json";
+const SUMMARY_PATH = "emdc-sync/v2/checklist-progress/index.json";
+const LEGACY_ITEMS_PATH = "emdc-state/checklist-items/all.json";
 const VERSION_PATH = "emdc-sync/v2/version.json";
 const EMPTY_VERSION = {
   version: 0, updatedAt: "",
@@ -23,6 +25,58 @@ async function readJson(path: string, fallback: any) {
   }
 }
 
+function isRecord(value: any) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function summarizeGroupItems(groupItems: any) {
+  const departments: Record<string,{ done:number; total:number }> = {};
+  let done = 0;
+  let total = 0;
+
+  Object.entries(isRecord(groupItems) ? groupItems : {}).forEach(
+    ([department,rows]: any) => {
+      const items = Array.isArray(rows) ? rows : [];
+      const departmentDone = items.filter((item:any)=>!!item?.done).length;
+      departments[department] = { done:departmentDone, total:items.length };
+      done += departmentDone;
+      total += items.length;
+    }
+  );
+
+  return {
+    done,
+    total,
+    departmentCount:Object.keys(departments).length,
+    departments,
+  };
+}
+
+async function readProgressIndex() {
+  const existing = await readJson(SUMMARY_PATH, null);
+  if (isRecord(existing)) return existing;
+
+  const legacyItems = await readJson(LEGACY_ITEMS_PATH, {});
+  const summaryIndex: Record<string,any> = {};
+
+  Object.entries(isRecord(legacyItems) ? legacyItems : {}).forEach(
+    ([groupId,groupItems]: any) => {
+      summaryIndex[groupId] = summarizeGroupItems(groupItems);
+    }
+  );
+
+  try {
+    await put(SUMMARY_PATH, JSON.stringify(summaryIndex), {
+      access:"private",
+      addRandomSuffix:false,
+      allowOverwrite:true,
+      contentType:"application/json",
+    } as any);
+  } catch {}
+
+  return summaryIndex;
+}
+
 async function bump(updatedAt: string) {
   const current = { ...EMPTY_VERSION, ...(await readJson(VERSION_PATH, EMPTY_VERSION)) };
   const next = {
@@ -39,7 +93,21 @@ async function bump(updatedAt: string) {
   return next;
 }
 
-function toChecklistIndexRow(group: any) {
+function compactSku(row: any) {
+  return {
+    id:row?.id || "",
+    brand:row?.brand || "",
+    productName:row?.productName || row?.product || "",
+    product:row?.product || row?.productName || "",
+    sku:row?.sku || row?.skuCode || "",
+    skuCode:row?.skuCode || row?.sku || "",
+    collection:row?.collection || row?.category || "",
+    category:row?.category || row?.collection || "",
+    imageLink:row?.imageLink || row?.image || "",
+  };
+}
+
+function toChecklistIndexRow(group: any, progressSummary: any) {
   return {
     id: group?.id,
     groupName: group?.groupName || group?.name || "",
@@ -62,6 +130,11 @@ function toChecklistIndexRow(group: any) {
       ? group.linkedEventIds
       : [],
     createdAt: group?.createdAt || "",
+    skus:Array.isArray(group?.skus) ? group.skus.map(compactSku) : [],
+    progressSummary:
+      progressSummary && typeof progressSummary==="object"
+        ? progressSummary
+        : { done:0,total:0,departmentCount:0,departments:{} },
   };
 }
 
@@ -97,10 +170,17 @@ export async function GET(req: NextRequest) {
   }
 
   if (mode === "index") {
+    const progressIndex = await readProgressIndex();
+
     return NextResponse.json(
       {
         ok: true,
-        checklistGroups: checklistGroups.map(toChecklistIndexRow),
+        checklistGroups: checklistGroups.map((group:any)=>
+          toChecklistIndexRow(
+            group,
+            progressIndex?.[String(group?.id || "")]
+          )
+        ),
       },
       { headers: { "Cache-Control": "private, no-store" } }
     );
