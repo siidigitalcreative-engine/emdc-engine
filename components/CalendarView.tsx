@@ -21200,6 +21200,56 @@ export default function App({
   };
 
   useEffect(() => {
+    cloudClientIdRef.current = uid();
+    setCloudSyncStatus("Loading cloud...");
+    setAppStateHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!appStateHydrated) return;
+
+    let cancelled = false;
+
+    (async()=>{
+      try {
+        const cloud = await fetchCloudState("initial");
+        if (cancelled) return;
+        if (cloud?.updatedAt) cloudLastUpdatedAtRef.current = cloud.updatedAt;
+      } finally {
+        // Always unlock the app, including when the full cloud request fails.
+        if (!cancelled) setCloudHydrated(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appStateHydrated]);
+
+  useEffect(() => {
+    if (!cloudHydrated) return;
+
+    const heartbeat = () => {
+      void pollSyncV2();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void pollSyncV2();
+      }
+    };
+
+    const timer = window.setInterval(heartbeat, 3000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void pollSyncV2();
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [cloudHydrated]);
+
+  useEffect(() => {
     // Sync v2 uses targeted feature saves. Full app-state autosaves are paused
     // to prevent large repeated origin transfer.
     return;
