@@ -9379,285 +9379,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
 
 
-      const assetCompletionStatusId = String(
-        digitalData.assetCompletionStatusId || ""
-      );
-      const assetCompletionStatus = statuses.find(
-        (status:any)=>String(status?.id)===assetCompletionStatusId
-      );
-      const assetCompletionIsDone =
-        String(assetCompletionStatus?.label || "").trim().toLowerCase()==="done" ||
-        assetCompletionStatusId.trim().toLowerCase()==="done";
-
-      const assetAnnouncementData = {
-        type:String(digitalData.assetAnnouncementType || "Assets Completed"),
-        tone:String(digitalData.assetAnnouncementTone || "professional"),
-        instructions:String(digitalData.assetAnnouncementInstructions || ""),
-        to:String(digitalData.assetAnnouncementTo || ""),
-        cc:String(digitalData.assetAnnouncementCc || ""),
-        drafts:{
-          email:{
-            subject:String(digitalData.assetAnnouncementDrafts?.email?.subject || ""),
-            body:String(digitalData.assetAnnouncementDrafts?.email?.body || ""),
-          },
-          viber:{
-            body:String(digitalData.assetAnnouncementDrafts?.viber?.body || ""),
-          },
-          internal:{
-            body:String(digitalData.assetAnnouncementDrafts?.internal?.body || ""),
-          },
-        },
-      };
-
-      const patchAssetAnnouncement = (patch:any) => {
-        updateAiWorkspace("digital",patch);
-      };
-
-      const parseAnnouncementJson = (source:any) => {
-        const raw = String(source || "")
-          .trim()
-          .replace(/^```(?:json)?\s*/i,"")
-          .replace(/\s*```$/,"");
-        try {
-          const parsed = JSON.parse(raw);
-          return {
-            email:{
-              subject:String(parsed?.email?.subject || ""),
-              body:String(parsed?.email?.body || ""),
-            },
-            viber:{
-              body:String(parsed?.viber?.body || ""),
-            },
-            internal:{
-              body:String(parsed?.internal?.body || ""),
-            },
-          };
-        } catch {
-          return null;
-        }
-      };
-
-      const generateAssetAnnouncements = async () => {
-        if(assetAnnouncementBusy) return;
-
-        const currentRows = commitCurrentProductIntroDigitalAssetRows();
-        const completedAssets = currentRows
-          .filter((row:any)=>String(row?.link || "").trim())
-          .map((row:any)=>({
-            name:String(row?.name || "Untitled Asset"),
-            link:String(row?.link || "").trim(),
-          }));
-
-        if(!completedAssets.length){
-          setAssetAnnouncementError(
-            "Add at least one final asset link before generating announcements."
-          );
-          return;
-        }
-
-        const products = productRows.map((row:any)=>({
-          brand:row.brand || "",
-          product:row.product || "",
-          sku:row.skuCode || "",
-          collection:row.collection || "",
-        }));
-
-        setAssetAnnouncementBusy(true);
-        setAssetAnnouncementError("");
-
-        try {
-          const response = await fetch("/api/ai/generate-text",{
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({
-              task:"asset_completion_announcement",
-              tone:assetAnnouncementData.tone,
-              taskLabel:`${assetAnnouncementData.type}: ${group.groupName || "Checklist Group"}`,
-              maxOutputTokens:2400,
-              instruction:[
-                "Create three polished completion announcements for the supplied product launch or reactivation assets.",
-                "Return strict JSON only. Do not use markdown code fences.",
-                'Required shape: {"email":{"subject":"","body":""},"viber":{"body":""},"internal":{"body":""}}.',
-                "The email should be professional and complete, with a greeting, concise completion summary, finished deliverables, access link or links, and a useful closing.",
-                "The Viber message should be concise, easy to scan, and suitable for partner or sales group chats.",
-                "The internal team message should clearly state what is complete, where files are stored, and the next action required.",
-                "Do not claim that an asset is complete unless a link is supplied.",
-                "Avoid em dashes.",
-                assetAnnouncementData.instructions
-                  ? `Additional instruction: ${assetAnnouncementData.instructions}`
-                  : "",
-              ].filter(Boolean).join("\\n"),
-              input:JSON.stringify({
-                announcementType:assetAnnouncementData.type,
-                checklistName:group.groupName || "",
-                launchType:launchTypes?.[group.launchType]?.label || group.launchType || "",
-                products,
-                completedAssets,
-              },null,2),
-            }),
-          });
-
-          const json = await response.json().catch(()=>null);
-          if(!response.ok){
-            throw new Error(json?.error || "Unable to generate announcements.");
-          }
-
-          const drafts = parseAnnouncementJson(json?.text);
-          if(!drafts){
-            throw new Error(
-              "AI returned an invalid announcement format. Please generate again."
-            );
-          }
-
-          patchAssetAnnouncement({
-            assetAnnouncementDrafts:drafts,
-            assetAnnouncementGeneratedAt:new Date().toISOString(),
-          });
-          setAssetAnnouncementTab("email");
-        } catch(error:any){
-          setAssetAnnouncementError(
-            error?.message || "Unable to generate announcements."
-          );
-        } finally {
-          setAssetAnnouncementBusy(false);
-        }
-      };
-
-      const copyAnnouncementText = async (value:any,actionId:string) => {
-        try {
-          await navigator.clipboard.writeText(String(value || ""));
-          markActionDone(actionId);
-        } catch {}
-      };
-
-      const openGmailAnnouncement = () => {
-        const email = assetAnnouncementData.drafts.email;
-        const params = new URLSearchParams({
-          view:"cm",
-          fs:"1",
-          to:assetAnnouncementData.to,
-          cc:assetAnnouncementData.cc,
-          su:email.subject,
-          body:email.body,
-        });
-        window.open(
-          `https://mail.google.com/mail/?${params.toString()}`,
-          "_blank",
-          "noopener,noreferrer"
-        );
-      };
-
-      const submitAnnouncementEmail = async (action:"draft"|"send") => {
-        const email = assetAnnouncementData.drafts.email;
-        if(!assetAnnouncementData.to.trim()){
-          setAssetAnnouncementError("Enter at least one email recipient.");
-          return;
-        }
-        if(!email.subject.trim() || !email.body.trim()){
-          setAssetAnnouncementError(
-            "Generate or enter the email subject and message first."
-          );
-          return;
-        }
-        if(
-          action==="send" &&
-          typeof window!=="undefined" &&
-          !window.confirm("Send this announcement email now?")
-        ) return;
-
-        setAssetAnnouncementEmailBusy(action);
-        setAssetAnnouncementError("");
-
-        try {
-          const response = await fetch("/api/communications/email",{
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({
-              action,
-              to:assetAnnouncementData.to,
-              cc:assetAnnouncementData.cc,
-              subject:email.subject,
-              body:email.body,
-            }),
-          });
-          const json = await response.json().catch(()=>null);
-          if(!response.ok || !json?.ok){
-            throw new Error(
-              json?.error ||
-              "Gmail server sending is not configured. Use Open Gmail instead."
-            );
-          }
-          markActionDone(
-            action==="draft"
-              ? "announcement-gmail-draft"
-              : "announcement-email-sent"
-          );
-          await logActivity({
-            action:action==="draft"
-              ? "created an email draft for"
-              : "sent an email announcement for",
-            entityType:"checklist",
-            entityName:group.groupName || "Digital Creative Assets",
-            href:"/#/checklists",
-          });
-        } catch(error:any){
-          setAssetAnnouncementError(
-            error?.message ||
-            "Unable to process the email. Use Open Gmail instead."
-          );
-        } finally {
-          setAssetAnnouncementEmailBusy("");
-        }
-      };
-
-      const postAnnouncementToTeamFeed = async () => {
-        const body = assetAnnouncementData.drafts.internal.body.trim();
-        if(!body){
-          setAssetAnnouncementError(
-            "Generate or enter the internal team message first."
-          );
-          return;
-        }
-
-        setAssetAnnouncementEmailBusy("internal");
-        setAssetAnnouncementError("");
-
-        try {
-          const supabase = createClient();
-          const { data:{ user } } = await supabase.auth.getUser();
-          if(!user) throw new Error("You must be signed in.");
-
-          const displayName =
-            user.user_metadata?.display_name ||
-            user.user_metadata?.full_name ||
-            user.user_metadata?.name ||
-            user.email ||
-            "EMDC User";
-
-          const { error } = await supabase.from("feed_posts").insert({
-            user_id:user.id,
-            display_name:displayName,
-            email:user.email || "",
-            body,
-            image_url:null,
-          });
-          if(error) throw error;
-
-          markActionDone("announcement-team-post");
-          await logActivity({
-            action:"posted a completion announcement for",
-            entityType:"feed",
-            entityName:group.groupName || "Digital Creative Assets",
-            href:"/#/feed",
-          });
-        } catch(error:any){
-          setAssetAnnouncementError(
-            error?.message || "Unable to post the internal message."
-          );
-        } finally {
-          setAssetAnnouncementEmailBusy("");
-        }
-      };
 
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
@@ -11927,6 +11648,287 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         addToOverview("Digital Creative", "Product Introduction Digital Creative Asset Links", lines.join("\n\n"), "Asset Link Table", { tab:"digital", type:"productIntroAssetLinks" });
         markActionDone("overview-product-intro-digital-assets");
       };
+
+      const assetCompletionStatusId = String(
+        digitalData.assetCompletionStatusId || ""
+      );
+      const assetCompletionStatus = statuses.find(
+        (status:any)=>String(status?.id)===assetCompletionStatusId
+      );
+      const assetCompletionIsDone =
+        String(assetCompletionStatus?.label || "").trim().toLowerCase()==="done" ||
+        assetCompletionStatusId.trim().toLowerCase()==="done";
+
+      const assetAnnouncementData = {
+        type:String(digitalData.assetAnnouncementType || "Assets Completed"),
+        tone:String(digitalData.assetAnnouncementTone || "professional"),
+        instructions:String(digitalData.assetAnnouncementInstructions || ""),
+        to:String(digitalData.assetAnnouncementTo || ""),
+        cc:String(digitalData.assetAnnouncementCc || ""),
+        drafts:{
+          email:{
+            subject:String(digitalData.assetAnnouncementDrafts?.email?.subject || ""),
+            body:String(digitalData.assetAnnouncementDrafts?.email?.body || ""),
+          },
+          viber:{
+            body:String(digitalData.assetAnnouncementDrafts?.viber?.body || ""),
+          },
+          internal:{
+            body:String(digitalData.assetAnnouncementDrafts?.internal?.body || ""),
+          },
+        },
+      };
+
+      const patchAssetAnnouncement = (patch:any) => {
+        updateAiWorkspace("digital",patch);
+      };
+
+      const parseAnnouncementJson = (source:any) => {
+        const raw = String(source || "")
+          .trim()
+          .replace(/^```(?:json)?\s*/i,"")
+          .replace(/\s*```$/,"");
+        try {
+          const parsed = JSON.parse(raw);
+          return {
+            email:{
+              subject:String(parsed?.email?.subject || ""),
+              body:String(parsed?.email?.body || ""),
+            },
+            viber:{
+              body:String(parsed?.viber?.body || ""),
+            },
+            internal:{
+              body:String(parsed?.internal?.body || ""),
+            },
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      const generateAssetAnnouncements = async () => {
+        if(assetAnnouncementBusy) return;
+
+        const currentRows = commitCurrentProductIntroDigitalAssetRows();
+        const completedAssets = currentRows
+          .filter((row:any)=>String(row?.link || "").trim())
+          .map((row:any)=>({
+            name:String(row?.name || "Untitled Asset"),
+            link:String(row?.link || "").trim(),
+          }));
+
+        if(!completedAssets.length){
+          setAssetAnnouncementError(
+            "Add at least one final asset link before generating announcements."
+          );
+          return;
+        }
+
+        const products = productRows.map((row:any)=>({
+          brand:row.brand || "",
+          product:row.product || "",
+          sku:row.skuCode || "",
+          collection:row.collection || "",
+        }));
+
+        setAssetAnnouncementBusy(true);
+        setAssetAnnouncementError("");
+
+        try {
+          const response = await fetch("/api/ai/generate-text",{
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              task:"asset_completion_announcement",
+              tone:assetAnnouncementData.tone,
+              taskLabel:`${assetAnnouncementData.type}: ${group.groupName || "Checklist Group"}`,
+              maxOutputTokens:2400,
+              instruction:[
+                "Create three polished completion announcements for the supplied product launch or reactivation assets.",
+                "Return strict JSON only. Do not use markdown code fences.",
+                'Required shape: {"email":{"subject":"","body":""},"viber":{"body":""},"internal":{"body":""}}.',
+                "The email should be professional and complete, with a greeting, concise completion summary, finished deliverables, access link or links, and a useful closing.",
+                "The Viber message should be concise, easy to scan, and suitable for partner or sales group chats.",
+                "The internal team message should clearly state what is complete, where files are stored, and the next action required.",
+                "Do not claim that an asset is complete unless a link is supplied.",
+                "Avoid em dashes.",
+                assetAnnouncementData.instructions
+                  ? `Additional instruction: ${assetAnnouncementData.instructions}`
+                  : "",
+              ].filter(Boolean).join("\\n"),
+              input:JSON.stringify({
+                announcementType:assetAnnouncementData.type,
+                checklistName:group.groupName || "",
+                launchType:launchTypes?.[group.launchType]?.label || group.launchType || "",
+                products,
+                completedAssets,
+              },null,2),
+            }),
+          });
+
+          const json = await response.json().catch(()=>null);
+          if(!response.ok){
+            throw new Error(json?.error || "Unable to generate announcements.");
+          }
+
+          const drafts = parseAnnouncementJson(json?.text);
+          if(!drafts){
+            throw new Error(
+              "AI returned an invalid announcement format. Please generate again."
+            );
+          }
+
+          patchAssetAnnouncement({
+            assetAnnouncementDrafts:drafts,
+            assetAnnouncementGeneratedAt:new Date().toISOString(),
+          });
+          setAssetAnnouncementTab("email");
+        } catch(error:any){
+          setAssetAnnouncementError(
+            error?.message || "Unable to generate announcements."
+          );
+        } finally {
+          setAssetAnnouncementBusy(false);
+        }
+      };
+
+      const copyAnnouncementText = async (value:any,actionId:string) => {
+        try {
+          await navigator.clipboard.writeText(String(value || ""));
+          markActionDone(actionId);
+        } catch {}
+      };
+
+      const openGmailAnnouncement = () => {
+        const email = assetAnnouncementData.drafts.email;
+        const params = new URLSearchParams({
+          view:"cm",
+          fs:"1",
+          to:assetAnnouncementData.to,
+          cc:assetAnnouncementData.cc,
+          su:email.subject,
+          body:email.body,
+        });
+        window.open(
+          `https://mail.google.com/mail/?${params.toString()}`,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      };
+
+      const submitAnnouncementEmail = async (action:"draft"|"send") => {
+        const email = assetAnnouncementData.drafts.email;
+        if(!assetAnnouncementData.to.trim()){
+          setAssetAnnouncementError("Enter at least one email recipient.");
+          return;
+        }
+        if(!email.subject.trim() || !email.body.trim()){
+          setAssetAnnouncementError(
+            "Generate or enter the email subject and message first."
+          );
+          return;
+        }
+        if(
+          action==="send" &&
+          typeof window!=="undefined" &&
+          !window.confirm("Send this announcement email now?")
+        ) return;
+
+        setAssetAnnouncementEmailBusy(action);
+        setAssetAnnouncementError("");
+
+        try {
+          const response = await fetch("/api/communications/email",{
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({
+              action,
+              to:assetAnnouncementData.to,
+              cc:assetAnnouncementData.cc,
+              subject:email.subject,
+              body:email.body,
+            }),
+          });
+          const json = await response.json().catch(()=>null);
+          if(!response.ok || !json?.ok){
+            throw new Error(
+              json?.error ||
+              "Gmail server sending is not configured. Use Open Gmail instead."
+            );
+          }
+          markActionDone(
+            action==="draft"
+              ? "announcement-gmail-draft"
+              : "announcement-email-sent"
+          );
+          await logActivity({
+            action:action==="draft"
+              ? "created an email draft for"
+              : "sent an email announcement for",
+            entityType:"checklist",
+            entityName:group.groupName || "Digital Creative Assets",
+            href:"/#/checklists",
+          });
+        } catch(error:any){
+          setAssetAnnouncementError(
+            error?.message ||
+            "Unable to process the email. Use Open Gmail instead."
+          );
+        } finally {
+          setAssetAnnouncementEmailBusy("");
+        }
+      };
+
+      const postAnnouncementToTeamFeed = async () => {
+        const body = assetAnnouncementData.drafts.internal.body.trim();
+        if(!body){
+          setAssetAnnouncementError(
+            "Generate or enter the internal team message first."
+          );
+          return;
+        }
+
+        setAssetAnnouncementEmailBusy("internal");
+        setAssetAnnouncementError("");
+
+        try {
+          const supabase = createClient();
+          const { data:{ user } } = await supabase.auth.getUser();
+          if(!user) throw new Error("You must be signed in.");
+
+          const displayName =
+            user.user_metadata?.display_name ||
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email ||
+            "EMDC User";
+
+          const { error } = await supabase.from("feed_posts").insert({
+            user_id:user.id,
+            display_name:displayName,
+            email:user.email || "",
+            body,
+            image_url:null,
+          });
+          if(error) throw error;
+
+          markActionDone("announcement-team-post");
+          await logActivity({
+            action:"posted a completion announcement for",
+            entityType:"feed",
+            entityName:group.groupName || "Digital Creative Assets",
+            href:"/#/feed",
+          });
+        } catch(error:any){
+          setAssetAnnouncementError(
+            error?.message || "Unable to post the internal message."
+          );
+        } finally {
+          setAssetAnnouncementEmailBusy("");
+        }
+      };
+
 
       const productIntroDeletedRowIds = Array.from(new Set(
         (Array.isArray(digitalData.deletedProductIntroDcRowIds) ? digitalData.deletedProductIntroDcRowIds : [])
