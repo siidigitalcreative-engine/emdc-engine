@@ -21594,37 +21594,91 @@ export default function App({
         throw new Error(detail || `Import save failed with status ${res.status}`);
       }
 
-      // The app also stores checklist groups/items in dedicated cloud blobs.
-      // Update those blobs during import, otherwise an older partial blob can
-      // overwrite the restored backup on the next refresh.
-      const [groupsRes, itemsRes] = await Promise.all([
-        fetch("/api/emdc-state?mode=checklist-groups", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          cache:"no-store",
-          body:JSON.stringify({
-            mode:"checklist-groups",
-            clientId:cloudClientIdRef.current,
-            updatedAt,
-            checklistGroups:safeImportedState.checklistGroups,
-          }),
+      // Sync v2 stores checklist groups and checklist items in the dedicated
+      // fast-route Blob paths. Restore those exact paths during backup import,
+      // otherwise the importing browser can show local data while incognito or
+      // another user still receives an older empty cloud workspace.
+      const groupsRes = await fetch("/api/checklist-groups-fast", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        cache:"no-store",
+        body:JSON.stringify({
+          clientId:cloudClientIdRef.current,
+          updatedAt,
+          checklistGroups:safeImportedState.checklistGroups,
         }),
-        fetch("/api/emdc-state?mode=checklist-items", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          cache:"no-store",
-          body:JSON.stringify({
-            mode:"checklist-items",
-            clientId:cloudClientIdRef.current,
-            updatedAt,
-            checklistItems:safeImportedState.checklistItems,
-          }),
-        }),
-      ]);
+      });
 
-      if (!groupsRes.ok || !itemsRes.ok) {
-        throw new Error("Backup imported, but checklist cloud restoration was incomplete.");
+      if (!groupsRes.ok) {
+        const detail = await groupsRes.text().catch(()=>"");
+        throw new Error(
+          detail ||
+          "Backup imported, but checklist-group cloud restoration failed."
+        );
       }
+
+      const checklistItemEntries = Object.entries(
+        safeImportedState.checklistItems &&
+        typeof safeImportedState.checklistItems === "object"
+          ? safeImportedState.checklistItems
+          : {}
+      );
+
+      // The current checklist-items route uses one small Blob per group.
+      // Restore each group explicitly so all browsers and users see the same
+      // tasks, progress, and department status after the import.
+      const itemRestoreResults = await Promise.all(
+        checklistItemEntries.map(async ([groupId,groupItems]:any)=>{
+          const response = await fetch("/api/checklist-items-fast", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            cache:"no-store",
+            body:JSON.stringify({
+              clientId:cloudClientIdRef.current,
+              updatedAt,
+              groupId,
+              groupItems:
+                groupItems && typeof groupItems === "object"
+                  ? groupItems
+                  : {},
+            }),
+          });
+
+          return {
+            groupId,
+            ok:response.ok,
+            detail:response.ok
+              ? ""
+              : await response.text().catch(()=>""),
+          };
+        })
+      );
+
+      const failedItemRestore = itemRestoreResults.find(
+        (result:any)=>!result.ok
+      );
+
+      if (failedItemRestore) {
+        throw new Error(
+          failedItemRestore.detail ||
+          `Checklist items for ${failedItemRestore.groupId} were not restored to cloud.`
+        );
+      }
+
+      // Mark restored versions as current on this browser so the next heartbeat
+      // does not immediately overwrite the imported state with an older read.
+      try {
+        const groupsJson = await groupsRes.json().catch(()=>null);
+        syncV2VersionRef.current = Math.max(
+          syncV2VersionRef.current,
+          Number(groupsJson?.syncVersion || 0)
+        );
+        syncV2GroupsVersionRef.current = Math.max(
+          syncV2GroupsVersionRef.current,
+          Number(groupsJson?.checklistGroupsVersion || 0)
+        );
+        syncV2EtagRef.current = "";
+      } catch {}
 
       safeSetEmdcAppStateLocal(safeImportedState);
       rememberLastGoodEmdcAppState(safeImportedState);
