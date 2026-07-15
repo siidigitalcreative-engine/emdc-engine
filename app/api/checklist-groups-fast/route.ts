@@ -94,92 +94,16 @@ async function bump(updatedAt: string) {
 }
 
 function compactSku(row: any) {
-  // Older checklist groups may store selected products as a plain SKU/id
-  // string instead of a complete object. Preserve that value so the client can
-  // still match it against SKU Storage after the group is opened.
-  if (
-    typeof row === "string" ||
-    typeof row === "number"
-  ) {
-    const value = String(row || "").trim();
-
-    return {
-      id:"",
-      value,
-      sourceId:value,
-      storageId:value,
-      skuStorageId:value,
-      brandId:"",
-      brand:"",
-      productName:"",
-      product:"",
-      name:"",
-      sku:value,
-      skuCode:value,
-      collection:"",
-      category:"",
-      imageLink:"",
-      imageUrl:"",
-      imageLinks:[],
-      links:[],
-    };
-  }
-
-  const sourceId =
-    row?.sourceId ||
-    row?.storageId ||
-    row?.skuStorageId ||
-    row?.id ||
-    "";
-
-  const sku =
-    row?.sku ||
-    row?.skuCode ||
-    row?.value ||
-    "";
-
-  const productName =
-    row?.productName ||
-    row?.product ||
-    row?.name ||
-    "";
-
-  const imageLink =
-    row?.imageLink ||
-    row?.imageUrl ||
-    row?.image ||
-    (Array.isArray(row?.imageLinks) ? row.imageLinks[0] : "") ||
-    (Array.isArray(row?.links) ? row.links[0] : "") ||
-    "";
-
   return {
-    id:row?.id || sourceId,
-    sourceId,
-    storageId:row?.storageId || sourceId,
-    skuStorageId:row?.skuStorageId || sourceId,
-    value:row?.value || sku || productName,
-    brandId:row?.brandId || "",
+    id:row?.id || "",
     brand:row?.brand || "",
-    productName,
-    product:row?.product || productName,
-    name:row?.name || productName,
-    sku,
-    skuCode:row?.skuCode || sku,
+    productName:row?.productName || row?.product || "",
+    product:row?.product || row?.productName || "",
+    sku:row?.sku || row?.skuCode || "",
+    skuCode:row?.skuCode || row?.sku || "",
     collection:row?.collection || row?.category || "",
     category:row?.category || row?.collection || "",
-    imageLink,
-    imageUrl:row?.imageUrl || imageLink,
-    imageLinks:Array.isArray(row?.imageLinks)
-      ? row.imageLinks
-      : imageLink
-        ? [imageLink]
-        : [],
-    links:Array.isArray(row?.links)
-      ? row.links
-      : imageLink
-        ? [imageLink]
-        : [],
-    localProductOverride:!!row?.localProductOverride,
+    imageLink:row?.imageLink || row?.image || "",
   };
 }
 
@@ -268,27 +192,115 @@ export async function GET(req: NextRequest) {
   );
 }
 
+function mergeWorkspace(existing: any, incoming: any) {
+  if (!isRecord(incoming)) {
+    return isRecord(existing) ? existing : {};
+  }
+
+  const previous = isRecord(existing) ? existing : {};
+  const next: Record<string,any> = { ...previous };
+
+  Object.entries(incoming).forEach(([tab,value]: any) => {
+    if (isRecord(value) && isRecord(previous?.[tab])) {
+      next[tab] = {
+        ...previous[tab],
+        ...value,
+      };
+    } else {
+      next[tab] = value;
+    }
+  });
+
+  return next;
+}
+
+function mergeChecklistGroup(existing: any, incoming: any) {
+  const previous = isRecord(existing) ? existing : {};
+  const nextIncoming = isRecord(incoming) ? incoming : {};
+
+  const merged: Record<string,any> = {
+    ...previous,
+    ...nextIncoming,
+  };
+
+  // The checklist overview now loads compact index rows. Those rows intentionally
+  // omit large workspace fields. Never let a compact save erase E-commerce,
+  // Digital Creative, Marketing, Livestream, Budget, or Overview data.
+  if (Object.prototype.hasOwnProperty.call(nextIncoming, "aiWorkspace")) {
+    merged.aiWorkspace = mergeWorkspace(
+      previous.aiWorkspace,
+      nextIncoming.aiWorkspace
+    );
+  } else if (Object.prototype.hasOwnProperty.call(previous, "aiWorkspace")) {
+    merged.aiWorkspace = previous.aiWorkspace;
+  }
+
+  // Preserve selected products when a compact row does not include them.
+  if (!Object.prototype.hasOwnProperty.call(nextIncoming, "skus")) {
+    merged.skus = Array.isArray(previous.skus) ? previous.skus : [];
+  }
+
+  return merged;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const checklistGroups = Array.isArray(body?.checklistGroups) ? body.checklistGroups : [];
-    const updatedAt = typeof body?.updatedAt === "string" && body.updatedAt
-      ? body.updatedAt : new Date().toISOString();
+    const incomingGroups = Array.isArray(body?.checklistGroups)
+      ? body.checklistGroups
+      : [];
+    const updatedAt =
+      typeof body?.updatedAt === "string" && body.updatedAt
+        ? body.updatedAt
+        : new Date().toISOString();
+
+    const existingRaw = await readJson(DATA_PATH, []);
+    const existingGroups = Array.isArray(existingRaw)
+      ? existingRaw
+      : [];
+
+    const existingById = new Map(
+      existingGroups.map((group:any)=>[
+        String(group?.id || ""),
+        group,
+      ])
+    );
+
+    // Keep the incoming list order and deletion behavior, but merge every row
+    // with its complete stored version so omitted lazy-loaded fields survive.
+    const checklistGroups = incomingGroups.map((incoming:any)=>{
+      const id = String(incoming?.id || "");
+      return mergeChecklistGroup(
+        existingById.get(id),
+        incoming
+      );
+    });
 
     await put(DATA_PATH, JSON.stringify(checklistGroups), {
-      access: "private", addRandomSuffix: false, allowOverwrite: true,
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
       contentType: "application/json",
     } as any);
 
     const sync = await bump(updatedAt);
+
     return NextResponse.json({
-      ok: true, updatedAt, count: checklistGroups.length,
+      ok: true,
+      updatedAt,
+      count: checklistGroups.length,
       syncVersion: sync.version,
       checklistGroupsVersion: sync.checklistGroupsVersion,
+      preservedWorkspaceData: true,
     });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Unable to save checklist groups." },
+      {
+        ok: false,
+        error:
+          error?.message ||
+          "Unable to save checklist groups.",
+      },
       { status: 500 }
     );
   }
