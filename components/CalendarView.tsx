@@ -5065,6 +5065,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [overviewEdit,setOverviewEdit] = useState<any>(null);
   const [assetAnnouncementOpen,setAssetAnnouncementOpen] = useState(false);
   const [assetAnnouncementTab,setAssetAnnouncementTab] = useState<"client"|"internal">("client");
+  const [assetAnnouncementDraftOverride,setAssetAnnouncementDraftOverride] = useState<any>(null);
   const [assetAnnouncementBusy,setAssetAnnouncementBusy] = useState(false);
   const [assetAnnouncementError,setAssetAnnouncementError] = useState("");
   const [assetAnnouncementEmailBusy,setAssetAnnouncementEmailBusy] = useState("");
@@ -11723,7 +11724,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         instructions:String(digitalData.assetAnnouncementInstructions || ""),
         to:String(digitalData.assetAnnouncementTo || ""),
         cc:String(digitalData.assetAnnouncementCc || ""),
-        drafts:{
+        drafts:assetAnnouncementDraftOverride || {
           client:{
             subject:String(
               digitalData.assetAnnouncementDrafts?.client?.subject ||
@@ -11925,14 +11926,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         audience:"client"|"internal" = assetAnnouncementData.audience
       ) => {
         const readyDraft = buildReadyChecklistAnnouncement(audience);
+        const nextDrafts = {
+          ...assetAnnouncementData.drafts,
+          [audience]:readyDraft,
+        };
 
+        // Update the visible editor immediately.
+        setAssetAnnouncementDraftOverride(nextDrafts);
+
+        // Persist the same draft into the checklist workspace.
         patchAssetAnnouncement({
           assetAnnouncementAudience:audience,
           assetAnnouncementChecklistType:checklistAnnouncementType,
-          assetAnnouncementDrafts:{
-            ...assetAnnouncementData.drafts,
-            [audience]:readyDraft,
-          },
+          assetAnnouncementDrafts:nextDrafts,
           assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
         });
 
@@ -12029,13 +12035,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             );
           }
 
+          const nextDrafts = {
+            ...assetAnnouncementData.drafts,
+            [audience]:draft,
+          };
+
+          setAssetAnnouncementDraftOverride(nextDrafts);
+
           patchAssetAnnouncement({
             assetAnnouncementAudience:audience,
             assetAnnouncementChecklistType:checklistAnnouncementType,
-            assetAnnouncementDrafts:{
-              ...assetAnnouncementData.drafts,
-              [audience]:draft,
-            },
+            assetAnnouncementDrafts:nextDrafts,
             assetAnnouncementGeneratedAt:new Date().toISOString(),
           });
         } catch(error:any){
@@ -13056,7 +13066,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           <Modal
             open={assetAnnouncementOpen}
-            onClose={()=>setAssetAnnouncementOpen(false)}
+            onClose={()=>{
+              setAssetAnnouncementOpen(false);
+              setAssetAnnouncementDraftOverride(null);
+            }}
             title="Prepare Completion Announcement"
             width={860}
           >
@@ -13305,16 +13318,20 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         .drafts[assetAnnouncementData.audience]
                         .subject
                     }
-                    onChange={(value:any)=>patchAssetAnnouncement({
-                      assetAnnouncementDrafts:{
+                    onChange={(value:any)=>{
+                      const nextDrafts = {
                         ...assetAnnouncementData.drafts,
                         [assetAnnouncementData.audience]:{
                           ...assetAnnouncementData
                             .drafts[assetAnnouncementData.audience],
                           subject:value,
                         },
-                      },
-                    })}
+                      };
+                      setAssetAnnouncementDraftOverride(nextDrafts);
+                      patchAssetAnnouncement({
+                        assetAnnouncementDrafts:nextDrafts,
+                      });
+                    }}
                   />
                 </Field>
 
@@ -13329,16 +13346,20 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         .drafts[assetAnnouncementData.audience]
                         .body
                     }
-                    onChange={(event:any)=>patchAssetAnnouncement({
-                      assetAnnouncementDrafts:{
+                    onChange={(event:any)=>{
+                      const nextDrafts = {
                         ...assetAnnouncementData.drafts,
                         [assetAnnouncementData.audience]:{
                           ...assetAnnouncementData
                             .drafts[assetAnnouncementData.audience],
                           body:event.target.value,
                         },
-                      },
-                    })}
+                      };
+                      setAssetAnnouncementDraftOverride(nextDrafts);
+                      patchAssetAnnouncement({
+                        assetAnnouncementDrafts:nextDrafts,
+                      });
+                    }}
                     style={{
                       width:"100%",
                       minHeight:340,
