@@ -12035,8 +12035,83 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           categories.length ? `Category: ${categories.join(", ")}` : "",
           `Products / SKUs: ${productRows.length}`,
           `Checklist Type: ${checklistAnnouncementType}`,
-          `Overall Progress: ${overallPct}%`,
         ].filter(Boolean).join("\n");
+
+        const ecommerceWorkspace =
+          (((group?.aiWorkspace || {}) as any).ecommerce || {}) as any;
+
+        const ecommerceSource = String(
+          ecommerceWorkspace?.generatedText ||
+          ecommerceWorkspace?.savedOutputs?.[0]?.text ||
+          ""
+        ).trim();
+
+        const extractEcommerceSection = (
+          source:string,
+          startLabels:string[],
+          endLabels:string[]
+        ) => {
+          if(!source) return "";
+
+          const escapeRegExp = (value:string) =>
+            value.replace(/[.*+?^${}()|[\]\]/g,"\\$&");
+
+          const startPattern = startLabels
+            .map(escapeRegExp)
+            .join("|");
+          const endPattern = endLabels
+            .map(escapeRegExp)
+            .join("|");
+
+          const match = source.match(
+            new RegExp(
+              `(?:^|\n)\s*(?:${startPattern})\s*[:\-]?\s*\n?([\s\S]*?)(?=\n\s*(?:${endPattern})\s*[:\-]?|$)`,
+              "i"
+            )
+          );
+
+          return String(match?.[1] || "")
+            .replace(/^\s*[-*•]\s*/gm,"• ")
+            .trim();
+        };
+
+        const externalOverview =
+          extractEcommerceSection(
+            ecommerceSource,
+            ["Product Overview","Overview","Product Description"],
+            [
+              "Key Features",
+              "Why You'll Love It",
+              "Variants Available",
+              "Color Options",
+              "Product Specifications",
+              "Perfect For",
+              "Care & Use",
+              "Package Includes",
+              "Best SEO Listing Title",
+            ]
+          ) ||
+          `${productName} is now available. Contact us for complete product details and ordering information.`;
+
+        const externalFeatures =
+          extractEcommerceSection(
+            ecommerceSource,
+            ["Key Features","Why You'll Love It"],
+            [
+              "Variants Available",
+              "Color Options",
+              "Product Specifications",
+              "Perfect For",
+              "Care & Use",
+              "Package Includes",
+              "Best SEO Listing Title",
+              "Stronger Lazada/Shopee SEO Version",
+              "Recommended Variations",
+              "Better Option / Higher AOV",
+              "Search Keywords",
+            ]
+          ) ||
+          "• Designed for practical everyday use.\n• Built with dependable quality and thoughtful functionality.\n• Suitable for modern homes, workspaces, and daily routines.";
 
         const clientTemplates:any = {
           "Product Introduction":{
@@ -12073,31 +12148,38 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             clientTemplates[checklistAnnouncementType] ||
             clientTemplates["Product Introduction"];
 
+          const externalHeadline = (()=>{
+            if(checklistAnnouncementType==="Product Reactivation"){
+              return `${productName.toUpperCase()} — AVAILABLE AGAIN!`;
+            }
+            if(checklistAnnouncementType==="Campaign"){
+              return `${checklistName.toUpperCase()} — NOW LIVE!`;
+            }
+            if(checklistAnnouncementType==="Special Campaign"){
+              return `${checklistName.toUpperCase()} — SPECIAL CAMPAIGN!`;
+            }
+            return `${productName.toUpperCase()} — NOW AVAILABLE!`;
+          })();
+
           return {
             subject:template.subject,
             body:[
-              "Dear Valued Partner,",
+              "Dear Partner,",
               "",
-              template.intro,
+              externalHeadline,
               "",
-              "Product / Campaign Information",
-              productSummary,
+              externalOverview,
               "",
-              assets.length ? "Available Marketing Materials" : "",
-              assets.length ? availableAssetNames : "",
+              "Why You'll Love It",
               "",
-              mainFolder
-                ? `Access the complete files here:\n${mainFolder}`
-                : assets.length
-                  ? `Available asset links:\n\n${assetLines}`
-                  : "",
+              externalFeatures,
               "",
-              template.action,
+              checklistAnnouncementType==="Product Introduction" ||
+              checklistAnnouncementType==="Product Reactivation"
+                ? "Reply ORDER to confirm. Should you require any additional information, please feel free to reach out."
+                : template.action,
               "",
-              "Thank you for your continued partnership.",
-              "",
-              "Best regards,",
-              "Sunbeams Lifestyle",
+              `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`,
             ].filter((line,index,rows)=>
               line !== "" ||
               (index > 0 && rows[index-1] !== "")
@@ -12234,9 +12316,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 'Return strict JSON only in this shape: {"subject":"","body":""}.',
                 "Do not use markdown code fences.",
                 audience === "client"
-                  ? "Use a professional partner-facing tone. Introduce or announce the product/campaign, mention that marketing materials are available, provide the main file access link, and include a clear inquiry or coordination closing."
-                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, show project progress, and state the next action for the team.",
-                "Only include assets that have valid links.",
+                  ? "Use a professional partner-facing tone similar to a polished New Arrival email. Include a headline, product overview, Why You'll Love It section, ordering or coordination instruction, and place Watch on YouTube as the final line. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links."
+                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
+                audience === "internal"
+                  ? "Only include assets that have valid links."
+                  : "For external messages, include only the YouTube link and place it at the very end.",
                 "Do not invent prices, campaign mechanics, availability dates, product features, or links.",
                 "Avoid em dashes.",
                 assetAnnouncementData.instructions
@@ -12247,7 +12331,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 checklistType:checklistAnnouncementType,
                 audience,
                 checklistName:group.groupName || "",
-                overallProgress:overallPct,
                 products,
                 completedAssets,
               },null,2),
