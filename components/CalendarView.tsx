@@ -12054,7 +12054,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           if(!source) return "";
 
           const escapeRegExp = (value:string) =>
-            value.replace(/[.*+?^${}()|[\]\]/g,"\\$&");
+            value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
 
           const startPattern = startLabels
             .map(escapeRegExp)
