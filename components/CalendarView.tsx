@@ -5065,7 +5065,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [overviewEdit,setOverviewEdit] = useState<any>(null);
   const [assetAnnouncementOpen,setAssetAnnouncementOpen] = useState(false);
   const [assetAnnouncementTab,setAssetAnnouncementTab] = useState<"client"|"internal">("client");
-  const [assetAnnouncementDraftOverride,setAssetAnnouncementDraftOverride] = useState<any>(null);
+  const [assetAnnouncementEditor,setAssetAnnouncementEditor] = useState<any>({
+    client:{ subject:"", body:"" },
+    internal:{ subject:"", body:"" },
+  });
   const [assetAnnouncementBusy,setAssetAnnouncementBusy] = useState(false);
   const [assetAnnouncementError,setAssetAnnouncementError] = useState("");
   const [assetAnnouncementEmailBusy,setAssetAnnouncementEmailBusy] = useState("");
@@ -9162,6 +9165,30 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <button
                             onClick={()=>{
                               setAssetAnnouncementError("");
+                              setAssetAnnouncementEditor({
+                                client:{
+                                  subject:String(
+                                    digitalData.assetAnnouncementDrafts?.client?.subject ||
+                                    digitalData.assetAnnouncementDrafts?.email?.subject ||
+                                    ""
+                                  ),
+                                  body:String(
+                                    digitalData.assetAnnouncementDrafts?.client?.body ||
+                                    digitalData.assetAnnouncementDrafts?.email?.body ||
+                                    ""
+                                  ),
+                                },
+                                internal:{
+                                  subject:String(
+                                    digitalData.assetAnnouncementDrafts?.internal?.subject ||
+                                    ""
+                                  ),
+                                  body:String(
+                                    digitalData.assetAnnouncementDrafts?.internal?.body ||
+                                    ""
+                                  ),
+                                },
+                              });
                               setActiveGroupTab("digital");
                               window.setTimeout(()=>{
                                 setAssetAnnouncementOpen(true);
@@ -11724,30 +11751,32 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         instructions:String(digitalData.assetAnnouncementInstructions || ""),
         to:String(digitalData.assetAnnouncementTo || ""),
         cc:String(digitalData.assetAnnouncementCc || ""),
-        drafts:assetAnnouncementDraftOverride || {
-          client:{
-            subject:String(
-              digitalData.assetAnnouncementDrafts?.client?.subject ||
-              digitalData.assetAnnouncementDrafts?.email?.subject ||
-              ""
-            ),
-            body:String(
-              digitalData.assetAnnouncementDrafts?.client?.body ||
-              digitalData.assetAnnouncementDrafts?.email?.body ||
-              ""
-            ),
-          },
-          internal:{
-            subject:String(
-              digitalData.assetAnnouncementDrafts?.internal?.subject ||
-              `[${checklistAnnouncementType} Assets Ready] ${group.groupName || "Checklist"}`
-            ),
-            body:String(
-              digitalData.assetAnnouncementDrafts?.internal?.body ||
-              ""
-            ),
-          },
-        },
+        drafts:assetAnnouncementOpen
+          ? assetAnnouncementEditor
+          : {
+              client:{
+                subject:String(
+                  digitalData.assetAnnouncementDrafts?.client?.subject ||
+                  digitalData.assetAnnouncementDrafts?.email?.subject ||
+                  ""
+                ),
+                body:String(
+                  digitalData.assetAnnouncementDrafts?.client?.body ||
+                  digitalData.assetAnnouncementDrafts?.email?.body ||
+                  ""
+                ),
+              },
+              internal:{
+                subject:String(
+                  digitalData.assetAnnouncementDrafts?.internal?.subject ||
+                  `[${checklistAnnouncementType} Assets Ready] ${group.groupName || "Checklist"}`
+                ),
+                body:String(
+                  digitalData.assetAnnouncementDrafts?.internal?.body ||
+                  ""
+                ),
+              },
+            },
       };
 
       const patchAssetAnnouncement = (patch:any) => {
@@ -11926,20 +11955,24 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         audience:"client"|"internal" = assetAnnouncementData.audience
       ) => {
         const readyDraft = buildReadyChecklistAnnouncement(audience);
-        const nextDrafts = {
-          ...assetAnnouncementData.drafts,
-          [audience]:readyDraft,
-        };
 
-        // Update the visible editor immediately.
-        setAssetAnnouncementDraftOverride(nextDrafts);
+        setAssetAnnouncementEditor((current:any)=>{
+          const nextDrafts = {
+            ...(current || {
+              client:{ subject:"", body:"" },
+              internal:{ subject:"", body:"" },
+            }),
+            [audience]:readyDraft,
+          };
 
-        // Persist the same draft into the checklist workspace.
-        patchAssetAnnouncement({
-          assetAnnouncementAudience:audience,
-          assetAnnouncementChecklistType:checklistAnnouncementType,
-          assetAnnouncementDrafts:nextDrafts,
-          assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
+          patchAssetAnnouncement({
+            assetAnnouncementAudience:audience,
+            assetAnnouncementChecklistType:checklistAnnouncementType,
+            assetAnnouncementDrafts:nextDrafts,
+            assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
+          });
+
+          return nextDrafts;
         });
 
         setAssetAnnouncementTab(audience);
@@ -12040,7 +12073,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             [audience]:draft,
           };
 
-          setAssetAnnouncementDraftOverride(nextDrafts);
+          setAssetAnnouncementEditor(nextDrafts);
 
           patchAssetAnnouncement({
             assetAnnouncementAudience:audience,
@@ -12065,7 +12098,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const openGmailAnnouncement = () => {
-        const email = assetAnnouncementData.drafts[assetAnnouncementData.audience];
+        const email = assetAnnouncementEditor?.[assetAnnouncementData.audience] || { subject:"", body:"" };
         const params = new URLSearchParams({
           view:"cm",
           fs:"1",
@@ -12082,7 +12115,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const submitAnnouncementEmail = async (action:"draft"|"send") => {
-        const email = assetAnnouncementData.drafts[assetAnnouncementData.audience];
+        const email = assetAnnouncementEditor?.[assetAnnouncementData.audience] || { subject:"", body:"" };
         if(!assetAnnouncementData.to.trim()){
           setAssetAnnouncementError("Enter at least one email recipient.");
           return;
@@ -13068,7 +13101,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             open={assetAnnouncementOpen}
             onClose={()=>{
               setAssetAnnouncementOpen(false);
-              setAssetAnnouncementDraftOverride(null);
+              setAssetAnnouncementEditor({
+                client:{ subject:"", body:"" },
+                internal:{ subject:"", body:"" },
+              });
             }}
             title="Prepare Completion Announcement"
             width={860}
@@ -13314,22 +13350,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <Field label="Subject">
                   <TI
                     value={
-                      assetAnnouncementData
-                        .drafts[assetAnnouncementData.audience]
-                        .subject
+                      assetAnnouncementEditor?.[assetAnnouncementData.audience]?.subject || ""
                     }
                     onChange={(value:any)=>{
-                      const nextDrafts = {
-                        ...assetAnnouncementData.drafts,
-                        [assetAnnouncementData.audience]:{
-                          ...assetAnnouncementData
-                            .drafts[assetAnnouncementData.audience],
-                          subject:value,
-                        },
-                      };
-                      setAssetAnnouncementDraftOverride(nextDrafts);
-                      patchAssetAnnouncement({
-                        assetAnnouncementDrafts:nextDrafts,
+                      setAssetAnnouncementEditor((current:any)=>{
+                        const nextDrafts = {
+                          ...(current || {}),
+                          [assetAnnouncementData.audience]:{
+                            ...(current?.[assetAnnouncementData.audience] || {}),
+                            subject:value,
+                          },
+                        };
+                        patchAssetAnnouncement({
+                          assetAnnouncementDrafts:nextDrafts,
+                        });
+                        return nextDrafts;
                       });
                     }}
                   />
@@ -13342,22 +13377,22 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 }>
                   <textarea
                     value={
-                      assetAnnouncementData
-                        .drafts[assetAnnouncementData.audience]
-                        .body
+                      assetAnnouncementEditor?.[assetAnnouncementData.audience]?.body || ""
                     }
                     onChange={(event:any)=>{
-                      const nextDrafts = {
-                        ...assetAnnouncementData.drafts,
-                        [assetAnnouncementData.audience]:{
-                          ...assetAnnouncementData
-                            .drafts[assetAnnouncementData.audience],
-                          body:event.target.value,
-                        },
-                      };
-                      setAssetAnnouncementDraftOverride(nextDrafts);
-                      patchAssetAnnouncement({
-                        assetAnnouncementDrafts:nextDrafts,
+                      const value = event.target.value;
+                      setAssetAnnouncementEditor((current:any)=>{
+                        const nextDrafts = {
+                          ...(current || {}),
+                          [assetAnnouncementData.audience]:{
+                            ...(current?.[assetAnnouncementData.audience] || {}),
+                            body:value,
+                          },
+                        };
+                        patchAssetAnnouncement({
+                          assetAnnouncementDrafts:nextDrafts,
+                        });
+                        return nextDrafts;
                       });
                     }}
                     style={{
