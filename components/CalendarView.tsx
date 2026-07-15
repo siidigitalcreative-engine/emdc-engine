@@ -9165,33 +9165,66 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <button
                             onClick={()=>{
                               setAssetAnnouncementError("");
+
+                              // Overview does not have the Digital Creative branch's
+                              // local `digitalData` variable in scope. Read the
+                              // persisted drafts directly from the checklist group.
+                              const overviewDigitalData =
+                                (
+                                  (
+                                    (group?.aiWorkspace || {}) as any
+                                  ).digital || {}
+                                ) as any;
+
                               setAssetAnnouncementEditor({
                                 client:{
                                   subject:String(
-                                    digitalData.assetAnnouncementDrafts?.client?.subject ||
-                                    digitalData.assetAnnouncementDrafts?.email?.subject ||
+                                    overviewDigitalData
+                                      ?.assetAnnouncementDrafts
+                                      ?.client
+                                      ?.subject ||
+                                    overviewDigitalData
+                                      ?.assetAnnouncementDrafts
+                                      ?.email
+                                      ?.subject ||
                                     ""
                                   ),
                                   body:String(
-                                    digitalData.assetAnnouncementDrafts?.client?.body ||
-                                    digitalData.assetAnnouncementDrafts?.email?.body ||
+                                    overviewDigitalData
+                                      ?.assetAnnouncementDrafts
+                                      ?.client
+                                      ?.body ||
+                                    overviewDigitalData
+                                      ?.assetAnnouncementDrafts
+                                      ?.email
+                                      ?.body ||
                                     ""
                                   ),
                                 },
                                 internal:{
                                   subject:String(
-                                    digitalData.assetAnnouncementDrafts?.internal?.subject ||
+                                    overviewDigitalData
+                                      ?.assetAnnouncementDrafts
+                                      ?.internal
+                                      ?.subject ||
                                     ""
                                   ),
                                   body:String(
-                                    digitalData.assetAnnouncementDrafts?.internal?.body ||
+                                    overviewDigitalData
+                                      ?.assetAnnouncementDrafts
+                                      ?.internal
+                                      ?.body ||
                                     ""
                                   ),
                                 },
                               });
-                              setActiveGroupTab("digital");
+
+                              // Open state first, then switch the underlying tab.
+                              // This preserves the click action while the Overview
+                              // branch is being replaced by Digital Creative.
+                              setAssetAnnouncementOpen(true);
                               window.setTimeout(()=>{
-                                setAssetAnnouncementOpen(true);
+                                setActiveGroupTab("digital");
                               },0);
                             }}
                             style={{
