@@ -9147,14 +9147,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
                 });
                 return sorted.map((item:any)=>(
-                  <article key={item.id} style={{ padding:16,border:`1.5px solid ${C.border}`,borderRadius:14,background:C.surface,minWidth:0,boxShadow:"0 2px 8px rgba(15,23,42,.04)" }}>
-                    <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:10 }}>
-                      <div style={{ minWidth:0,flex:1 }}>
-                        <span style={{ display:"inline-flex",fontSize:10.5,fontWeight:900,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px",marginBottom:7 }}>{normalizeSource(item.sourceTab)}</span>
-                        <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
-                        <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
+                  <article key={item.id} style={{ padding:isMobile?12:16,border:`1.5px solid ${C.border}`,borderRadius:14,background:C.surface,minWidth:0,boxShadow:"0 2px 8px rgba(15,23,42,.04)",overflow:"hidden" }}>
+                    <div style={{ display:"flex",flexDirection:isMobile?"column":"row",justifyContent:"space-between",gap:isMobile?10:12,alignItems:isMobile?"stretch":"flex-start",marginBottom:10,minWidth:0 }}>
+                      <div style={{ minWidth:0,flex:1,width:"100%" }}>
+                        <span style={{ display:"inline-flex",fontSize:10.5,fontWeight:900,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px",marginBottom:7,maxWidth:"100%" }}>{normalizeSource(item.sourceTab)}</span>
+                        <p style={{ margin:0,fontSize:isMobile?15:13,fontWeight:900,color:C.text,lineHeight:1.3,overflowWrap:"anywhere",wordBreak:"normal" }}>{item.title || "Overview Item"}</p>
+                        <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint,lineHeight:1.4,overflowWrap:"anywhere" }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
                       </div>
-                      <div style={{ display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                      <div style={{ display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:isMobile?"flex-start":"flex-end",width:isMobile?"100%":"auto" }}>
                         {(
                           String(item?.sourceRef?.type || "").toLowerCase()==="productintroassetlinks" ||
                           (
@@ -9236,14 +9236,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                               fontSize:11,
                               fontWeight:900,
                               cursor:"pointer",
+                              whiteSpace:"nowrap",
+                              flex:isMobile?"1 1 100%":"0 0 auto",
                             }}
                           >
                             Prepare Announcement
                           </button>
                         )}
-                        <button onClick={()=>openOverviewEdit(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Edit</button>
-                        <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
-                        <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
+                        <button onClick={()=>openOverviewEdit(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"7px 11px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flex:isMobile?"1 1 0":"0 0 auto" }}>Edit</button>
+                        <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"7px 11px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flex:isMobile?"1 1 0":"0 0 auto" }}>Copy</button>
+                        <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"7px 11px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flex:isMobile?"1 1 0":"0 0 auto" }}>Delete</button>
                       </div>
                     </div>
                     {renderOverviewContent(item)}
@@ -9382,7 +9384,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
       const defaultProductIntroDigitalAssetRows = [
         { id:"main-google-drive-folder", name:"Main Google Drive Folder", link:"" },
-        { id:"product-images", name:"Product Images", link:"" },
+        { id:"product-image", name:"Product Image", link:"" },
         { id:"cem-banner", name:"CEM Banner", link:"" },
         { id:"store-banner", name:"Store Banner", link:"" },
         { id:"feed", name:"Feed", link:"" },
@@ -9390,23 +9392,38 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         { id:"showcase-video", name:"Showcase Video", link:"" },
         { id:"a4-signage", name:"A4 Signage", link:"" },
         { id:"sampling-poster", name:"Sampling Poster", link:"" },
+        { id:"youtube-link", name:"YouTube Link", link:"" },
       ];
       const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
         const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
         const normalizeAssetKey = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
-        const oldDefaultKeys = new Set(["product-image","cem-banner","store-banner","feed","story","showcase-video"]);
-        const looksLikeOldDefaults = sourceRows.length > 0 && sourceRows.length <= oldDefaultKeys.size && sourceRows.every((row:any)=>{
+        const standardAssetKeys = new Set([
+          "main-google-drive-folder",
+          "product-image",
+          "product-images",
+          "cem-banner",
+          "store-banner",
+          "feed",
+          "story",
+          "showcase-video",
+          "a4-signage",
+          "sampling-poster",
+          "youtube-link",
+          "youtube",
+        ]);
+        const looksLikeStandardDefaults = sourceRows.length > 0 && sourceRows.every((row:any)=>{
           const keys = [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean);
-          return keys.some((key:string)=>oldDefaultKeys.has(key));
+          return keys.some((key:string)=>standardAssetKeys.has(key));
         });
-        if (sourceRows.length && !looksLikeOldDefaults) return sourceRows;
+        if (sourceRows.length && !looksLikeStandardDefaults) return sourceRows;
         const sourceByKey = new Map<string,any>();
         sourceRows.forEach((row:any)=>{
           [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean).forEach((key:string)=>{
             if (!sourceByKey.has(key)) sourceByKey.set(key,row);
           });
         });
-        if (sourceByKey.has("product-image") && !sourceByKey.has("product-images")) sourceByKey.set("product-images",sourceByKey.get("product-image"));
+        if (sourceByKey.has("product-images") && !sourceByKey.has("product-image")) sourceByKey.set("product-image",sourceByKey.get("product-images"));
+        if (sourceByKey.has("youtube") && !sourceByKey.has("youtube-link")) sourceByKey.set("youtube-link",sourceByKey.get("youtube"));
         return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
           const match = sourceByKey.get(normalizeAssetKey(defaultRow.id)) || sourceByKey.get(normalizeAssetKey(defaultRow.name));
           return match ? { ...defaultRow, link:match.link || match.url || match.outputLink || "" } : defaultRow;
