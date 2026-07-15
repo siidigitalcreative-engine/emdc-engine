@@ -11815,13 +11815,50 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const readCurrentAnnouncementAssets = () => {
-        const currentRows = commitCurrentProductIntroDigitalAssetRows();
+        // The announcement popup can be opened from Overview, where the
+        // Digital Creative table helper functions are not in scope. Read the
+        // saved asset rows directly from the checklist workspace instead.
+        const digitalWorkspace =
+          (
+            (
+              (group?.aiWorkspace || {}) as any
+            ).digital || {}
+          ) as any;
+
+        const rawRows =
+          digitalWorkspace?.productIntroAssetLinks ||
+          digitalWorkspace?.assetLinks ||
+          digitalWorkspace?.digitalAssetLinks ||
+          [];
+
+        const currentRows = Array.isArray(rawRows)
+          ? rawRows
+          : Array.isArray(rawRows?.rows)
+            ? rawRows.rows
+            : [];
 
         return currentRows
-          .filter((row:any)=>String(row?.link || "").trim())
+          .filter((row:any)=>
+            String(
+              row?.link ||
+              row?.url ||
+              row?.outputLink ||
+              ""
+            ).trim()
+          )
           .map((row:any)=>({
-            name:String(row?.name || "Asset").trim(),
-            link:String(row?.link || "").trim(),
+            name:String(
+              row?.name ||
+              row?.assetName ||
+              row?.label ||
+              "Asset"
+            ).trim(),
+            link:String(
+              row?.link ||
+              row?.url ||
+              row?.outputLink ||
+              ""
+            ).trim(),
           }));
       };
 
