@@ -14525,10 +14525,20 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
     status:s.status,
     extraFields:s.extraFields||{},
     syncedFromSkuStorage:true,
-  })):skus.filter(s=>s.value.trim());
+  })):skus.filter((s:any)=>String(s?.value || s?.sku || s?.skuCode || "").trim());
   const phaseoutSourceSkus:any[] = skuMode==="storage"
     ? pickedSkus
-    : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
+    : skus
+      .filter((s:any)=>String(s?.value || s?.sku || s?.skuCode || "").trim())
+      .map((s:any)=>{
+        const value = String(s?.value || s?.sku || s?.skuCode || "").trim();
+        return {
+          id:s?.id || uid(),
+          value,
+          sku:value,
+          productName:String(s?.productName || s?.product || s?.name || value),
+        };
+      });
   const isPhaseoutType = selType==="phaseout" || (launchTypes?.[selType]?.label || "").toLowerCase().includes("phase-out");
   const selectedCalendarType = calendarTypes.find((t:any)=>t.id===calendarType) || defaultCalendarType;
   const onCalendarTypeChange = (id:any) => {
@@ -14744,10 +14754,20 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const updSku=(id:string,v:string)=>setSkus((p:any)=>p.map((s:any)=>s.id===id?{...s,value:v}:s));
   const pickSku=(s:any)=>{ setPickedSkus((p:any[])=>p.find((x:any)=>x.id===s.id)?p.filter((x:any)=>x.id!==s.id):[...p,s]); };
   const toggleLinkedEvent = (id:any) => setLinkedEventIds((prev:any[])=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
-  const finalSkus = skuMode==="storage" ? pickedSkus.map((s:any)=>({id:s.id,value:s.sku,sku:s.sku,productName:s.productName,collection:s.collection||s.category||s.productCategory||"",category:s.collection||s.category||s.productCategory||"",brandId:s.brandId,inventory:s.inventory,status:s.status,extraFields:s.extraFields||{}})) : skus.filter((s:any)=>s.value.trim());
+  const finalSkus = skuMode==="storage" ? pickedSkus.map((s:any)=>({id:s.id,value:s.sku,sku:s.sku,productName:s.productName,collection:s.collection||s.category||s.productCategory||"",category:s.collection||s.category||s.productCategory||"",brandId:s.brandId,inventory:s.inventory,status:s.status,extraFields:s.extraFields||{}})) : skus.filter((s:any)=>String(s?.value || s?.sku || s?.skuCode || "").trim());
   const phaseoutSourceSkus:any[] = skuMode==="storage"
     ? pickedSkus
-    : skus.filter((s:any)=>s.value.trim()).map((s:any)=>({ id:s.id, value:s.value.trim(), sku:s.value.trim(), productName:s.value.trim() }));
+    : skus
+      .filter((s:any)=>String(s?.value || s?.sku || s?.skuCode || "").trim())
+      .map((s:any)=>{
+        const value = String(s?.value || s?.sku || s?.skuCode || "").trim();
+        return {
+          id:s?.id || uid(),
+          value,
+          sku:value,
+          productName:String(s?.productName || s?.product || s?.name || value),
+        };
+      });
   const isPhaseoutType = launchType==="phaseout" || (launchTypes?.[launchType]?.label || "").toLowerCase().includes("phase-out");
   const canSave = finalSkus.length>0 && groupName.trim();
   const onCalendarTypeChange = (id:any) => {
