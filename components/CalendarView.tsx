@@ -12099,10 +12099,28 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .map((asset:any)=>`• ${asset.name}`)
           .join("\n");
 
+        const actualSkus = Array.from(
+          new Set(
+            productRows
+              .map((row:any)=>
+                String(
+                  row?.skuCode ||
+                  row?.sku ||
+                  row?.value ||
+                  ""
+                ).trim()
+              )
+              .filter(Boolean)
+          )
+        );
+
         const productSummary = [
           brands.length ? `Brand: ${brands.join(", ")}` : "",
-          categories.length ? `Category: ${categories.join(", ")}` : "",
-          `Products / SKUs: ${productRows.length}`,
+          `Products / SKUs: ${
+            actualSkus.length
+              ? actualSkus.join(", ")
+              : "Not available"
+          }`,
           `Checklist Type: ${checklistAnnouncementType}`,
         ].filter(Boolean).join("\n");
 
