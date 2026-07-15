@@ -4936,9 +4936,20 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
 const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete, onStatusChange }) => {
   const [expanded,setExpanded] = useState(false);
   const [copied,setCopied] = useState(false);
-  const color=DEPTS[dept].color, status=statuses.find(s=>s.id===item.statusId);
-  const hasLink=item.link?.trim(), hasNote=item.note?.trim(), hasAssignee=item.assignee?.trim();
-  const doneStatus = statuses.find(s=>s.id==="done");
+
+  if(!item || typeof item!=="object") return null;
+
+  const deptMeta = DEPTS?.[dept] || {
+    color:C.accent,
+    label:String(dept || "Checklist"),
+  };
+  const safeStatuses = Array.isArray(statuses) ? statuses : [];
+  const color=deptMeta.color;
+  const status=safeStatuses.find((s:any)=>s?.id===item?.statusId);
+  const hasLink=String(item?.link || "").trim();
+  const hasNote=String(item?.note || "").trim();
+  const hasAssignee=String(item?.assignee || "").trim();
+  const doneStatus = safeStatuses.find((s:any)=>s?.id==="done");
 
   const toggleDone = () => {
     const nowDone = !item.done;
@@ -4988,7 +4999,7 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete, onStatusChang
           }} onClick={e=>e.stopPropagation()}
             style={{ fontSize:10,fontWeight:700,borderRadius:5,border:`1.5px solid ${status?.color||C.border}`,background:status?(status.color+"14"):C.surfaceAlt,color:status?.color||C.faint,cursor:"pointer",padding:"3px 6px",outline:"none",maxWidth:100 }}>
             <option value="">—</option>
-            {statuses.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+            {safeStatuses.map((s:any)=><option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
           <div style={{ display:"flex",gap:4 }}>
             <button onClick={()=>setExpanded(x=>!x)}
@@ -5148,8 +5159,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return next;
   });
   };
-  const addItem= (dept:string)=>{ if(!newText[dept].trim()) return; checklistBoardLocalEditRef.current = true; setItems((p:any)=>{
-    const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text:newText[dept],done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
+  const addItem= (dept:string)=>{ const nextTaskText=String(newText?.[dept] || "").trim(); if(!nextTaskText) return; checklistBoardLocalEditRef.current = true; setItems((p:any)=>{
+    const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text:nextTaskText,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
     checklistBoardItemsRef.current = next;
     if(onItemsChange) onItemsChange(next);
     return next;
@@ -5164,8 +5175,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
   const groupColor = group.calendarColor || lt?.color || C.accent;
   const linkedEvents = (events||[]).filter((ev:any)=>(group.linkedEventIds||[]).includes(ev.id));
-  const allItems = Object.values(items).flat();
-  const overallDone = allItems.filter(i=>i.done).length;
+  const allItems = Object.values(items || {}).flat().filter((item:any)=>item && typeof item==="object");
+  const overallDone = allItems.filter((i:any)=>!!i?.done).length;
   const overallPct  = allItems.length ? Math.round(overallDone/allItems.length*100) : 0;
 
   const findExtraField = (extra:any={}, names:string[] = []) => {
@@ -14390,7 +14401,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <div style={{ padding:"8px 12px 12px",borderTop:`1px solid ${C.border}`,background:C.bg }}>
 
                 <div style={{ display:"flex",gap:6 }}>
-                  <TI value={newText[dept]} onChange={v=>setNewText(p=>({...p,[dept]:v}))} placeholder="Add task..." style={{ flex:1,padding:"8px 10px",fontSize:13 }} />
+                  <TI value={String(newText?.[dept] || "")} onChange={v=>setNewText((p:any)=>({...p,[dept]:v}))} placeholder="Add task..." style={{ flex:1,padding:"8px 10px",fontSize:13 }} />
                   <button onClick={()=>addItem(dept)} style={{ width:36,height:36,background:C.accent,color:"#fff",border:"none",borderRadius:7,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>+</button>
 
                 </div>
