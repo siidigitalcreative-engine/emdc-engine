@@ -34,7 +34,9 @@ const readMessages = async (): Promise<ChatMessage[]> => {
 
   if (!blob?.url) return [];
 
-  const response = await fetch(`${blob.url}?t=${Date.now()}`, {
+  const privateReadUrl = (blob as any).downloadUrl || blob.url;
+
+  const response = await fetch(`${privateReadUrl}?t=${Date.now()}`, {
     cache: "no-store",
   });
 
@@ -56,7 +58,7 @@ const writeMessages = async (messages: ChatMessage[]) => {
       messages: messages.slice(-MAX_STORED_MESSAGES),
     }),
     {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: "application/json",
