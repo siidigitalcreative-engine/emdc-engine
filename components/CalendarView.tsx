@@ -11925,7 +11925,24 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           assets[0]?.link ||
           "";
 
-        const assetLines = buildAnnouncementAssetLines(assets);
+        const youtubeAsset = assets.find((asset:any)=>{
+          const name = String(asset?.name || "").toLowerCase();
+          const link = String(asset?.link || "").toLowerCase();
+
+          return (
+            name.includes("youtube") ||
+            link.includes("youtube.com") ||
+            link.includes("youtu.be")
+          );
+        });
+
+        // Keep YouTube as the final dedicated line in the announcement instead
+        // of repeating the Main Google Drive Folder.
+        const standardAssets = assets.filter(
+          (asset:any)=>asset !== youtubeAsset
+        );
+
+        const assetLines = buildAnnouncementAssetLines(standardAssets);
         const availableAssetNames = assets
           .map((asset:any)=>`• ${asset.name}`)
           .join("\n");
@@ -12022,8 +12039,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               ? assetLines
               : "No final asset links have been added yet.",
             "",
-            mainFolder
-              ? `Main Google Drive Folder\n${mainFolder}`
+            youtubeAsset?.link
+              ? `YouTube Link:\n${youtubeAsset.link}`
               : "",
             "",
             "Please review the uploaded files and proceed with your respective next steps.",
