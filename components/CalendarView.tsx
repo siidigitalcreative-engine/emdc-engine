@@ -11775,9 +11775,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const assetAnnouncementData = {
         checklistType:checklistAnnouncementType,
-        audience:String(
-          digitalData.assetAnnouncementAudience || "client"
-        ) === "internal"
+        audience:assetAnnouncementTab === "internal"
           ? "internal"
           : "client",
         tone:String(digitalData.assetAnnouncementTone || "professional"),
@@ -11985,31 +11983,44 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const applyReadyChecklistAnnouncement = (
-        audience:"client"|"internal" = assetAnnouncementData.audience
+        audience:"client"|"internal" = assetAnnouncementTab
       ) => {
-        const readyDraft = buildReadyChecklistAnnouncement(audience);
-
-        setAssetAnnouncementEditor((current:any)=>{
+        try {
+          const readyDraft = buildReadyChecklistAnnouncement(audience);
           const nextDrafts = {
-            ...(current || {
-              client:{ subject:"", body:"" },
-              internal:{ subject:"", body:"" },
-            }),
+            client:{
+              subject:String(assetAnnouncementEditor?.client?.subject || ""),
+              body:String(assetAnnouncementEditor?.client?.body || ""),
+            },
+            internal:{
+              subject:String(assetAnnouncementEditor?.internal?.subject || ""),
+              body:String(assetAnnouncementEditor?.internal?.body || ""),
+            },
             [audience]:readyDraft,
           };
 
-          patchAssetAnnouncement({
-            assetAnnouncementAudience:audience,
-            assetAnnouncementChecklistType:checklistAnnouncementType,
-            assetAnnouncementDrafts:nextDrafts,
-            assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
-          });
+          // Directly control the visible Subject and Body.
+          setAssetAnnouncementEditor(nextDrafts);
+          setAssetAnnouncementTab(audience);
 
-          return nextDrafts;
-        });
+          // Persist after the visible editor has been updated.
+          window.setTimeout(()=>{
+            patchAssetAnnouncement({
+              assetAnnouncementAudience:audience,
+              assetAnnouncementChecklistType:checklistAnnouncementType,
+              assetAnnouncementDrafts:nextDrafts,
+              assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
+            });
+          },0);
 
-        setAssetAnnouncementTab(audience);
-        setAssetAnnouncementError("");
+          setAssetAnnouncementError("");
+          return readyDraft;
+        } catch(error:any) {
+          setAssetAnnouncementError(
+            error?.message || "Unable to create the ready message."
+          );
+          return { subject:"", body:"" };
+        }
       };
 
 
@@ -12044,7 +12055,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           return;
         }
 
-        const audience = assetAnnouncementData.audience;
+        const audience = assetAnnouncementTab;
         const products = productRows.map((row:any)=>({
           brand:row.brand || "",
           product:row.product || "",
@@ -12102,18 +12113,27 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           }
 
           const nextDrafts = {
-            ...assetAnnouncementData.drafts,
+            client:{
+              subject:String(assetAnnouncementEditor?.client?.subject || ""),
+              body:String(assetAnnouncementEditor?.client?.body || ""),
+            },
+            internal:{
+              subject:String(assetAnnouncementEditor?.internal?.subject || ""),
+              body:String(assetAnnouncementEditor?.internal?.body || ""),
+            },
             [audience]:draft,
           };
 
           setAssetAnnouncementEditor(nextDrafts);
 
-          patchAssetAnnouncement({
-            assetAnnouncementAudience:audience,
-            assetAnnouncementChecklistType:checklistAnnouncementType,
-            assetAnnouncementDrafts:nextDrafts,
-            assetAnnouncementGeneratedAt:new Date().toISOString(),
-          });
+          window.setTimeout(()=>{
+            patchAssetAnnouncement({
+              assetAnnouncementAudience:audience,
+              assetAnnouncementChecklistType:checklistAnnouncementType,
+              assetAnnouncementDrafts:nextDrafts,
+              assetAnnouncementGeneratedAt:new Date().toISOString(),
+            });
+          },0);
         } catch(error:any){
           setAssetAnnouncementError(
             error?.message || "Unable to generate the announcement."
@@ -12131,7 +12151,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const openGmailAnnouncement = () => {
-        const email = assetAnnouncementEditor?.[assetAnnouncementData.audience] || { subject:"", body:"" };
+        const audience = assetAnnouncementTab;
+        let email = assetAnnouncementEditor?.[audience] || { subject:"", body:"" };
+
+        if(!String(email.subject || "").trim() || !String(email.body || "").trim()){
+          email = applyReadyChecklistAnnouncement(audience);
+        }
         const params = new URLSearchParams({
           view:"cm",
           fs:"1",
@@ -12148,7 +12173,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const submitAnnouncementEmail = async (action:"draft"|"send") => {
-        const email = assetAnnouncementEditor?.[assetAnnouncementData.audience] || { subject:"", body:"" };
+        const audience = assetAnnouncementTab;
+        let email = assetAnnouncementEditor?.[audience] || { subject:"", body:"" };
+
+        // Creating a Gmail draft should work even when the user has not clicked
+        // Use Ready Message first.
+        if(!String(email.subject || "").trim() || !String(email.body || "").trim()){
+          email = applyReadyChecklistAnnouncement(audience);
+        }
+
         if(!assetAnnouncementData.to.trim()){
           setAssetAnnouncementError("Enter at least one email recipient.");
           return;
@@ -13171,27 +13204,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                 <Field label="Audience">
                   <select
-                    value={assetAnnouncementData.audience}
+                    value={assetAnnouncementTab}
                     onChange={(event:any)=>{
                       const audience =
                         event.target.value === "internal"
                           ? "internal"
                           : "client";
 
+                      setAssetAnnouncementTab(audience);
                       patchAssetAnnouncement({
                         assetAnnouncementAudience:audience,
                       });
-                      setAssetAnnouncementTab(audience);
-
-                      const existingDraft =
-                        assetAnnouncementData.drafts[audience];
-
-                      if(
-                        !existingDraft?.subject?.trim() &&
-                        !existingDraft?.body?.trim()
-                      ){
-                        applyReadyChecklistAnnouncement(audience);
-                      }
                     }}
                     style={{
                       width:"100%",
@@ -13270,7 +13293,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   <Btn
                     variant="outline"
                     onClick={()=>applyReadyChecklistAnnouncement(
-                      assetAnnouncementData.audience
+                      assetAnnouncementTab
                     )}
                   >
                     Use Ready Message
@@ -13307,18 +13330,18 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               }}>
                 <button
                   onClick={()=>{
+                    setAssetAnnouncementTab("client");
                     patchAssetAnnouncement({
                       assetAnnouncementAudience:"client",
                     });
-                    setAssetAnnouncementTab("client");
                   }}
                   style={{
                     height:34,
                     padding:"0 12px",
                     borderRadius:8,
-                    border:`1px solid ${assetAnnouncementData.audience==="client"?C.accent:C.border}`,
-                    background:assetAnnouncementData.audience==="client"?C.accent:C.surface,
-                    color:assetAnnouncementData.audience==="client"?"#fff":C.textSub,
+                    border:`1px solid ${assetAnnouncementTab==="client"?C.accent:C.border}`,
+                    background:assetAnnouncementTab==="client"?C.accent:C.surface,
+                    color:assetAnnouncementTab==="client"?"#fff":C.textSub,
                     fontSize:11,
                     fontWeight:800,
                     cursor:"pointer",
@@ -13329,18 +13352,18 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                 <button
                   onClick={()=>{
+                    setAssetAnnouncementTab("internal");
                     patchAssetAnnouncement({
                       assetAnnouncementAudience:"internal",
                     });
-                    setAssetAnnouncementTab("internal");
                   }}
                   style={{
                     height:34,
                     padding:"0 12px",
                     borderRadius:8,
-                    border:`1px solid ${assetAnnouncementData.audience==="internal"?C.accent:C.border}`,
-                    background:assetAnnouncementData.audience==="internal"?C.accent:C.surface,
-                    color:assetAnnouncementData.audience==="internal"?"#fff":C.textSub,
+                    border:`1px solid ${assetAnnouncementTab==="internal"?C.accent:C.border}`,
+                    background:assetAnnouncementTab==="internal"?C.accent:C.surface,
+                    color:assetAnnouncementTab==="internal"?"#fff":C.textSub,
                     fontSize:11,
                     fontWeight:800,
                     cursor:"pointer",
@@ -13363,7 +13386,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         assetAnnouncementTo:value,
                       })}
                       placeholder={
-                        assetAnnouncementData.audience==="client"
+                        assetAnnouncementTab==="client"
                           ? "client@example.com, partner@example.com"
                           : "sales@company.com, marketing@company.com"
                       }
@@ -13383,14 +13406,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <Field label="Subject">
                   <TI
                     value={
-                      assetAnnouncementEditor?.[assetAnnouncementData.audience]?.subject || ""
+                      assetAnnouncementEditor?.[assetAnnouncementTab]?.subject || ""
                     }
                     onChange={(value:any)=>{
                       setAssetAnnouncementEditor((current:any)=>{
                         const nextDrafts = {
                           ...(current || {}),
-                          [assetAnnouncementData.audience]:{
-                            ...(current?.[assetAnnouncementData.audience] || {}),
+                          [assetAnnouncementTab]:{
+                            ...(current?.[assetAnnouncementTab] || {}),
                             subject:value,
                           },
                         };
@@ -13404,21 +13427,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 </Field>
 
                 <Field label={
-                  assetAnnouncementData.audience==="client"
+                  assetAnnouncementTab==="client"
                     ? "Client Email Body"
                     : "Internal Team Email Body"
                 }>
                   <textarea
                     value={
-                      assetAnnouncementEditor?.[assetAnnouncementData.audience]?.body || ""
+                      assetAnnouncementEditor?.[assetAnnouncementTab]?.body || ""
                     }
                     onChange={(event:any)=>{
                       const value = event.target.value;
                       setAssetAnnouncementEditor((current:any)=>{
                         const nextDrafts = {
                           ...(current || {}),
-                          [assetAnnouncementData.audience]:{
-                            ...(current?.[assetAnnouncementData.audience] || {}),
+                          [assetAnnouncementTab]:{
+                            ...(current?.[assetAnnouncementTab] || {}),
                             body:value,
                           },
                         };
@@ -13462,11 +13485,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           .drafts[assetAnnouncementData.audience]
                           .body
                       }`,
-                      `copy-announcement-${assetAnnouncementData.audience}`
+                      `copy-announcement-${assetAnnouncementTab}`
                     )}
                   >
                     {actionDone(
-                      `copy-announcement-${assetAnnouncementData.audience}`
+                      `copy-announcement-${assetAnnouncementTab}`
                     )
                       ? "✓ Copied"
                       : "Copy"}
@@ -13486,7 +13509,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       : "Create Gmail Draft"}
                   </Btn>
 
-                  {assetAnnouncementData.audience==="internal"&&(
+                  {assetAnnouncementTab==="internal"&&(
                     <Btn
                       variant="outline"
                       disabled={assetAnnouncementEmailBusy==="internal"}
