@@ -9150,7 +9150,34 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         <p style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>{item.title || "Overview Item"}</p>
                         <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.faint }}>{item.kind || "Output"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Added"}</p>
                       </div>
-                      <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                      <div style={{ display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                        {(
+                          String(item?.sourceRef?.type || "").toLowerCase()==="productintroassetlinks" ||
+                          (
+                            normalizeSource(item.sourceTab)==="Digital Creative" &&
+                            String(item?.title || "").toLowerCase().includes("digital creative asset links")
+                          )
+                        )&&(
+                          <button
+                            onClick={()=>{
+                              setAssetAnnouncementError("");
+                              setAssetAnnouncementOpen(true);
+                              setActiveGroupTab("digital");
+                            }}
+                            style={{
+                              border:"none",
+                              background:C.accent,
+                              color:"#fff",
+                              borderRadius:7,
+                              padding:"6px 10px",
+                              fontSize:11,
+                              fontWeight:900,
+                              cursor:"pointer",
+                            }}
+                          >
+                            Prepare Announcement
+                          </button>
+                        )}
                         <button onClick={()=>openOverviewEdit(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Edit</button>
                         <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Copy</button>
                         <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"6px 9px",fontSize:11,fontWeight:800,cursor:"pointer" }}>Delete</button>
@@ -11911,6 +11938,39 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         setAssetAnnouncementError("");
       };
 
+
+      useEffect(()=>{
+        if(!assetAnnouncementOpen) return;
+
+        const clientDraft = assetAnnouncementData.drafts.client;
+        const internalDraft = assetAnnouncementData.drafts.internal;
+
+        const clientEmpty =
+          !String(clientDraft?.subject || "").trim() &&
+          !String(clientDraft?.body || "").trim();
+
+        const internalEmpty =
+          !String(internalDraft?.subject || "").trim() &&
+          !String(internalDraft?.body || "").trim();
+
+        if(!clientEmpty && !internalEmpty) return;
+
+        patchAssetAnnouncement({
+          assetAnnouncementAudience:assetAnnouncementData.audience,
+          assetAnnouncementChecklistType:checklistAnnouncementType,
+          assetAnnouncementDrafts:{
+            ...assetAnnouncementData.drafts,
+            client:clientEmpty
+              ? buildReadyChecklistAnnouncement("client")
+              : clientDraft,
+            internal:internalEmpty
+              ? buildReadyChecklistAnnouncement("internal")
+              : internalDraft,
+          },
+          assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
+        });
+      },[assetAnnouncementOpen]);
+
       const parseAnnouncementJson = (source:any) => {
         const raw = String(source || "")
           .trim()
@@ -12939,46 +12999,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     </option>
                   ))}
                 </select>
-                {assetCompletionIsDone&&(
-                  <Btn
-                    xs
-                    onClick={()=>{
-                      setAssetAnnouncementError("");
 
-                      const clientDraft =
-                        assetAnnouncementData.drafts.client;
-                      const internalDraft =
-                        assetAnnouncementData.drafts.internal;
-
-                      if(
-                        !clientDraft.subject.trim() &&
-                        !clientDraft.body.trim()
-                      ){
-                        const readyClient =
-                          buildReadyChecklistAnnouncement("client");
-                        patchAssetAnnouncement({
-                          assetAnnouncementDrafts:{
-                            ...assetAnnouncementData.drafts,
-                            client:readyClient,
-                            internal:
-                              internalDraft.subject.trim() ||
-                              internalDraft.body.trim()
-                                ? internalDraft
-                                : buildReadyChecklistAnnouncement("internal"),
-                          },
-                          assetAnnouncementAudience:
-                            assetAnnouncementData.audience,
-                          assetAnnouncementChecklistType:
-                            checklistAnnouncementType,
-                        });
-                      }
-
-                      setAssetAnnouncementOpen(true);
-                    }}
-                  >
-                    Prepare Announcement
-                  </Btn>
-                )}
                 <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
                 <Btn
                   xs
