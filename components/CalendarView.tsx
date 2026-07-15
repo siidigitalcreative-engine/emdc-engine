@@ -5027,7 +5027,52 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
-  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
+
+  const buildDefaultChecklistItems = () => {
+    const out:any = {};
+
+    Object.keys(DEPTS).forEach((dept:string)=>{
+      const templateRows = Array.isArray(
+        templates?.[group.launchType]?.[dept]
+      )
+        ? templates[group.launchType][dept]
+        : [];
+
+      out[dept] = templateRows.map((taskText:string)=>({
+        id:uid(),
+        text:String(taskText || ""),
+        done:false,
+        link:"",
+        note:"",
+        assignee:"",
+        statusId:"",
+        custom:false,
+      }));
+    });
+
+    return out;
+  };
+
+  const hasChecklistRows = (value:any) => {
+    if(!value || typeof value!=="object") return false;
+
+    return Object.values(value).some(
+      (rows:any)=>Array.isArray(rows) && rows.length>0
+    );
+  };
+
+  const [items,setItems] = useState(()=>{
+    const normalizedInitial =
+      initialItems && typeof initialItems==="object"
+        ? dedupeChecklistItemsObject(initialItems)
+        : null;
+
+    // An empty object from the lazy cloud endpoint means no saved task payload
+    // was found yet. It must not suppress the checklist template defaults.
+    return hasChecklistRows(normalizedInitial)
+      ? normalizedInitial
+      : buildDefaultChecklistItems();
+  });
   const checklistBoardItemsRef = useRef<any>(items);
   const checklistBoardLocalEditRef = useRef(false);
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
@@ -5114,11 +5159,34 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[items]);
 
   useEffect(()=>{
-    if(!initialItems) return;
+    if(!initialItems || typeof initialItems!=="object") return;
 
     const incoming = dedupeChecklistItemsObject(initialItems);
+    const incomingHasRows = hasChecklistRows(incoming);
+    const current = checklistBoardItemsRef.current || {};
+    const currentHasRows = hasChecklistRows(current);
+
+    // Never let an empty lazy/API response erase visible checklist templates or
+    // previously loaded tasks. This was the cause of existing groups showing
+    // "No tasks" across every department.
+    if(!incomingHasRows){
+      if(currentHasRows) return;
+
+      const recoveredDefaults = buildDefaultChecklistItems();
+      checklistBoardItemsRef.current = recoveredDefaults;
+      setItems(recoveredDefaults);
+
+      // Persist regenerated defaults only when both the incoming cloud payload
+      // and the current UI are genuinely empty.
+      if(hasChecklistRows(recoveredDefaults) && onItemsChange){
+        checklistBoardLocalEditRef.current = true;
+        onItemsChange(recoveredDefaults);
+      }
+      return;
+    }
+
     const incomingSignature = JSON.stringify(incoming);
-    const currentSignature = JSON.stringify(checklistBoardItemsRef.current || {});
+    const currentSignature = JSON.stringify(current);
 
     // Parent caught up with the local edit. Keep the same visible state and
     // release the local lock.
@@ -5131,8 +5199,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     // propagated. This prevents the dropdown from visibly reverting.
     if (checklistBoardLocalEditRef.current) return;
 
+    checklistBoardItemsRef.current = incoming;
     setItems(incoming);
-  },[initialItems]);
+  },[initialItems,group.launchType,templates]);
 
   useEffect(()=>{
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
@@ -12040,88 +12109,152 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         const ecommerceWorkspace =
           (((group?.aiWorkspace || {}) as any).ecommerce || {}) as any;
 
+        const ecommerceSavedOutputs = Array.isArray(
+          ecommerceWorkspace?.savedOutputs
+        )
+          ? ecommerceWorkspace.savedOutputs
+          : [];
+
+        const latestSavedEcommerceOutput = [...ecommerceSavedOutputs]
+          .filter((item:any)=>String(item?.text || "").trim())
+          .sort((left:any,right:any)=>{
+            const leftTime = new Date(
+              left?.updatedAt ||
+              left?.createdAt ||
+              0
+            ).getTime();
+
+            const rightTime = new Date(
+              right?.updatedAt ||
+              right?.createdAt ||
+              0
+            ).getTime();
+
+            return rightTime - leftTime;
+          })[0];
+
+        // Always use the current E-commerce generated output first. When the
+        // current editor is empty, use the most recently saved E-commerce
+        // output. External product information must come from this source.
         const ecommerceSource = String(
           ecommerceWorkspace?.generatedText ||
-          ecommerceWorkspace?.savedOutputs?.[0]?.text ||
+          latestSavedEcommerceOutput?.text ||
           ""
         ).trim();
 
-        const extractEcommerceSection = (
-          source:string,
-          startLabels:string[],
-          endLabels:string[]
-        ) => {
-          if(!source) return "";
+        const ecommerceSectionHeadings = [
+          "Product Name",
+          "Product Overview",
+          "Key Features",
+          "Variants Available",
+          "Color Options",
+          "Product Specifications",
+          "Perfect For",
+          "Care & Use",
+          "Package Includes",
+          "Best SEO Listing Title",
+          "Stronger Lazada/Shopee SEO Version",
+          "Recommended Variations",
+          "Better Option / Higher AOV",
+          "Search Keywords",
+        ];
 
-          const escapeRegExp = (value:string) =>
-            value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+        const normalizeEcommerceHeading = (value:any) =>
+          String(value || "")
+            .replace(/^\s*#{1,6}\s*/,"")
+            .replace(/^\s*(?:\d+[\.\)]|[-*•])\s*/,"")
+            .replace(/\s*[:\-]\s*$/,"")
+            .trim()
+            .toLowerCase();
 
-          const startPattern = startLabels
-            .map(escapeRegExp)
-            .join("|");
-          const endPattern = endLabels
-            .map(escapeRegExp)
-            .join("|");
+        const ecommerceHeadingMap = new Map(
+          ecommerceSectionHeadings.map((heading:string)=>[
+            normalizeEcommerceHeading(heading),
+            heading,
+          ])
+        );
 
-          const match = source.match(
-            new RegExp(
-              `(?:^|\n)\s*(?:${startPattern})\s*[:\-]?\s*\n?([\s\S]*?)(?=\n\s*(?:${endPattern})\s*[:\-]?|$)`,
-              "i"
-            )
-          );
+        const parseEcommerceSections = (source:string) => {
+          const sections:Record<string,string> = {};
+          let activeHeading = "";
+          const buffer:string[] = [];
 
-          return String(match?.[1] || "")
-            .replace(/^\s*[-*•]\s*/gm,"• ")
-            .trim();
+          const commit = () => {
+            if(!activeHeading) return;
+
+            const value = buffer
+              .join("\n")
+              .replace(/^\s+|\s+$/g,"")
+              .trim();
+
+            if(value){
+              sections[activeHeading] = value;
+            }
+
+            buffer.length = 0;
+          };
+
+          String(source || "")
+            .replace(/\r\n?/g,"\n")
+            .split("\n")
+            .forEach((rawLine:string)=>{
+              const normalized = normalizeEcommerceHeading(rawLine);
+              const matchedHeading =
+                ecommerceHeadingMap.get(normalized);
+
+              if(matchedHeading){
+                commit();
+                activeHeading = matchedHeading;
+                return;
+              }
+
+              if(activeHeading){
+                buffer.push(rawLine);
+              }
+            });
+
+          commit();
+          return sections;
         };
 
-        const externalOverview =
-          extractEcommerceSection(
-            ecommerceSource,
-            ["Product Overview","Overview","Product Description"],
-            [
-              "Key Features",
-              "Why You'll Love It",
-              "Variants Available",
-              "Color Options",
-              "Product Specifications",
-              "Perfect For",
-              "Care & Use",
-              "Package Includes",
-              "Best SEO Listing Title",
-            ]
-          ) ||
-          `${productName} is now available. Contact us for complete product details and ordering information.`;
+        const ecommerceSections =
+          parseEcommerceSections(ecommerceSource);
 
-        const externalFeatures =
-          extractEcommerceSection(
-            ecommerceSource,
-            ["Key Features","Why You'll Love It"],
-            [
-              "Variants Available",
-              "Color Options",
-              "Product Specifications",
-              "Perfect For",
-              "Care & Use",
-              "Package Includes",
-              "Best SEO Listing Title",
-              "Stronger Lazada/Shopee SEO Version",
-              "Recommended Variations",
-              "Better Option / Higher AOV",
-              "Search Keywords",
-            ]
-          ) ||
-          "• Designed for practical everyday use.\n• Built with dependable quality and thoughtful functionality.\n• Suitable for modern homes, workspaces, and daily routines.";
+        const ecommerceProductName = String(
+          ecommerceSections["Product Name"] ||
+          ""
+        )
+          .split("\n")
+          .map((line:string)=>line.trim())
+          .filter(Boolean)[0] || "";
+
+        const externalOverview = String(
+          ecommerceSections["Product Overview"] ||
+          ""
+        ).trim();
+
+        const externalFeatures = String(
+          ecommerceSections["Key Features"] ||
+          ""
+        )
+          .replace(/^\s*[-*]\s*/gm,"• ")
+          .trim();
+
+        // Do not invent product details. The external announcement uses only
+        // the Product Overview and Key Features found in the E-commerce output.
+        const externalProductName =
+          ecommerceProductName ||
+          productName;
 
         const clientTemplates:any = {
           "Product Introduction":{
-            subject:`[New Arrival] ${productName} — Now Available`,
-            intro:`We are pleased to introduce ${productName}, now available for ordering.`,
+            subject:`[New Arrival] ${externalProductName} — Now Available`,
+            intro:`We are pleased to introduce ${externalProductName}, now available for ordering.`,
             action:"For inquiries, product details, or orders, please feel free to contact us.",
           },
           "Product Reactivation":{
-            subject:`[Product Reactivation] ${productName} — Available Again`,
-            intro:`We are pleased to reintroduce ${productName}, now available again for ordering and promotion.`,
+            subject:`[Product Reactivation] ${externalProductName} — Available Again`,
+            intro:`We are pleased to reintroduce ${externalProductName}, now available again for ordering and promotion.`,
             action:"Please feel free to contact us for updated product details, availability, or orders.",
           },
           "Campaign":{
@@ -12150,7 +12283,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           const externalHeadline = (()=>{
             if(checklistAnnouncementType==="Product Reactivation"){
-              return `${productName.toUpperCase()} — AVAILABLE AGAIN!`;
+              return `${externalProductName.toUpperCase()} — AVAILABLE AGAIN!`;
             }
             if(checklistAnnouncementType==="Campaign"){
               return `${checklistName.toUpperCase()} — NOW LIVE!`;
@@ -12158,32 +12291,49 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             if(checklistAnnouncementType==="Special Campaign"){
               return `${checklistName.toUpperCase()} — SPECIAL CAMPAIGN!`;
             }
-            return `${productName.toUpperCase()} — NOW AVAILABLE!`;
+            return `${externalProductName.toUpperCase()} — NOW AVAILABLE!`;
           })();
 
-          return {
-            subject:template.subject,
-            body:[
-              "Dear Partner,",
+          const externalBodyLines = [
+            "Dear Partner,",
+            "",
+            externalHeadline,
+          ];
+
+          if(externalOverview){
+            externalBodyLines.push(
               "",
-              externalHeadline,
-              "",
-              externalOverview,
+              externalOverview
+            );
+          }
+
+          if(externalFeatures){
+            externalBodyLines.push(
               "",
               "Why You'll Love It",
               "",
-              externalFeatures,
-              "",
-              checklistAnnouncementType==="Product Introduction" ||
-              checklistAnnouncementType==="Product Reactivation"
-                ? "Reply ORDER to confirm. Should you require any additional information, please feel free to reach out."
-                : template.action,
-              "",
-              `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`,
-            ].filter((line,index,rows)=>
-              line !== "" ||
-              (index > 0 && rows[index-1] !== "")
-            ).join("\n"),
+              externalFeatures
+            );
+          }
+
+          externalBodyLines.push(
+            "",
+            checklistAnnouncementType==="Product Introduction" ||
+            checklistAnnouncementType==="Product Reactivation"
+              ? "Reply ORDER to confirm. Should you require any additional information, please feel free to reach out."
+              : template.action,
+            "",
+            `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`
+          );
+
+          return {
+            subject:template.subject,
+            body:externalBodyLines
+              .filter((line,index,rows)=>
+                line !== "" ||
+                (index > 0 && rows[index-1] !== "")
+              )
+              .join("\n"),
           };
         }
 
@@ -12332,6 +12482,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 audience,
                 checklistName:group.groupName || "",
                 products,
+                ecommerceOutput:ecommerceSource,
                 completedAssets,
               },null,2),
             }),
