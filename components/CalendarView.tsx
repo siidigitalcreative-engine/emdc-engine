@@ -11707,7 +11707,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       } as any;
       const defaultProductIntroDigitalAssetRows = [
         { id:"main-google-drive-folder", name:"Main Google Drive Folder", link:"" },
-        { id:"product-images", name:"Product Images", link:"" },
+        { id:"product-image", name:"Product Image", link:"" },
         { id:"cem-banner", name:"CEM Banner", link:"" },
         { id:"store-banner", name:"Store Banner", link:"" },
         { id:"feed", name:"Feed", link:"" },
@@ -11715,26 +11715,66 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         { id:"showcase-video", name:"Showcase Video", link:"" },
         { id:"a4-signage", name:"A4 Signage", link:"" },
         { id:"sampling-poster", name:"Sampling Poster", link:"" },
+        { id:"youtube-link", name:"YouTube Link", link:"" },
       ];
       const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
         const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-        const normalizeAssetKey = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
-        const oldDefaultKeys = new Set(["product-image","cem-banner","store-banner","feed","story","showcase-video"]);
-        const looksLikeOldDefaults = sourceRows.length > 0 && sourceRows.length <= oldDefaultKeys.size && sourceRows.every((row:any)=>{
-          const keys = [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean);
-          return keys.some((key:string)=>oldDefaultKeys.has(key));
-        });
-        if (sourceRows.length && !looksLikeOldDefaults) return sourceRows;
+        const normalizeAssetKey = (value:any) =>
+          String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g,"-")
+            .replace(/^-+|-+$/g,"");
+
         const sourceByKey = new Map<string,any>();
+
         sourceRows.forEach((row:any)=>{
-          [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean).forEach((key:string)=>{
-            if (!sourceByKey.has(key)) sourceByKey.set(key,row);
-          });
+          [row?.id,row?.name,row?.assetName,row?.label]
+            .map(normalizeAssetKey)
+            .filter(Boolean)
+            .forEach((key:string)=>{
+              if (!sourceByKey.has(key)) sourceByKey.set(key,row);
+            });
         });
-        if (sourceByKey.has("product-image") && !sourceByKey.has("product-images")) sourceByKey.set("product-images",sourceByKey.get("product-image"));
+
+        // Migrate the previous plural Product Images row.
+        if (
+          sourceByKey.has("product-images") &&
+          !sourceByKey.has("product-image")
+        ) {
+          sourceByKey.set(
+            "product-image",
+            sourceByKey.get("product-images")
+          );
+        }
+
+        // Accept common YouTube naming variations.
+        if (
+          sourceByKey.has("youtube") &&
+          !sourceByKey.has("youtube-link")
+        ) {
+          sourceByKey.set(
+            "youtube-link",
+            sourceByKey.get("youtube")
+          );
+        }
+
         return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
-          const match = sourceByKey.get(normalizeAssetKey(defaultRow.id)) || sourceByKey.get(normalizeAssetKey(defaultRow.name));
-          return match ? { ...defaultRow, link:match.link || match.url || match.outputLink || "" } : defaultRow;
+          const match =
+            sourceByKey.get(normalizeAssetKey(defaultRow.id)) ||
+            sourceByKey.get(normalizeAssetKey(defaultRow.name));
+
+          return match
+            ? {
+                ...defaultRow,
+                link:String(
+                  match?.link ||
+                  match?.url ||
+                  match?.outputLink ||
+                  ""
+                ).trim(),
+              }
+            : defaultRow;
         });
       };
       const productIntroDigitalAssetRows = normalizeProductIntroDigitalAssetRows(digitalData.productIntroAssetLinks);
@@ -11832,9 +11872,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const readCurrentAnnouncementAssets = () => {
-        // The announcement popup can be opened from Overview, where the
-        // Digital Creative table helper functions are not in scope. Read the
-        // saved asset rows directly from the checklist workspace instead.
         const digitalWorkspace =
           (
             (
@@ -11848,35 +11885,81 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           digitalWorkspace?.digitalAssetLinks ||
           [];
 
-        const currentRows = Array.isArray(rawRows)
+        const storedRows = Array.isArray(rawRows)
           ? rawRows
           : Array.isArray(rawRows?.rows)
             ? rawRows.rows
             : [];
 
-        return currentRows
-          .filter((row:any)=>
-            String(
+        const normalizeKey = (value:any) =>
+          String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g,"-")
+            .replace(/^-+|-+$/g,"");
+
+        const byKey = new Map<string,any>();
+
+        storedRows.filter(Boolean).forEach((row:any)=>{
+          [row?.id,row?.name,row?.assetName,row?.label]
+            .map(normalizeKey)
+            .filter(Boolean)
+            .forEach((key:string)=>{
+              if (!byKey.has(key)) byKey.set(key,row);
+            });
+        });
+
+        if (byKey.has("product-images") && !byKey.has("product-image")) {
+          byKey.set("product-image",byKey.get("product-images"));
+        }
+
+        if (byKey.has("youtube") && !byKey.has("youtube-link")) {
+          byKey.set("youtube-link",byKey.get("youtube"));
+        }
+
+        // Also support a separately saved YouTube URL field from older data.
+        const legacyYoutubeLink = String(
+          digitalWorkspace?.youtubeLink ||
+          digitalWorkspace?.youtubeUrl ||
+          ""
+        ).trim();
+
+        const canonicalRows = [
+          { id:"main-google-drive-folder", name:"Main Google Drive Folder" },
+          { id:"product-image", name:"Product Image" },
+          { id:"cem-banner", name:"CEM Banner" },
+          { id:"store-banner", name:"Store Banner" },
+          { id:"feed", name:"Feed" },
+          { id:"story", name:"Story" },
+          { id:"showcase-video", name:"Showcase Video" },
+          { id:"a4-signage", name:"A4 Signage" },
+          { id:"sampling-poster", name:"Sampling Poster" },
+          { id:"youtube-link", name:"YouTube Link" },
+        ];
+
+        return canonicalRows
+          .map((defaultRow:any)=>{
+            const row =
+              byKey.get(normalizeKey(defaultRow.id)) ||
+              byKey.get(normalizeKey(defaultRow.name));
+
+            const link = String(
               row?.link ||
               row?.url ||
               row?.outputLink ||
-              ""
-            ).trim()
-          )
-          .map((row:any)=>({
-            name:String(
-              row?.name ||
-              row?.assetName ||
-              row?.label ||
-              "Asset"
-            ).trim(),
-            link:String(
-              row?.link ||
-              row?.url ||
-              row?.outputLink ||
-              ""
-            ).trim(),
-          }));
+              (
+                defaultRow.id === "youtube-link"
+                  ? legacyYoutubeLink
+                  : ""
+              )
+            ).trim();
+
+            return {
+              name:defaultRow.name,
+              link,
+            };
+          })
+          .filter((row:any)=>row.link);
       };
 
       const buildAnnouncementAssetLines = (assets:any[]) => {
