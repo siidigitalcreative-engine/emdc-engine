@@ -5064,7 +5064,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignOverviewAddedIds,setCampaignOverviewAddedIds] = useState<string[]>([]);
   const [overviewEdit,setOverviewEdit] = useState<any>(null);
   const [assetAnnouncementOpen,setAssetAnnouncementOpen] = useState(false);
-  const [assetAnnouncementTab,setAssetAnnouncementTab] = useState<"email"|"viber"|"internal">("email");
+  const [assetAnnouncementTab,setAssetAnnouncementTab] = useState<"client"|"internal">("client");
   const [assetAnnouncementBusy,setAssetAnnouncementBusy] = useState(false);
   const [assetAnnouncementError,setAssetAnnouncementError] = useState("");
   const [assetAnnouncementEmailBusy,setAssetAnnouncementEmailBusy] = useState("");
@@ -11670,22 +11670,52 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         String(assetCompletionStatus?.label || "").trim().toLowerCase()==="done" ||
         assetCompletionStatusId.trim().toLowerCase()==="done";
 
+      const checklistAnnouncementType = (() => {
+        const raw = String(
+          launchTypes?.[group.launchType]?.label ||
+          group.launchType ||
+          ""
+        ).trim().toLowerCase();
+
+        if(raw.includes("reactivation")) return "Product Reactivation";
+        if(raw.includes("special") && raw.includes("campaign")) return "Special Campaign";
+        if(raw.includes("campaign")) return "Campaign";
+        return "Product Introduction";
+      })();
+
       const assetAnnouncementData = {
-        type:String(digitalData.assetAnnouncementType || "Assets Completed"),
+        checklistType:checklistAnnouncementType,
+        audience:String(
+          digitalData.assetAnnouncementAudience || "client"
+        ) === "internal"
+          ? "internal"
+          : "client",
         tone:String(digitalData.assetAnnouncementTone || "professional"),
         instructions:String(digitalData.assetAnnouncementInstructions || ""),
         to:String(digitalData.assetAnnouncementTo || ""),
         cc:String(digitalData.assetAnnouncementCc || ""),
         drafts:{
-          email:{
-            subject:String(digitalData.assetAnnouncementDrafts?.email?.subject || ""),
-            body:String(digitalData.assetAnnouncementDrafts?.email?.body || ""),
-          },
-          viber:{
-            body:String(digitalData.assetAnnouncementDrafts?.viber?.body || ""),
+          client:{
+            subject:String(
+              digitalData.assetAnnouncementDrafts?.client?.subject ||
+              digitalData.assetAnnouncementDrafts?.email?.subject ||
+              ""
+            ),
+            body:String(
+              digitalData.assetAnnouncementDrafts?.client?.body ||
+              digitalData.assetAnnouncementDrafts?.email?.body ||
+              ""
+            ),
           },
           internal:{
-            body:String(digitalData.assetAnnouncementDrafts?.internal?.body || ""),
+            subject:String(
+              digitalData.assetAnnouncementDrafts?.internal?.subject ||
+              `[${checklistAnnouncementType} Assets Ready] ${group.groupName || "Checklist"}`
+            ),
+            body:String(
+              digitalData.assetAnnouncementDrafts?.internal?.body ||
+              ""
+            ),
           },
         },
       };
@@ -11694,24 +11724,204 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         updateAiWorkspace("digital",patch);
       };
 
+      const readCurrentAnnouncementAssets = () => {
+        const currentRows = commitCurrentProductIntroDigitalAssetRows();
+
+        return currentRows
+          .filter((row:any)=>String(row?.link || "").trim())
+          .map((row:any)=>({
+            name:String(row?.name || "Asset").trim(),
+            link:String(row?.link || "").trim(),
+          }));
+      };
+
+      const buildAnnouncementAssetLines = (assets:any[]) => {
+        return assets
+          .map((asset:any)=>`${asset.name}\n${asset.link}`)
+          .join("\n\n");
+      };
+
+      const buildReadyChecklistAnnouncement = (
+        audience:"client"|"internal",
+        assets:any[] = readCurrentAnnouncementAssets()
+      ) => {
+        const checklistName =
+          String(group.groupName || group.name || "Checklist").trim();
+
+        const products = productRows
+          .map((row:any)=>String(row?.product || "").trim())
+          .filter(Boolean);
+
+        const uniqueProducts = Array.from(new Set(products));
+        const productName =
+          uniqueProducts.length === 1
+            ? uniqueProducts[0]
+            : checklistName;
+
+        const brands = Array.from(
+          new Set(
+            productRows
+              .map((row:any)=>String(row?.brand || "").trim())
+              .filter(Boolean)
+          )
+        );
+
+        const categories = Array.from(
+          new Set(
+            productRows
+              .map((row:any)=>String(row?.category || row?.collection || "").trim())
+              .filter(Boolean)
+          )
+        );
+
+        const mainFolder =
+          assets.find((asset:any)=>
+            asset.name.toLowerCase().includes("main google drive")
+          )?.link ||
+          assets[0]?.link ||
+          "";
+
+        const assetLines = buildAnnouncementAssetLines(assets);
+        const availableAssetNames = assets
+          .map((asset:any)=>`• ${asset.name}`)
+          .join("\n");
+
+        const productSummary = [
+          brands.length ? `Brand: ${brands.join(", ")}` : "",
+          categories.length ? `Category: ${categories.join(", ")}` : "",
+          `Products / SKUs: ${productRows.length}`,
+          `Checklist Type: ${checklistAnnouncementType}`,
+          `Overall Progress: ${overallPct}%`,
+        ].filter(Boolean).join("\n");
+
+        const clientTemplates:any = {
+          "Product Introduction":{
+            subject:`[New Arrival] ${productName} — Now Available`,
+            intro:`We are pleased to introduce ${productName}, now available for ordering.`,
+            action:"For inquiries, product details, or orders, please feel free to contact us.",
+          },
+          "Product Reactivation":{
+            subject:`[Product Reactivation] ${productName} — Available Again`,
+            intro:`We are pleased to reintroduce ${productName}, now available again for ordering and promotion.`,
+            action:"Please feel free to contact us for updated product details, availability, or orders.",
+          },
+          "Campaign":{
+            subject:`[Campaign] ${checklistName}`,
+            intro:`We are pleased to share the materials for our upcoming campaign, ${checklistName}.`,
+            action:"Please review the campaign materials and coordinate with us for participation or implementation.",
+          },
+          "Special Campaign":{
+            subject:`[Special Campaign] ${checklistName}`,
+            intro:`We are pleased to share the official materials for the special campaign, ${checklistName}.`,
+            action:"Please review the campaign requirements and contact us for coordination or additional information.",
+          },
+        };
+
+        const internalSubjects:any = {
+          "Product Introduction":`[Product Introduction Assets Ready] ${checklistName}`,
+          "Product Reactivation":`[Product Reactivation Assets Ready] ${checklistName}`,
+          "Campaign":`[Campaign Assets Ready] ${checklistName}`,
+          "Special Campaign":`[Special Campaign Assets Ready] ${checklistName}`,
+        };
+
+        if(audience==="client"){
+          const template =
+            clientTemplates[checklistAnnouncementType] ||
+            clientTemplates["Product Introduction"];
+
+          return {
+            subject:template.subject,
+            body:[
+              "Dear Valued Partner,",
+              "",
+              template.intro,
+              "",
+              "Product / Campaign Information",
+              productSummary,
+              "",
+              assets.length ? "Available Marketing Materials" : "",
+              assets.length ? availableAssetNames : "",
+              "",
+              mainFolder
+                ? `Access the complete files here:\n${mainFolder}`
+                : assets.length
+                  ? `Available asset links:\n\n${assetLines}`
+                  : "",
+              "",
+              template.action,
+              "",
+              "Thank you for your continued partnership.",
+              "",
+              "Best regards,",
+              "Sunbeams Lifestyle",
+            ].filter((line,index,rows)=>
+              line !== "" ||
+              (index > 0 && rows[index-1] !== "")
+            ).join("\n"),
+          };
+        }
+
+        return {
+          subject:
+            internalSubjects[checklistAnnouncementType] ||
+            `[Assets Ready] ${checklistName}`,
+          body:[
+            "Hi Team,",
+            "",
+            `All available assets for ${checklistName} have been completed and uploaded.`,
+            "",
+            "Project Summary",
+            productSummary,
+            "",
+            assets.length ? "Uploaded Assets" : "Uploaded Assets",
+            assets.length
+              ? assetLines
+              : "No final asset links have been added yet.",
+            "",
+            mainFolder
+              ? `Main Google Drive Folder\n${mainFolder}`
+              : "",
+            "",
+            "Please review the uploaded files and proceed with your respective next steps.",
+            "",
+            "Generated automatically by EMDC Engine.",
+          ].filter((line,index,rows)=>
+            line !== "" ||
+            (index > 0 && rows[index-1] !== "")
+          ).join("\n"),
+        };
+      };
+
+      const applyReadyChecklistAnnouncement = (
+        audience:"client"|"internal" = assetAnnouncementData.audience
+      ) => {
+        const readyDraft = buildReadyChecklistAnnouncement(audience);
+
+        patchAssetAnnouncement({
+          assetAnnouncementAudience:audience,
+          assetAnnouncementChecklistType:checklistAnnouncementType,
+          assetAnnouncementDrafts:{
+            ...assetAnnouncementData.drafts,
+            [audience]:readyDraft,
+          },
+          assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
+        });
+
+        setAssetAnnouncementTab(audience);
+        setAssetAnnouncementError("");
+      };
+
       const parseAnnouncementJson = (source:any) => {
         const raw = String(source || "")
           .trim()
           .replace(/^```(?:json)?\s*/i,"")
           .replace(/\s*```$/,"");
+
         try {
           const parsed = JSON.parse(raw);
           return {
-            email:{
-              subject:String(parsed?.email?.subject || ""),
-              body:String(parsed?.email?.body || ""),
-            },
-            viber:{
-              body:String(parsed?.viber?.body || ""),
-            },
-            internal:{
-              body:String(parsed?.internal?.body || ""),
-            },
+            subject:String(parsed?.subject || ""),
+            body:String(parsed?.body || ""),
           };
         } catch {
           return null;
@@ -11721,26 +11931,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const generateAssetAnnouncements = async () => {
         if(assetAnnouncementBusy) return;
 
-        const currentRows = commitCurrentProductIntroDigitalAssetRows();
-        const completedAssets = currentRows
-          .filter((row:any)=>String(row?.link || "").trim())
-          .map((row:any)=>({
-            name:String(row?.name || "Untitled Asset"),
-            link:String(row?.link || "").trim(),
-          }));
+        const completedAssets = readCurrentAnnouncementAssets();
 
         if(!completedAssets.length){
           setAssetAnnouncementError(
-            "Add at least one final asset link before generating announcements."
+            "Add at least one final asset link before generating the announcement."
           );
           return;
         }
 
+        const audience = assetAnnouncementData.audience;
         const products = productRows.map((row:any)=>({
           brand:row.brand || "",
           product:row.product || "",
           sku:row.skuCode || "",
-          collection:row.collection || "",
+          collection:row.collection || row.category || "",
         }));
 
         setAssetAnnouncementBusy(true);
@@ -11753,25 +11958,27 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             body:JSON.stringify({
               task:"asset_completion_announcement",
               tone:assetAnnouncementData.tone,
-              taskLabel:`${assetAnnouncementData.type}: ${group.groupName || "Checklist Group"}`,
-              maxOutputTokens:2400,
+              taskLabel:`${checklistAnnouncementType} · ${audience === "client" ? "Client" : "Internal"}: ${group.groupName || "Checklist"}`,
+              maxOutputTokens:2200,
               instruction:[
-                "Create three polished completion announcements for the supplied product launch or reactivation assets.",
-                "Return strict JSON only. Do not use markdown code fences.",
-                'Required shape: {"email":{"subject":"","body":""},"viber":{"body":""},"internal":{"body":""}}.',
-                "The email should be professional and complete, with a greeting, concise completion summary, finished deliverables, access link or links, and a useful closing.",
-                "The Viber message should be concise, easy to scan, and suitable for partner or sales group chats.",
-                "The internal team message should clearly state what is complete, where files are stored, and the next action required.",
-                "Do not claim that an asset is complete unless a link is supplied.",
+                `Create one polished ${audience === "client" ? "external client email" : "internal team email"} for a ${checklistAnnouncementType} checklist.`,
+                'Return strict JSON only in this shape: {"subject":"","body":""}.',
+                "Do not use markdown code fences.",
+                audience === "client"
+                  ? "Use a professional partner-facing tone. Introduce or announce the product/campaign, mention that marketing materials are available, provide the main file access link, and include a clear inquiry or coordination closing."
+                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, show project progress, and state the next action for the team.",
+                "Only include assets that have valid links.",
+                "Do not invent prices, campaign mechanics, availability dates, product features, or links.",
                 "Avoid em dashes.",
                 assetAnnouncementData.instructions
-                  ? `Additional instruction: ${assetAnnouncementData.instructions}`
+                  ? `Additional notes: ${assetAnnouncementData.instructions}`
                   : "",
-              ].filter(Boolean).join("\\n"),
+              ].filter(Boolean).join("\n"),
               input:JSON.stringify({
-                announcementType:assetAnnouncementData.type,
+                checklistType:checklistAnnouncementType,
+                audience,
                 checklistName:group.groupName || "",
-                launchType:launchTypes?.[group.launchType]?.label || group.launchType || "",
+                overallProgress:overallPct,
                 products,
                 completedAssets,
               },null,2),
@@ -11780,24 +11987,28 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           const json = await response.json().catch(()=>null);
           if(!response.ok){
-            throw new Error(json?.error || "Unable to generate announcements.");
+            throw new Error(json?.error || "Unable to generate the announcement.");
           }
 
-          const drafts = parseAnnouncementJson(json?.text);
-          if(!drafts){
+          const draft = parseAnnouncementJson(json?.text);
+          if(!draft){
             throw new Error(
               "AI returned an invalid announcement format. Please generate again."
             );
           }
 
           patchAssetAnnouncement({
-            assetAnnouncementDrafts:drafts,
+            assetAnnouncementAudience:audience,
+            assetAnnouncementChecklistType:checklistAnnouncementType,
+            assetAnnouncementDrafts:{
+              ...assetAnnouncementData.drafts,
+              [audience]:draft,
+            },
             assetAnnouncementGeneratedAt:new Date().toISOString(),
           });
-          setAssetAnnouncementTab("email");
         } catch(error:any){
           setAssetAnnouncementError(
-            error?.message || "Unable to generate announcements."
+            error?.message || "Unable to generate the announcement."
           );
         } finally {
           setAssetAnnouncementBusy(false);
@@ -11812,7 +12023,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const openGmailAnnouncement = () => {
-        const email = assetAnnouncementData.drafts.email;
+        const email = assetAnnouncementData.drafts[assetAnnouncementData.audience];
         const params = new URLSearchParams({
           view:"cm",
           fs:"1",
@@ -11829,7 +12040,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const submitAnnouncementEmail = async (action:"draft"|"send") => {
-        const email = assetAnnouncementData.drafts.email;
+        const email = assetAnnouncementData.drafts[assetAnnouncementData.audience];
         if(!assetAnnouncementData.to.trim()){
           setAssetAnnouncementError("Enter at least one email recipient.");
           return;
@@ -12733,6 +12944,35 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     xs
                     onClick={()=>{
                       setAssetAnnouncementError("");
+
+                      const clientDraft =
+                        assetAnnouncementData.drafts.client;
+                      const internalDraft =
+                        assetAnnouncementData.drafts.internal;
+
+                      if(
+                        !clientDraft.subject.trim() &&
+                        !clientDraft.body.trim()
+                      ){
+                        const readyClient =
+                          buildReadyChecklistAnnouncement("client");
+                        patchAssetAnnouncement({
+                          assetAnnouncementDrafts:{
+                            ...assetAnnouncementData.drafts,
+                            client:readyClient,
+                            internal:
+                              internalDraft.subject.trim() ||
+                              internalDraft.body.trim()
+                                ? internalDraft
+                                : buildReadyChecklistAnnouncement("internal"),
+                          },
+                          assetAnnouncementAudience:
+                            assetAnnouncementData.audience,
+                          assetAnnouncementChecklistType:
+                            checklistAnnouncementType,
+                        });
+                      }
+
                       setAssetAnnouncementOpen(true);
                     }}
                   >
@@ -12837,24 +13077,64 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",
                 gap:10,
               }}>
-                <Field label="Announcement Type">
+                <Field label="Checklist Type">
+                  <div style={{
+                    minHeight:38,
+                    display:"flex",
+                    alignItems:"center",
+                    padding:"0 11px",
+                    border:`1px solid ${C.border}`,
+                    borderRadius:8,
+                    background:C.surface,
+                    color:C.text,
+                    fontSize:12,
+                    fontWeight:800,
+                  }}>
+                    {checklistAnnouncementType}
+                  </div>
+                </Field>
+
+                <Field label="Audience">
                   <select
-                    value={assetAnnouncementData.type}
-                    onChange={(event:any)=>patchAssetAnnouncement({
-                      assetAnnouncementType:event.target.value,
-                    })}
+                    value={assetAnnouncementData.audience}
+                    onChange={(event:any)=>{
+                      const audience =
+                        event.target.value === "internal"
+                          ? "internal"
+                          : "client";
+
+                      patchAssetAnnouncement({
+                        assetAnnouncementAudience:audience,
+                      });
+                      setAssetAnnouncementTab(audience);
+
+                      const existingDraft =
+                        assetAnnouncementData.drafts[audience];
+
+                      if(
+                        !existingDraft?.subject?.trim() &&
+                        !existingDraft?.body?.trim()
+                      ){
+                        applyReadyChecklistAnnouncement(audience);
+                      }
+                    }}
                     style={{
-                      width:"100%",height:38,border:`1px solid ${C.border}`,
-                      borderRadius:8,padding:"0 10px",background:C.surface,
-                      color:C.textSub,fontSize:12,fontWeight:700,
+                      width:"100%",
+                      height:38,
+                      border:`1px solid ${C.border}`,
+                      borderRadius:8,
+                      padding:"0 10px",
+                      background:C.surface,
+                      color:C.textSub,
+                      fontSize:12,
+                      fontWeight:700,
                     }}
                   >
-                    <option>Assets Completed</option>
-                    <option>Product Launch</option>
-                    <option>New Arrival</option>
-                    <option>Product Reactivation</option>
+                    <option value="client">Client / External</option>
+                    <option value="internal">Internal Team</option>
                   </select>
                 </Field>
+
                 <Field label="Tone">
                   <select
                     value={assetAnnouncementData.tone}
@@ -12862,9 +13142,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       assetAnnouncementTone:event.target.value,
                     })}
                     style={{
-                      width:"100%",height:38,border:`1px solid ${C.border}`,
-                      borderRadius:8,padding:"0 10px",background:C.surface,
-                      color:C.textSub,fontSize:12,fontWeight:700,
+                      width:"100%",
+                      height:38,
+                      border:`1px solid ${C.border}`,
+                      borderRadius:8,
+                      padding:"0 10px",
+                      background:C.surface,
+                      color:C.textSub,
+                      fontSize:12,
+                      fontWeight:700,
                     }}
                   >
                     <option value="professional">Professional</option>
@@ -12874,234 +13160,253 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     <option value="taglish">Taglish</option>
                   </select>
                 </Field>
+
                 <div style={{ gridColumn:isMobile?"auto":"1 / -1" }}>
-                  <Field label="Additional AI Instructions">
+                  <Field label="Additional Notes">
                     <textarea
                       value={assetAnnouncementData.instructions}
                       onChange={(event:any)=>patchAssetAnnouncement({
                         assetAnnouncementInstructions:event.target.value,
                       })}
-                      placeholder="Example: Mention that Shopee, Lazada, and YouTube uploads are complete. Ask Sales to begin sharing the launch materials."
+                      placeholder="Example: Mention the YouTube video, launch date, ordering instructions, campaign schedule, or specific next steps."
                       style={{
-                        width:"100%",minHeight:78,border:`1px solid ${C.border}`,
-                        borderRadius:8,padding:10,resize:"vertical",
-                        fontSize:12,color:C.textSub,background:C.surface,
+                        width:"100%",
+                        minHeight:78,
+                        border:`1px solid ${C.border}`,
+                        borderRadius:8,
+                        padding:10,
+                        resize:"vertical",
+                        fontSize:12,
+                        color:C.textSub,
+                        background:C.surface,
                         outline:"none",
                       }}
                     />
                   </Field>
                 </div>
-                <div style={{ gridColumn:isMobile?"auto":"1 / -1",display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+
+                <div style={{
+                  gridColumn:isMobile?"auto":"1 / -1",
+                  display:"flex",
+                  gap:8,
+                  justifyContent:"flex-end",
+                  flexWrap:"wrap",
+                }}>
+                  <Btn
+                    variant="outline"
+                    onClick={()=>applyReadyChecklistAnnouncement(
+                      assetAnnouncementData.audience
+                    )}
+                  >
+                    Use Ready Message
+                  </Btn>
                   <Btn
                     onClick={generateAssetAnnouncements}
                     disabled={assetAnnouncementBusy}
                   >
                     {assetAnnouncementBusy
                       ? "Generating..."
-                      : assetAnnouncementData.drafts.email.body
-                        ? "Regenerate Messages"
-                        : "Generate Messages"}
+                      : "Refine with AI"}
                   </Btn>
                 </div>
               </div>
 
               {assetAnnouncementError&&(
                 <div style={{
-                  padding:"10px 12px",borderRadius:8,
-                  border:"1px solid #FCA5A5",background:"#FEF2F2",
-                  color:"#B91C1C",fontSize:12,fontWeight:700,
+                  padding:"10px 12px",
+                  borderRadius:8,
+                  border:"1px solid #FCA5A5",
+                  background:"#FEF2F2",
+                  color:"#B91C1C",
+                  fontSize:12,
+                  fontWeight:700,
                 }}>
                   {assetAnnouncementError}
                 </div>
               )}
 
-              <div style={{ display:"flex",gap:7,flexWrap:"wrap" }}>
-                {[
-                  { id:"email",label:"Email Message" },
-                  { id:"viber",label:"Viber Message" },
-                  { id:"internal",label:"Internal Team Message" },
-                ].map((item:any)=>(
-                  <button
-                    key={item.id}
-                    onClick={()=>setAssetAnnouncementTab(item.id)}
-                    style={{
-                      height:34,padding:"0 12px",borderRadius:8,
-                      border:`1px solid ${assetAnnouncementTab===item.id?C.accent:C.border}`,
-                      background:assetAnnouncementTab===item.id?C.accent:C.surface,
-                      color:assetAnnouncementTab===item.id?"#fff":C.textSub,
-                      fontSize:11,fontWeight:800,cursor:"pointer",
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div style={{
+                display:"flex",
+                gap:7,
+                flexWrap:"wrap",
+              }}>
+                <button
+                  onClick={()=>{
+                    patchAssetAnnouncement({
+                      assetAnnouncementAudience:"client",
+                    });
+                    setAssetAnnouncementTab("client");
+                  }}
+                  style={{
+                    height:34,
+                    padding:"0 12px",
+                    borderRadius:8,
+                    border:`1px solid ${assetAnnouncementData.audience==="client"?C.accent:C.border}`,
+                    background:assetAnnouncementData.audience==="client"?C.accent:C.surface,
+                    color:assetAnnouncementData.audience==="client"?"#fff":C.textSub,
+                    fontSize:11,
+                    fontWeight:800,
+                    cursor:"pointer",
+                  }}
+                >
+                  Client Email
+                </button>
+
+                <button
+                  onClick={()=>{
+                    patchAssetAnnouncement({
+                      assetAnnouncementAudience:"internal",
+                    });
+                    setAssetAnnouncementTab("internal");
+                  }}
+                  style={{
+                    height:34,
+                    padding:"0 12px",
+                    borderRadius:8,
+                    border:`1px solid ${assetAnnouncementData.audience==="internal"?C.accent:C.border}`,
+                    background:assetAnnouncementData.audience==="internal"?C.accent:C.surface,
+                    color:assetAnnouncementData.audience==="internal"?"#fff":C.textSub,
+                    fontSize:11,
+                    fontWeight:800,
+                    cursor:"pointer",
+                  }}
+                >
+                  Internal Team Email
+                </button>
               </div>
 
-              {assetAnnouncementTab==="email"&&(
-                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                  <div style={{
-                    display:"grid",
-                    gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",
-                    gap:10,
-                  }}>
-                    <Field label="To">
-                      <TI
-                        value={assetAnnouncementData.to}
-                        onChange={(value:any)=>patchAssetAnnouncement({
-                          assetAnnouncementTo:value,
-                        })}
-                        placeholder="partner@example.com, sales@example.com"
-                      />
-                    </Field>
-                    <Field label="CC">
-                      <TI
-                        value={assetAnnouncementData.cc}
-                        onChange={(value:any)=>patchAssetAnnouncement({
-                          assetAnnouncementCc:value,
-                        })}
-                        placeholder="Optional CC recipients"
-                      />
-                    </Field>
-                  </div>
-                  <Field label="Subject">
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",
+                  gap:10,
+                }}>
+                  <Field label="To">
                     <TI
-                      value={assetAnnouncementData.drafts.email.subject}
+                      value={assetAnnouncementData.to}
                       onChange={(value:any)=>patchAssetAnnouncement({
-                        assetAnnouncementDrafts:{
-                          ...assetAnnouncementData.drafts,
-                          email:{
-                            ...assetAnnouncementData.drafts.email,
-                            subject:value,
-                          },
-                        },
+                        assetAnnouncementTo:value,
                       })}
-                      placeholder="[Product Launch] Collection Name"
+                      placeholder={
+                        assetAnnouncementData.audience==="client"
+                          ? "client@example.com, partner@example.com"
+                          : "sales@company.com, marketing@company.com"
+                      }
                     />
                   </Field>
-                  <Field label="Email Body">
-                    <textarea
-                      value={assetAnnouncementData.drafts.email.body}
-                      onChange={(event:any)=>patchAssetAnnouncement({
-                        assetAnnouncementDrafts:{
-                          ...assetAnnouncementData.drafts,
-                          email:{
-                            ...assetAnnouncementData.drafts.email,
-                            body:event.target.value,
-                          },
-                        },
+                  <Field label="CC">
+                    <TI
+                      value={assetAnnouncementData.cc}
+                      onChange={(value:any)=>patchAssetAnnouncement({
+                        assetAnnouncementCc:value,
                       })}
-                      style={{
-                        width:"100%",minHeight:300,border:`1px solid ${C.border}`,
-                        borderRadius:9,padding:12,resize:"vertical",
-                        fontSize:12.5,lineHeight:1.55,color:C.textSub,
-                        background:C.surface,outline:"none",
-                      }}
+                      placeholder="Optional CC recipients"
                     />
                   </Field>
-                  <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
-                    <Btn
-                      variant="outline"
-                      onClick={()=>copyAnnouncementText(
-                        `${assetAnnouncementData.drafts.email.subject}\n\n${assetAnnouncementData.drafts.email.body}`,
-                        "copy-announcement-email"
-                      )}
-                    >
-                      {actionDone("copy-announcement-email")?"✓ Copied":"Copy"}
-                    </Btn>
-                    <Btn variant="outline" onClick={openGmailAnnouncement}>
-                      Open Gmail
-                    </Btn>
-                    <Btn
-                      variant="outline"
-                      disabled={!!assetAnnouncementEmailBusy}
-                      onClick={()=>submitAnnouncementEmail("draft")}
-                    >
-                      {assetAnnouncementEmailBusy==="draft"
-                        ? "Creating..."
-                        : actionDone("announcement-gmail-draft")
-                          ? "✓ Draft Created"
-                          : "Create Gmail Draft"}
-                    </Btn>
-                    <Btn
-                      disabled={!!assetAnnouncementEmailBusy}
-                      onClick={()=>submitAnnouncementEmail("send")}
-                    >
-                      {assetAnnouncementEmailBusy==="send"
-                        ? "Sending..."
-                        : actionDone("announcement-email-sent")
-                          ? "✓ Sent"
-                          : "Send Email"}
-                    </Btn>
-                  </div>
                 </div>
-              )}
 
-              {assetAnnouncementTab==="viber"&&(
-                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                  <Field label="Viber Message">
-                    <textarea
-                      value={assetAnnouncementData.drafts.viber.body}
-                      onChange={(event:any)=>patchAssetAnnouncement({
-                        assetAnnouncementDrafts:{
-                          ...assetAnnouncementData.drafts,
-                          viber:{ body:event.target.value },
+                <Field label="Subject">
+                  <TI
+                    value={
+                      assetAnnouncementData
+                        .drafts[assetAnnouncementData.audience]
+                        .subject
+                    }
+                    onChange={(value:any)=>patchAssetAnnouncement({
+                      assetAnnouncementDrafts:{
+                        ...assetAnnouncementData.drafts,
+                        [assetAnnouncementData.audience]:{
+                          ...assetAnnouncementData
+                            .drafts[assetAnnouncementData.audience],
+                          subject:value,
                         },
-                      })}
-                      style={{
-                        width:"100%",minHeight:240,border:`1px solid ${C.border}`,
-                        borderRadius:9,padding:12,resize:"vertical",
-                        fontSize:12.5,lineHeight:1.55,color:C.textSub,
-                        background:C.surface,outline:"none",
-                      }}
-                    />
-                  </Field>
-                  <div style={{ display:"flex",justifyContent:"flex-end" }}>
-                    <Btn
-                      onClick={()=>copyAnnouncementText(
-                        assetAnnouncementData.drafts.viber.body,
-                        "copy-announcement-viber"
-                      )}
-                    >
-                      {actionDone("copy-announcement-viber")
-                        ? "✓ Copied"
-                        : "Copy Viber Message"}
-                    </Btn>
-                  </div>
-                </div>
-              )}
+                      },
+                    })}
+                  />
+                </Field>
 
-              {assetAnnouncementTab==="internal"&&(
-                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                  <Field label="Internal Team Message">
-                    <textarea
-                      value={assetAnnouncementData.drafts.internal.body}
-                      onChange={(event:any)=>patchAssetAnnouncement({
-                        assetAnnouncementDrafts:{
-                          ...assetAnnouncementData.drafts,
-                          internal:{ body:event.target.value },
+                <Field label={
+                  assetAnnouncementData.audience==="client"
+                    ? "Client Email Body"
+                    : "Internal Team Email Body"
+                }>
+                  <textarea
+                    value={
+                      assetAnnouncementData
+                        .drafts[assetAnnouncementData.audience]
+                        .body
+                    }
+                    onChange={(event:any)=>patchAssetAnnouncement({
+                      assetAnnouncementDrafts:{
+                        ...assetAnnouncementData.drafts,
+                        [assetAnnouncementData.audience]:{
+                          ...assetAnnouncementData
+                            .drafts[assetAnnouncementData.audience],
+                          body:event.target.value,
                         },
-                      })}
-                      style={{
-                        width:"100%",minHeight:240,border:`1px solid ${C.border}`,
-                        borderRadius:9,padding:12,resize:"vertical",
-                        fontSize:12.5,lineHeight:1.55,color:C.textSub,
-                        background:C.surface,outline:"none",
-                      }}
-                    />
-                  </Field>
-                  <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" }}>
+                      },
+                    })}
+                    style={{
+                      width:"100%",
+                      minHeight:340,
+                      border:`1px solid ${C.border}`,
+                      borderRadius:9,
+                      padding:12,
+                      resize:"vertical",
+                      fontSize:12.5,
+                      lineHeight:1.55,
+                      color:C.textSub,
+                      background:C.surface,
+                      outline:"none",
+                    }}
+                  />
+                </Field>
+
+                <div style={{
+                  display:"flex",
+                  gap:8,
+                  justifyContent:"flex-end",
+                  flexWrap:"wrap",
+                }}>
+                  <Btn
+                    variant="outline"
+                    onClick={()=>copyAnnouncementText(
+                      `${
+                        assetAnnouncementData
+                          .drafts[assetAnnouncementData.audience]
+                          .subject
+                      }\n\n${
+                        assetAnnouncementData
+                          .drafts[assetAnnouncementData.audience]
+                          .body
+                      }`,
+                      `copy-announcement-${assetAnnouncementData.audience}`
+                    )}
+                  >
+                    {actionDone(
+                      `copy-announcement-${assetAnnouncementData.audience}`
+                    )
+                      ? "✓ Copied"
+                      : "Copy"}
+                  </Btn>
+
+                  <Btn variant="outline" onClick={openGmailAnnouncement}>
+                    Open Gmail
+                  </Btn>
+
+                  <Btn
+                    variant="outline"
+                    disabled={!!assetAnnouncementEmailBusy}
+                    onClick={()=>submitAnnouncementEmail("draft")}
+                  >
+                    {assetAnnouncementEmailBusy==="draft"
+                      ? "Creating..."
+                      : "Create Gmail Draft"}
+                  </Btn>
+
+                  {assetAnnouncementData.audience==="internal"&&(
                     <Btn
                       variant="outline"
-                      onClick={()=>copyAnnouncementText(
-                        assetAnnouncementData.drafts.internal.body,
-                        "copy-announcement-internal"
-                      )}
-                    >
-                      {actionDone("copy-announcement-internal")
-                        ? "✓ Copied"
-                        : "Copy"}
-                    </Btn>
-                    <Btn
                       disabled={assetAnnouncementEmailBusy==="internal"}
                       onClick={postAnnouncementToTeamFeed}
                     >
@@ -13111,9 +13416,20 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           ? "✓ Posted to Team Feed"
                           : "Post to Team Feed"}
                     </Btn>
-                  </div>
+                  )}
+
+                  <Btn
+                    disabled={!!assetAnnouncementEmailBusy}
+                    onClick={()=>submitAnnouncementEmail("send")}
+                  >
+                    {assetAnnouncementEmailBusy==="send"
+                      ? "Sending..."
+                      : actionDone("announcement-email-sent")
+                        ? "✓ Sent"
+                        : "Send Email"}
+                  </Btn>
                 </div>
-              )}
+              </div>
             </div>
           </Modal>
 
