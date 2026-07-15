@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import AppTopBar from "@/components/AppTopBar";
 import AppBottomNav from "@/components/AppBottomNav";
 import { logActivity } from "@/lib/activity";
+import TeamChatPopup from "@/components/TeamChatPopup";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const C = {
@@ -23417,6 +23418,7 @@ export default function App({
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
+        <TeamChatPopup />
         <AppBottomNav />
       </div>
     </>
