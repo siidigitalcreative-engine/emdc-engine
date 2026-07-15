@@ -9161,8 +9161,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                           <button
                             onClick={()=>{
                               setAssetAnnouncementError("");
-                              setAssetAnnouncementOpen(true);
                               setActiveGroupTab("digital");
+                              window.setTimeout(()=>{
+                                setAssetAnnouncementOpen(true);
+                              },0);
                             }}
                             style={{
                               border:"none",
@@ -11939,37 +11941,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
 
-      useEffect(()=>{
-        if(!assetAnnouncementOpen) return;
 
-        const clientDraft = assetAnnouncementData.drafts.client;
-        const internalDraft = assetAnnouncementData.drafts.internal;
-
-        const clientEmpty =
-          !String(clientDraft?.subject || "").trim() &&
-          !String(clientDraft?.body || "").trim();
-
-        const internalEmpty =
-          !String(internalDraft?.subject || "").trim() &&
-          !String(internalDraft?.body || "").trim();
-
-        if(!clientEmpty && !internalEmpty) return;
-
-        patchAssetAnnouncement({
-          assetAnnouncementAudience:assetAnnouncementData.audience,
-          assetAnnouncementChecklistType:checklistAnnouncementType,
-          assetAnnouncementDrafts:{
-            ...assetAnnouncementData.drafts,
-            client:clientEmpty
-              ? buildReadyChecklistAnnouncement("client")
-              : clientDraft,
-            internal:internalEmpty
-              ? buildReadyChecklistAnnouncement("internal")
-              : internalDraft,
-          },
-          assetAnnouncementTemplateAppliedAt:new Date().toISOString(),
-        });
-      },[assetAnnouncementOpen]);
 
       const parseAnnouncementJson = (source:any) => {
         const raw = String(source || "")
