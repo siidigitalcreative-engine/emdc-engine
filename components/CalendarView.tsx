@@ -21427,11 +21427,108 @@ export default function App({
       setCloudSyncStatus("Preparing backup...");
       const updatedAt = new Date().toISOString();
       const appStateForBackup = await makeCloudAppStatePayload(updatedAt);
+
+      const workspaceBackups = readEmdcGroupWorkspaceBackups();
+      const enhancedChecklistGroups = (
+        Array.isArray(appStateForBackup?.checklistGroups)
+          ? appStateForBackup.checklistGroups
+          : []
+      ).map((group:any) => {
+        const groupId = String(group?.id || "");
+        const backupWorkspace =
+          workspaceBackups?.[groupId]?.aiWorkspace &&
+          typeof workspaceBackups[groupId].aiWorkspace === "object"
+            ? workspaceBackups[groupId].aiWorkspace
+            : {};
+
+        const currentWorkspace =
+          group?.aiWorkspace &&
+          typeof group.aiWorkspace === "object"
+            ? group.aiWorkspace
+            : {};
+
+        const nextWorkspace:any = {
+          ...currentWorkspace,
+          ...backupWorkspace,
+        };
+
+        Object.entries(backupWorkspace).forEach(([tab,value]:any) => {
+          if (
+            value &&
+            typeof value === "object" &&
+            !Array.isArray(value)
+          ) {
+            nextWorkspace[tab] = {
+              ...(currentWorkspace?.[tab] || {}),
+              ...value,
+            };
+          }
+        });
+
+        try {
+          const localOverview = JSON.parse(
+            localStorage.getItem(`emdc_overview_items_v1_${groupId}`) || "[]"
+          );
+          if (Array.isArray(localOverview) && localOverview.length) {
+            const map = new Map<string,any>();
+            [
+              ...(Array.isArray(nextWorkspace?.overview?.items)
+                ? nextWorkspace.overview.items
+                : []),
+              ...localOverview,
+            ].forEach((item:any) => {
+              const key = String(
+                item?.id ||
+                `${item?.title || ""}|${item?.createdAt || ""}|${item?.updatedAt || ""}`
+              );
+              if (key.trim()) map.set(key, { ...(map.get(key) || {}), ...item });
+            });
+            nextWorkspace.overview = {
+              ...(nextWorkspace.overview || {}),
+              items: Array.from(map.values()),
+            };
+          }
+        } catch {}
+
+        try {
+          const localSavedOutputs = JSON.parse(
+            localStorage.getItem(`emdc_ecommerce_saved_outputs_v1_${groupId}`) || "[]"
+          );
+          if (Array.isArray(localSavedOutputs) && localSavedOutputs.length) {
+            const map = new Map<string,any>();
+            [
+              ...(Array.isArray(nextWorkspace?.ecommerce?.savedOutputs)
+                ? nextWorkspace.ecommerce.savedOutputs
+                : []),
+              ...localSavedOutputs,
+            ].forEach((item:any) => {
+              const key = String(
+                item?.id ||
+                `${item?.title || ""}|${item?.createdAt || ""}|${item?.updatedAt || ""}`
+              );
+              if (key.trim()) map.set(key, { ...(map.get(key) || {}), ...item });
+            });
+            nextWorkspace.ecommerce = {
+              ...(nextWorkspace.ecommerce || {}),
+              savedOutputs: Array.from(map.values()),
+            };
+          }
+        } catch {}
+
+        return {
+          ...group,
+          aiWorkspace: nextWorkspace,
+        };
+      });
+
       const payload = {
-        version: 1,
+        version: 2,
         source: "emdc-engine",
         exportedAt: updatedAt,
-        appState: appStateForBackup,
+        appState: {
+          ...appStateForBackup,
+          checklistGroups: enhancedChecklistGroups,
+        },
       };
 
       const blob = new Blob([JSON.stringify(payload,null,2)], { type:"application/json" });
@@ -22137,6 +22234,209 @@ export default function App({
     if(!cloudHydrated) return;
     if(tab==="skus") void fetchSkuItemsV2();
   }, [cloudHydrated,tab]);
+
+  useEffect(() => {
+    if (!cloudHydrated || !Array.isArray(checklistGroups) || !checklistGroups.length) {
+      return;
+    }
+    if (typeof window === "undefined") return;
+
+    const recoveryKey = "emdc_workspace_cloud_recovery_v2_completed";
+    if (localStorage.getItem(recoveryKey) === "1") return;
+
+    const mergeObjects = (previous:any, incoming:any) => {
+      const left = previous && typeof previous === "object" && !Array.isArray(previous)
+        ? previous
+        : {};
+      const right = incoming && typeof incoming === "object" && !Array.isArray(incoming)
+        ? incoming
+        : {};
+      const merged:any = { ...left };
+
+      Object.entries(right).forEach(([key,value]:any) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          left?.[key] &&
+          typeof left[key] === "object" &&
+          !Array.isArray(left[key])
+        ) {
+          merged[key] = { ...left[key], ...value };
+        } else {
+          merged[key] = value;
+        }
+      });
+
+      return merged;
+    };
+
+    const mergeRows = (...lists:any[][]) => {
+      const map = new Map<string,any>();
+      lists
+        .flat()
+        .filter(Boolean)
+        .forEach((item:any) => {
+          const key = String(
+            item?.id ||
+            `${item?.title || ""}|${item?.createdAt || ""}|${item?.updatedAt || ""}`
+          ).trim();
+          if (!key) return;
+          map.set(key, { ...(map.get(key) || {}), ...item });
+        });
+      return Array.from(map.values());
+    };
+
+    const workspaceBackups = readEmdcGroupWorkspaceBackups();
+    let changed = false;
+
+    const recoveredGroups = checklistGroups.map((group:any) => {
+      const groupId = String(group?.id || "");
+      if (!groupId) return group;
+
+      const storedBackup =
+        workspaceBackups?.[groupId]?.aiWorkspace &&
+        typeof workspaceBackups[groupId].aiWorkspace === "object"
+          ? workspaceBackups[groupId].aiWorkspace
+          : {};
+
+      let localOverviewItems:any[] = [];
+      let localSavedEcommerce:any[] = [];
+
+      try {
+        const parsed = JSON.parse(
+          localStorage.getItem(`emdc_overview_items_v1_${groupId}`) || "[]"
+        );
+        localOverviewItems = Array.isArray(parsed) ? parsed : [];
+      } catch {}
+
+      try {
+        const parsed = JSON.parse(
+          localStorage.getItem(`emdc_ecommerce_saved_outputs_v1_${groupId}`) || "[]"
+        );
+        localSavedEcommerce = Array.isArray(parsed) ? parsed : [];
+      } catch {}
+
+      const currentWorkspace =
+        group?.aiWorkspace &&
+        typeof group.aiWorkspace === "object"
+          ? group.aiWorkspace
+          : {};
+
+      let nextWorkspace = mergeObjects(currentWorkspace, storedBackup);
+
+      const overviewItems = mergeRows(
+        Array.isArray(currentWorkspace?.overview?.items)
+          ? currentWorkspace.overview.items
+          : [],
+        Array.isArray(storedBackup?.overview?.items)
+          ? storedBackup.overview.items
+          : [],
+        localOverviewItems
+      );
+
+      if (overviewItems.length) {
+        nextWorkspace = {
+          ...nextWorkspace,
+          overview: {
+            ...(currentWorkspace?.overview || {}),
+            ...(storedBackup?.overview || {}),
+            items: overviewItems,
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      }
+
+      const ecommerceSavedOutputs = mergeRows(
+        Array.isArray(currentWorkspace?.ecommerce?.savedOutputs)
+          ? currentWorkspace.ecommerce.savedOutputs
+          : [],
+        Array.isArray(storedBackup?.ecommerce?.savedOutputs)
+          ? storedBackup.ecommerce.savedOutputs
+          : [],
+        localSavedEcommerce
+      );
+
+      if (ecommerceSavedOutputs.length) {
+        nextWorkspace = {
+          ...nextWorkspace,
+          ecommerce: {
+            ...(currentWorkspace?.ecommerce || {}),
+            ...(storedBackup?.ecommerce || {}),
+            savedOutputs: ecommerceSavedOutputs,
+            savedOutputsUpdatedAt: new Date().toISOString(),
+          },
+        };
+      }
+
+      const before = JSON.stringify(currentWorkspace || {});
+      const after = JSON.stringify(nextWorkspace || {});
+
+      if (after !== before && after !== "{}") {
+        changed = true;
+        return {
+          ...group,
+          aiWorkspace: nextWorkspace,
+        };
+      }
+
+      return group;
+    });
+
+    if (!changed) {
+      localStorage.setItem(recoveryKey, "1");
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setCloudSyncStatus("Recovering saved workspace data...");
+
+        const updatedAt = new Date().toISOString();
+        const response = await fetch("/api/checklist-groups-fast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            clientId: cloudClientIdRef.current,
+            updatedAt,
+            checklistGroups: recoveredGroups,
+          }),
+        });
+
+        const json = await response.json().catch(() => null);
+
+        if (!response.ok || !json?.ok) {
+          throw new Error(
+            json?.error || "Unable to restore saved workspace data to cloud."
+          );
+        }
+
+        if (cancelled) return;
+
+        setChecklistGroups(recoveredGroups);
+        localStorage.setItem(recoveryKey, "1");
+        syncV2GroupsVersionRef.current = Math.max(
+          syncV2GroupsVersionRef.current,
+          Number(json?.checklistGroupsVersion || 0)
+        );
+        syncV2VersionRef.current = Math.max(
+          syncV2VersionRef.current,
+          Number(json?.syncVersion || 0)
+        );
+        syncV2EtagRef.current = "";
+        setCloudSyncStatus("Synced");
+      } catch {
+        if (!cancelled) setCloudSyncStatus("Workspace recovery failed");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudHydrated, checklistGroups.length]);
 
   useEffect(() => {
     // Sync v2 uses targeted feature saves. Full app-state autosaves are paused
