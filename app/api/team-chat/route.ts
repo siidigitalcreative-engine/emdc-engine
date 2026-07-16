@@ -18,6 +18,17 @@ type ChatMessage = {
   readBy?: string[];
 };
 
+type ChatUser = {
+  name: string;
+  email: string;
+  lastSeenAt: string;
+};
+
+type ChatStore = {
+  messages: ChatMessage[];
+  users: ChatUser[];
+};
+
 const CHAT_PATH = "emdc-team-chat/recent.json";
 const MAX_STORED_MESSAGES = 100;
 const DEFAULT_LIMIT = 30;
@@ -46,31 +57,37 @@ const streamToText = async (
   stream: ReadableStream<Uint8Array>
 ) => new Response(stream).text();
 
-const readMessages = async (): Promise<ChatMessage[]> => {
+const readStore = async (): Promise<ChatStore> => {
   const result = await get(CHAT_PATH, {
     access: "private",
     useCache: false,
   });
 
   if (!result || result.statusCode === 304 || !result.stream) {
-    return [];
+    return { messages: [], users: [] };
   }
 
   const raw = await streamToText(result.stream);
   const json = JSON.parse(raw || "{}");
 
-  return Array.isArray(json?.messages)
-    ? json.messages.filter(Boolean)
-    : [];
+  return {
+    messages: Array.isArray(json?.messages)
+      ? json.messages.filter(Boolean)
+      : [],
+    users: Array.isArray(json?.users)
+      ? json.users.filter(Boolean)
+      : [],
+  };
 };
 
-const writeMessages = async (messages: ChatMessage[]) => {
+const writeStore = async (store: ChatStore) => {
   await put(
     CHAT_PATH,
     JSON.stringify({
-      version: 2,
+      version: 3,
       updatedAt: new Date().toISOString(),
-      messages: messages.slice(-MAX_STORED_MESSAGES),
+      messages: store.messages.slice(-MAX_STORED_MESSAGES),
+      users: store.users.slice(-200),
     }),
     {
       access: "private",
@@ -80,6 +97,13 @@ const writeMessages = async (messages: ChatMessage[]) => {
       cacheControlMaxAge: 0,
     }
   );
+};
+
+const readMessages = async () => (await readStore()).messages;
+
+const writeMessages = async (messages: ChatMessage[]) => {
+  const store = await readStore();
+  await writeStore({ ...store, messages });
 };
 
 const safePasswordMatch = (
@@ -127,12 +151,19 @@ export async function GET(request: NextRequest) {
       50
     );
 
-    const messages = await readMessages();
+    const store = await readStore();
 
     return NextResponse.json(
       {
         ok: true,
-        messages: messages.slice(-limit),
+        messages: store.messages.slice(-limit),
+        users: store.users
+          .sort(
+            (left, right) =>
+              new Date(right.lastSeenAt).getTime() -
+              new Date(left.lastSeenAt).getTime()
+          )
+          .slice(0, 100),
       },
       {
         headers: {
@@ -235,8 +266,40 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const currentMessages = await readMessages();
+    const store = await readStore();
+    const currentMessages = store.messages;
     let changed = false;
+
+    if (action === "register-user") {
+      const requesterName = cleanText(payload?.requesterName, 100);
+
+      if (!requesterName) {
+        return NextResponse.json(
+          { ok: false, error: "Display name is required." },
+          { status: 400 }
+        );
+      }
+
+      const nextUser: ChatUser = {
+        name: requesterName,
+        email: requesterEmail,
+        lastSeenAt: new Date().toISOString(),
+      };
+
+      const users = [
+        ...store.users.filter(
+          (user) => normalizeEmail(user.email) !== requesterEmail
+        ),
+        nextUser,
+      ];
+
+      await writeStore({ ...store, users });
+
+      return NextResponse.json({
+        ok: true,
+        users,
+      });
+    }
 
     if (action === "toggle-reaction") {
       const messageId = cleanText(payload?.messageId, 100);
