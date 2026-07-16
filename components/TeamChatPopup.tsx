@@ -89,6 +89,7 @@ export default function TeamChatPopup() {
   const [clearing, setClearing] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const lastMarkedReadRef = useRef("");
+  const activeRoomRequestRef = useRef(0);
 
   useEffect(() => {
     const updateMobile = () => setMobile(window.innerWidth < 760);
@@ -212,7 +213,12 @@ export default function TeamChatPopup() {
     silent = false,
     requestedRoomId = roomId
   ) => {
-    if (!silent) setLoading(true);
+    const requestId = ++activeRoomRequestRef.current;
+
+    if (!silent) {
+      setLoading(true);
+      setMessages([]);
+    }
 
     try {
       const response = await fetch(
@@ -226,6 +232,10 @@ export default function TeamChatPopup() {
         { cache: "no-store" }
       );
       const json = await response.json().catch(() => null);
+
+      if (requestId !== activeRoomRequestRef.current) {
+        return;
+      }
 
       if (!response.ok || !json?.ok) {
         if (
@@ -281,7 +291,12 @@ export default function TeamChatPopup() {
     } catch (loadError: any) {
       if (!silent) setError(loadError?.message || "Unable to load chat.");
     } finally {
-      if (!silent) setLoading(false);
+      if (
+        !silent &&
+        requestId === activeRoomRequestRef.current
+      ) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1116,10 +1131,16 @@ export default function TeamChatPopup() {
                       }));
                     }
 
+                    // Clear the previously opened room immediately so its
+                    // messages never flash while the new room is loading.
+                    activeRoomRequestRef.current += 1;
+                    setMessages([]);
+                    setLoading(true);
                     setRoomId(room.id);
                     setShowRoomList(false);
                     setSelectedIds([]);
                     setSelectionMode(false);
+                    setSettingsOpen(false);
                     setReactionDetailsKey("");
                     setReactionPickerId("");
 
@@ -1354,9 +1375,19 @@ export default function TeamChatPopup() {
               boxSizing: "border-box",
             }}
           >
-            {loading && !messages.length ? (
-              <div style={{ textAlign: "center", color: "#6B7280" }}>
-                Loading…
+            {loading ? (
+              <div
+                style={{
+                  minHeight: 180,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                  color: "#6B7280",
+                  fontSize: 12,
+                }}
+              >
+                Loading conversation…
               </div>
             ) : !messages.length ? (
               <div
