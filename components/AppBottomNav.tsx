@@ -41,7 +41,12 @@ export default function AppBottomNav() {
 
   return (
     <>
-      <div aria-hidden="true" style={{ height: "calc(76px + env(safe-area-inset-bottom))" }} />
+      <div
+        aria-hidden="true"
+        style={{
+          height: "calc(76px + env(safe-area-inset-bottom))",
+        }}
+      />
 
       <nav
         style={{
@@ -68,9 +73,10 @@ export default function AppBottomNav() {
                 window.location.href = `/#/${item.id}`;
               }}
               style={{
+                position: "relative",
                 flex: 1,
                 minWidth: 0,
-                padding: "9px 2px 10px",
+                padding: "9px 1px 10px",
                 border: "none",
                 background: "transparent",
                 color: "#111827",
@@ -91,7 +97,7 @@ export default function AppBottomNav() {
 
               <span
                 style={{
-                  fontSize: 9,
+                  fontSize: 8.5,
                   fontWeight: active ? 800 : 700,
                   opacity: active ? 1 : 0.52,
                   whiteSpace: "nowrap",
