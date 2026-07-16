@@ -5028,6 +5028,73 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
+  const applyStoredProgressSummary = (sourceItems:any) => {
+    const cleanItems = dedupeChecklistItemsObject(sourceItems || {});
+    const summary =
+      group?.progressSummary &&
+      typeof group.progressSummary === "object"
+        ? group.progressSummary
+        : {};
+
+    const summaryDepartments =
+      summary?.departments &&
+      typeof summary.departments === "object"
+        ? summary.departments
+        : {};
+
+    const currentDone = Object.values(cleanItems)
+      .flat()
+      .filter((item:any)=>!!item?.done).length;
+
+    const summaryDone = Math.max(
+      0,
+      Number(summary?.done || 0)
+    );
+
+    // Keep exact saved task states whenever they exist.
+    if(currentDone>0 || summaryDone<=0){
+      return cleanItems;
+    }
+
+    const next:any = {};
+    let remainingOverallDone = summaryDone;
+
+    Object.keys(DEPTS).forEach((dept:string)=>{
+      const rows = Array.isArray(cleanItems?.[dept])
+        ? cleanItems[dept]
+        : [];
+
+      const departmentDone = Math.max(
+        0,
+        Math.min(
+          rows.length,
+          Number(
+            summaryDepartments?.[dept]?.done || 0
+          )
+        )
+      );
+
+      const doneTarget =
+        departmentDone>0
+          ? departmentDone
+          : Math.min(rows.length,remainingOverallDone);
+
+      next[dept] = rows.map(
+        (item:any,index:number)=>({
+          ...item,
+          done:index < doneTarget,
+        })
+      );
+
+      remainingOverallDone = Math.max(
+        0,
+        remainingOverallDone - doneTarget
+      );
+    });
+
+    return dedupeChecklistItemsObject(next);
+  };
+
   const buildChecklistDefaults = () => {
     const out:any = {};
     Object.keys(DEPTS).forEach((dept:string)=>{
@@ -5044,12 +5111,18 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         custom:false,
       }));
     });
-    return dedupeChecklistItemsObject(out);
+    return applyStoredProgressSummary(out);
   };
 
   const [items,setItems] = useState(()=>{
-    const incoming = dedupeChecklistItemsObject(initialItems || {});
-    if(countEmdcChecklistItems(incoming)>0) return incoming;
+    const incoming = dedupeChecklistItemsObject(
+      initialItems || {}
+    );
+
+    if(countEmdcChecklistItems(incoming)>0){
+      return applyStoredProgressSummary(incoming);
+    }
+
     return buildChecklistDefaults();
   });
   const checklistBoardItemsRef = useRef<any>(items);
@@ -5139,7 +5212,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[items]);
 
   useEffect(()=>{
-    const incoming = dedupeChecklistItemsObject(initialItems || {});
+    const incoming = applyStoredProgressSummary(
+      dedupeChecklistItemsObject(initialItems || {})
+    );
     const incomingCount = countEmdcChecklistItems(incoming);
 
     if(incomingCount===0){
@@ -5199,7 +5274,22 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     // Import backups may omit some per-group checklist item blobs.
     // For those groups only, save the operational-type defaults once.
     // Existing non-empty restored checklist data is never replaced.
-    if(incomingCount===0 && visibleCount>0 && onItemsChange){
+    const summaryDone = Math.max(
+      0,
+      Number(group?.progressSummary?.done || 0)
+    );
+    const visibleDone = Object.values(visibleItems)
+      .flat()
+      .filter((item:any)=>!!item?.done).length;
+
+    if(
+      visibleCount>0 &&
+      onItemsChange &&
+      (
+        incomingCount===0 ||
+        (summaryDone>0 && visibleDone===summaryDone)
+      )
+    ){
       missingChecklistSeededRef.current = true;
       checklistBoardLocalEditRef.current = true;
       onItemsChange(
