@@ -279,18 +279,43 @@ export default function TeamChatPopup() {
         throw new Error(json?.error || "Unable to load chat.");
       }
 
-      setRooms(Array.isArray(json.rooms) ? json.rooms : []);
-      setUsers(Array.isArray(json.users) ? json.users : []);
+      const returnedRooms = Array.isArray(json.rooms)
+        ? json.rooms.filter(
+            (room: ChatRoom) => room?.id && room?.name
+          )
+        : [];
+
+      // Never erase the existing group list because of a temporary,
+      // incomplete, or stale API response.
+      if (returnedRooms.length > 0) {
+        setRooms(returnedRooms);
+      }
+
+      const returnedUsers = Array.isArray(json.users)
+        ? json.users.filter(
+            (user: ChatUser) => user?.email && user?.name
+          )
+        : [];
+
+      if (returnedUsers.length > 0) {
+        setUsers(returnedUsers);
+      }
+
       const nextMessages = Array.isArray(json.messages)
         ? json.messages
         : [];
 
       setMessages(nextMessages);
-      setRoomSummaryData(
-        Array.isArray(json.roomSummaries)
-          ? json.roomSummaries
-          : []
-      );
+
+      const returnedSummaries = Array.isArray(
+        json.roomSummaries
+      )
+        ? json.roomSummaries
+        : [];
+
+      if (returnedSummaries.length > 0) {
+        setRoomSummaryData(returnedSummaries);
+      }
       setError("");
 
       if (!showRoomList && requestedRoomId === roomId) {
@@ -530,7 +555,9 @@ export default function TeamChatPopup() {
       return;
     }
 
-    setRooms(json.rooms);
+    if (Array.isArray(json.rooms) && json.rooms.length > 0) {
+      setRooms(json.rooms);
+    }
     setRoomId(json.room.id);
     setRoomPasswords((current) => ({
       ...current,
@@ -737,7 +764,9 @@ export default function TeamChatPopup() {
         ? json.rooms
         : [{ id: "general", name: "General" }];
 
-      setRooms(nextRooms);
+      if (nextRooms.length > 0) {
+        setRooms(nextRooms);
+      }
       setRoomId("general");
       setMessages([]);
       setSelectedIds([]);
