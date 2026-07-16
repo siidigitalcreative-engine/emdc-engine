@@ -25,6 +25,8 @@ type ChatUser = {
 type ChatRoom = {
   id: string;
   name: string;
+  ownerEmail?: string;
+  passwordProtected?: boolean;
 };
 
 type RoomSummary = {
@@ -69,6 +71,9 @@ export default function TeamChatPopup() {
   >([]);
   const [roomId, setRoomId] = useState("general");
   const [showRoomList, setShowRoomList] = useState(true);
+  const [roomPasswords, setRoomPasswords] = useState<
+    Record<string, string>
+  >({});
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -144,12 +149,41 @@ export default function TeamChatPopup() {
           requestedRoomId
         )}&limit=${LIMIT}&requesterEmail=${encodeURIComponent(
           senderEmail
+        )}&roomPassword=${encodeURIComponent(
+          roomPasswords[requestedRoomId] || ""
         )}&t=${Date.now()}`,
         { cache: "no-store" }
       );
       const json = await response.json().catch(() => null);
 
       if (!response.ok || !json?.ok) {
+        if (
+          json?.code === "ROOM_PASSWORD_REQUIRED" ||
+          (
+            response.status === 403 &&
+            String(json?.error || "").toLowerCase().includes(
+              "password"
+            )
+          )
+        ) {
+          const entered = window.prompt(
+            "Enter the password for this group chat:"
+          );
+
+          if (entered !== null) {
+            setRoomPasswords((current) => ({
+              ...current,
+              [requestedRoomId]: entered,
+            }));
+
+            window.setTimeout(() => {
+              loadMessages(false, requestedRoomId);
+            }, 0);
+
+            return;
+          }
+        }
+
         throw new Error(json?.error || "Unable to load chat.");
       }
 
@@ -237,6 +271,12 @@ export default function TeamChatPopup() {
     const name = window.prompt("Enter the new group chat name:");
     if (!name?.trim()) return;
 
+    const roomPassword = window.prompt(
+      "Optional: Enter a password for this group. Leave blank for no password."
+    );
+
+    if (roomPassword === null) return;
+
     const response = await fetch("/api/team-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -244,6 +284,7 @@ export default function TeamChatPopup() {
         action: "create-room",
         name: name.trim(),
         requesterEmail: senderEmail,
+        roomPassword: roomPassword.trim(),
       }),
     });
 
@@ -256,6 +297,10 @@ export default function TeamChatPopup() {
 
     setRooms(json.rooms);
     setRoomId(json.room.id);
+    setRoomPasswords((current) => ({
+      ...current,
+      [json.room.id]: roomPassword.trim(),
+    }));
     setShowRoomList(false);
     setMessages([]);
   };
@@ -276,6 +321,7 @@ export default function TeamChatPopup() {
           sender,
           senderEmail,
           text: clean,
+          roomPassword: currentRoomPassword,
         }),
       });
 
@@ -308,6 +354,7 @@ export default function TeamChatPopup() {
         messageId: message.id,
         emoji,
         requesterEmail: senderEmail,
+        roomPassword: currentRoomPassword,
       }),
     });
 
@@ -336,6 +383,7 @@ export default function TeamChatPopup() {
         roomId,
         messageIds: selectedIds,
         requesterEmail: senderEmail,
+        roomPassword: currentRoomPassword,
       }),
     });
 
@@ -351,15 +399,75 @@ export default function TeamChatPopup() {
     setSelectionMode(false);
   };
 
+  const manageRoomPassword = async () => {
+    if (!currentUserIsRoomOwner) {
+      setError(
+        "Only the group owner can change the password."
+      );
+      return;
+    }
+
+    const nextPassword = window.prompt(
+      currentRoom.passwordProtected
+        ? "Enter a new password. Leave blank to remove the current password."
+        : "Enter a password for this group:"
+    );
+
+    if (nextPassword === null) return;
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set-room-password",
+          roomId,
+          requesterEmail: senderEmail,
+          newPassword: nextPassword,
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.ok) {
+        throw new Error(
+          json?.error || "Unable to update group password."
+        );
+      }
+
+      setRooms(
+        Array.isArray(json.rooms)
+          ? json.rooms
+          : rooms.map((room) =>
+              room.id === roomId ? json.room : room
+            )
+      );
+
+      setRoomPasswords((current) => ({
+        ...current,
+        [roomId]: nextPassword,
+      }));
+
+      setError("");
+    } catch (passwordError: any) {
+      setError(
+        passwordError?.message ||
+          "Unable to update group password."
+      );
+    }
+  };
+
   const deleteCurrentRoom = async () => {
     if (roomId === "general") {
       setError("The General group cannot be deleted.");
       return;
     }
 
-    const password = window.prompt(
-      "Enter the chat administrator password to delete this group:"
-    );
+    const password = currentUserIsRoomOwner
+      ? ""
+      : window.prompt(
+          "Enter the chat administrator password to delete this group:"
+        );
 
     if (password === null) return;
 
@@ -378,6 +486,7 @@ export default function TeamChatPopup() {
         body: JSON.stringify({
           action: "delete-room",
           roomId,
+          requesterEmail: senderEmail,
           adminPassword: password,
         }),
       });
@@ -442,6 +551,13 @@ export default function TeamChatPopup() {
     rooms.find((room) => room.id === roomId) ||
     rooms[0] ||
     { id: "general", name: "General" };
+
+  const currentUserIsRoomOwner =
+    normalizeEmail(currentRoom?.ownerEmail) ===
+    normalizeEmail(senderEmail);
+
+  const currentRoomPassword =
+    roomPasswords[roomId] || "";
 
   const roomSummaries = useMemo(() => {
     const summaryByRoom = new Map(
@@ -664,6 +780,33 @@ export default function TeamChatPopup() {
                   </div>
                 </div>
 
+                {currentUserIsRoomOwner && (
+                  <button
+                    type="button"
+                    onClick={manageRoomPassword}
+                    title="Manage group password"
+                    style={{
+                      height: 34,
+                      padding: "0 9px",
+                      borderRadius: 9,
+                      border: "1px solid #D1D5DB",
+                      background: currentRoom.passwordProtected
+                        ? "#EFF6FF"
+                        : "#FFFFFF",
+                      color: currentRoom.passwordProtected
+                        ? "#1D4ED8"
+                        : "#374151",
+                      fontSize: 10,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {currentRoom.passwordProtected
+                      ? "Change Password"
+                      : "Set Password"}
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -763,13 +906,37 @@ export default function TeamChatPopup() {
                   key={room.id}
                   type="button"
                   onClick={() => {
+                    const isOwner =
+                      normalizeEmail(room.ownerEmail) ===
+                      normalizeEmail(senderEmail);
+
+                    if (
+                      room.passwordProtected &&
+                      !isOwner &&
+                      !roomPasswords[room.id]
+                    ) {
+                      const entered = window.prompt(
+                        `Enter the password for "${room.name}":`
+                      );
+
+                      if (entered === null) return;
+
+                      setRoomPasswords((current) => ({
+                        ...current,
+                        [room.id]: entered,
+                      }));
+                    }
+
                     setRoomId(room.id);
                     setShowRoomList(false);
                     setSelectedIds([]);
                     setSelectionMode(false);
                     setReactionDetailsKey("");
                     setReactionPickerId("");
-                    void loadMessages(false, room.id);
+
+                    window.setTimeout(() => {
+                      void loadMessages(false, room.id);
+                    }, 0);
                   }}
                   style={{
                     width: "100%",
@@ -822,6 +989,7 @@ export default function TeamChatPopup() {
                       }}
                     >
                       {room.name}
+                      {room.passwordProtected ? " 🔒" : ""}
                     </div>
                     {mentionedYou ? (
                       <div
