@@ -16,6 +16,12 @@ type ChatMessage = {
   readBy?: string[];
 };
 
+type ChatUser = {
+  name: string;
+  email: string;
+  lastSeenAt?: string;
+};
+
 const CHAT_POLL_MS = 30000;
 const MAX_VISIBLE_MESSAGES = 30;
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
@@ -42,6 +48,7 @@ export default function TeamChatPopup() {
   const [open, setOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
   const [draft, setDraft] = useState("");
   const [sender, setSender] = useState("EMDC User");
   const [senderEmail, setSenderEmail] = useState("");
@@ -168,6 +175,33 @@ export default function TeamChatPopup() {
     }
   };
 
+  const registerCurrentUser = async () => {
+    const email = normalizeEmail(senderEmail);
+    const name = String(sender || "").trim();
+
+    if (!email || !name) return;
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register-user",
+          requesterEmail: email,
+          requesterName: name,
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (response.ok && json?.ok && Array.isArray(json.users)) {
+        setChatUsers(json.users);
+      }
+    } catch {
+      // Registration is optional and should never block chat.
+    }
+  };
+
   const loadMessages = async (silent = false) => {
     if (!silent) setLoading(true);
 
@@ -189,6 +223,10 @@ export default function TeamChatPopup() {
       const nextMessages = Array.isArray(json.messages)
         ? json.messages
         : [];
+
+      if (Array.isArray(json.users)) {
+        setChatUsers(json.users);
+      }
 
       const latestId =
         nextMessages[nextMessages.length - 1]?.id || "";
@@ -232,6 +270,7 @@ export default function TeamChatPopup() {
     if (!open) return;
 
     setUnread(0);
+    void registerCurrentUser();
     loadMessages();
 
     const timer = window.setInterval(() => {
@@ -251,6 +290,15 @@ export default function TeamChatPopup() {
   const participantSuggestions = useMemo(() => {
     const byEmail = new Map<string, string>();
 
+    chatUsers.forEach((user) => {
+      const email = normalizeEmail(user.email);
+      const name = String(user.name || "").trim();
+
+      if (email && name && email !== normalizeEmail(senderEmail)) {
+        byEmail.set(email, name);
+      }
+    });
+
     messages.forEach((message) => {
       const email = normalizeEmail(message.senderEmail);
       const name = String(message.sender || "").trim();
@@ -260,15 +308,17 @@ export default function TeamChatPopup() {
       }
     });
 
-    return Array.from(byEmail.entries()).map(([email, name]) => ({
-      email,
-      name,
-    }));
-  }, [messages, senderEmail]);
+    return Array.from(byEmail.entries())
+      .map(([email, name]) => ({ email, name }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [chatUsers, messages, senderEmail]);
 
   const mentionQuery = useMemo(() => {
-    const match = draft.match(/(?:^|\s)@([^\s@]*)$/);
-    return match ? String(match[1] || "").toLowerCase() : "";
+    const cursorText = draft;
+    const match = cursorText.match(/(?:^|\s)@([^\n@]*)$/);
+    return match
+      ? String(match[1] || "").trim().toLowerCase()
+      : "";
   }, [draft]);
 
   const filteredMentions = useMemo(() => {
@@ -935,8 +985,9 @@ export default function TeamChatPopup() {
                                     : "#FFFFFF",
                                   color: "#111827",
                                   borderRadius: 999,
-                                  padding: "2px 7px",
-                                  fontSize: 10,
+                                  padding: "4px 9px",
+                                  fontSize: 13,
+                                  fontWeight: 700,
                                 }}
                               >
                                 {emoji} {emails.length}
@@ -993,11 +1044,25 @@ export default function TeamChatPopup() {
                               border: 0,
                               background: "transparent",
                               color: mine ? "#FFFFFF" : "#374151",
-                              fontSize: 12,
-                              opacity: 0.8,
+                              width: 28,
+                              height: 28,
+                              border: mine
+                                ? "1px solid rgba(255,255,255,.38)"
+                                : "1px solid #D1D5DB",
+                              borderRadius: 999,
+                              background: mine
+                                ? "rgba(255,255,255,.12)"
+                                : "#F9FAFB",
+                              color: mine ? "#FFFFFF" : "#111827",
+                              fontSize: 17,
+                              opacity: 1,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
                             }}
                           >
-                            ☺
+                            😊
                           </button>
                         )}
                       </div>
@@ -1007,9 +1072,9 @@ export default function TeamChatPopup() {
                           style={{
                             marginTop: 7,
                             display: "flex",
-                            gap: 3,
-                            padding: 4,
-                            borderRadius: 10,
+                            gap: 5,
+                            padding: 6,
+                            borderRadius: 12,
                             background: "#FFFFFF",
                             border: "1px solid #E5E7EB",
                           }}
@@ -1029,8 +1094,12 @@ export default function TeamChatPopup() {
                               style={{
                                 border: 0,
                                 background: "transparent",
-                                fontSize: 17,
-                                padding: 3,
+                                width: 34,
+                                height: 34,
+                                borderRadius: 999,
+                                fontSize: 23,
+                                padding: 2,
+                                cursor: "pointer",
                               }}
                             >
                               {emoji}
@@ -1115,7 +1184,7 @@ export default function TeamChatPopup() {
                   const value = event.target.value;
                   setDraft(value);
                   setMentionOpen(
-                    /(?:^|\s)@[^\s@]*$/.test(value)
+                    /(?:^|\s)@[^\n@]*$/.test(value)
                   );
                 }}
                 onKeyDown={(event) => {
