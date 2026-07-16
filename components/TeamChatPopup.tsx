@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import MaterialIcon from "@/components/MaterialIcon";
 
 type ReactionMap = Record<string, string[]>;
 
@@ -476,6 +475,7 @@ export default function TeamChatPopup() {
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
+            boxSizing: "border-box",
           }}
         >
           {showRoomList ? (
@@ -921,8 +921,10 @@ export default function TeamChatPopup() {
             style={{
               flex: 1,
               overflowY: "auto",
+              overflowX: "hidden",
               padding: 12,
               background: "#F8FAFC",
+              boxSizing: "border-box",
             }}
           >
             {loading && !messages.length ? (
@@ -974,8 +976,10 @@ export default function TeamChatPopup() {
                     <div
                       style={{
                         position: "relative",
-                        maxWidth: "86%",
+                        maxWidth: "calc(100% - 18px)",
+                        minWidth: 0,
                         padding: "9px 11px",
+                        boxSizing: "border-box",
                         borderRadius: mine
                           ? "14px 14px 4px 14px"
                           : "14px 14px 14px 4px",
@@ -1046,7 +1050,13 @@ export default function TeamChatPopup() {
                               .includes(normalizeEmail(senderEmail));
 
                             return (
-                              <div key={emoji} style={{ position: "relative" }}>
+                              <div
+                                key={emoji}
+                                style={{
+                                  position: "relative",
+                                  maxWidth: "100%",
+                                }}
+                              >
                                 <button
                                   type="button"
                                   onClick={(event) => {
@@ -1074,18 +1084,19 @@ export default function TeamChatPopup() {
                                   <div
                                     onClick={(event) => event.stopPropagation()}
                                     style={{
-                                      position: "absolute",
-                                      left: 0,
-                                      bottom: "calc(100% + 6px)",
-                                      zIndex: 60,
-                                      minWidth: 220,
+                                      position: "relative",
+                                      width: "min(240px, 100%)",
+                                      maxWidth: "100%",
+                                      marginTop: 6,
                                       padding: 9,
+                                      boxSizing: "border-box",
                                       borderRadius: 10,
                                       border: "1px solid #D1D5DB",
                                       background: "#FFFFFF",
                                       color: "#111827",
                                       boxShadow:
-                                        "0 14px 35px rgba(15,23,42,.18)",
+                                        "0 8px 20px rgba(15,23,42,.12)",
+                                      overflow: "hidden",
                                     }}
                                   >
                                     <div
@@ -1121,6 +1132,7 @@ export default function TeamChatPopup() {
                                             style={{
                                               fontSize: 9,
                                               color: "#6B7280",
+                                              overflowWrap: "anywhere",
                                             }}
                                           >
                                             {normalized}
@@ -1205,20 +1217,17 @@ export default function TeamChatPopup() {
                               style={{
                                 position: "absolute",
                                 inset: 0,
-                                display: "grid",
-                                placeItems: "center",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
                                 pointerEvents: "none",
+                                fontSize: 18,
+                                lineHeight: 1,
+                                fontFamily:
+                                  '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
                               }}
                             >
-                              <MaterialIcon
-                                name="sentiment_satisfied"
-                                size={18}
-                                weight={500}
-                                style={{
-                                  display: "block",
-                                  lineHeight: 1,
-                                }}
-                              />
+                              😊
                             </span>
                           </button>
                         )}
