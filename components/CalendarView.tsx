@@ -5028,6 +5028,60 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
+
+  const doneStatusId =
+    (
+      Array.isArray(statuses)
+        ? statuses.find(
+            (status:any) =>
+              String(status?.id || "").toLowerCase()==="done" ||
+              String(status?.label || "").trim().toLowerCase()==="done"
+          )?.id
+        : ""
+    ) || "done";
+
+  const normalizeChecklistDoneState = (sourceItems:any) => {
+    const cleanItems = normalizeChecklistDoneState(sourceItems || {});
+    const next:any = {};
+
+    Object.keys(DEPTS).forEach((dept:string)=>{
+      const rows = Array.isArray(cleanItems?.[dept])
+        ? cleanItems[dept]
+        : [];
+
+      next[dept] = rows.map((item:any)=>{
+        const currentStatusId = String(item?.statusId || "");
+        const statusMeta = Array.isArray(statuses)
+          ? statuses.find(
+              (status:any) =>
+                String(status?.id || "")===currentStatusId
+            )
+          : null;
+
+        const statusMeansDone =
+          currentStatusId.toLowerCase()==="done" ||
+          String(statusMeta?.label || "")
+            .trim()
+            .toLowerCase()==="done";
+
+        const isDone = Boolean(item?.done || statusMeansDone);
+
+        return {
+          ...item,
+          done:isDone,
+          // A checked item with no status should visibly show Done.
+          // Existing non-empty manual statuses are preserved.
+          statusId:
+            isDone && !currentStatusId
+              ? doneStatusId
+              : currentStatusId,
+        };
+      });
+    });
+
+    return dedupeChecklistItemsObject(next);
+  };
+
   const applyStoredProgressSummary = (sourceItems:any) => {
     const cleanItems = dedupeChecklistItemsObject(sourceItems || {});
     const summary =
@@ -5080,10 +5134,18 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
           : Math.min(rows.length,remainingOverallDone);
 
       next[dept] = rows.map(
-        (item:any,index:number)=>({
-          ...item,
-          done:index < doneTarget,
-        })
+        (item:any,index:number)=>{
+          const reconstructedDone = index < doneTarget;
+
+          return {
+            ...item,
+            done:reconstructedDone,
+            statusId:
+              reconstructedDone
+                ? (String(item?.statusId || "") || doneStatusId)
+                : String(item?.statusId || ""),
+          };
+        }
       );
 
       remainingOverallDone = Math.max(
@@ -5120,7 +5182,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     );
 
     if(countEmdcChecklistItems(incoming)>0){
-      return applyStoredProgressSummary(incoming);
+      return normalizeChecklistDoneState(
+        applyStoredProgressSummary(incoming)
+      );
     }
 
     return buildChecklistDefaults();
@@ -5212,8 +5276,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[items]);
 
   useEffect(()=>{
-    const incoming = applyStoredProgressSummary(
-      dedupeChecklistItemsObject(initialItems || {})
+    const incoming = normalizeChecklistDoneState(
+      applyStoredProgressSummary(
+        dedupeChecklistItemsObject(initialItems || {})
+      )
     );
     const incomingCount = countEmdcChecklistItems(incoming);
 
