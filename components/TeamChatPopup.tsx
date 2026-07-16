@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 type ChatMessage = {
   id: string;
   sender: string;
+  senderEmail?: string;
   text: string;
   createdAt: string;
 };
@@ -34,6 +35,8 @@ export default function TeamChatPopup() {
   const [senderEmail, setSenderEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
+  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState("");
   const [unread, setUnread] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -196,6 +199,7 @@ export default function TeamChatPopup() {
         },
         body: JSON.stringify({
           sender: cleanSender,
+          senderEmail,
           text: cleanText,
         }),
       });
@@ -237,6 +241,105 @@ export default function TeamChatPopup() {
       setError(sendError?.message || "Unable to send message.");
     } finally {
       setSending(false);
+    }
+  };
+
+  const deleteOwnMessage = async (message: ChatMessage) => {
+    if (
+      !senderEmail ||
+      !message?.senderEmail ||
+      message.senderEmail.toLowerCase() !== senderEmail.toLowerCase()
+    ) {
+      setError("You can delete only your own messages.");
+      return;
+    }
+
+    if (!window.confirm("Delete this message?")) return;
+
+    setDeletingId(message.id);
+    setError("");
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "delete-message",
+          messageId: message.id,
+          requesterEmail: senderEmail,
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "Unable to delete message.");
+      }
+
+      setMessages(
+        Array.isArray(json?.messages)
+          ? json.messages
+          : (current) =>
+              current.filter((item) => item.id !== message.id)
+      );
+    } catch (deleteError: any) {
+      setError(
+        deleteError?.message || "Unable to delete message."
+      );
+    } finally {
+      setDeletingId("");
+    }
+  };
+
+  const clearEntireChat = async () => {
+    const adminPassword = window.prompt(
+      "Enter the Team Chat administrator password:"
+    );
+
+    if (adminPassword === null) return;
+    if (!adminPassword) {
+      setError("Administrator password is required.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Clear the entire team chat? This cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    setClearing(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "clear-chat",
+          adminPassword,
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "Unable to clear chat.");
+      }
+
+      setMessages([]);
+      latestMessageIdRef.current = "";
+      setUnread(0);
+    } catch (clearError: any) {
+      setError(clearError?.message || "Unable to clear chat.");
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -296,24 +399,53 @@ export default function TeamChatPopup() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close team chat"
+            <div
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 999,
-                border: "1px solid #E5E7EB",
-                background: "#F9FAFB",
-                fontSize: 22,
-                lineHeight: 1,
-                cursor: "pointer",
-                color: "#374151",
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
               }}
             >
-              ×
-            </button>
+              <button
+                type="button"
+                onClick={clearEntireChat}
+                disabled={clearing}
+                title="Admin only"
+                style={{
+                  height: 34,
+                  padding: "0 10px",
+                  borderRadius: 9,
+                  border: "1px solid #E5E7EB",
+                  background: "#FFFFFF",
+                  color: "#B91C1C",
+                  fontSize: 10,
+                  fontWeight: 900,
+                  cursor: clearing ? "wait" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {clearing ? "Clearing…" : "Clear Chat"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close team chat"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 999,
+                  border: "1px solid #E5E7EB",
+                  background: "#F9FAFB",
+                  fontSize: 22,
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  color: "#374151",
+                }}
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           <div
@@ -438,9 +570,23 @@ export default function TeamChatPopup() {
               </div>
             ) : (
               sortedMessages.map((message) => {
-                const mine =
+                const mine = Boolean(
+                  senderEmail &&
+                  message.senderEmail &&
+                  message.senderEmail.toLowerCase() ===
+                    senderEmail.toLowerCase()
+                ) || (
+                  !message.senderEmail &&
                   message.sender.trim().toLowerCase() ===
-                  (sender.trim() || "EMDC User").toLowerCase();
+                    (sender.trim() || "EMDC User").toLowerCase()
+                );
+
+                const canDelete = Boolean(
+                  senderEmail &&
+                  message.senderEmail &&
+                  message.senderEmail.toLowerCase() ===
+                    senderEmail.toLowerCase()
+                );
 
                 return (
                   <div
@@ -490,13 +636,46 @@ export default function TeamChatPopup() {
 
                       <div
                         style={{
-                          fontSize: 9,
                           marginTop: 5,
-                          opacity: 0.68,
-                          textAlign: "right",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                          gap: 8,
                         }}
                       >
-                        {formatChatTime(message.createdAt)}
+                        <span
+                          style={{
+                            fontSize: 9,
+                            opacity: 0.68,
+                          }}
+                        >
+                          {formatChatTime(message.createdAt)}
+                        </span>
+
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => deleteOwnMessage(message)}
+                            disabled={deletingId === message.id}
+                            style={{
+                              padding: 0,
+                              border: 0,
+                              background: "transparent",
+                              color: mine ? "#FCA5A5" : "#DC2626",
+                              fontSize: 9,
+                              fontWeight: 900,
+                              cursor:
+                                deletingId === message.id
+                                  ? "wait"
+                                  : "pointer",
+                              textDecoration: "underline",
+                            }}
+                          >
+                            {deletingId === message.id
+                              ? "Deleting…"
+                              : "Delete"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -602,7 +781,7 @@ export default function TeamChatPopup() {
             position: "fixed",
             right: 18,
             bottom: mobile
-              ? "calc(92px + env(safe-area-inset-bottom))"
+              ? "calc(76px + 18px + env(safe-area-inset-bottom))"
               : 20,
             zIndex: 9997,
             width: 56,
