@@ -27,6 +27,13 @@ type ChatRoom = {
   name: string;
 };
 
+type RoomSummary = {
+  roomId: string;
+  latestMessage: ChatMessage | null;
+  mentionedYou: boolean;
+  mentionMessageId?: string;
+};
+
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 const POLL_MS = 30000;
 const LIMIT = 30;
@@ -57,6 +64,9 @@ export default function TeamChatPopup() {
   const [rooms, setRooms] = useState<ChatRoom[]>([
     { id: "general", name: "General" },
   ]);
+  const [roomSummaryData, setRoomSummaryData] = useState<
+    RoomSummary[]
+  >([]);
   const [roomId, setRoomId] = useState("general");
   const [showRoomList, setShowRoomList] = useState(true);
   const [users, setUsers] = useState<ChatUser[]>([]);
@@ -130,7 +140,11 @@ export default function TeamChatPopup() {
 
     try {
       const response = await fetch(
-        `/api/team-chat?roomId=${encodeURIComponent(requestedRoomId)}&limit=${LIMIT}&t=${Date.now()}`,
+        `/api/team-chat?roomId=${encodeURIComponent(
+          requestedRoomId
+        )}&limit=${LIMIT}&requesterEmail=${encodeURIComponent(
+          senderEmail
+        )}&t=${Date.now()}`,
         { cache: "no-store" }
       );
       const json = await response.json().catch(() => null);
@@ -142,6 +156,11 @@ export default function TeamChatPopup() {
       setRooms(Array.isArray(json.rooms) ? json.rooms : []);
       setUsers(Array.isArray(json.users) ? json.users : []);
       setMessages(Array.isArray(json.messages) ? json.messages : []);
+      setRoomSummaryData(
+        Array.isArray(json.roomSummaries)
+          ? json.roomSummaries
+          : []
+      );
       setError("");
     } catch (loadError: any) {
       if (!silent) setError(loadError?.message || "Unable to load chat.");
@@ -425,22 +444,32 @@ export default function TeamChatPopup() {
     { id: "general", name: "General" };
 
   const roomSummaries = useMemo(() => {
-    return rooms.map((room) => {
-      const roomMessages = messages.filter(
-        (message) => message.roomId === room.id
-      );
+    const summaryByRoom = new Map(
+      roomSummaryData.map((summary) => [
+        summary.roomId,
+        summary,
+      ])
+    );
 
-      const latest = roomMessages[roomMessages.length - 1];
+    return rooms.map((room) => {
+      const summary = summaryByRoom.get(room.id);
+      const latest =
+        summary?.latestMessage ||
+        messages
+          .filter((message) => message.roomId === room.id)
+          .slice(-1)[0] ||
+        null;
 
       return {
         room,
         latest,
+        mentionedYou: Boolean(summary?.mentionedYou),
         preview: latest
           ? `${latest.sender}: ${latest.text}`
           : "No messages yet",
       };
     });
-  }, [rooms, messages]);
+  }, [rooms, messages, roomSummaryData]);
 
   const roomInitials = (name: string) =>
     String(name || "")
@@ -728,7 +757,8 @@ export default function TeamChatPopup() {
                 padding: "6px 0",
               }}
             >
-              {roomSummaries.map(({ room, latest, preview }, index) => (
+              {roomSummaries.map(
+                ({ room, latest, preview, mentionedYou }, index) => (
                 <button
                   key={room.id}
                   type="button"
@@ -793,18 +823,57 @@ export default function TeamChatPopup() {
                     >
                       {room.name}
                     </div>
-                    <div
-                      style={{
-                        marginTop: 4,
-                        fontSize: 10,
-                        color: "#6B7280",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {preview}
-                    </div>
+                    {mentionedYou ? (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                          minWidth: 0,
+                        }}
+                      >
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: "#FEF3C7",
+                            color: "#92400E",
+                            fontSize: 9,
+                            fontWeight: 900,
+                          }}
+                        >
+                          @ Mentioned you
+                        </span>
+
+                        <span
+                          style={{
+                            minWidth: 0,
+                            fontSize: 10,
+                            color: "#6B7280",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {preview}
+                        </span>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          fontSize: 10,
+                          color: "#6B7280",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {preview}
+                      </div>
+                    )}
                   </div>
 
                   <div
@@ -819,7 +888,8 @@ export default function TeamChatPopup() {
                     {latest ? formatTime(latest.createdAt) : "›"}
                   </div>
                 </button>
-              ))}
+                )
+              )}
             </div>
           ) : (
             <>
