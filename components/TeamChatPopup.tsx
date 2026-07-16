@@ -894,10 +894,14 @@ export default function TeamChatPopup() {
       return {
         room,
         latest,
-        mentionedYou: Boolean(summary?.mentionedYou),
-        preview: latest
-          ? `${latest.sender}: ${latest.text}`
-          : "No messages yet",
+        mentionedYou:
+          !room.passwordProtected &&
+          Boolean(summary?.mentionedYou),
+        preview: room.passwordProtected
+          ? "Password Protected"
+          : latest
+            ? `${latest.sender}: ${latest.text}`
+            : "No messages yet",
       };
     });
   }, [rooms, messages, roomSummaryData]);
@@ -1419,7 +1423,20 @@ export default function TeamChatPopup() {
                       {room.name}
                       {room.passwordProtected ? " 🔒" : ""}
                     </div>
-                    {mentionedYou ? (
+                    {room.passwordProtected ? (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          fontSize: 10,
+                          color: "#6B7280",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Password Protected
+                      </div>
+                    ) : mentionedYou ? (
                       <div
                         style={{
                           marginTop: 4,
