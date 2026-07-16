@@ -58,6 +58,7 @@ export default function TeamChatPopup() {
     { id: "general", name: "General" },
   ]);
   const [roomId, setRoomId] = useState("general");
+  const [showRoomList, setShowRoomList] = useState(true);
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -225,6 +226,7 @@ export default function TeamChatPopup() {
 
     setRooms(json.rooms);
     setRoomId(json.room.id);
+    setShowRoomList(false);
     setMessages([]);
   };
 
@@ -351,6 +353,37 @@ export default function TeamChatPopup() {
     }
   };
 
+  const currentRoom =
+    rooms.find((room) => room.id === roomId) ||
+    rooms[0] ||
+    { id: "general", name: "General" };
+
+  const roomSummaries = useMemo(() => {
+    return rooms.map((room) => {
+      const roomMessages = messages.filter(
+        (message) => message.roomId === room.id
+      );
+
+      const latest = roomMessages[roomMessages.length - 1];
+
+      return {
+        room,
+        latest,
+        preview: latest
+          ? `${latest.sender}: ${latest.text}`
+          : "No messages yet",
+      };
+    });
+  }, [rooms, messages]);
+
+  const roomInitials = (name: string) =>
+    String(name || "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "GC";
+
   return (
     <>
       {open && (
@@ -378,110 +411,314 @@ export default function TeamChatPopup() {
             overflow: "hidden",
           }}
         >
-          <div
-            style={{
-              padding: 10,
-              borderBottom: "1px solid #E5E7EB",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <select
-              value={roomId}
-              onChange={(event) => {
-                setRoomId(event.target.value);
-                setMessages([]);
-                setSelectedIds([]);
-                setSelectionMode(false);
+          {showRoomList ? (
+            <div
+              style={{
+                padding: "12px",
+                borderBottom: "1px solid #E5E7EB",
+                background: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
               }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 900,
+                    color: "#111827",
+                  }}
+                >
+                  Group Chats
+                </div>
+                <div
+                  style={{
+                    marginTop: 2,
+                    fontSize: 10,
+                    color: "#6B7280",
+                  }}
+                >
+                  Select a group to open the conversation
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={createRoom}
+                  title="Create group chat"
+                  aria-label="Create group chat"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    border: "1px solid #D1D5DB",
+                    background: "#111827",
+                    color: "#FFFFFF",
+                    fontSize: 20,
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  +
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close team chat"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 999,
+                    border: "1px solid #D1D5DB",
+                    background: "#F9FAFB",
+                    color: "#374151",
+                    fontSize: 20,
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderBottom: "1px solid #E5E7EB",
+                background: "#FFFFFF",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRoomList(true);
+                    setSelectionMode(false);
+                    setSelectedIds([]);
+                    setReactionDetailsKey("");
+                    setReactionPickerId("");
+                  }}
+                  aria-label="Back to group chat list"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    flexShrink: 0,
+                    borderRadius: 999,
+                    border: "1px solid #D1D5DB",
+                    background: "#F9FAFB",
+                    color: "#111827",
+                    fontSize: 20,
+                    cursor: "pointer",
+                  }}
+                >
+                  ←
+                </button>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 900,
+                      color: "#111827",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {currentRoom.name}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontSize: 10,
+                      color: "#6B7280",
+                    }}
+                  >
+                    Group conversation
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectionMode((value) => !value);
+                    setSelectedIds([]);
+                  }}
+                  style={{
+                    height: 34,
+                    padding: "0 9px",
+                    borderRadius: 9,
+                    border: "1px solid #D1D5DB",
+                    background: selectionMode ? "#EFF6FF" : "#FFFFFF",
+                    color: selectionMode ? "#1D4ED8" : "#374151",
+                    fontSize: 10,
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  {selectionMode ? "Cancel" : "Select"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearRoom}
+                  disabled={clearing}
+                  title="Admin password required"
+                  style={{
+                    height: 34,
+                    padding: "0 9px",
+                    borderRadius: 9,
+                    border: "1px solid #FCA5A5",
+                    background: "#FEF2F2",
+                    color: "#B91C1C",
+                    fontSize: 10,
+                    fontWeight: 900,
+                    cursor: clearing ? "wait" : "pointer",
+                  }}
+                >
+                  {clearing ? "..." : "Clear"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close team chat"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    flexShrink: 0,
+                    borderRadius: 999,
+                    border: "1px solid #D1D5DB",
+                    background: "#F9FAFB",
+                    color: "#374151",
+                    fontSize: 20,
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showRoomList ? (
+            <div
               style={{
                 flex: 1,
-                minWidth: 0,
-                height: 36,
-                border: "1px solid #D1D5DB",
-                borderRadius: 9,
-                padding: "0 8px",
-                fontWeight: 900,
+                overflowY: "auto",
+                background: "#FFFFFF",
+                padding: "6px 0",
               }}
             >
-              {rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                </option>
+              {roomSummaries.map(({ room, latest, preview }, index) => (
+                <button
+                  key={room.id}
+                  type="button"
+                  onClick={() => {
+                    setRoomId(room.id);
+                    setShowRoomList(false);
+                    setMessages([]);
+                    setSelectedIds([]);
+                    setSelectionMode(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "grid",
+                    gridTemplateColumns: "46px minmax(0,1fr) auto",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                    border: 0,
+                    borderBottom: "1px solid #F3F4F6",
+                    background:
+                      room.id === roomId
+                        ? "#F3F4F6"
+                        : "#FFFFFF",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 12,
+                      background:
+                        index % 3 === 0
+                          ? "linear-gradient(135deg,#FF8A65,#EF5350)"
+                          : index % 3 === 1
+                            ? "linear-gradient(135deg,#9CA3AF,#6B7280)"
+                            : "linear-gradient(135deg,#60A5FA,#2563EB)",
+                      color: "#FFFFFF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 13,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {roomInitials(room.name)}
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 800,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {room.name}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 4,
+                        fontSize: 10,
+                        color: "#6B7280",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {preview}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      alignSelf: "start",
+                      paddingTop: 2,
+                      color: "#9CA3AF",
+                      fontSize: 10,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {latest ? formatTime(latest.createdAt) : "›"}
+                  </div>
+                </button>
               ))}
-            </select>
-
-            <button
-              type="button"
-              onClick={createRoom}
-              title="Create group chat"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 9,
-                border: "1px solid #D1D5DB",
-                background: "#FFFFFF",
-                fontSize: 20,
-                fontWeight: 900,
-              }}
-            >
-              +
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSelectionMode((value) => !value);
-                setSelectedIds([]);
-              }}
-              style={{
-                height: 36,
-                padding: "0 9px",
-                borderRadius: 9,
-                border: "1px solid #D1D5DB",
-                background: "#FFFFFF",
-                fontSize: 10,
-                fontWeight: 900,
-              }}
-            >
-              {selectionMode ? "Cancel" : "Select"}
-            </button>
-
-            <button
-              type="button"
-              onClick={clearRoom}
-              disabled={clearing}
-              style={{
-                height: 36,
-                padding: "0 9px",
-                borderRadius: 9,
-                border: "1px solid #FCA5A5",
-                background: "#FFFFFF",
-                color: "#B91C1C",
-                fontSize: 10,
-                fontWeight: 900,
-              }}
-            >
-              {clearing ? "..." : "Clear"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 999,
-                border: "1px solid #D1D5DB",
-                background: "#F9FAFB",
-                fontSize: 20,
-              }}
-            >
-              ×
-            </button>
-          </div>
-
+            </div>
+          ) : (
+            <>
           {selectionMode && (
             <div
               style={{
@@ -516,14 +753,63 @@ export default function TeamChatPopup() {
 
           <div
             style={{
-              padding: "8px 10px",
+              padding: "8px 12px",
               borderBottom: "1px solid #E5E7EB",
               background: "#F9FAFB",
-              fontSize: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
             }}
           >
-            <strong>{sender}</strong>
-            <div style={{ color: "#6B7280" }}>{senderEmail}</div>
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                flexShrink: 0,
+                borderRadius: 999,
+                background: "#111827",
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 10,
+                fontWeight: 900,
+              }}
+            >
+              {sender
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase())
+                .join("") || "EU"}
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 900,
+                  color: "#111827",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {sender}
+              </div>
+              <div
+                style={{
+                  marginTop: 1,
+                  fontSize: 9,
+                  color: "#6B7280",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {senderEmail}
+              </div>
+            </div>
           </div>
 
           <div
@@ -540,7 +826,18 @@ export default function TeamChatPopup() {
                 Loading…
               </div>
             ) : !messages.length ? (
-              <div style={{ textAlign: "center", color: "#6B7280" }}>
+              <div
+                style={{
+                  minHeight: 180,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                  color: "#6B7280",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+              >
                 No messages in this group yet.
               </div>
             ) : (
@@ -856,8 +1153,9 @@ export default function TeamChatPopup() {
             <div
               style={{
                 position: "relative",
-                padding: 10,
+                padding: 12,
                 borderTop: "1px solid #E5E7EB",
+                background: "#FFFFFF",
               }}
             >
               {mentionOpen && (
@@ -934,11 +1232,21 @@ export default function TeamChatPopup() {
 
               <div
                 style={{
-                  marginTop: 7,
+                  marginTop: 8,
                   display: "flex",
-                  justifyContent: "flex-end",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
                 }}
               >
+                <span
+                  style={{
+                    fontSize: 9,
+                    color: "#9CA3AF",
+                  }}
+                >
+                  Enter to send · Shift+Enter for a new line
+                </span>
                 <button
                   type="button"
                   onClick={sendMessage}
@@ -957,6 +1265,8 @@ export default function TeamChatPopup() {
                 </button>
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
       )}
