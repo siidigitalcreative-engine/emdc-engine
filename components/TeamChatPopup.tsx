@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type ChatMessage = {
   id: string;
@@ -38,60 +39,56 @@ export default function TeamChatPopup() {
   const latestMessageIdRef = useRef("");
 
   useEffect(() => {
-    const readSignedInUser = () => {
+    let active = true;
+    const supabase = createClient();
+
+    const applyUser = (user: any) => {
+      if (!active || !user) return;
+
+      const metadata =
+        user?.user_metadata ||
+        user?.raw_user_meta_data ||
+        {};
+
+      const resolvedName = String(
+        metadata?.display_name ||
+        metadata?.full_name ||
+        metadata?.name ||
+        metadata?.preferred_username ||
+        user?.email ||
+        "EMDC User"
+      ).trim();
+
+      setSender(resolvedName || "EMDC User");
+      setSenderEmail(String(user?.email || "").trim());
+    };
+
+    const loadCurrentUser = async () => {
       try {
-        const storageKeys = Object.keys(localStorage);
-        const authKey = storageKeys.find(
-          (key) =>
-            key.startsWith("sb-") &&
-            key.endsWith("-auth-token")
-        );
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-        if (!authKey) return;
-
-        const raw = localStorage.getItem(authKey);
-        if (!raw) return;
-
-        const parsed = JSON.parse(raw);
-        const user =
-          parsed?.user ||
-          parsed?.currentSession?.user ||
-          parsed?.session?.user ||
-          parsed?.data?.session?.user;
-
-        if (!user) return;
-
-        const metadata =
-          user?.user_metadata ||
-          user?.raw_user_meta_data ||
-          {};
-
-        const resolvedName = String(
-          metadata?.full_name ||
-          metadata?.name ||
-          metadata?.display_name ||
-          user?.email ||
-          "Signed-in EMDC User"
-        ).trim();
-
-        const resolvedEmail = String(
-          user?.email || ""
-        ).trim();
-
-        setSender(resolvedName || "Signed-in EMDC User");
-        setSenderEmail(resolvedEmail);
+        if (user) applyUser(user);
       } catch {
-        // Keep the safe fallback when the auth payload is unavailable.
+        // Keep the fallback only if Supabase cannot return the session.
       }
     };
 
-    readSignedInUser();
+    loadCurrentUser();
 
-    const handleStorage = () => readSignedInUser();
-    window.addEventListener("storage", handleStorage);
+    const {
+      data: authListener,
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        applyUser(session.user);
+      }
+    });
 
-    return () =>
-      window.removeEventListener("storage", handleStorage);
+    return () => {
+      active = false;
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   const loadMessages = async (silent = false) => {
