@@ -425,9 +425,7 @@ export default function TeamChatPopup() {
 
     while ((match = pattern.exec(messageText)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(
-          messageText.slice(lastIndex, match.index)
-        );
+        parts.push(messageText.slice(lastIndex, match.index));
       }
 
       const label = match[1];
@@ -817,14 +815,10 @@ export default function TeamChatPopup() {
       return {
         room,
         latest,
-        mentionedYou:
-          !room.passwordProtected &&
-          Boolean(summary?.mentionedYou),
-        preview: room.passwordProtected
-          ? "Password protected"
-          : latest
-            ? `${latest.sender}: ${latest.text}`
-            : "No messages yet",
+        mentionedYou: Boolean(summary?.mentionedYou),
+        preview: latest
+          ? `${latest.sender}: ${latest.text}`
+          : "No messages yet",
       };
     });
   }, [rooms, messages, roomSummaryData]);
@@ -1346,20 +1340,7 @@ export default function TeamChatPopup() {
                       {room.name}
                       {room.passwordProtected ? " 🔒" : ""}
                     </div>
-                    {room.passwordProtected ? (
-                      <div
-                        style={{
-                          marginTop: 4,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 5,
-                          fontSize: 10,
-                          color: "#6B7280",
-                        }}
-                      >
-                        <span>Password protected</span>
-                      </div>
-                    ) : mentionedYou ? (
+                    {mentionedYou ? (
                       <div
                         style={{
                           marginTop: 4,
