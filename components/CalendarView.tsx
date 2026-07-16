@@ -16157,22 +16157,63 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       // task payload produced by a user action. This prevents opening a group
       // from changing 6/23 to 0/23.
       if(summaryTotal>0){
-        setGroups((currentGroups:any[])=>
-          currentGroups.map((currentGroup:any)=>
-            String(currentGroup?.id)===String(groupId)
-              ? {
-                  ...currentGroup,
-                  progressSummary:{
-                    done:summaryDone,
-                    total:summaryTotal,
-                    departmentCount:Object.keys(departmentSummary).length,
-                    departments:departmentSummary,
-                    updatedAt:new Date().toISOString(),
-                  },
-                }
-              : currentGroup
-          )
-        );
+        const summaryUpdatedAt = new Date().toISOString();
+
+        setGroups((currentGroups:any[])=>{
+          const nextGroups = currentGroups.map(
+            (currentGroup:any)=>
+              String(currentGroup?.id)===String(groupId)
+                ? {
+                    ...currentGroup,
+                    progressSummary:{
+                      done:summaryDone,
+                      total:summaryTotal,
+                      departmentCount:
+                        Object.keys(departmentSummary).length,
+                      departments:departmentSummary,
+                      updatedAt:summaryUpdatedAt,
+                    },
+                  }
+                : currentGroup
+          );
+
+          // Progress cards are stored in checklistGroups, while task details
+          // are stored in checklistItems. Save both sources together whenever
+          // a task changes so leaving the group cannot restore an old 0/30
+          // summary from the cloud.
+          try {
+            const raw = localStorage.getItem(
+              "emdc_app_state_v1"
+            );
+            const parsed = raw
+              ? parseEmdcJson(raw)
+              : {};
+
+            localStorage.setItem(
+              "emdc_app_state_v1",
+              JSON.stringify({
+                ...(parsed || {}),
+                checklistGroups:
+                  mergeChecklistGroupsWithWorkspaceBackups(
+                    nextGroups
+                  ),
+              })
+            );
+
+            markEmdcLocalStateUpdated();
+            window.dispatchEvent(
+              new Event("emdc-local-sync")
+            );
+          } catch {}
+
+          if(onChecklistGroupsDirectSave){
+            onChecklistGroupsDirectSave(
+              JSON.parse(JSON.stringify(nextGroups))
+            );
+          }
+
+          return nextGroups;
+        });
       }
 
       // Keep the current UI/device immediately updated, but do not also send an
