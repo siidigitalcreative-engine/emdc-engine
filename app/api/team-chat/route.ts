@@ -22,10 +22,23 @@ const cleanText = (value: unknown, maxLength: number) =>
     .trim()
     .slice(0, maxLength);
 
+const getBlobToken = () => {
+  const token = String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
+
+  if (!token) {
+    throw new Error("BLOB_READ_WRITE_TOKEN is not configured.");
+  }
+
+  return token;
+};
+
 const readMessages = async (): Promise<ChatMessage[]> => {
+  const token = getBlobToken();
+
   const result = await list({
     prefix: CHAT_PATH,
     limit: 5,
+    token,
   });
 
   const blob = result.blobs.find(
@@ -34,13 +47,25 @@ const readMessages = async (): Promise<ChatMessage[]> => {
 
   if (!blob?.url) return [];
 
-  const privateReadUrl = (blob as any).downloadUrl || blob.url;
-
-  const response = await fetch(`${privateReadUrl}?t=${Date.now()}`, {
+  // Private Blob URLs must be read server-side with the Blob token.
+  const response = await fetch(blob.url, {
+    method: "GET",
     cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 
-  if (!response.ok) return [];
+  if (response.status === 404) return [];
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `Unable to read private chat storage (${response.status})${
+        detail ? `: ${detail.slice(0, 180)}` : ""
+      }`
+    );
+  }
 
   const json = await response.json().catch(() => null);
 
@@ -50,6 +75,8 @@ const readMessages = async (): Promise<ChatMessage[]> => {
 };
 
 const writeMessages = async (messages: ChatMessage[]) => {
+  const token = getBlobToken();
+
   await put(
     CHAT_PATH,
     JSON.stringify({
@@ -63,6 +90,7 @@ const writeMessages = async (messages: ChatMessage[]) => {
       allowOverwrite: true,
       contentType: "application/json",
       cacheControlMaxAge: 0,
+      token,
     }
   );
 };
@@ -98,6 +126,8 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error: any) {
+    console.error("Team chat GET error:", error);
+
     return NextResponse.json(
       {
         ok: false,
@@ -113,14 +143,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json().catch(() => null);
-    const sender = cleanText(payload?.sender, 60);
+    const sender = cleanText(payload?.sender, 80);
     const text = cleanText(payload?.text, 2000);
 
     if (!sender || !text) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Sender and message are required.",
+          error: "Signed-in user and message are required.",
         },
         { status: 400 }
       );
@@ -145,8 +175,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       message,
+      messages: nextMessages.slice(-DEFAULT_LIMIT),
     });
   } catch (error: any) {
+    console.error("Team chat POST error:", error);
+
     return NextResponse.json(
       {
         ok: false,
