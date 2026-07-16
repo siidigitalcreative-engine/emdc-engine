@@ -3,16 +3,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+type ReactionMap = Record<string, string[]>;
+
 type ChatMessage = {
   id: string;
   sender: string;
   senderEmail?: string;
   text: string;
   createdAt: string;
+  reactions?: ReactionMap;
+  mentions?: string[];
+  readBy?: string[];
 };
 
 const CHAT_POLL_MS = 30000;
 const MAX_VISIBLE_MESSAGES = 30;
+const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 
 const formatChatTime = (value: string) => {
   const date = new Date(value);
@@ -26,21 +32,33 @@ const formatChatTime = (value: string) => {
   });
 };
 
+const normalizeEmail = (value: unknown) =>
+  String(value || "").trim().toLowerCase();
+
+const unique = (values: string[]) =>
+  Array.from(new Set(values.filter(Boolean)));
+
 export default function TeamChatPopup() {
   const [open, setOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [sender, setSender] = useState("Signed-in EMDC User");
+  const [sender, setSender] = useState("EMDC User");
   const [senderEmail, setSenderEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
-  const [deletingId, setDeletingId] = useState("");
-  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState("");
   const [unread, setUnread] = useState(0);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [reactionMessageId, setReactionMessageId] = useState("");
+  const [reactionBusyKey, setReactionBusyKey] = useState("");
+  const [mentionOpen, setMentionOpen] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const latestMessageIdRef = useRef("");
+  const lastMarkedReadRef = useRef("");
 
   useEffect(() => {
     const updateMobile = () => setMobile(window.innerWidth < 760);
@@ -52,7 +70,6 @@ export default function TeamChatPopup() {
       window.removeEventListener("resize", updateMobile);
     };
   }, []);
-
 
   useEffect(() => {
     let active = true;
@@ -86,26 +103,70 @@ export default function TeamChatPopup() {
         } = await supabase.auth.getUser();
 
         if (user) applyUser(user);
-      } catch {
-        // Keep the fallback only if Supabase cannot return the session.
-      }
+      } catch {}
     };
 
     loadCurrentUser();
 
-    const {
-      data: authListener,
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        applyUser(session.user);
-      }
-    });
+    const { data: authListener } =
+      supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) applyUser(session.user);
+      });
 
     return () => {
       active = false;
       authListener?.subscription?.unsubscribe();
     };
   }, []);
+
+  const markRead = async (
+    nextMessages: ChatMessage[],
+    silent = true
+  ) => {
+    const email = normalizeEmail(senderEmail);
+    if (!email || !open || document.visibilityState !== "visible") return;
+
+    const unreadIds = nextMessages
+      .filter((message) => {
+        const author = normalizeEmail(message.senderEmail);
+        const readers = (message.readBy || []).map(normalizeEmail);
+        return author && author !== email && !readers.includes(email);
+      })
+      .map((message) => message.id);
+
+    if (!unreadIds.length) return;
+
+    const signature = unreadIds.join(",");
+    if (lastMarkedReadRef.current === signature) return;
+    lastMarkedReadRef.current = signature;
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark-read",
+          messageIds: unreadIds,
+          requesterEmail: email,
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "Unable to update read receipts.");
+      }
+
+      if (Array.isArray(json.messages)) {
+        setMessages(json.messages);
+      }
+    } catch (readError: any) {
+      if (!silent) {
+        setError(
+          readError?.message || "Unable to update read receipts."
+        );
+      }
+    }
+  };
 
   const loadMessages = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -129,7 +190,8 @@ export default function TeamChatPopup() {
         ? json.messages
         : [];
 
-      const latestId = nextMessages[nextMessages.length - 1]?.id || "";
+      const latestId =
+        nextMessages[nextMessages.length - 1]?.id || "";
 
       if (
         !open &&
@@ -138,7 +200,8 @@ export default function TeamChatPopup() {
         latestId !== latestMessageIdRef.current
       ) {
         const previousIndex = nextMessages.findIndex(
-          (message: ChatMessage) => message.id === latestMessageIdRef.current
+          (message: ChatMessage) =>
+            message.id === latestMessageIdRef.current
         );
 
         const addedCount =
@@ -152,6 +215,10 @@ export default function TeamChatPopup() {
       latestMessageIdRef.current = latestId;
       setMessages(nextMessages);
       setError("");
+
+      if (open) {
+        void markRead(nextMessages);
+      }
     } catch (loadError: any) {
       if (!silent) {
         setError(loadError?.message || "Unable to load team chat.");
@@ -174,19 +241,69 @@ export default function TeamChatPopup() {
     }, CHAT_POLL_MS);
 
     return () => window.clearInterval(timer);
-  }, [open]);
+  }, [open, senderEmail]);
 
   useEffect(() => {
     if (!open || !listRef.current) return;
-
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [open, messages.length]);
+
+  const participantSuggestions = useMemo(() => {
+    const byEmail = new Map<string, string>();
+
+    messages.forEach((message) => {
+      const email = normalizeEmail(message.senderEmail);
+      const name = String(message.sender || "").trim();
+
+      if (email && name && email !== normalizeEmail(senderEmail)) {
+        byEmail.set(email, name);
+      }
+    });
+
+    return Array.from(byEmail.entries()).map(([email, name]) => ({
+      email,
+      name,
+    }));
+  }, [messages, senderEmail]);
+
+  const mentionQuery = useMemo(() => {
+    const match = draft.match(/(?:^|\s)@([^\s@]*)$/);
+    return match ? String(match[1] || "").toLowerCase() : "";
+  }, [draft]);
+
+  const filteredMentions = useMemo(() => {
+    if (!mentionOpen) return [];
+
+    return participantSuggestions
+      .filter((person) => {
+        if (!mentionQuery) return true;
+        return (
+          person.name.toLowerCase().includes(mentionQuery) ||
+          person.email.toLowerCase().includes(mentionQuery)
+        );
+      })
+      .slice(0, 6);
+  }, [mentionOpen, mentionQuery, participantSuggestions]);
+
+  const addMention = (person: { name: string; email: string }) => {
+    setDraft((current) =>
+      current.replace(
+        /(?:^|\s)@([^\s@]*)$/,
+        (matched) => {
+          const leading = matched.startsWith(" ") ? " " : "";
+          return `${leading}@${person.name} `;
+        }
+      )
+    );
+    setMentionOpen(false);
+  };
 
   const sendMessage = async () => {
     const cleanText = draft.trim();
     const cleanSender = sender.trim() || "EMDC User";
+    const cleanEmail = normalizeEmail(senderEmail);
 
-    if (!cleanText || sending) return;
+    if (!cleanText || !cleanEmail || sending) return;
 
     setSending(true);
     setError("");
@@ -194,13 +311,12 @@ export default function TeamChatPopup() {
     try {
       const response = await fetch("/api/team-chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sender: cleanSender,
-          senderEmail,
+          senderEmail: cleanEmail,
           text: cleanText,
+          mentionDirectory: participantSuggestions,
         }),
       });
 
@@ -211,31 +327,16 @@ export default function TeamChatPopup() {
       }
 
       setDraft("");
+      setMentionOpen(false);
 
-      const returnedMessages = Array.isArray(json?.messages)
-        ? json.messages
-        : [];
-
-      if (returnedMessages.length) {
-        const latestId =
-          returnedMessages[returnedMessages.length - 1]?.id || "";
-
-        latestMessageIdRef.current = latestId;
-        setMessages(returnedMessages);
+      if (Array.isArray(json?.messages)) {
+        setMessages(json.messages);
+        latestMessageIdRef.current =
+          json.messages[json.messages.length - 1]?.id || "";
       } else if (json?.message) {
-        latestMessageIdRef.current = json.message.id || "";
-        setMessages((current) => {
-          const withoutDuplicate = current.filter(
-            (item) => item.id !== json.message.id
-          );
-
-          return [
-            ...withoutDuplicate,
-            json.message,
-          ].slice(-MAX_VISIBLE_MESSAGES);
-        });
-      } else {
-        await loadMessages(true);
+        setMessages((current) =>
+          [...current, json.message].slice(-MAX_VISIBLE_MESSAGES)
+        );
       }
     } catch (sendError: any) {
       setError(sendError?.message || "Unable to send message.");
@@ -244,52 +345,109 @@ export default function TeamChatPopup() {
     }
   };
 
-  const deleteOwnMessage = async (message: ChatMessage) => {
-    if (
-      !senderEmail ||
-      !message?.senderEmail ||
-      message.senderEmail.toLowerCase() !== senderEmail.toLowerCase()
-    ) {
-      setError("You can delete only your own messages.");
-      return;
-    }
+  const toggleReaction = async (
+    message: ChatMessage,
+    emoji: string
+  ) => {
+    const email = normalizeEmail(senderEmail);
+    if (!email) return;
 
-    if (!window.confirm("Delete this message?")) return;
-
-    setDeletingId(message.id);
+    const busyKey = `${message.id}:${emoji}`;
+    setReactionBusyKey(busyKey);
     setError("");
 
     try {
       const response = await fetch("/api/team-chat", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "delete-message",
+          action: "toggle-reaction",
           messageId: message.id,
-          requesterEmail: senderEmail,
+          emoji,
+          requesterEmail: email,
         }),
       });
 
       const json = await response.json().catch(() => null);
 
       if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || "Unable to delete message.");
+        throw new Error(json?.error || "Unable to update reaction.");
+      }
+
+      if (Array.isArray(json.messages)) {
+        setMessages(json.messages);
+      }
+    } catch (reactionError: any) {
+      setError(
+        reactionError?.message || "Unable to update reaction."
+      );
+    } finally {
+      setReactionBusyKey("");
+      setReactionMessageId("");
+    }
+  };
+
+  const toggleSelected = (message: ChatMessage) => {
+    const mine =
+      normalizeEmail(message.senderEmail) ===
+      normalizeEmail(senderEmail);
+
+    if (!mine) return;
+
+    setSelectedIds((current) =>
+      current.includes(message.id)
+        ? current.filter((id) => id !== message.id)
+        : [...current, message.id]
+    );
+  };
+
+  const deleteSelected = async () => {
+    if (!selectedIds.length || deletingSelected) return;
+
+    if (
+      !window.confirm(
+        `Delete ${selectedIds.length} selected message${
+          selectedIds.length === 1 ? "" : "s"
+        }?`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingSelected(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete-selected",
+          messageIds: selectedIds,
+          requesterEmail: normalizeEmail(senderEmail),
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.ok) {
+        throw new Error(
+          json?.error || "Unable to delete selected messages."
+        );
       }
 
       setMessages(
-        Array.isArray(json?.messages)
-          ? json.messages
-          : (current) =>
-              current.filter((item) => item.id !== message.id)
+        Array.isArray(json.messages) ? json.messages : []
       );
+      setSelectedIds([]);
+      setSelectionMode(false);
     } catch (deleteError: any) {
       setError(
-        deleteError?.message || "Unable to delete message."
+        deleteError?.message ||
+          "Unable to delete selected messages."
       );
     } finally {
-      setDeletingId("");
+      setDeletingSelected(false);
     }
   };
 
@@ -318,9 +476,7 @@ export default function TeamChatPopup() {
     try {
       const response = await fetch("/api/team-chat", {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "clear-chat",
           adminPassword,
@@ -334,6 +490,8 @@ export default function TeamChatPopup() {
       }
 
       setMessages([]);
+      setSelectedIds([]);
+      setSelectionMode(false);
       latestMessageIdRef.current = "";
       setUnread(0);
     } catch (clearError: any) {
@@ -382,87 +540,167 @@ export default function TeamChatPopup() {
         >
           <div
             style={{
-              padding: "14px 14px 12px",
+              padding: "12px 12px 10px",
               borderBottom: "1px solid #E5E7EB",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 12,
+              gap: 8,
             }}
           >
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 900, color: "#111827" }}>
-                EMDC Team Chat
-              </div>
-              <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
-                Refreshes only while open
-              </div>
-            </div>
+            {selectionMode ? (
+              <>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 900 }}>
+                    Selected ({selectedIds.length})
+                  </div>
+                  <div style={{ fontSize: 10, color: "#6B7280" }}>
+                    Only your own messages can be selected.
+                  </div>
+                </div>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
-              }}
-            >
-              <button
-                type="button"
-                onClick={clearEntireChat}
-                disabled={clearing}
-                title="Admin only"
-                style={{
-                  height: 34,
-                  padding: "0 10px",
-                  borderRadius: 9,
-                  border: "1px solid #E5E7EB",
-                  background: "#FFFFFF",
-                  color: "#B91C1C",
-                  fontSize: 10,
-                  fontWeight: 900,
-                  cursor: clearing ? "wait" : "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {clearing ? "Clearing…" : "Clear Chat"}
-              </button>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={deleteSelected}
+                    disabled={!selectedIds.length || deletingSelected}
+                    style={{
+                      height: 34,
+                      padding: "0 10px",
+                      borderRadius: 9,
+                      border: "1px solid #FCA5A5",
+                      background: "#FEF2F2",
+                      color: "#B91C1C",
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {deletingSelected
+                      ? "Deleting…"
+                      : "Delete Selected"}
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close team chat"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 999,
-                  border: "1px solid #E5E7EB",
-                  background: "#F9FAFB",
-                  fontSize: 22,
-                  lineHeight: 1,
-                  cursor: "pointer",
-                  color: "#374151",
-                }}
-              >
-                ×
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectionMode(false);
+                      setSelectedIds([]);
+                    }}
+                    style={{
+                      height: 34,
+                      padding: "0 10px",
+                      borderRadius: 9,
+                      border: "1px solid #E5E7EB",
+                      background: "#FFFFFF",
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 900,
+                      color: "#111827",
+                    }}
+                  >
+                    EMDC Team Chat
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "#6B7280",
+                      marginTop: 2,
+                    }}
+                  >
+                    Lazy mode · refreshes only while open
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectionMode(true)}
+                    style={{
+                      height: 34,
+                      padding: "0 9px",
+                      borderRadius: 9,
+                      border: "1px solid #E5E7EB",
+                      background: "#FFFFFF",
+                      color: "#374151",
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    Select
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={clearEntireChat}
+                    disabled={clearing}
+                    title="Admin password required"
+                    style={{
+                      height: 34,
+                      padding: "0 9px",
+                      borderRadius: 9,
+                      border: "1px solid #E5E7EB",
+                      background: "#FFFFFF",
+                      color: "#B91C1C",
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {clearing ? "Clearing…" : "Clear Chat"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    aria-label="Close team chat"
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 999,
+                      border: "1px solid #E5E7EB",
+                      background: "#F9FAFB",
+                      fontSize: 20,
+                      color: "#374151",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div
             style={{
-              padding: "10px 12px",
+              padding: "9px 12px",
               borderBottom: "1px solid #E5E7EB",
               background: "#F9FAFB",
             }}
           >
             <div
               style={{
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 800,
                 color: "#6B7280",
-                marginBottom: 6,
+                marginBottom: 5,
                 textTransform: "uppercase",
-                letterSpacing: ".04em",
               }}
             >
               Signed in as
@@ -472,24 +710,24 @@ export default function TeamChatPopup() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                gap: 9,
                 border: "1px solid #D1D5DB",
                 borderRadius: 10,
-                padding: "9px 10px",
+                padding: "8px 9px",
                 background: "#FFFFFF",
               }}
             >
               <div
                 style={{
-                  width: 34,
-                  height: 34,
+                  width: 32,
+                  height: 32,
                   borderRadius: 999,
                   background: "#111827",
                   color: "#FFFFFF",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: 900,
                   flexShrink: 0,
                 }}
@@ -505,9 +743,8 @@ export default function TeamChatPopup() {
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: 900,
-                    color: "#111827",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -515,12 +752,10 @@ export default function TeamChatPopup() {
                 >
                   {sender}
                 </div>
-
                 {senderEmail && (
                   <div
                     style={{
-                      marginTop: 2,
-                      fontSize: 10,
+                      fontSize: 9,
                       color: "#6B7280",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -570,50 +805,85 @@ export default function TeamChatPopup() {
               </div>
             ) : (
               sortedMessages.map((message) => {
-                const mine = Boolean(
-                  senderEmail &&
-                  message.senderEmail &&
-                  message.senderEmail.toLowerCase() ===
-                    senderEmail.toLowerCase()
-                ) || (
-                  !message.senderEmail &&
-                  message.sender.trim().toLowerCase() ===
-                    (sender.trim() || "EMDC User").toLowerCase()
-                );
+                const mine =
+                  normalizeEmail(message.senderEmail) ===
+                  normalizeEmail(senderEmail);
 
-                const canDelete = Boolean(
-                  senderEmail &&
-                  message.senderEmail &&
-                  message.senderEmail.toLowerCase() ===
-                    senderEmail.toLowerCase()
-                );
+                const selected = selectedIds.includes(message.id);
+                const reactionEntries = Object.entries(
+                  message.reactions || {}
+                ).filter(([, emails]) => emails.length > 0);
+
+                const seenCount = unique(
+                  (message.readBy || [])
+                    .map(normalizeEmail)
+                    .filter(
+                      (email) =>
+                        email &&
+                        email !== normalizeEmail(message.senderEmail)
+                    )
+                ).length;
 
                 return (
                   <div
                     key={message.id}
+                    onClick={() => {
+                      if (selectionMode && mine) toggleSelected(message);
+                    }}
                     style={{
                       display: "flex",
                       justifyContent: mine ? "flex-end" : "flex-start",
                       marginBottom: 10,
+                      cursor:
+                        selectionMode && mine ? "pointer" : "default",
                     }}
                   >
                     <div
                       style={{
+                        position: "relative",
                         maxWidth: "84%",
                         borderRadius: mine
                           ? "14px 14px 4px 14px"
                           : "14px 14px 14px 4px",
                         padding: "9px 11px",
                         background: mine ? "#111827" : "#FFFFFF",
-                        border: mine ? "1px solid #111827" : "1px solid #E5E7EB",
+                        border: selected
+                          ? "2px solid #3B82F6"
+                          : mine
+                            ? "1px solid #111827"
+                            : "1px solid #E5E7EB",
                         color: mine ? "#FFFFFF" : "#111827",
                         boxShadow: "0 1px 2px rgba(15,23,42,.04)",
                       }}
                     >
+                      {selectionMode && mine && (
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: -7,
+                            right: -7,
+                            width: 19,
+                            height: 19,
+                            borderRadius: 999,
+                            background: selected
+                              ? "#3B82F6"
+                              : "#FFFFFF",
+                            border: "2px solid #3B82F6",
+                            color: "#FFFFFF",
+                            fontSize: 11,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {selected ? "✓" : ""}
+                        </span>
+                      )}
+
                       {!mine && (
                         <div
                           style={{
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: 900,
                             marginBottom: 4,
                             color: "#374151",
@@ -634,49 +904,140 @@ export default function TeamChatPopup() {
                         {message.text}
                       </div>
 
+                      {reactionEntries.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 4,
+                            marginTop: 7,
+                          }}
+                        >
+                          {reactionEntries.map(([emoji, emails]) => {
+                            const reacted = emails
+                              .map(normalizeEmail)
+                              .includes(normalizeEmail(senderEmail));
+
+                            return (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleReaction(message, emoji);
+                                }}
+                                style={{
+                                  border: reacted
+                                    ? "1px solid #60A5FA"
+                                    : "1px solid #D1D5DB",
+                                  background: reacted
+                                    ? "#EFF6FF"
+                                    : "#FFFFFF",
+                                  color: "#111827",
+                                  borderRadius: 999,
+                                  padding: "2px 7px",
+                                  fontSize: 10,
+                                }}
+                              >
+                                {emoji} {emails.length}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       <div
                         style={{
-                          marginTop: 5,
+                          marginTop: 6,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "flex-end",
                           gap: 8,
                         }}
                       >
+                        {mine && (
+                          <span
+                            style={{
+                              fontSize: 8.5,
+                              opacity: 0.72,
+                            }}
+                          >
+                            {seenCount > 0
+                              ? `Seen by ${seenCount}`
+                              : "Sent"}
+                          </span>
+                        )}
+
                         <span
                           style={{
-                            fontSize: 9,
+                            fontSize: 8.5,
                             opacity: 0.68,
                           }}
                         >
                           {formatChatTime(message.createdAt)}
                         </span>
 
-                        {canDelete && (
+                        {!selectionMode && (
                           <button
                             type="button"
-                            onClick={() => deleteOwnMessage(message)}
-                            disabled={deletingId === message.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setReactionMessageId(
+                                reactionMessageId === message.id
+                                  ? ""
+                                  : message.id
+                              );
+                            }}
                             style={{
                               padding: 0,
                               border: 0,
                               background: "transparent",
-                              color: mine ? "#FCA5A5" : "#DC2626",
-                              fontSize: 9,
-                              fontWeight: 900,
-                              cursor:
-                                deletingId === message.id
-                                  ? "wait"
-                                  : "pointer",
-                              textDecoration: "underline",
+                              color: mine ? "#FFFFFF" : "#374151",
+                              fontSize: 12,
+                              opacity: 0.8,
                             }}
                           >
-                            {deletingId === message.id
-                              ? "Deleting…"
-                              : "Delete"}
+                            ☺
                           </button>
                         )}
                       </div>
+
+                      {reactionMessageId === message.id && (
+                        <div
+                          style={{
+                            marginTop: 7,
+                            display: "flex",
+                            gap: 3,
+                            padding: 4,
+                            borderRadius: 10,
+                            background: "#FFFFFF",
+                            border: "1px solid #E5E7EB",
+                          }}
+                        >
+                          {REACTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              disabled={
+                                reactionBusyKey ===
+                                `${message.id}:${emoji}`
+                              }
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleReaction(message, emoji);
+                              }}
+                              style={{
+                                border: 0,
+                                background: "transparent",
+                                fontSize: 17,
+                                padding: 3,
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -687,143 +1048,200 @@ export default function TeamChatPopup() {
           {error && (
             <div
               style={{
-                padding: "8px 12px",
+                padding: "7px 12px",
                 borderTop: "1px solid #FCA5A5",
                 background: "#FEF2F2",
                 color: "#B91C1C",
-                fontSize: 11,
+                fontSize: 10,
               }}
             >
               {error}
             </div>
           )}
 
-          <div
-            style={{
-              padding: 12,
-              borderTop: "1px solid #E5E7EB",
-              background: "#FFFFFF",
-            }}
-          >
-            <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault();
-                  sendMessage();
-                }
-              }}
-              rows={2}
-              maxLength={2000}
-              placeholder="Write a message…"
-              style={{
-                width: "100%",
-                resize: "none",
-                border: "1px solid #D1D5DB",
-                borderRadius: 10,
-                padding: "9px 10px",
-                fontSize: 13,
-                outline: "none",
-                color: "#111827",
-              }}
-            />
-
+          {!selectionMode && (
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-                marginTop: 8,
+                position: "relative",
+                padding: 12,
+                borderTop: "1px solid #E5E7EB",
+                background: "#FFFFFF",
               }}
             >
-              <span style={{ fontSize: 10, color: "#9CA3AF" }}>
-                Enter to send · Shift+Enter for a new line
-              </span>
+              {mentionOpen && filteredMentions.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    right: 12,
+                    bottom: "100%",
+                    maxHeight: 170,
+                    overflowY: "auto",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 10,
+                    background: "#FFFFFF",
+                    boxShadow: "0 10px 30px rgba(15,23,42,.12)",
+                    zIndex: 3,
+                  }}
+                >
+                  {filteredMentions.map((person) => (
+                    <button
+                      key={person.email}
+                      type="button"
+                      onClick={() => addMention(person)}
+                      style={{
+                        width: "100%",
+                        padding: "9px 10px",
+                        border: 0,
+                        borderBottom: "1px solid #F3F4F6",
+                        background: "#FFFFFF",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 900 }}>
+                        {person.name}
+                      </div>
+                      <div style={{ fontSize: 9, color: "#6B7280" }}>
+                        {person.email}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
 
-              <button
-                type="button"
-                onClick={sendMessage}
-                disabled={!draft.trim() || sending}
+              <textarea
+                value={draft}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setDraft(value);
+                  setMentionOpen(
+                    /(?:^|\s)@[^\s@]*$/.test(value)
+                  );
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    !event.shiftKey &&
+                    !event.nativeEvent.isComposing &&
+                    !mentionOpen
+                  ) {
+                    event.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                rows={2}
+                maxLength={2000}
+                placeholder="Write a message… Use @ to mention"
                 style={{
-                  border: 0,
-                  borderRadius: 9,
-                  padding: "9px 15px",
-                  background:
-                    !draft.trim() || sending ? "#D1D5DB" : "#111827",
-                  color: "#FFFFFF",
-                  fontSize: 12,
-                  fontWeight: 900,
-                  cursor:
-                    !draft.trim() || sending ? "not-allowed" : "pointer",
+                  width: "100%",
+                  resize: "none",
+                  border: "1px solid #D1D5DB",
+                  borderRadius: 10,
+                  padding: "9px 10px",
+                  fontSize: 13,
+                  outline: "none",
+                  color: "#111827",
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  marginTop: 8,
                 }}
               >
-                {sending ? "Sending…" : "Send"}
-              </button>
+                <span style={{ fontSize: 9, color: "#9CA3AF" }}>
+                  Enter to send · Shift+Enter for a new line
+                </span>
+
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  disabled={
+                    !draft.trim() ||
+                    !normalizeEmail(senderEmail) ||
+                    sending
+                  }
+                  style={{
+                    border: 0,
+                    borderRadius: 9,
+                    padding: "9px 15px",
+                    background:
+                      !draft.trim() ||
+                      !normalizeEmail(senderEmail) ||
+                      sending
+                        ? "#D1D5DB"
+                        : "#111827",
+                    color: "#FFFFFF",
+                    fontSize: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  {sending ? "Sending…" : "Send"}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
       <button
-          type="button"
-          onClick={() => {
-            setOpen((value) => !value);
-            setUnread(0);
-          }}
-          aria-label="Open EMDC team chat"
-          style={{
-            position: "fixed",
-            right: 18,
-            bottom: mobile
-              ? "calc(76px + 18px + env(safe-area-inset-bottom))"
-              : 20,
-            zIndex: 9997,
-            width: 56,
-            height: 56,
-            borderRadius: 999,
-            border: "1px solid rgba(255,255,255,.18)",
-            background: "#111827",
-            color: "#FFFFFF",
-            boxShadow: "0 12px 30px rgba(15,23,42,.25)",
-            cursor: "pointer",
-            fontSize: 23,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {open ? "×" : "💬"}
-  
-          {!open && unread > 0 && (
-            <span
-              style={{
-                position: "absolute",
-                top: -3,
-                right: -3,
-                minWidth: 20,
-                height: 20,
-                borderRadius: 999,
-                padding: "0 5px",
-                background: "#EF4444",
-                color: "#FFFFFF",
-                border: "2px solid #FFFFFF",
-                fontSize: 10,
-                fontWeight: 900,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {unread > 9 ? "9+" : unread}
-            </span>
-          )}
-        </button>
+        type="button"
+        onClick={() => {
+          setOpen((value) => !value);
+          setUnread(0);
+        }}
+        aria-label="Open EMDC team chat"
+        style={{
+          position: "fixed",
+          right: 18,
+          bottom: mobile
+            ? "calc(76px + 18px + env(safe-area-inset-bottom))"
+            : 20,
+          zIndex: 9997,
+          width: 56,
+          height: 56,
+          borderRadius: 999,
+          border: "1px solid rgba(255,255,255,.18)",
+          background: "#111827",
+          color: "#FFFFFF",
+          boxShadow: "0 12px 30px rgba(15,23,42,.25)",
+          cursor: "pointer",
+          fontSize: 23,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {open ? "×" : "💬"}
+
+        {!open && unread > 0 && (
+          <span
+            style={{
+              position: "absolute",
+              top: -3,
+              right: -3,
+              minWidth: 20,
+              height: 20,
+              borderRadius: 999,
+              padding: "0 5px",
+              background: "#EF4444",
+              color: "#FFFFFF",
+              border: "2px solid #FFFFFF",
+              fontSize: 10,
+              fontWeight: 900,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </button>
     </>
   );
 }
