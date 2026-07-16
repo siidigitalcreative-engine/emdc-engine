@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import AppTopBar from "@/components/AppTopBar";
 import AppBottomNav from "@/components/AppBottomNav";
 import { logActivity } from "@/lib/activity";
-import TeamChatPopup from "@/components/TeamChatPopup";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const C = {
@@ -5028,52 +5027,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
-
-  const buildDefaultChecklistItems = () => {
-    const out:any = {};
-
-    Object.keys(DEPTS).forEach((dept:string)=>{
-      const templateRows = Array.isArray(
-        templates?.[group.launchType]?.[dept]
-      )
-        ? templates[group.launchType][dept]
-        : [];
-
-      out[dept] = templateRows.map((taskText:string)=>({
-        id:uid(),
-        text:String(taskText || ""),
-        done:false,
-        link:"",
-        note:"",
-        assignee:"",
-        statusId:"",
-        custom:false,
-      }));
-    });
-
-    return out;
-  };
-
-  const hasChecklistRows = (value:any) => {
-    if(!value || typeof value!=="object") return false;
-
-    return Object.values(value).some(
-      (rows:any)=>Array.isArray(rows) && rows.length>0
-    );
-  };
-
-  const [items,setItems] = useState(()=>{
-    const normalizedInitial =
-      initialItems && typeof initialItems==="object"
-        ? dedupeChecklistItemsObject(initialItems)
-        : null;
-
-    // An empty object from the lazy cloud endpoint means no saved task payload
-    // was found yet. It must not suppress the checklist template defaults.
-    return hasChecklistRows(normalizedInitial)
-      ? normalizedInitial
-      : buildDefaultChecklistItems();
-  });
+  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
   const checklistBoardItemsRef = useRef<any>(items);
   const checklistBoardLocalEditRef = useRef(false);
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
@@ -5160,34 +5114,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[items]);
 
   useEffect(()=>{
-    if(!initialItems || typeof initialItems!=="object") return;
+    if(!initialItems) return;
 
     const incoming = dedupeChecklistItemsObject(initialItems);
-    const incomingHasRows = hasChecklistRows(incoming);
-    const current = checklistBoardItemsRef.current || {};
-    const currentHasRows = hasChecklistRows(current);
-
-    // Never let an empty lazy/API response erase visible checklist templates or
-    // previously loaded tasks. This was the cause of existing groups showing
-    // "No tasks" across every department.
-    if(!incomingHasRows){
-      if(currentHasRows) return;
-
-      const recoveredDefaults = buildDefaultChecklistItems();
-      checklistBoardItemsRef.current = recoveredDefaults;
-      setItems(recoveredDefaults);
-
-      // Persist regenerated defaults only when both the incoming cloud payload
-      // and the current UI are genuinely empty.
-      if(hasChecklistRows(recoveredDefaults) && onItemsChange){
-        checklistBoardLocalEditRef.current = true;
-        onItemsChange(recoveredDefaults);
-      }
-      return;
-    }
-
     const incomingSignature = JSON.stringify(incoming);
-    const currentSignature = JSON.stringify(current);
+    const currentSignature = JSON.stringify(checklistBoardItemsRef.current || {});
 
     // Parent caught up with the local edit. Keep the same visible state and
     // release the local lock.
@@ -5200,9 +5131,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     // propagated. This prevents the dropdown from visibly reverting.
     if (checklistBoardLocalEditRef.current) return;
 
-    checklistBoardItemsRef.current = incoming;
     setItems(incoming);
-  },[initialItems,group.launchType,templates]);
+  },[initialItems]);
 
   useEffect(()=>{
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
@@ -5759,6 +5689,32 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const getOverviewLocalStorageKey = () => group?.id ? `emdc_overview_items_v1_${group.id}` : "";
+  const getOverviewDeletedLocalStorageKey = () => group?.id ? `emdc_overview_deleted_v2_${group.id}` : "";
+
+  const overviewCanonicalKey = (item:any) => {
+    const sourceTab = String(item?.sourceRef?.tab || item?.sourceTab || "").trim().toLowerCase();
+    const sourceType = String(item?.sourceRef?.type || "").trim().toLowerCase();
+    const sourceId = String(item?.sourceRef?.id || "").trim().toLowerCase();
+    const title = String(item?.title || "").trim().toLowerCase().replace(/\s+/g," ");
+    const kind = String(item?.kind || "").trim().toLowerCase().replace(/\s+/g," ");
+
+    // Product Introduction Digital Creative Asset Links is one live Overview
+    // card per checklist group. New saves update the existing card instead of
+    // creating duplicates.
+    if(
+      sourceType==="productintroassetlinks" ||
+      (
+        sourceTab.includes("digital") &&
+        title.includes("product introduction digital creative asset links")
+      )
+    ){
+      return "digital:productintroassetlinks";
+    }
+
+    if(sourceType && sourceId) return `${sourceTab}:${sourceType}:${sourceId}`;
+    if(sourceType) return `${sourceTab}:${sourceType}:${title}`;
+    return String(item?.id || `${sourceTab}:${kind}:${title}:${item?.createdAt || ""}`).trim();
+  };
 
   const readOverviewItemsFromLocal = () => {
     if (typeof window === "undefined") return [];
@@ -5772,6 +5728,34 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     }
   };
 
+  const readOverviewDeletedFromLocal = () => {
+    if(typeof window === "undefined") return { ids:[], keys:[] };
+    const key = getOverviewDeletedLocalStorageKey();
+    if(!key) return { ids:[], keys:[] };
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+      return {
+        ids:Array.isArray(parsed?.ids) ? parsed.ids.map(String) : [],
+        keys:Array.isArray(parsed?.keys) ? parsed.keys.map(String) : [],
+      };
+    } catch {
+      return { ids:[], keys:[] };
+    }
+  };
+
+  const writeOverviewDeletedToLocal = (value:any) => {
+    if(typeof window === "undefined") return;
+    const key = getOverviewDeletedLocalStorageKey();
+    if(!key) return;
+    try {
+      localStorage.setItem(key,JSON.stringify({
+        ids:Array.from(new Set((value?.ids || []).map(String))),
+        keys:Array.from(new Set((value?.keys || []).map(String))),
+        updatedAt:new Date().toISOString(),
+      }));
+    } catch {}
+  };
+
   const writeOverviewItemsToLocal = (items:any[] = []) => {
     if (typeof window === "undefined") return;
     const key = getOverviewLocalStorageKey();
@@ -5783,13 +5767,49 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const mergeOverviewItems = (...lists:any[][]) => {
-    const map = new Map();
+    const map = new Map<string,any>();
     lists.flat().filter(Boolean).forEach((item:any)=>{
-      const key = String(item?.id || `${item?.title || ""}-${item?.createdAt || ""}-${item?.updatedAt || ""}`);
+      const key = overviewCanonicalKey(item);
       if(!key.trim()) return;
-      map.set(key, { ...(map.get(key) || {}), ...item });
+
+      const existing = map.get(key);
+      if(!existing){
+        map.set(key,item);
+        return;
+      }
+
+      const existingTime = String(existing?.updatedAt || existing?.createdAt || "");
+      const incomingTime = String(item?.updatedAt || item?.createdAt || "");
+
+      // Keep the newest record, while preserving any fields only present on
+      // the older copy.
+      map.set(
+        key,
+        incomingTime >= existingTime
+          ? { ...existing, ...item }
+          : { ...item, ...existing }
+      );
     });
     return Array.from(map.values()).sort((a:any,b:any)=>String(b?.updatedAt || b?.createdAt || "").localeCompare(String(a?.updatedAt || a?.createdAt || "")));
+  };
+
+  const getOverviewDeletionState = () => {
+    const currentOverview = ((group.aiWorkspace || {}).overview || {}) as any;
+    const persistedOverview = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}).overview || {}) as any;
+    const localDeleted = readOverviewDeletedFromLocal();
+
+    return {
+      ids:Array.from(new Set([
+        ...(Array.isArray(currentOverview.deletedItemIds) ? currentOverview.deletedItemIds : []),
+        ...(Array.isArray(persistedOverview.deletedItemIds) ? persistedOverview.deletedItemIds : []),
+        ...(localDeleted.ids || []),
+      ].map(String))),
+      keys:Array.from(new Set([
+        ...(Array.isArray(currentOverview.deletedItemKeys) ? currentOverview.deletedItemKeys : []),
+        ...(Array.isArray(persistedOverview.deletedItemKeys) ? persistedOverview.deletedItemKeys : []),
+        ...(localDeleted.keys || []),
+      ].map(String))),
+    };
   };
 
   const getOverviewItems = () => {
@@ -5798,27 +5818,65 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const currentItems = Array.isArray(currentOverview.items) ? currentOverview.items : [];
     const persistedItems = Array.isArray(persistedOverview.items) ? persistedOverview.items : [];
     const localItems = readOverviewItemsFromLocal();
-    return mergeOverviewItems(currentItems,persistedItems,localItems);
+    const deleted = getOverviewDeletionState();
+    const deletedIds = new Set(deleted.ids);
+    const deletedKeys = new Set(deleted.keys);
+
+    return mergeOverviewItems(currentItems,persistedItems,localItems).filter((item:any)=>
+      !deletedIds.has(String(item?.id || "")) &&
+      !deletedKeys.has(overviewCanonicalKey(item))
+    );
   };
 
   const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output", sourceRef:any=null) => {
     const isStructured = content && typeof content === "object";
     const textContent = isStructured ? content : String(content || "").trim();
     if(!isStructured && !textContent) return;
-    const items = getOverviewItems();
-    const newItem = {
+
+    const now = new Date().toISOString();
+    const candidate = {
       id:uid(),
       sourceTab,
       kind,
       title:title || `${sourceTab} output`,
       content:textContent,
       sourceRef:sourceRef || null,
-      updatedAt:new Date().toISOString(),
-      createdAt:new Date().toISOString(),
+      updatedAt:now,
+      createdAt:now,
     };
-    const nextItems = [...items,newItem];
+    const candidateKey = overviewCanonicalKey(candidate);
+    const items = getOverviewItems();
+    const existing = items.find((item:any)=>overviewCanonicalKey(item)===candidateKey);
+    const newItem = existing ? {
+      ...existing,
+      sourceTab,
+      kind,
+      title:title || existing.title || `${sourceTab} output`,
+      content:textContent,
+      sourceRef:sourceRef || existing.sourceRef || null,
+      updatedAt:now,
+    } : candidate;
+
+    const nextItems = [
+      ...items.filter((item:any)=>overviewCanonicalKey(item)!==candidateKey),
+      newItem,
+    ];
+
+    // Adding the card again intentionally restores its canonical key.
+    const deleted = getOverviewDeletionState();
+    const nextDeleted = {
+      ids:deleted.ids.filter((id:string)=>id!==String(newItem.id || "")),
+      keys:deleted.keys.filter((key:string)=>key!==candidateKey),
+    };
+
+    writeOverviewDeletedToLocal(nextDeleted);
     writeOverviewItemsToLocal(nextItems);
-    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
+    updateAiWorkspace("overview",{
+      items:nextItems,
+      deletedItemIds:nextDeleted.ids,
+      deletedItemKeys:nextDeleted.keys,
+      updatedAt:now,
+    });
     markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
   };
 
@@ -6225,9 +6283,39 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const deleteOverviewItem = (id:string) => {
-    const nextItems = getOverviewItems().filter((item:any)=>item.id!==id);
+    const items = getOverviewItems();
+    const target = items.find((item:any)=>String(item?.id || "")===String(id || ""));
+    if(!target) return;
+
+    const targetKey = overviewCanonicalKey(target);
+
+    // Remove every duplicate representing the same source output, not only the
+    // clicked record ID.
+    const removedItems = items.filter((item:any)=>overviewCanonicalKey(item)===targetKey);
+    const nextItems = items.filter((item:any)=>overviewCanonicalKey(item)!==targetKey);
+    const deleted = getOverviewDeletionState();
+    const nextDeleted = {
+      ids:Array.from(new Set([
+        ...deleted.ids,
+        ...removedItems.map((item:any)=>String(item?.id || "")).filter(Boolean),
+        String(id || ""),
+      ])),
+      keys:Array.from(new Set([
+        ...deleted.keys,
+        targetKey,
+      ])),
+    };
+    const now = new Date().toISOString();
+
+    writeOverviewDeletedToLocal(nextDeleted);
     writeOverviewItemsToLocal(nextItems);
-    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
+    updateAiWorkspace("overview",{
+      items:nextItems,
+      deletedItemIds:nextDeleted.ids,
+      deletedItemKeys:nextDeleted.keys,
+      updatedAt:now,
+    });
+    markActionDone(`overview-delete-${targetKey}`);
   };
 
   const overviewItemToText = (item:any) => {
@@ -11777,7 +11865,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       } as any;
       const defaultProductIntroDigitalAssetRows = [
         { id:"main-google-drive-folder", name:"Main Google Drive Folder", link:"" },
-        { id:"product-image", name:"Product Image", link:"" },
+        { id:"product-images", name:"Product Images", link:"" },
         { id:"cem-banner", name:"CEM Banner", link:"" },
         { id:"store-banner", name:"Store Banner", link:"" },
         { id:"feed", name:"Feed", link:"" },
@@ -11785,66 +11873,26 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         { id:"showcase-video", name:"Showcase Video", link:"" },
         { id:"a4-signage", name:"A4 Signage", link:"" },
         { id:"sampling-poster", name:"Sampling Poster", link:"" },
-        { id:"youtube-link", name:"YouTube Link", link:"" },
       ];
       const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
         const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-        const normalizeAssetKey = (value:any) =>
-          String(value || "")
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g,"-")
-            .replace(/^-+|-+$/g,"");
-
-        const sourceByKey = new Map<string,any>();
-
-        sourceRows.forEach((row:any)=>{
-          [row?.id,row?.name,row?.assetName,row?.label]
-            .map(normalizeAssetKey)
-            .filter(Boolean)
-            .forEach((key:string)=>{
-              if (!sourceByKey.has(key)) sourceByKey.set(key,row);
-            });
+        const normalizeAssetKey = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+        const oldDefaultKeys = new Set(["product-image","cem-banner","store-banner","feed","story","showcase-video"]);
+        const looksLikeOldDefaults = sourceRows.length > 0 && sourceRows.length <= oldDefaultKeys.size && sourceRows.every((row:any)=>{
+          const keys = [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean);
+          return keys.some((key:string)=>oldDefaultKeys.has(key));
         });
-
-        // Migrate the previous plural Product Images row.
-        if (
-          sourceByKey.has("product-images") &&
-          !sourceByKey.has("product-image")
-        ) {
-          sourceByKey.set(
-            "product-image",
-            sourceByKey.get("product-images")
-          );
-        }
-
-        // Accept common YouTube naming variations.
-        if (
-          sourceByKey.has("youtube") &&
-          !sourceByKey.has("youtube-link")
-        ) {
-          sourceByKey.set(
-            "youtube-link",
-            sourceByKey.get("youtube")
-          );
-        }
-
+        if (sourceRows.length && !looksLikeOldDefaults) return sourceRows;
+        const sourceByKey = new Map<string,any>();
+        sourceRows.forEach((row:any)=>{
+          [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean).forEach((key:string)=>{
+            if (!sourceByKey.has(key)) sourceByKey.set(key,row);
+          });
+        });
+        if (sourceByKey.has("product-image") && !sourceByKey.has("product-images")) sourceByKey.set("product-images",sourceByKey.get("product-image"));
         return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
-          const match =
-            sourceByKey.get(normalizeAssetKey(defaultRow.id)) ||
-            sourceByKey.get(normalizeAssetKey(defaultRow.name));
-
-          return match
-            ? {
-                ...defaultRow,
-                link:String(
-                  match?.link ||
-                  match?.url ||
-                  match?.outputLink ||
-                  ""
-                ).trim(),
-              }
-            : defaultRow;
+          const match = sourceByKey.get(normalizeAssetKey(defaultRow.id)) || sourceByKey.get(normalizeAssetKey(defaultRow.name));
+          return match ? { ...defaultRow, link:match.link || match.url || match.outputLink || "" } : defaultRow;
         });
       };
       const productIntroDigitalAssetRows = normalizeProductIntroDigitalAssetRows(digitalData.productIntroAssetLinks);
@@ -11942,6 +11990,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const readCurrentAnnouncementAssets = () => {
+        // The announcement popup can be opened from Overview, where the
+        // Digital Creative table helper functions are not in scope. Read the
+        // saved asset rows directly from the checklist workspace instead.
         const digitalWorkspace =
           (
             (
@@ -11955,81 +12006,35 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           digitalWorkspace?.digitalAssetLinks ||
           [];
 
-        const storedRows = Array.isArray(rawRows)
+        const currentRows = Array.isArray(rawRows)
           ? rawRows
           : Array.isArray(rawRows?.rows)
             ? rawRows.rows
             : [];
 
-        const normalizeKey = (value:any) =>
-          String(value || "")
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g,"-")
-            .replace(/^-+|-+$/g,"");
-
-        const byKey = new Map<string,any>();
-
-        storedRows.filter(Boolean).forEach((row:any)=>{
-          [row?.id,row?.name,row?.assetName,row?.label]
-            .map(normalizeKey)
-            .filter(Boolean)
-            .forEach((key:string)=>{
-              if (!byKey.has(key)) byKey.set(key,row);
-            });
-        });
-
-        if (byKey.has("product-images") && !byKey.has("product-image")) {
-          byKey.set("product-image",byKey.get("product-images"));
-        }
-
-        if (byKey.has("youtube") && !byKey.has("youtube-link")) {
-          byKey.set("youtube-link",byKey.get("youtube"));
-        }
-
-        // Also support a separately saved YouTube URL field from older data.
-        const legacyYoutubeLink = String(
-          digitalWorkspace?.youtubeLink ||
-          digitalWorkspace?.youtubeUrl ||
-          ""
-        ).trim();
-
-        const canonicalRows = [
-          { id:"main-google-drive-folder", name:"Main Google Drive Folder" },
-          { id:"product-image", name:"Product Image" },
-          { id:"cem-banner", name:"CEM Banner" },
-          { id:"store-banner", name:"Store Banner" },
-          { id:"feed", name:"Feed" },
-          { id:"story", name:"Story" },
-          { id:"showcase-video", name:"Showcase Video" },
-          { id:"a4-signage", name:"A4 Signage" },
-          { id:"sampling-poster", name:"Sampling Poster" },
-          { id:"youtube-link", name:"YouTube Link" },
-        ];
-
-        return canonicalRows
-          .map((defaultRow:any)=>{
-            const row =
-              byKey.get(normalizeKey(defaultRow.id)) ||
-              byKey.get(normalizeKey(defaultRow.name));
-
-            const link = String(
+        return currentRows
+          .filter((row:any)=>
+            String(
               row?.link ||
               row?.url ||
               row?.outputLink ||
-              (
-                defaultRow.id === "youtube-link"
-                  ? legacyYoutubeLink
-                  : ""
-              )
-            ).trim();
-
-            return {
-              name:defaultRow.name,
-              link,
-            };
-          })
-          .filter((row:any)=>row.link);
+              ""
+            ).trim()
+          )
+          .map((row:any)=>({
+            name:String(
+              row?.name ||
+              row?.assetName ||
+              row?.label ||
+              "Asset"
+            ).trim(),
+            link:String(
+              row?.link ||
+              row?.url ||
+              row?.outputLink ||
+              ""
+            ).trim(),
+          }));
       };
 
       const buildAnnouncementAssetLines = (assets:any[]) => {
@@ -12100,180 +12105,23 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .map((asset:any)=>`• ${asset.name}`)
           .join("\n");
 
-        const actualSkus = Array.from(
-          new Set(
-            productRows
-              .map((row:any)=>
-                String(
-                  row?.skuCode ||
-                  row?.sku ||
-                  row?.value ||
-                  ""
-                ).trim()
-              )
-              .filter(Boolean)
-          )
-        );
-
         const productSummary = [
           brands.length ? `Brand: ${brands.join(", ")}` : "",
-          `Products / SKUs: ${
-            actualSkus.length
-              ? actualSkus.join(", ")
-              : "Not available"
-          }`,
+          categories.length ? `Category: ${categories.join(", ")}` : "",
+          `Products / SKUs: ${productRows.length}`,
           `Checklist Type: ${checklistAnnouncementType}`,
+          `Overall Progress: ${overallPct}%`,
         ].filter(Boolean).join("\n");
-
-        const ecommerceWorkspace =
-          (((group?.aiWorkspace || {}) as any).ecommerce || {}) as any;
-
-        const ecommerceSavedOutputs = Array.isArray(
-          ecommerceWorkspace?.savedOutputs
-        )
-          ? ecommerceWorkspace.savedOutputs
-          : [];
-
-        const latestSavedEcommerceOutput = [...ecommerceSavedOutputs]
-          .filter((item:any)=>String(item?.text || "").trim())
-          .sort((left:any,right:any)=>{
-            const leftTime = new Date(
-              left?.updatedAt ||
-              left?.createdAt ||
-              0
-            ).getTime();
-
-            const rightTime = new Date(
-              right?.updatedAt ||
-              right?.createdAt ||
-              0
-            ).getTime();
-
-            return rightTime - leftTime;
-          })[0];
-
-        // Always use the current E-commerce generated output first. When the
-        // current editor is empty, use the most recently saved E-commerce
-        // output. External product information must come from this source.
-        const ecommerceSource = String(
-          ecommerceWorkspace?.generatedText ||
-          latestSavedEcommerceOutput?.text ||
-          ""
-        ).trim();
-
-        const ecommerceSectionHeadings = [
-          "Product Name",
-          "Product Overview",
-          "Key Features",
-          "Variants Available",
-          "Color Options",
-          "Product Specifications",
-          "Perfect For",
-          "Care & Use",
-          "Package Includes",
-          "Best SEO Listing Title",
-          "Stronger Lazada/Shopee SEO Version",
-          "Recommended Variations",
-          "Better Option / Higher AOV",
-          "Search Keywords",
-        ];
-
-        const normalizeEcommerceHeading = (value:any) =>
-          String(value || "")
-            .replace(/^\s*#{1,6}\s*/,"")
-            .replace(/^\s*(?:\d+[\.\)]|[-*•])\s*/,"")
-            .replace(/\s*[:\-]\s*$/,"")
-            .trim()
-            .toLowerCase();
-
-        const ecommerceHeadingMap = new Map(
-          ecommerceSectionHeadings.map((heading:string)=>[
-            normalizeEcommerceHeading(heading),
-            heading,
-          ])
-        );
-
-        const parseEcommerceSections = (source:string) => {
-          const sections:Record<string,string> = {};
-          let activeHeading = "";
-          const buffer:string[] = [];
-
-          const commit = () => {
-            if(!activeHeading) return;
-
-            const value = buffer
-              .join("\n")
-              .replace(/^\s+|\s+$/g,"")
-              .trim();
-
-            if(value){
-              sections[activeHeading] = value;
-            }
-
-            buffer.length = 0;
-          };
-
-          String(source || "")
-            .replace(/\r\n?/g,"\n")
-            .split("\n")
-            .forEach((rawLine:string)=>{
-              const normalized = normalizeEcommerceHeading(rawLine);
-              const matchedHeading =
-                ecommerceHeadingMap.get(normalized);
-
-              if(matchedHeading){
-                commit();
-                activeHeading = matchedHeading;
-                return;
-              }
-
-              if(activeHeading){
-                buffer.push(rawLine);
-              }
-            });
-
-          commit();
-          return sections;
-        };
-
-        const ecommerceSections =
-          parseEcommerceSections(ecommerceSource);
-
-        const ecommerceProductName = String(
-          ecommerceSections["Product Name"] ||
-          ""
-        )
-          .split("\n")
-          .map((line:string)=>line.trim())
-          .filter(Boolean)[0] || "";
-
-        const externalOverview = String(
-          ecommerceSections["Product Overview"] ||
-          ""
-        ).trim();
-
-        const externalFeatures = String(
-          ecommerceSections["Key Features"] ||
-          ""
-        )
-          .replace(/^\s*[-*]\s*/gm,"• ")
-          .trim();
-
-        // Do not invent product details. The external announcement uses only
-        // the Product Overview and Key Features found in the E-commerce output.
-        const externalProductName =
-          ecommerceProductName ||
-          productName;
 
         const clientTemplates:any = {
           "Product Introduction":{
-            subject:`[New Arrival] ${externalProductName} — Now Available`,
-            intro:`We are pleased to introduce ${externalProductName}, now available for ordering.`,
+            subject:`[New Arrival] ${productName} — Now Available`,
+            intro:`We are pleased to introduce ${productName}, now available for ordering.`,
             action:"For inquiries, product details, or orders, please feel free to contact us.",
           },
           "Product Reactivation":{
-            subject:`[Product Reactivation] ${externalProductName} — Available Again`,
-            intro:`We are pleased to reintroduce ${externalProductName}, now available again for ordering and promotion.`,
+            subject:`[Product Reactivation] ${productName} — Available Again`,
+            intro:`We are pleased to reintroduce ${productName}, now available again for ordering and promotion.`,
             action:"Please feel free to contact us for updated product details, availability, or orders.",
           },
           "Campaign":{
@@ -12300,59 +12148,35 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             clientTemplates[checklistAnnouncementType] ||
             clientTemplates["Product Introduction"];
 
-          const externalHeadline = (()=>{
-            if(checklistAnnouncementType==="Product Reactivation"){
-              return `${externalProductName.toUpperCase()} — AVAILABLE AGAIN!`;
-            }
-            if(checklistAnnouncementType==="Campaign"){
-              return `${checklistName.toUpperCase()} — NOW LIVE!`;
-            }
-            if(checklistAnnouncementType==="Special Campaign"){
-              return `${checklistName.toUpperCase()} — SPECIAL CAMPAIGN!`;
-            }
-            return `${externalProductName.toUpperCase()} — NOW AVAILABLE!`;
-          })();
-
-          const externalBodyLines = [
-            "Dear Partner,",
-            "",
-            externalHeadline,
-          ];
-
-          if(externalOverview){
-            externalBodyLines.push(
-              "",
-              externalOverview
-            );
-          }
-
-          if(externalFeatures){
-            externalBodyLines.push(
-              "",
-              "Why You'll Love It",
-              "",
-              externalFeatures
-            );
-          }
-
-          externalBodyLines.push(
-            "",
-            checklistAnnouncementType==="Product Introduction" ||
-            checklistAnnouncementType==="Product Reactivation"
-              ? "Reply ORDER to confirm. Should you require any additional information, please feel free to reach out."
-              : template.action,
-            "",
-            `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`
-          );
-
           return {
             subject:template.subject,
-            body:externalBodyLines
-              .filter((line,index,rows)=>
-                line !== "" ||
-                (index > 0 && rows[index-1] !== "")
-              )
-              .join("\n"),
+            body:[
+              "Dear Valued Partner,",
+              "",
+              template.intro,
+              "",
+              "Product / Campaign Information",
+              productSummary,
+              "",
+              assets.length ? "Available Marketing Materials" : "",
+              assets.length ? availableAssetNames : "",
+              "",
+              mainFolder
+                ? `Access the complete files here:\n${mainFolder}`
+                : assets.length
+                  ? `Available asset links:\n\n${assetLines}`
+                  : "",
+              "",
+              template.action,
+              "",
+              "Thank you for your continued partnership.",
+              "",
+              "Best regards,",
+              "Sunbeams Lifestyle",
+            ].filter((line,index,rows)=>
+              line !== "" ||
+              (index > 0 && rows[index-1] !== "")
+            ).join("\n"),
           };
         }
 
@@ -12485,11 +12309,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 'Return strict JSON only in this shape: {"subject":"","body":""}.',
                 "Do not use markdown code fences.",
                 audience === "client"
-                  ? "Use a professional partner-facing tone similar to a polished New Arrival email. Include a headline, product overview, Why You'll Love It section, ordering or coordination instruction, and place Watch on YouTube as the final line. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links."
-                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
-                audience === "internal"
-                  ? "Only include assets that have valid links."
-                  : "For external messages, include only the YouTube link and place it at the very end.",
+                  ? "Use a professional partner-facing tone. Introduce or announce the product/campaign, mention that marketing materials are available, provide the main file access link, and include a clear inquiry or coordination closing."
+                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, show project progress, and state the next action for the team.",
+                "Only include assets that have valid links.",
                 "Do not invent prices, campaign mechanics, availability dates, product features, or links.",
                 "Avoid em dashes.",
                 assetAnnouncementData.instructions
@@ -12500,8 +12322,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 checklistType:checklistAnnouncementType,
                 audience,
                 checklistName:group.groupName || "",
+                overallProgress:overallPct,
                 products,
-                ecommerceOutput:ecommerceSource,
                 completedAssets,
               },null,2),
             }),
@@ -23153,7 +22975,49 @@ export default function App({
 
       let nextWorkspace = mergeObjects(currentWorkspace, storedBackup);
 
-      const overviewItems = mergeRows(
+      let localOverviewDeleted:any = { ids:[], keys:[] };
+      try {
+        const parsed = JSON.parse(
+          localStorage.getItem(`emdc_overview_deleted_v2_${groupId}`) || "{}"
+        );
+        localOverviewDeleted = {
+          ids:Array.isArray(parsed?.ids) ? parsed.ids.map(String) : [],
+          keys:Array.isArray(parsed?.keys) ? parsed.keys.map(String) : [],
+        };
+      } catch {}
+
+      const recoveryOverviewCanonicalKey = (item:any) => {
+        const sourceTab = String(item?.sourceRef?.tab || item?.sourceTab || "").trim().toLowerCase();
+        const sourceType = String(item?.sourceRef?.type || "").trim().toLowerCase();
+        const sourceId = String(item?.sourceRef?.id || "").trim().toLowerCase();
+        const title = String(item?.title || "").trim().toLowerCase().replace(/\s+/g," ");
+        const kind = String(item?.kind || "").trim().toLowerCase().replace(/\s+/g," ");
+        if(
+          sourceType==="productintroassetlinks" ||
+          (
+            sourceTab.includes("digital") &&
+            title.includes("product introduction digital creative asset links")
+          )
+        ) return "digital:productintroassetlinks";
+        if(sourceType && sourceId) return `${sourceTab}:${sourceType}:${sourceId}`;
+        if(sourceType) return `${sourceTab}:${sourceType}:${title}`;
+        return String(item?.id || `${sourceTab}:${kind}:${title}:${item?.createdAt || ""}`).trim();
+      };
+
+      const recoveryDeletedIds = new Set([
+        ...(Array.isArray(currentWorkspace?.overview?.deletedItemIds) ? currentWorkspace.overview.deletedItemIds : []),
+        ...(Array.isArray(storedBackup?.overview?.deletedItemIds) ? storedBackup.overview.deletedItemIds : []),
+        ...(localOverviewDeleted.ids || []),
+      ].map(String));
+
+      const recoveryDeletedKeys = new Set([
+        ...(Array.isArray(currentWorkspace?.overview?.deletedItemKeys) ? currentWorkspace.overview.deletedItemKeys : []),
+        ...(Array.isArray(storedBackup?.overview?.deletedItemKeys) ? storedBackup.overview.deletedItemKeys : []),
+        ...(localOverviewDeleted.keys || []),
+      ].map(String));
+
+      const recoveryOverviewMap = new Map<string,any>();
+      mergeRows(
         Array.isArray(currentWorkspace?.overview?.items)
           ? currentWorkspace.overview.items
           : [],
@@ -23161,15 +23025,36 @@ export default function App({
           ? storedBackup.overview.items
           : [],
         localOverviewItems
-      );
+      ).forEach((item:any)=>{
+        const canonicalKey = recoveryOverviewCanonicalKey(item);
+        if(
+          recoveryDeletedIds.has(String(item?.id || "")) ||
+          recoveryDeletedKeys.has(canonicalKey)
+        ) return;
 
-      if (overviewItems.length) {
+        const existing = recoveryOverviewMap.get(canonicalKey);
+        const existingTime = String(existing?.updatedAt || existing?.createdAt || "");
+        const incomingTime = String(item?.updatedAt || item?.createdAt || "");
+        if(!existing || incomingTime >= existingTime){
+          recoveryOverviewMap.set(canonicalKey,{ ...(existing || {}), ...item });
+        }
+      });
+
+      const overviewItems = Array.from(recoveryOverviewMap.values());
+
+      if (
+        overviewItems.length ||
+        recoveryDeletedIds.size ||
+        recoveryDeletedKeys.size
+      ) {
         nextWorkspace = {
           ...nextWorkspace,
           overview: {
             ...(currentWorkspace?.overview || {}),
             ...(storedBackup?.overview || {}),
             items: overviewItems,
+            deletedItemIds:Array.from(recoveryDeletedIds),
+            deletedItemKeys:Array.from(recoveryDeletedKeys),
             updatedAt: new Date().toISOString(),
           },
         };
@@ -23418,7 +23303,6 @@ export default function App({
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
-        <TeamChatPopup />
         <AppBottomNav />
       </div>
     </>
