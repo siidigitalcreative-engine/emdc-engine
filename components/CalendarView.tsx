@@ -5062,6 +5062,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   });
   const checklistBoardItemsRef = useRef<any>(items);
   const checklistBoardLocalEditRef = useRef(false);
+  const checklistBoardLastLocalEditAtRef = useRef(0);
   const checklistDefaultsPersistedRef = useRef(false);
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
@@ -5150,6 +5151,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     // Each checklist group needs its own one-time default recovery.
     checklistDefaultsPersistedRef.current = false;
     checklistBoardLocalEditRef.current = false;
+    checklistBoardLastLocalEditAtRef.current = 0;
 
     const incoming = dedupeChecklistItemsObject(
       initialItems || {}
@@ -5208,11 +5210,27 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
     if(incomingSignature===currentSignature){
       checklistBoardLocalEditRef.current = false;
+      checklistBoardLastLocalEditAtRef.current = 0;
       return;
     }
 
-    if(checklistBoardLocalEditRef.current) return;
+    const localEditAge =
+      Date.now() -
+      Number(
+        checklistBoardLastLocalEditAtRef.current || 0
+      );
 
+    // Ignore only the immediate stale echo after a local edit. After the short
+    // grace period, accept newer cloud/other-user checklist updates.
+    if(
+      checklistBoardLocalEditRef.current &&
+      localEditAge < 2500
+    ){
+      return;
+    }
+
+    checklistBoardLocalEditRef.current = false;
+    checklistBoardLastLocalEditAtRef.current = 0;
     checklistBoardItemsRef.current = incoming;
     setItems(incoming);
   },[
@@ -5239,6 +5257,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(incomingCount===0 && visibleCount>0){
       checklistDefaultsPersistedRef.current = true;
       checklistBoardLocalEditRef.current = true;
+      checklistBoardLastLocalEditAtRef.current = Date.now();
 
       if(onItemsChange){
         onItemsChange(
@@ -5261,6 +5280,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const upd = (dept:string,item:any) => {
     checklistBoardLocalEditRef.current = true;
+    checklistBoardLastLocalEditAtRef.current = Date.now();
     setItems((previous:any)=>{
       const prevDeptItems = Array.isArray(previous?.[dept]) ? previous[dept] : [];
       const nextDeptItems = prevDeptItems.map((existing:any)=>
@@ -5277,6 +5297,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
   const del = (dept:string,id:string) => {
     checklistBoardLocalEditRef.current = true;
+    checklistBoardLastLocalEditAtRef.current = Date.now();
     setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById((p?.[dept]||[]).filter((i:any)=>String(i?.id)!==String(id)))};
     if(onItemsChange) onItemsChange(next);
@@ -5284,13 +5305,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return next;
   });
   };
-  const addItem= (dept:string)=>{ const nextTaskText=String(newText?.[dept] || "").trim(); if(!nextTaskText) return; checklistBoardLocalEditRef.current = true; setItems((p:any)=>{
+  const addItem= (dept:string)=>{ const nextTaskText=String(newText?.[dept] || "").trim(); if(!nextTaskText) return; checklistBoardLocalEditRef.current = true; checklistBoardLastLocalEditAtRef.current = Date.now(); setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text:nextTaskText,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
     checklistBoardItemsRef.current = next;
     if(onItemsChange) onItemsChange(next);
     return next;
   }); setNewText((p:any)=>({...p,[dept]:""})); };
-  const addFromSKU=(dept,s)=>{ checklistBoardLocalEditRef.current = true; const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
+  const addFromSKU=(dept,s)=>{ checklistBoardLocalEditRef.current = true; checklistBoardLastLocalEditAtRef.current = Date.now(); const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
     checklistBoardItemsRef.current = next;
     if(onItemsChange) onItemsChange(next);
