@@ -177,6 +177,9 @@ export async function GET(request: NextRequest) {
     const roomId =
       cleanText(request.nextUrl.searchParams.get("roomId"), 100) ||
       DEFAULT_ROOM_ID;
+    const requesterEmail = normalizeEmail(
+      request.nextUrl.searchParams.get("requesterEmail")
+    );
     const requestedLimit = Number(
       request.nextUrl.searchParams.get("limit") || DEFAULT_LIMIT
     );
@@ -189,12 +192,50 @@ export async function GET(request: NextRequest) {
       .filter((message) => message.roomId === roomId)
       .slice(-limit);
 
+    const roomSummaries = store.rooms.map((room) => {
+      const roomMessages = store.messages.filter(
+        (message) => message.roomId === room.id
+      );
+
+      const latestMessage =
+        roomMessages[roomMessages.length - 1] || null;
+
+      const latestMentionForRequester = requesterEmail
+        ? [...roomMessages]
+            .reverse()
+            .find((message) => {
+              const mentions = (message.mentions || []).map(
+                normalizeEmail
+              );
+              const readers = (message.readBy || []).map(
+                normalizeEmail
+              );
+
+              return (
+                mentions.includes(requesterEmail) &&
+                normalizeEmail(message.senderEmail) !==
+                  requesterEmail &&
+                !readers.includes(requesterEmail)
+              );
+            }) || null
+        : null;
+
+      return {
+        roomId: room.id,
+        latestMessage,
+        mentionedYou: Boolean(latestMentionForRequester),
+        mentionMessageId:
+          latestMentionForRequester?.id || "",
+      };
+    });
+
     return NextResponse.json(
       {
         ok: true,
         rooms: store.rooms,
         users: DEFAULT_USERS,
         messages,
+        roomSummaries,
       },
       {
         headers: {
