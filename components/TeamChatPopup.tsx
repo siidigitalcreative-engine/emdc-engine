@@ -450,11 +450,14 @@ export default function TeamChatPopup() {
   ]);
 
   const addChecklistTag = (group: ChecklistGroupTag) => {
+    const safeName = group.name.replace(/\]\]/g, "");
+    const safeId = group.id.replace(/\]\]/g, "");
+
     setDraft((current) =>
       current.replace(
         /(?:^|\s)#([^\n#]*)$/,
         (matched) =>
-          `${matched.startsWith(" ") ? " " : ""}#[${group.name}](${group.id}) `
+          `${matched.startsWith(" ") ? " " : ""}[[CHECKLIST:${safeId}::${safeName}]] `
       )
     );
 
@@ -471,7 +474,9 @@ export default function TeamChatPopup() {
   };
 
   const renderMessageText = (messageText: string) => {
-    const pattern = /#\[([^\]]+)\]\(([^)]+)\)/g;
+    const pattern =
+      /\[\[CHECKLIST:([^:\]]+)::([^\]]+)\]\]|#\[([^\]]+)\]\(([^)]+)\)/g;
+
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -481,8 +486,8 @@ export default function TeamChatPopup() {
         parts.push(messageText.slice(lastIndex, match.index));
       }
 
-      const label = match[1];
-      const groupId = match[2];
+      const groupId = match[1] || match[4];
+      const label = match[2] || match[3];
 
       parts.push(
         <button
@@ -576,13 +581,33 @@ export default function TeamChatPopup() {
       return;
     }
 
+    const createdRoom = json?.room;
+
     if (Array.isArray(json.rooms) && json.rooms.length > 0) {
       setRooms(json.rooms);
+    } else if (createdRoom?.id && createdRoom?.name) {
+      setRooms((current) => {
+        const withoutDuplicate = current.filter(
+          (room) => room.id !== createdRoom.id
+        );
+
+        return [...withoutDuplicate, createdRoom];
+      });
     }
 
-    setRoomId(json.room.id);
+    if (!createdRoom?.id) {
+      setError("The group was created but no group ID was returned.");
+      return;
+    }
+
+    setRoomId(createdRoom.id);
     setShowRoomList(false);
     setMessages([]);
+    setError("");
+
+    window.setTimeout(() => {
+      void loadMessages(false, createdRoom.id);
+    }, 0);
   };
 
   const sendMessage = async () => {
@@ -591,6 +616,8 @@ export default function TeamChatPopup() {
 
     setSending(true);
     setError("");
+    setMentionOpen(false);
+    setChecklistTagOpen(false);
 
     try {
       const response = await fetch("/api/team-chat", {
@@ -608,7 +635,12 @@ export default function TeamChatPopup() {
       const json = await response.json().catch(() => null);
 
       if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || "Unable to send message.");
+        const detail =
+          json?.error ||
+          json?.message ||
+          `Unable to send message (${response.status}).`;
+
+        throw new Error(detail);
       }
 
       setDraft("");
