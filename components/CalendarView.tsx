@@ -5028,9 +5028,33 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
-  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
+  const buildChecklistDefaults = () => {
+    const out:any = {};
+    Object.keys(DEPTS).forEach((dept:string)=>{
+      out[dept] = (
+        templates?.[group?.launchType]?.[dept] || []
+      ).map((taskText:string)=>({
+        id:uid(),
+        text:taskText,
+        done:false,
+        link:"",
+        note:"",
+        assignee:"",
+        statusId:"",
+        custom:false,
+      }));
+    });
+    return dedupeChecklistItemsObject(out);
+  };
+
+  const [items,setItems] = useState(()=>{
+    const incoming = dedupeChecklistItemsObject(initialItems || {});
+    if(countEmdcChecklistItems(incoming)>0) return incoming;
+    return buildChecklistDefaults();
+  });
   const checklistBoardItemsRef = useRef<any>(items);
   const checklistBoardLocalEditRef = useRef(false);
+  const missingChecklistSeededRef = useRef(false);
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
@@ -5115,25 +5139,81 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[items]);
 
   useEffect(()=>{
-    if(!initialItems) return;
+    const incoming = dedupeChecklistItemsObject(initialItems || {});
+    const incomingCount = countEmdcChecklistItems(incoming);
 
-    const incoming = dedupeChecklistItemsObject(initialItems);
+    if(incomingCount===0){
+      const current = dedupeChecklistItemsObject(
+        checklistBoardItemsRef.current || {}
+      );
+      const currentCount = countEmdcChecklistItems(current);
+
+      if(currentCount===0){
+        const defaults = buildChecklistDefaults();
+        const defaultsCount = countEmdcChecklistItems(defaults);
+
+        if(defaultsCount>0){
+          checklistBoardItemsRef.current = defaults;
+          setItems(defaults);
+        }
+      }
+      return;
+    }
+
     const incomingSignature = JSON.stringify(incoming);
-    const currentSignature = JSON.stringify(checklistBoardItemsRef.current || {});
+    const currentSignature = JSON.stringify(
+      checklistBoardItemsRef.current || {}
+    );
 
-    // Parent caught up with the local edit. Keep the same visible state and
-    // release the local lock.
-    if (incomingSignature === currentSignature) {
+    if(incomingSignature===currentSignature){
       checklistBoardLocalEditRef.current = false;
       return;
     }
 
-    // Ignore stale parent/cloud props while a local status edit is still being
-    // propagated. This prevents the dropdown from visibly reverting.
-    if (checklistBoardLocalEditRef.current) return;
+    if(checklistBoardLocalEditRef.current) return;
 
+    checklistBoardItemsRef.current = incoming;
     setItems(incoming);
-  },[initialItems]);
+  },[
+    initialItems,
+    group?.id,
+    group?.launchType,
+    templates,
+  ]);
+
+  useEffect(()=>{
+    missingChecklistSeededRef.current = false;
+  },[group?.id]);
+
+  useEffect(()=>{
+    if(missingChecklistSeededRef.current) return;
+
+    const incomingCount = countEmdcChecklistItems(
+      dedupeChecklistItemsObject(initialItems || {})
+    );
+    const visibleItems = dedupeChecklistItemsObject(
+      checklistBoardItemsRef.current || items || {}
+    );
+    const visibleCount = countEmdcChecklistItems(visibleItems);
+
+    // Import backups may omit some per-group checklist item blobs.
+    // For those groups only, save the operational-type defaults once.
+    // Existing non-empty restored checklist data is never replaced.
+    if(incomingCount===0 && visibleCount>0 && onItemsChange){
+      missingChecklistSeededRef.current = true;
+      checklistBoardLocalEditRef.current = true;
+      onItemsChange(
+        JSON.parse(JSON.stringify(visibleItems))
+      );
+    }
+  },[
+    initialItems,
+    items,
+    group?.id,
+    group?.launchType,
+    templates,
+    onItemsChange,
+  ]);
 
   useEffect(()=>{
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
