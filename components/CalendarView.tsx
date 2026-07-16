@@ -5029,142 +5029,19 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
 
-  const doneStatusId =
-    (
-      Array.isArray(statuses)
-        ? statuses.find(
-            (status:any) =>
-              String(status?.id || "").toLowerCase()==="done" ||
-              String(status?.label || "").trim().toLowerCase()==="done"
-          )?.id
-        : ""
-    ) || "done";
-
-  const normalizeChecklistDoneState = (sourceItems:any) => {
-    const cleanItems = dedupeChecklistItemsObject(sourceItems || {});
-    const next:any = {};
-
-    Object.keys(DEPTS).forEach((dept:string)=>{
-      const rows = Array.isArray(cleanItems?.[dept])
-        ? cleanItems[dept]
-        : [];
-
-      next[dept] = rows.map((item:any)=>{
-        const currentStatusId = String(item?.statusId || "");
-        const statusMeta = Array.isArray(statuses)
-          ? statuses.find(
-              (status:any) =>
-                String(status?.id || "")===currentStatusId
-            )
-          : null;
-
-        const statusMeansDone =
-          currentStatusId.toLowerCase()==="done" ||
-          String(statusMeta?.label || "")
-            .trim()
-            .toLowerCase()==="done";
-
-        const isDone = Boolean(item?.done || statusMeansDone);
-
-        return {
-          ...item,
-          done:isDone,
-          // A checked item with no status should visibly show Done.
-          // Existing non-empty manual statuses are preserved.
-          statusId:
-            isDone && !currentStatusId
-              ? doneStatusId
-              : currentStatusId,
-        };
-      });
-    });
-
-    return dedupeChecklistItemsObject(next);
-  };
-
-  const applyStoredProgressSummary = (sourceItems:any) => {
-    const cleanItems = dedupeChecklistItemsObject(sourceItems || {});
-    const summary =
-      group?.progressSummary &&
-      typeof group.progressSummary === "object"
-        ? group.progressSummary
-        : {};
-
-    const summaryDepartments =
-      summary?.departments &&
-      typeof summary.departments === "object"
-        ? summary.departments
-        : {};
-
-    const currentDone = Object.values(cleanItems)
-      .flat()
-      .filter((item:any)=>!!item?.done).length;
-
-    const summaryDone = Math.max(
-      0,
-      Number(summary?.done || 0)
-    );
-
-    // Keep exact saved task states whenever they exist.
-    if(currentDone>0 || summaryDone<=0){
-      return cleanItems;
-    }
-
-    const next:any = {};
-    let remainingOverallDone = summaryDone;
-
-    Object.keys(DEPTS).forEach((dept:string)=>{
-      const rows = Array.isArray(cleanItems?.[dept])
-        ? cleanItems[dept]
-        : [];
-
-      const departmentDone = Math.max(
-        0,
-        Math.min(
-          rows.length,
-          Number(
-            summaryDepartments?.[dept]?.done || 0
-          )
-        )
-      );
-
-      const doneTarget =
-        departmentDone>0
-          ? departmentDone
-          : Math.min(rows.length,remainingOverallDone);
-
-      next[dept] = rows.map(
-        (item:any,index:number)=>{
-          const reconstructedDone = index < doneTarget;
-
-          return {
-            ...item,
-            done:reconstructedDone,
-            statusId:
-              reconstructedDone
-                ? (String(item?.statusId || "") || doneStatusId)
-                : String(item?.statusId || ""),
-          };
-        }
-      );
-
-      remainingOverallDone = Math.max(
-        0,
-        remainingOverallDone - doneTarget
-      );
-    });
-
-    return dedupeChecklistItemsObject(next);
-  };
-
-  const buildChecklistDefaults = () => {
+  const buildDefaultChecklistItems = () => {
     const out:any = {};
+
     Object.keys(DEPTS).forEach((dept:string)=>{
-      out[dept] = (
-        templates?.[group?.launchType]?.[dept] || []
-      ).map((taskText:string)=>({
+      const templateRows = Array.isArray(
+        templates?.[group.launchType]?.[dept]
+      )
+        ? templates[group.launchType][dept]
+        : [];
+
+      out[dept] = templateRows.map((taskText:string)=>({
         id:uid(),
-        text:taskText,
+        text:String(taskText || ""),
         done:false,
         link:"",
         note:"",
@@ -5173,25 +5050,32 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         custom:false,
       }));
     });
-    return applyStoredProgressSummary(out);
+
+    return out;
+  };
+
+  const hasChecklistRows = (value:any) => {
+    if(!value || typeof value!=="object") return false;
+
+    return Object.values(value).some(
+      (rows:any)=>Array.isArray(rows) && rows.length>0
+    );
   };
 
   const [items,setItems] = useState(()=>{
-    const incoming = dedupeChecklistItemsObject(
-      initialItems || {}
-    );
+    const normalizedInitial =
+      initialItems && typeof initialItems==="object"
+        ? dedupeChecklistItemsObject(initialItems)
+        : null;
 
-    if(countEmdcChecklistItems(incoming)>0){
-      return normalizeChecklistDoneState(
-        applyStoredProgressSummary(incoming)
-      );
-    }
-
-    return buildChecklistDefaults();
+    // An empty object from the lazy cloud endpoint means no saved task payload
+    // was found yet. It must not suppress the checklist template defaults.
+    return hasChecklistRows(normalizedInitial)
+      ? normalizedInitial
+      : buildDefaultChecklistItems();
   });
   const checklistBoardItemsRef = useRef<any>(items);
   const checklistBoardLocalEditRef = useRef(false);
-  const missingChecklistSeededRef = useRef(false);
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
@@ -5276,65 +5160,49 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[items]);
 
   useEffect(()=>{
-    const incoming = normalizeChecklistDoneState(
-      applyStoredProgressSummary(
-        dedupeChecklistItemsObject(initialItems || {})
-      )
-    );
-    const incomingCount = countEmdcChecklistItems(incoming);
+    if(!initialItems || typeof initialItems!=="object") return;
 
-    if(incomingCount===0){
-      const current = dedupeChecklistItemsObject(
-        checklistBoardItemsRef.current || {}
-      );
-      const currentCount = countEmdcChecklistItems(current);
+    const incoming = dedupeChecklistItemsObject(initialItems);
+    const incomingHasRows = hasChecklistRows(incoming);
+    const current = checklistBoardItemsRef.current || {};
+    const currentHasRows = hasChecklistRows(current);
 
-      if(currentCount===0){
-        const defaults = buildChecklistDefaults();
-        const defaultsCount = countEmdcChecklistItems(defaults);
+    // Never let an empty lazy/API response erase visible checklist templates or
+    // previously loaded tasks. This was the cause of existing groups showing
+    // "No tasks" across every department.
+    if(!incomingHasRows){
+      if(currentHasRows) return;
 
-        if(defaultsCount>0){
-          checklistBoardItemsRef.current = defaults;
-          setItems(defaults);
-        }
+      const recoveredDefaults = buildDefaultChecklistItems();
+      checklistBoardItemsRef.current = recoveredDefaults;
+      setItems(recoveredDefaults);
+
+      // Persist regenerated defaults only when both the incoming cloud payload
+      // and the current UI are genuinely empty.
+      if(hasChecklistRows(recoveredDefaults) && onItemsChange){
+        checklistBoardLocalEditRef.current = true;
+        onItemsChange(recoveredDefaults);
       }
       return;
     }
 
     const incomingSignature = JSON.stringify(incoming);
-    const currentSignature = JSON.stringify(
-      checklistBoardItemsRef.current || {}
-    );
+    const currentSignature = JSON.stringify(current);
 
-    if(incomingSignature===currentSignature){
+    // Parent caught up with the local edit. Keep the same visible state and
+    // release the local lock.
+    if (incomingSignature === currentSignature) {
       checklistBoardLocalEditRef.current = false;
       return;
     }
 
-    if(checklistBoardLocalEditRef.current) return;
+    // Ignore stale parent/cloud props while a local status edit is still being
+    // propagated. This prevents the dropdown from visibly reverting.
+    if (checklistBoardLocalEditRef.current) return;
 
     checklistBoardItemsRef.current = incoming;
     setItems(incoming);
-  },[
-    initialItems,
-    group?.id,
-    group?.launchType,
-    templates,
-  ]);
-
-  useEffect(()=>{
-    missingChecklistSeededRef.current = false;
-  },[group?.id]);
-
-  useEffect(()=>{
-    // Opening a checklist group must be read-only. Do not save generated,
-    // reconstructed, or temporarily empty task data on mount because that can
-    // overwrite the compact preview progress before the user edits anything.
-    missingChecklistSeededRef.current = false;
-  },[
-    group?.id,
-    group?.launchType,
-  ]);
+  },[initialItems,group.launchType,templates]);
 
   useEffect(()=>{
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
@@ -5900,9 +5768,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const title = String(item?.title || "").trim().toLowerCase().replace(/\s+/g," ");
     const kind = String(item?.kind || "").trim().toLowerCase().replace(/\s+/g," ");
 
-    // Product Introduction Digital Creative Asset Links is one live Overview
-    // card per checklist group. New saves update the existing card instead of
-    // creating duplicates.
     if(
       sourceType==="productintroassetlinks" ||
       (
@@ -5982,9 +5847,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
       const existingTime = String(existing?.updatedAt || existing?.createdAt || "");
       const incomingTime = String(item?.updatedAt || item?.createdAt || "");
-
-      // Keep the newest record, while preserving any fields only present on
-      // the older copy.
       map.set(
         key,
         incomingTime >= existingTime
@@ -6064,7 +5926,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       newItem,
     ];
 
-    // Adding the card again intentionally restores its canonical key.
     const deleted = getOverviewDeletionState();
     const nextDeleted = {
       ids:deleted.ids.filter((id:string)=>id!==String(newItem.id || "")),
@@ -6490,9 +6351,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     if(!target) return;
 
     const targetKey = overviewCanonicalKey(target);
-
-    // Remove every duplicate representing the same source output, not only the
-    // clicked record ID.
     const removedItems = items.filter((item:any)=>overviewCanonicalKey(item)===targetKey);
     const nextItems = items.filter((item:any)=>overviewCanonicalKey(item)!==targetKey);
     const deleted = getOverviewDeletionState();
@@ -12067,7 +11925,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       } as any;
       const defaultProductIntroDigitalAssetRows = [
         { id:"main-google-drive-folder", name:"Main Google Drive Folder", link:"" },
-        { id:"product-images", name:"Product Images", link:"" },
+        { id:"product-image", name:"Product Image", link:"" },
         { id:"cem-banner", name:"CEM Banner", link:"" },
         { id:"store-banner", name:"Store Banner", link:"" },
         { id:"feed", name:"Feed", link:"" },
@@ -12075,26 +11933,66 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         { id:"showcase-video", name:"Showcase Video", link:"" },
         { id:"a4-signage", name:"A4 Signage", link:"" },
         { id:"sampling-poster", name:"Sampling Poster", link:"" },
+        { id:"youtube-link", name:"YouTube Link", link:"" },
       ];
       const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
         const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-        const normalizeAssetKey = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
-        const oldDefaultKeys = new Set(["product-image","cem-banner","store-banner","feed","story","showcase-video"]);
-        const looksLikeOldDefaults = sourceRows.length > 0 && sourceRows.length <= oldDefaultKeys.size && sourceRows.every((row:any)=>{
-          const keys = [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean);
-          return keys.some((key:string)=>oldDefaultKeys.has(key));
-        });
-        if (sourceRows.length && !looksLikeOldDefaults) return sourceRows;
+        const normalizeAssetKey = (value:any) =>
+          String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g,"-")
+            .replace(/^-+|-+$/g,"");
+
         const sourceByKey = new Map<string,any>();
+
         sourceRows.forEach((row:any)=>{
-          [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean).forEach((key:string)=>{
-            if (!sourceByKey.has(key)) sourceByKey.set(key,row);
-          });
+          [row?.id,row?.name,row?.assetName,row?.label]
+            .map(normalizeAssetKey)
+            .filter(Boolean)
+            .forEach((key:string)=>{
+              if (!sourceByKey.has(key)) sourceByKey.set(key,row);
+            });
         });
-        if (sourceByKey.has("product-image") && !sourceByKey.has("product-images")) sourceByKey.set("product-images",sourceByKey.get("product-image"));
+
+        // Migrate the previous plural Product Images row.
+        if (
+          sourceByKey.has("product-images") &&
+          !sourceByKey.has("product-image")
+        ) {
+          sourceByKey.set(
+            "product-image",
+            sourceByKey.get("product-images")
+          );
+        }
+
+        // Accept common YouTube naming variations.
+        if (
+          sourceByKey.has("youtube") &&
+          !sourceByKey.has("youtube-link")
+        ) {
+          sourceByKey.set(
+            "youtube-link",
+            sourceByKey.get("youtube")
+          );
+        }
+
         return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
-          const match = sourceByKey.get(normalizeAssetKey(defaultRow.id)) || sourceByKey.get(normalizeAssetKey(defaultRow.name));
-          return match ? { ...defaultRow, link:match.link || match.url || match.outputLink || "" } : defaultRow;
+          const match =
+            sourceByKey.get(normalizeAssetKey(defaultRow.id)) ||
+            sourceByKey.get(normalizeAssetKey(defaultRow.name));
+
+          return match
+            ? {
+                ...defaultRow,
+                link:String(
+                  match?.link ||
+                  match?.url ||
+                  match?.outputLink ||
+                  ""
+                ).trim(),
+              }
+            : defaultRow;
         });
       };
       const productIntroDigitalAssetRows = normalizeProductIntroDigitalAssetRows(digitalData.productIntroAssetLinks);
@@ -12192,9 +12090,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const readCurrentAnnouncementAssets = () => {
-        // The announcement popup can be opened from Overview, where the
-        // Digital Creative table helper functions are not in scope. Read the
-        // saved asset rows directly from the checklist workspace instead.
         const digitalWorkspace =
           (
             (
@@ -12208,35 +12103,81 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           digitalWorkspace?.digitalAssetLinks ||
           [];
 
-        const currentRows = Array.isArray(rawRows)
+        const storedRows = Array.isArray(rawRows)
           ? rawRows
           : Array.isArray(rawRows?.rows)
             ? rawRows.rows
             : [];
 
-        return currentRows
-          .filter((row:any)=>
-            String(
+        const normalizeKey = (value:any) =>
+          String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g,"-")
+            .replace(/^-+|-+$/g,"");
+
+        const byKey = new Map<string,any>();
+
+        storedRows.filter(Boolean).forEach((row:any)=>{
+          [row?.id,row?.name,row?.assetName,row?.label]
+            .map(normalizeKey)
+            .filter(Boolean)
+            .forEach((key:string)=>{
+              if (!byKey.has(key)) byKey.set(key,row);
+            });
+        });
+
+        if (byKey.has("product-images") && !byKey.has("product-image")) {
+          byKey.set("product-image",byKey.get("product-images"));
+        }
+
+        if (byKey.has("youtube") && !byKey.has("youtube-link")) {
+          byKey.set("youtube-link",byKey.get("youtube"));
+        }
+
+        // Also support a separately saved YouTube URL field from older data.
+        const legacyYoutubeLink = String(
+          digitalWorkspace?.youtubeLink ||
+          digitalWorkspace?.youtubeUrl ||
+          ""
+        ).trim();
+
+        const canonicalRows = [
+          { id:"main-google-drive-folder", name:"Main Google Drive Folder" },
+          { id:"product-image", name:"Product Image" },
+          { id:"cem-banner", name:"CEM Banner" },
+          { id:"store-banner", name:"Store Banner" },
+          { id:"feed", name:"Feed" },
+          { id:"story", name:"Story" },
+          { id:"showcase-video", name:"Showcase Video" },
+          { id:"a4-signage", name:"A4 Signage" },
+          { id:"sampling-poster", name:"Sampling Poster" },
+          { id:"youtube-link", name:"YouTube Link" },
+        ];
+
+        return canonicalRows
+          .map((defaultRow:any)=>{
+            const row =
+              byKey.get(normalizeKey(defaultRow.id)) ||
+              byKey.get(normalizeKey(defaultRow.name));
+
+            const link = String(
               row?.link ||
               row?.url ||
               row?.outputLink ||
-              ""
-            ).trim()
-          )
-          .map((row:any)=>({
-            name:String(
-              row?.name ||
-              row?.assetName ||
-              row?.label ||
-              "Asset"
-            ).trim(),
-            link:String(
-              row?.link ||
-              row?.url ||
-              row?.outputLink ||
-              ""
-            ).trim(),
-          }));
+              (
+                defaultRow.id === "youtube-link"
+                  ? legacyYoutubeLink
+                  : ""
+              )
+            ).trim();
+
+            return {
+              name:defaultRow.name,
+              link,
+            };
+          })
+          .filter((row:any)=>row.link);
       };
 
       const buildAnnouncementAssetLines = (assets:any[]) => {
@@ -12307,23 +12248,180 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .map((asset:any)=>`• ${asset.name}`)
           .join("\n");
 
+        const actualSkus = Array.from(
+          new Set(
+            productRows
+              .map((row:any)=>
+                String(
+                  row?.skuCode ||
+                  row?.sku ||
+                  row?.value ||
+                  ""
+                ).trim()
+              )
+              .filter(Boolean)
+          )
+        );
+
         const productSummary = [
           brands.length ? `Brand: ${brands.join(", ")}` : "",
-          categories.length ? `Category: ${categories.join(", ")}` : "",
-          `Products / SKUs: ${productRows.length}`,
+          `Products / SKUs: ${
+            actualSkus.length
+              ? actualSkus.join(", ")
+              : "Not available"
+          }`,
           `Checklist Type: ${checklistAnnouncementType}`,
-          `Overall Progress: ${overallPct}%`,
         ].filter(Boolean).join("\n");
+
+        const ecommerceWorkspace =
+          (((group?.aiWorkspace || {}) as any).ecommerce || {}) as any;
+
+        const ecommerceSavedOutputs = Array.isArray(
+          ecommerceWorkspace?.savedOutputs
+        )
+          ? ecommerceWorkspace.savedOutputs
+          : [];
+
+        const latestSavedEcommerceOutput = [...ecommerceSavedOutputs]
+          .filter((item:any)=>String(item?.text || "").trim())
+          .sort((left:any,right:any)=>{
+            const leftTime = new Date(
+              left?.updatedAt ||
+              left?.createdAt ||
+              0
+            ).getTime();
+
+            const rightTime = new Date(
+              right?.updatedAt ||
+              right?.createdAt ||
+              0
+            ).getTime();
+
+            return rightTime - leftTime;
+          })[0];
+
+        // Always use the current E-commerce generated output first. When the
+        // current editor is empty, use the most recently saved E-commerce
+        // output. External product information must come from this source.
+        const ecommerceSource = String(
+          ecommerceWorkspace?.generatedText ||
+          latestSavedEcommerceOutput?.text ||
+          ""
+        ).trim();
+
+        const ecommerceSectionHeadings = [
+          "Product Name",
+          "Product Overview",
+          "Key Features",
+          "Variants Available",
+          "Color Options",
+          "Product Specifications",
+          "Perfect For",
+          "Care & Use",
+          "Package Includes",
+          "Best SEO Listing Title",
+          "Stronger Lazada/Shopee SEO Version",
+          "Recommended Variations",
+          "Better Option / Higher AOV",
+          "Search Keywords",
+        ];
+
+        const normalizeEcommerceHeading = (value:any) =>
+          String(value || "")
+            .replace(/^\s*#{1,6}\s*/,"")
+            .replace(/^\s*(?:\d+[\.\)]|[-*•])\s*/,"")
+            .replace(/\s*[:\-]\s*$/,"")
+            .trim()
+            .toLowerCase();
+
+        const ecommerceHeadingMap = new Map(
+          ecommerceSectionHeadings.map((heading:string)=>[
+            normalizeEcommerceHeading(heading),
+            heading,
+          ])
+        );
+
+        const parseEcommerceSections = (source:string) => {
+          const sections:Record<string,string> = {};
+          let activeHeading = "";
+          const buffer:string[] = [];
+
+          const commit = () => {
+            if(!activeHeading) return;
+
+            const value = buffer
+              .join("\n")
+              .replace(/^\s+|\s+$/g,"")
+              .trim();
+
+            if(value){
+              sections[activeHeading] = value;
+            }
+
+            buffer.length = 0;
+          };
+
+          String(source || "")
+            .replace(/\r\n?/g,"\n")
+            .split("\n")
+            .forEach((rawLine:string)=>{
+              const normalized = normalizeEcommerceHeading(rawLine);
+              const matchedHeading =
+                ecommerceHeadingMap.get(normalized);
+
+              if(matchedHeading){
+                commit();
+                activeHeading = matchedHeading;
+                return;
+              }
+
+              if(activeHeading){
+                buffer.push(rawLine);
+              }
+            });
+
+          commit();
+          return sections;
+        };
+
+        const ecommerceSections =
+          parseEcommerceSections(ecommerceSource);
+
+        const ecommerceProductName = String(
+          ecommerceSections["Product Name"] ||
+          ""
+        )
+          .split("\n")
+          .map((line:string)=>line.trim())
+          .filter(Boolean)[0] || "";
+
+        const externalOverview = String(
+          ecommerceSections["Product Overview"] ||
+          ""
+        ).trim();
+
+        const externalFeatures = String(
+          ecommerceSections["Key Features"] ||
+          ""
+        )
+          .replace(/^\s*[-*]\s*/gm,"• ")
+          .trim();
+
+        // Do not invent product details. The external announcement uses only
+        // the Product Overview and Key Features found in the E-commerce output.
+        const externalProductName =
+          ecommerceProductName ||
+          productName;
 
         const clientTemplates:any = {
           "Product Introduction":{
-            subject:`[New Arrival] ${productName} — Now Available`,
-            intro:`We are pleased to introduce ${productName}, now available for ordering.`,
+            subject:`[New Arrival] ${externalProductName} — Now Available`,
+            intro:`We are pleased to introduce ${externalProductName}, now available for ordering.`,
             action:"For inquiries, product details, or orders, please feel free to contact us.",
           },
           "Product Reactivation":{
-            subject:`[Product Reactivation] ${productName} — Available Again`,
-            intro:`We are pleased to reintroduce ${productName}, now available again for ordering and promotion.`,
+            subject:`[Product Reactivation] ${externalProductName} — Available Again`,
+            intro:`We are pleased to reintroduce ${externalProductName}, now available again for ordering and promotion.`,
             action:"Please feel free to contact us for updated product details, availability, or orders.",
           },
           "Campaign":{
@@ -12350,35 +12448,59 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             clientTemplates[checklistAnnouncementType] ||
             clientTemplates["Product Introduction"];
 
+          const externalHeadline = (()=>{
+            if(checklistAnnouncementType==="Product Reactivation"){
+              return `${externalProductName.toUpperCase()} — AVAILABLE AGAIN!`;
+            }
+            if(checklistAnnouncementType==="Campaign"){
+              return `${checklistName.toUpperCase()} — NOW LIVE!`;
+            }
+            if(checklistAnnouncementType==="Special Campaign"){
+              return `${checklistName.toUpperCase()} — SPECIAL CAMPAIGN!`;
+            }
+            return `${externalProductName.toUpperCase()} — NOW AVAILABLE!`;
+          })();
+
+          const externalBodyLines = [
+            "Dear Partner,",
+            "",
+            externalHeadline,
+          ];
+
+          if(externalOverview){
+            externalBodyLines.push(
+              "",
+              externalOverview
+            );
+          }
+
+          if(externalFeatures){
+            externalBodyLines.push(
+              "",
+              "Why You'll Love It",
+              "",
+              externalFeatures
+            );
+          }
+
+          externalBodyLines.push(
+            "",
+            checklistAnnouncementType==="Product Introduction" ||
+            checklistAnnouncementType==="Product Reactivation"
+              ? "Reply ORDER to confirm. Should you require any additional information, please feel free to reach out."
+              : template.action,
+            "",
+            `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`
+          );
+
           return {
             subject:template.subject,
-            body:[
-              "Dear Valued Partner,",
-              "",
-              template.intro,
-              "",
-              "Product / Campaign Information",
-              productSummary,
-              "",
-              assets.length ? "Available Marketing Materials" : "",
-              assets.length ? availableAssetNames : "",
-              "",
-              mainFolder
-                ? `Access the complete files here:\n${mainFolder}`
-                : assets.length
-                  ? `Available asset links:\n\n${assetLines}`
-                  : "",
-              "",
-              template.action,
-              "",
-              "Thank you for your continued partnership.",
-              "",
-              "Best regards,",
-              "Sunbeams Lifestyle",
-            ].filter((line,index,rows)=>
-              line !== "" ||
-              (index > 0 && rows[index-1] !== "")
-            ).join("\n"),
+            body:externalBodyLines
+              .filter((line,index,rows)=>
+                line !== "" ||
+                (index > 0 && rows[index-1] !== "")
+              )
+              .join("\n"),
           };
         }
 
@@ -12511,9 +12633,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 'Return strict JSON only in this shape: {"subject":"","body":""}.',
                 "Do not use markdown code fences.",
                 audience === "client"
-                  ? "Use a professional partner-facing tone. Introduce or announce the product/campaign, mention that marketing materials are available, provide the main file access link, and include a clear inquiry or coordination closing."
-                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, show project progress, and state the next action for the team.",
-                "Only include assets that have valid links.",
+                  ? "Use a professional partner-facing tone similar to a polished New Arrival email. Include a headline, product overview, Why You'll Love It section, ordering or coordination instruction, and place Watch on YouTube as the final line. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links."
+                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
+                audience === "internal"
+                  ? "Only include assets that have valid links."
+                  : "For external messages, include only the YouTube link and place it at the very end.",
                 "Do not invent prices, campaign mechanics, availability dates, product features, or links.",
                 "Avoid em dashes.",
                 assetAnnouncementData.instructions
@@ -12524,8 +12648,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 checklistType:checklistAnnouncementType,
                 audience,
                 checklistName:group.groupName || "",
-                overallProgress:overallPct,
                 products,
+                ecommerceOutput:ecommerceSource,
                 completedAssets,
               },null,2),
             }),
@@ -16153,68 +16277,22 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         summaryTotal += departmentRows.length;
       });
 
-      // Only replace the compact summary when there is an actual non-empty
-      // task payload produced by a user action. This prevents opening a group
-      // from changing 6/23 to 0/23.
-      if(summaryTotal>0){
-        const summaryUpdatedAt = new Date().toISOString();
-
-        setGroups((currentGroups:any[])=>{
-          const nextGroups = currentGroups.map(
-            (currentGroup:any)=>
-              String(currentGroup?.id)===String(groupId)
-                ? {
-                    ...currentGroup,
-                    progressSummary:{
-                      done:summaryDone,
-                      total:summaryTotal,
-                      departmentCount:
-                        Object.keys(departmentSummary).length,
-                      departments:departmentSummary,
-                      updatedAt:summaryUpdatedAt,
-                    },
-                  }
-                : currentGroup
-          );
-
-          // Progress cards are stored in checklistGroups, while task details
-          // are stored in checklistItems. Save both sources together whenever
-          // a task changes so leaving the group cannot restore an old 0/30
-          // summary from the cloud.
-          try {
-            const raw = localStorage.getItem(
-              "emdc_app_state_v1"
-            );
-            const parsed = raw
-              ? parseEmdcJson(raw)
-              : {};
-
-            localStorage.setItem(
-              "emdc_app_state_v1",
-              JSON.stringify({
-                ...(parsed || {}),
-                checklistGroups:
-                  mergeChecklistGroupsWithWorkspaceBackups(
-                    nextGroups
-                  ),
-              })
-            );
-
-            markEmdcLocalStateUpdated();
-            window.dispatchEvent(
-              new Event("emdc-local-sync")
-            );
-          } catch {}
-
-          if(onChecklistGroupsDirectSave){
-            onChecklistGroupsDirectSave(
-              JSON.parse(JSON.stringify(nextGroups))
-            );
-          }
-
-          return nextGroups;
-        });
-      }
+      setGroups((currentGroups:any[])=>
+        currentGroups.map((currentGroup:any)=>
+          String(currentGroup?.id)===String(groupId)
+            ? {
+                ...currentGroup,
+                progressSummary:{
+                  done:summaryDone,
+                  total:summaryTotal,
+                  departmentCount:Object.keys(departmentSummary).length,
+                  departments:departmentSummary,
+                  updatedAt:new Date().toISOString(),
+                },
+              }
+            : currentGroup
+        )
+      );
 
       // Keep the current UI/device immediately updated, but do not also send an
       // app-patch request. The dedicated checklist-items endpoint is the single
@@ -22057,131 +22135,21 @@ export default function App({
     );
     const json = await res.json().catch(()=>null);
 
-    if(
-      !res.ok ||
-      !json?.ok ||
-      !json?.groupItems ||
-      typeof json.groupItems!=="object"
-    ){
+    if(!res.ok || !json?.ok || !json?.groupItems || typeof json.groupItems!=="object") {
       return;
     }
 
-    const remoteItems = dedupeChecklistItemsObject(
-      json.groupItems
-    );
-    const remoteCount = countEmdcChecklistItems(remoteItems);
-
-    let resolvedItems = remoteItems;
-    let shouldRepairRemote = false;
-
-    setChecklistAllItems((previous:any)=>{
-      const currentItems = dedupeChecklistItemsObject(
-        previous?.[groupId] || {}
-      );
-      const currentCount =
-        countEmdcChecklistItems(currentItems);
-
-      let backupItems:any = {};
-      try {
-        const backups = readEmdcChecklistItemsBackups();
-        backupItems = dedupeChecklistItemsObject(
-          backups?.[groupId]?.items || {}
-        );
-      } catch {}
-
-      const backupCount =
-        countEmdcChecklistItems(backupItems);
-
-      // Never allow an empty/stale Sync v2 response to erase checklist tasks
-      // that are already visible or were restored from backup/defaults.
-      if(remoteCount===0){
-        if(currentCount>0){
-          resolvedItems = currentItems;
-          shouldRepairRemote = true;
-        } else if(backupCount>0){
-          resolvedItems = backupItems;
-          shouldRepairRemote = true;
-        }
-      }
-
-      const resolvedCount =
-        countEmdcChecklistItems(resolvedItems);
-
-      if(resolvedCount>0){
-        try {
-          writeEmdcChecklistItemsBackup(
-            groupId,
-            resolvedItems
-          );
-        } catch {}
-      }
-
-      return {
-        ...(previous || {}),
-        [groupId]:resolvedItems,
-      };
-    });
+    const cleanGroupItems = dedupeChecklistItemsObject(json.groupItems);
 
     syncV2ApplyingRef.current = true;
     try {
-      // Repair the cloud only when it returned empty while a known-good local
-      // checklist exists. This prevents the progress from disappearing again
-      // during later sync polls.
-      if(
-        shouldRepairRemote &&
-        countEmdcChecklistItems(resolvedItems)>0
-      ){
-        try {
-          const repairResponse = await fetch(
-            "/api/checklist-items-fast",
-            {
-              method:"POST",
-              headers:{
-                "Content-Type":"application/json",
-              },
-              cache:"no-store",
-              body:JSON.stringify({
-                clientId:cloudClientIdRef.current,
-                updatedAt:new Date().toISOString(),
-                groupId,
-                groupItems:resolvedItems,
-              }),
-            }
-          );
-
-          const repairJson = await repairResponse
-            .json()
-            .catch(()=>null);
-
-          if(repairResponse.ok && repairJson?.ok){
-            syncV2ItemsVersionRef.current = Math.max(
-              syncV2ItemsVersionRef.current,
-              Number(
-                repairJson?.checklistItemsVersion || 0
-              )
-            );
-
-            if(repairJson?.groupId){
-              syncV2ItemGroupVersionsRef.current[
-                String(repairJson.groupId)
-              ] = Math.max(
-                Number(
-                  syncV2ItemGroupVersionsRef.current[
-                    String(repairJson.groupId)
-                  ] || 0
-                ),
-                Number(repairJson?.groupVersion || 0)
-              );
-            }
-
-            syncV2EtagRef.current = "";
-          }
-        } catch {}
-      }
+      setChecklistAllItems((previous:any)=>({
+        ...(previous || {}),
+        [groupId]:cleanGroupItems,
+      }));
+      try { writeEmdcChecklistItemsBackup(groupId,cleanGroupItems); } catch {}
     } finally {
-      setTimeout(()=>{
-        syncV2ApplyingRef.current = false;
-      },0);
+      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
     }
   };
 
