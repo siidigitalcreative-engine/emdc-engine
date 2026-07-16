@@ -524,10 +524,24 @@ export default function TeamChatPopup() {
                     background: "#F9FAFB",
                     color: "#111827",
                     fontSize: 20,
+                    lineHeight: 1,
                     cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
                   }}
                 >
-                  ←
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "block",
+                      lineHeight: 1,
+                      transform: "translateY(-1px)",
+                    }}
+                  >
+                    ←
+                  </span>
                 </button>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1091,9 +1105,24 @@ export default function TeamChatPopup() {
                                 ? "rgba(255,255,255,.12)"
                                 : "#FFFFFF",
                               fontSize: 18,
+                              lineHeight: 1,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
+                              cursor: "pointer",
                             }}
                           >
-                            😊
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                display: "block",
+                                lineHeight: 1,
+                                transform: "translateY(-1px)",
+                              }}
+                            >
+                              😊
+                            </span>
                           </button>
                         )}
                       </div>
