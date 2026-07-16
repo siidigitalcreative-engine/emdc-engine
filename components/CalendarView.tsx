@@ -5261,48 +5261,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[group?.id]);
 
   useEffect(()=>{
-    if(missingChecklistSeededRef.current) return;
-
-    const incomingCount = countEmdcChecklistItems(
-      dedupeChecklistItemsObject(initialItems || {})
-    );
-    const visibleItems = dedupeChecklistItemsObject(
-      checklistBoardItemsRef.current || items || {}
-    );
-    const visibleCount = countEmdcChecklistItems(visibleItems);
-
-    // Import backups may omit some per-group checklist item blobs.
-    // For those groups only, save the operational-type defaults once.
-    // Existing non-empty restored checklist data is never replaced.
-    const summaryDone = Math.max(
-      0,
-      Number(group?.progressSummary?.done || 0)
-    );
-    const visibleDone = Object.values(visibleItems)
-      .flat()
-      .filter((item:any)=>!!item?.done).length;
-
-    if(
-      visibleCount>0 &&
-      onItemsChange &&
-      (
-        incomingCount===0 ||
-        (summaryDone>0 && visibleDone===summaryDone)
-      )
-    ){
-      missingChecklistSeededRef.current = true;
-      checklistBoardLocalEditRef.current = true;
-      onItemsChange(
-        JSON.parse(JSON.stringify(visibleItems))
-      );
-    }
+    // Opening a checklist group must be read-only. Do not save generated,
+    // reconstructed, or temporarily empty task data on mount because that can
+    // overwrite the compact preview progress before the user edits anything.
+    missingChecklistSeededRef.current = false;
   },[
-    initialItems,
-    items,
     group?.id,
     group?.launchType,
-    templates,
-    onItemsChange,
   ]);
 
   useEffect(()=>{
@@ -16122,22 +16087,27 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         summaryTotal += departmentRows.length;
       });
 
-      setGroups((currentGroups:any[])=>
-        currentGroups.map((currentGroup:any)=>
-          String(currentGroup?.id)===String(groupId)
-            ? {
-                ...currentGroup,
-                progressSummary:{
-                  done:summaryDone,
-                  total:summaryTotal,
-                  departmentCount:Object.keys(departmentSummary).length,
-                  departments:departmentSummary,
-                  updatedAt:new Date().toISOString(),
-                },
-              }
-            : currentGroup
-        )
-      );
+      // Only replace the compact summary when there is an actual non-empty
+      // task payload produced by a user action. This prevents opening a group
+      // from changing 6/23 to 0/23.
+      if(summaryTotal>0){
+        setGroups((currentGroups:any[])=>
+          currentGroups.map((currentGroup:any)=>
+            String(currentGroup?.id)===String(groupId)
+              ? {
+                  ...currentGroup,
+                  progressSummary:{
+                    done:summaryDone,
+                    total:summaryTotal,
+                    departmentCount:Object.keys(departmentSummary).length,
+                    departments:departmentSummary,
+                    updatedAt:new Date().toISOString(),
+                  },
+                }
+              : currentGroup
+          )
+        );
+      }
 
       // Keep the current UI/device immediately updated, but do not also send an
       // app-patch request. The dedicated checklist-items endpoint is the single
