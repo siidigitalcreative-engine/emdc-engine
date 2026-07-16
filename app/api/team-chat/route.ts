@@ -9,122 +9,56 @@ type ReactionMap = Record<string, string[]>;
 
 type ChatMessage = {
   id: string;
+  roomId: string;
   sender: string;
-  senderEmail?: string;
+  senderEmail: string;
   text: string;
   createdAt: string;
-  reactions?: ReactionMap;
-  mentions?: string[];
-  readBy?: string[];
+  reactions: ReactionMap;
+  mentions: string[];
+  readBy: string[];
 };
 
 type ChatUser = {
   name: string;
   email: string;
-  lastSeenAt: string;
+};
+
+type ChatRoom = {
+  id: string;
+  name: string;
+  createdAt: string;
+  createdBy: string;
 };
 
 type ChatStore = {
+  version: number;
+  rooms: ChatRoom[];
   messages: ChatMessage[];
-  users: ChatUser[];
 };
 
+const CHAT_PATH = "emdc-team-chat/store.json";
+const DEFAULT_ROOM_ID = "general";
+const DEFAULT_LIMIT = 30;
+const MAX_MESSAGES = 1000;
 
-const DEFAULT_CHAT_USERS: ChatUser[] = [
-  {
-    name: "analyst",
-    email: "analyst@sunbeamsimpexinc.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "Ayen Quintos",
-    email: "marketing@sunbeamsimpexinc.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "Charlene Quizon",
-    email: "mariacharlenemae.quizon@gmail.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "Che Navarro",
-    email: "design@sunbeamsimpexinc.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "design2",
-    email: "design2@sunbeamsimpexinc.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "Janssen Balneg",
-    email: "janssenbalneg14@gmail.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "operations",
-    email: "operations@sunbeamsimpexinc.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "Philip Jimenez Cute",
-    email: "jimenezphilip91@gmail.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "ravi",
-    email: "ravi@sunbeamsimpexinc.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
-  {
-    name: "Reggienald Vargas",
-    email: "admin@sunbeamsimpexinc.com",
-    lastSeenAt: "2026-07-16T00:00:00.000Z",
-  },
+const DEFAULT_USERS: ChatUser[] = [
+  { name: "analyst", email: "analyst@sunbeamsimpexinc.com" },
+  { name: "Ayen Quintos", email: "marketing@sunbeamsimpexinc.com" },
+  { name: "Charlene Quizon", email: "mariacharlenemae.quizon@gmail.com" },
+  { name: "Che Navarro", email: "design@sunbeamsimpexinc.com" },
+  { name: "design2", email: "design2@sunbeamsimpexinc.com" },
+  { name: "Janssen Balneg", email: "janssenbalneg14@gmail.com" },
+  { name: "operations", email: "operations@sunbeamsimpexinc.com" },
+  { name: "Philip Jimenez Cute", email: "jimenezphilip91@gmail.com" },
+  { name: "ravi", email: "ravi@sunbeamsimpexinc.com" },
+  { name: "Reggienald Vargas", email: "admin@sunbeamsimpexinc.com" },
 ];
 
-const mergeUsers = (...groups: ChatUser[][]) => {
-  const byEmail = new Map<string, ChatUser>();
+const ALLOWED_REACTIONS = new Set(["👍", "❤️", "😂", "😮", "😢", "👏"]);
 
-  groups.flat().forEach((user) => {
-    const email = normalizeEmail(user?.email);
-    const name = cleanText(user?.name, 100);
-
-    if (!email || !name) return;
-
-    const existing = byEmail.get(email);
-    byEmail.set(email, {
-      name,
-      email,
-      lastSeenAt:
-        user?.lastSeenAt ||
-        existing?.lastSeenAt ||
-        "2026-07-16T00:00:00.000Z",
-    });
-  });
-
-  return Array.from(byEmail.values()).sort((left, right) =>
-    left.name.localeCompare(right.name)
-  );
-};
-
-const CHAT_PATH = "emdc-team-chat/recent.json";
-const MAX_STORED_MESSAGES = 100;
-const DEFAULT_LIMIT = 30;
-const ALLOWED_REACTIONS = new Set([
-  "👍",
-  "❤️",
-  "😂",
-  "😮",
-  "😢",
-  "👏",
-]);
-
-const cleanText = (value: unknown, maxLength: number) =>
-  String(value || "")
-    .replace(/\u0000/g, "")
-    .trim()
-    .slice(0, maxLength);
+const cleanText = (value: unknown, maxLength = 2000) =>
+  String(value || "").replace(/\u0000/g, "").trim().slice(0, maxLength);
 
 const normalizeEmail = (value: unknown) =>
   cleanText(value, 200).toLowerCase();
@@ -132,44 +66,86 @@ const normalizeEmail = (value: unknown) =>
 const unique = (values: string[]) =>
   Array.from(new Set(values.filter(Boolean)));
 
-const streamToText = async (
-  stream: ReadableStream<Uint8Array>
-) => new Response(stream).text();
+const defaultRoom = (): ChatRoom => ({
+  id: DEFAULT_ROOM_ID,
+  name: "General",
+  createdAt: new Date().toISOString(),
+  createdBy: "system",
+});
+
+const emptyStore = (): ChatStore => ({
+  version: 4,
+  rooms: [defaultRoom()],
+  messages: [],
+});
 
 const readStore = async (): Promise<ChatStore> => {
-  const result = await get(CHAT_PATH, {
-    access: "private",
-    useCache: false,
-  });
+  try {
+    const result = await get(CHAT_PATH, {
+      access: "private",
+      useCache: false,
+    });
 
-  if (!result || result.statusCode === 304 || !result.stream) {
-    return { messages: [], users: [] };
+    if (!result || result.statusCode === 304 || !result.stream) {
+      return emptyStore();
+    }
+
+    const raw = await new Response(result.stream).text();
+    const parsed = JSON.parse(raw || "{}");
+
+    const rooms = Array.isArray(parsed?.rooms) && parsed.rooms.length
+      ? parsed.rooms
+      : [defaultRoom()];
+
+    const roomIds = new Set(rooms.map((room: ChatRoom) => room.id));
+
+    const messages = Array.isArray(parsed?.messages)
+      ? parsed.messages
+          .filter(Boolean)
+          .map((message: any) => ({
+            ...message,
+            roomId: roomIds.has(message?.roomId)
+              ? message.roomId
+              : DEFAULT_ROOM_ID,
+            senderEmail: normalizeEmail(message?.senderEmail),
+            reactions:
+              message?.reactions && typeof message.reactions === "object"
+                ? Object.fromEntries(
+                    Object.entries(message.reactions).map(([emoji, value]) => [
+                      emoji,
+                      Array.isArray(value)
+                        ? unique(value.map(normalizeEmail))
+                        : [],
+                    ])
+                  )
+                : {},
+            mentions: Array.isArray(message?.mentions)
+              ? unique(message.mentions.map(normalizeEmail))
+              : [],
+            readBy: Array.isArray(message?.readBy)
+              ? unique(message.readBy.map(normalizeEmail))
+              : [],
+          }))
+      : [];
+
+    return {
+      version: 4,
+      rooms,
+      messages,
+    };
+  } catch {
+    return emptyStore();
   }
-
-  const raw = await streamToText(result.stream);
-  const json = JSON.parse(raw || "{}");
-
-  return {
-    messages: Array.isArray(json?.messages)
-      ? json.messages.filter(Boolean)
-      : [],
-    users: mergeUsers(
-      DEFAULT_CHAT_USERS,
-      Array.isArray(json?.users)
-        ? json.users.filter(Boolean)
-        : []
-    ),
-  };
 };
 
 const writeStore = async (store: ChatStore) => {
   await put(
     CHAT_PATH,
     JSON.stringify({
-      version: 3,
+      ...store,
+      version: 4,
+      messages: store.messages.slice(-MAX_MESSAGES),
       updatedAt: new Date().toISOString(),
-      messages: store.messages.slice(-MAX_STORED_MESSAGES),
-      users: store.users.slice(-200),
     }),
     {
       access: "private",
@@ -181,85 +157,54 @@ const writeStore = async (store: ChatStore) => {
   );
 };
 
-const readMessages = async () => (await readStore()).messages;
-
-const writeMessages = async (messages: ChatMessage[]) => {
-  const store = await readStore();
-  await writeStore({ ...store, messages });
-};
-
-const safePasswordMatch = (
-  submitted: string,
-  expected: string
-) => {
+const safePasswordMatch = (submitted: string, expected: string) => {
   const left = Buffer.from(submitted);
   const right = Buffer.from(expected);
-
-  if (left.length !== right.length) return false;
-  return crypto.timingSafeEqual(left, right);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
 };
 
-const extractMentions = (
-  text: string,
-  directory: Array<{ name?: string; email?: string }>
-) => {
-  const lowerText = text.toLowerCase();
+const extractMentions = (text: string) => {
+  const lower = text.toLowerCase();
 
-  return unique(
-    directory
-      .filter((person) => {
-        const name = cleanText(person?.name, 100);
-        return name && lowerText.includes(`@${name.toLowerCase()}`);
-      })
-      .map((person) => normalizeEmail(person?.email))
-      .filter(Boolean)
-  );
+  return DEFAULT_USERS.filter((user) =>
+    lower.includes(`@${user.name.toLowerCase()}`)
+  ).map((user) => normalizeEmail(user.email));
 };
 
 export async function GET(request: NextRequest) {
   try {
-    const requestedLimit = Number(
-      request.nextUrl.searchParams.get("limit") ||
-        DEFAULT_LIMIT
-    );
-
-    const limit = Math.min(
-      Math.max(
-        Number.isFinite(requestedLimit)
-          ? requestedLimit
-          : DEFAULT_LIMIT,
-        1
-      ),
-      50
-    );
-
     const store = await readStore();
+    const roomId =
+      cleanText(request.nextUrl.searchParams.get("roomId"), 100) ||
+      DEFAULT_ROOM_ID;
+    const requestedLimit = Number(
+      request.nextUrl.searchParams.get("limit") || DEFAULT_LIMIT
+    );
+    const limit = Math.min(
+      Math.max(Number.isFinite(requestedLimit) ? requestedLimit : DEFAULT_LIMIT, 1),
+      100
+    );
+
+    const messages = store.messages
+      .filter((message) => message.roomId === roomId)
+      .slice(-limit);
 
     return NextResponse.json(
       {
         ok: true,
-        messages: store.messages.slice(-limit),
-        users: mergeUsers(
-        DEFAULT_CHAT_USERS,
-        store.users
-      ).slice(0, 100),
+        rooms: store.rooms,
+        users: DEFAULT_USERS,
+        messages,
       },
       {
         headers: {
-          "Cache-Control":
-            "private, no-store, no-cache, must-revalidate",
+          "Cache-Control": "private, no-store, no-cache, must-revalidate",
         },
       }
     );
   } catch (error: any) {
-    console.error("Team chat GET error:", error);
-
     return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error?.message || "Unable to load team chat.",
-      },
+      { ok: false, error: error?.message || "Unable to load team chat." },
       { status: 500 }
     );
   }
@@ -268,60 +213,89 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json().catch(() => null);
-    const sender = cleanText(payload?.sender, 80);
+    const action = cleanText(payload?.action, 40);
+    const store = await readStore();
+
+    if (action === "create-room") {
+      const name = cleanText(payload?.name, 80);
+      const requesterEmail = normalizeEmail(payload?.requesterEmail);
+
+      if (!name || !requesterEmail) {
+        return NextResponse.json(
+          { ok: false, error: "Group name and signed-in user are required." },
+          { status: 400 }
+        );
+      }
+
+      const room: ChatRoom = {
+        id: crypto.randomUUID(),
+        name,
+        createdAt: new Date().toISOString(),
+        createdBy: requesterEmail,
+      };
+
+      const nextStore = {
+        ...store,
+        rooms: [...store.rooms, room],
+      };
+
+      await writeStore(nextStore);
+
+      return NextResponse.json({
+        ok: true,
+        room,
+        rooms: nextStore.rooms,
+      });
+    }
+
+    const roomId = cleanText(payload?.roomId, 100) || DEFAULT_ROOM_ID;
+    const sender = cleanText(payload?.sender, 100);
     const senderEmail = normalizeEmail(payload?.senderEmail);
     const text = cleanText(payload?.text, 2000);
-    const mentionDirectory = Array.isArray(
-      payload?.mentionDirectory
-    )
-      ? payload.mentionDirectory.slice(0, 100)
-      : [];
+
+    if (!store.rooms.some((room) => room.id === roomId)) {
+      return NextResponse.json(
+        { ok: false, error: "Chat group was not found." },
+        { status: 404 }
+      );
+    }
 
     if (!sender || !senderEmail || !text) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Signed-in user and message are required.",
-        },
+        { ok: false, error: "Signed-in user and message are required." },
         { status: 400 }
       );
     }
 
-    const currentMessages = await readMessages();
-
     const message: ChatMessage = {
       id: crypto.randomUUID(),
+      roomId,
       sender,
       senderEmail,
       text,
       createdAt: new Date().toISOString(),
       reactions: {},
-      mentions: extractMentions(text, mentionDirectory),
+      mentions: extractMentions(text),
       readBy: [senderEmail],
     };
 
-    const nextMessages = [
-      ...currentMessages,
-      message,
-    ].slice(-MAX_STORED_MESSAGES);
+    const nextStore = {
+      ...store,
+      messages: [...store.messages, message],
+    };
 
-    await writeMessages(nextMessages);
+    await writeStore(nextStore);
 
     return NextResponse.json({
       ok: true,
       message,
-      messages: nextMessages.slice(-DEFAULT_LIMIT),
+      messages: nextStore.messages
+        .filter((item) => item.roomId === roomId)
+        .slice(-DEFAULT_LIMIT),
     });
   } catch (error: any) {
-    console.error("Team chat POST error:", error);
-
     return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error?.message || "Unable to send team chat message.",
-      },
+      { ok: false, error: error?.message || "Unable to send message." },
       { status: 500 }
     );
   }
@@ -331,54 +305,15 @@ export async function PATCH(request: NextRequest) {
   try {
     const payload = await request.json().catch(() => null);
     const action = cleanText(payload?.action, 40);
-    const requesterEmail = normalizeEmail(
-      payload?.requesterEmail
-    );
+    const requesterEmail = normalizeEmail(payload?.requesterEmail);
+    const roomId = cleanText(payload?.roomId, 100) || DEFAULT_ROOM_ID;
+    const store = await readStore();
 
     if (!requesterEmail) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Signed-in user is required.",
-        },
+        { ok: false, error: "Signed-in user is required." },
         { status: 400 }
       );
-    }
-
-    const store = await readStore();
-    const currentMessages = store.messages;
-    let changed = false;
-
-    if (action === "register-user") {
-      const requesterName = cleanText(payload?.requesterName, 100);
-
-      if (!requesterName) {
-        return NextResponse.json(
-          { ok: false, error: "Display name is required." },
-          { status: 400 }
-        );
-      }
-
-      const nextUser: ChatUser = {
-        name: requesterName,
-        email: requesterEmail,
-        lastSeenAt: new Date().toISOString(),
-      };
-
-      const users = mergeUsers(
-        DEFAULT_CHAT_USERS,
-        store.users.filter(
-          (user) => normalizeEmail(user.email) !== requesterEmail
-        ),
-        [nextUser]
-      );
-
-      await writeStore({ ...store, users });
-
-      return NextResponse.json({
-        ok: true,
-        users,
-      });
     }
 
     if (action === "toggle-reaction") {
@@ -387,83 +322,72 @@ export async function PATCH(request: NextRequest) {
 
       if (!messageId || !ALLOWED_REACTIONS.has(emoji)) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "Invalid reaction request.",
-          },
+          { ok: false, error: "Invalid reaction." },
           { status: 400 }
         );
       }
 
-      const nextMessages = currentMessages.map((message) => {
-        if (message.id !== messageId) return message;
+      let found = false;
 
-        const reactions: ReactionMap = {
-          ...(message.reactions || {}),
-        };
+      const messages = store.messages.map((message) => {
+        if (message.id !== messageId || message.roomId !== roomId) return message;
+        found = true;
 
+        const reactions = { ...(message.reactions || {}) };
         const existing = unique(
-          (reactions[emoji] || []).map(normalizeEmail)
+          (Array.isArray(reactions[emoji]) ? reactions[emoji] : []).map(
+            normalizeEmail
+          )
         );
 
         reactions[emoji] = existing.includes(requesterEmail)
-          ? existing.filter(
-              (email) => email !== requesterEmail
-            )
+          ? existing.filter((email) => email !== requesterEmail)
           : [...existing, requesterEmail];
 
-        if (!reactions[emoji].length) {
-          delete reactions[emoji];
-        }
+        if (!reactions[emoji].length) delete reactions[emoji];
 
-        changed = true;
         return { ...message, reactions };
       });
 
-      if (!changed) {
+      if (!found) {
         return NextResponse.json(
           { ok: false, error: "Message was not found." },
           { status: 404 }
         );
       }
 
-      await writeMessages(nextMessages);
+      const nextStore = { ...store, messages };
+      await writeStore(nextStore);
 
       return NextResponse.json({
         ok: true,
-        messages: nextMessages.slice(-DEFAULT_LIMIT),
+        messages: messages
+          .filter((message) => message.roomId === roomId)
+          .slice(-DEFAULT_LIMIT),
       });
     }
 
     if (action === "mark-read") {
-      const messageIds = unique(
-        (Array.isArray(payload?.messageIds)
-          ? payload.messageIds
-          : []
-        )
+      const ids = new Set(
+        (Array.isArray(payload?.messageIds) ? payload.messageIds : [])
           .map((id: unknown) => cleanText(id, 100))
           .filter(Boolean)
-      ).slice(0, 50);
+      );
 
-      if (!messageIds.length) {
-        return NextResponse.json({
-          ok: true,
-          messages: currentMessages.slice(-DEFAULT_LIMIT),
-        });
-      }
+      let changed = false;
 
-      const idSet = new Set(messageIds);
-
-      const nextMessages = currentMessages.map((message) => {
-        if (!idSet.has(message.id)) return message;
-
-        const readers = unique(
-          (message.readBy || []).map(normalizeEmail)
-        );
-
-        if (readers.includes(requesterEmail)) {
+      const messages = store.messages.map((message) => {
+        if (
+          message.roomId !== roomId ||
+          !ids.has(message.id) ||
+          message.senderEmail === requesterEmail
+        ) {
           return message;
         }
+
+        const readers = unique((message.readBy || []).map(normalizeEmail));
+
+        if (readers.includes(requesterEmail)) return message;
 
         changed = true;
         return {
@@ -472,30 +396,23 @@ export async function PATCH(request: NextRequest) {
         };
       });
 
-      if (changed) await writeMessages(nextMessages);
+      if (changed) await writeStore({ ...store, messages });
 
       return NextResponse.json({
         ok: true,
-        messages: nextMessages.slice(-DEFAULT_LIMIT),
+        messages: messages
+          .filter((message) => message.roomId === roomId)
+          .slice(-DEFAULT_LIMIT),
       });
     }
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Unsupported chat action.",
-      },
+      { ok: false, error: "Unsupported chat action." },
       { status: 400 }
     );
   } catch (error: any) {
-    console.error("Team chat PATCH error:", error);
-
     return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error?.message || "Unable to update team chat.",
-      },
+      { ok: false, error: error?.message || "Unable to update chat." },
       { status: 500 }
     );
   }
@@ -505,124 +422,89 @@ export async function DELETE(request: NextRequest) {
   try {
     const payload = await request.json().catch(() => null);
     const action = cleanText(payload?.action, 40);
-    const currentMessages = await readMessages();
+    const roomId = cleanText(payload?.roomId, 100) || DEFAULT_ROOM_ID;
+    const store = await readStore();
 
     if (action === "delete-selected") {
-      const requesterEmail = normalizeEmail(
-        payload?.requesterEmail
-      );
-
-      const messageIds = unique(
-        (Array.isArray(payload?.messageIds)
-          ? payload.messageIds
-          : []
-        )
+      const requesterEmail = normalizeEmail(payload?.requesterEmail);
+      const ids = new Set(
+        (Array.isArray(payload?.messageIds) ? payload.messageIds : [])
           .map((id: unknown) => cleanText(id, 100))
           .filter(Boolean)
-      ).slice(0, 50);
+      );
 
-      if (!requesterEmail || !messageIds.length) {
+      if (!requesterEmail || !ids.size) {
         return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "Selected messages and signed-in user are required.",
-          },
+          { ok: false, error: "Selected messages are required." },
           { status: 400 }
         );
       }
 
-      const idSet = new Set(messageIds);
-      const unauthorized = currentMessages.some(
+      const unauthorized = store.messages.some(
         (message) =>
-          idSet.has(message.id) &&
-          normalizeEmail(message.senderEmail) !==
-            requesterEmail
+          message.roomId === roomId &&
+          ids.has(message.id) &&
+          normalizeEmail(message.senderEmail) !== requesterEmail
       );
 
       if (unauthorized) {
         return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "You can delete only your own messages.",
-          },
+          { ok: false, error: "You can delete only your own messages." },
           { status: 403 }
         );
       }
 
-      const nextMessages = currentMessages.filter(
-        (message) => !idSet.has(message.id)
+      const messages = store.messages.filter(
+        (message) => !(message.roomId === roomId && ids.has(message.id))
       );
 
-      await writeMessages(nextMessages);
+      await writeStore({ ...store, messages });
 
       return NextResponse.json({
         ok: true,
-        messages: nextMessages.slice(-DEFAULT_LIMIT),
+        messages: messages
+          .filter((message) => message.roomId === roomId)
+          .slice(-DEFAULT_LIMIT),
       });
     }
 
     if (action === "clear-chat") {
-      const submittedPassword = String(
-        payload?.adminPassword || ""
-      );
+      const expected = String(process.env.TEAM_CHAT_ADMIN_PASSWORD || "");
+      const submitted = String(payload?.adminPassword || "");
 
-      const expectedPassword = String(
-        process.env.TEAM_CHAT_ADMIN_PASSWORD || ""
-      );
-
-      if (!expectedPassword) {
+      if (!expected) {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "TEAM_CHAT_ADMIN_PASSWORD is not configured in Vercel.",
+            error: "TEAM_CHAT_ADMIN_PASSWORD is not configured in Vercel.",
           },
           { status: 500 }
         );
       }
 
-      if (
-        !submittedPassword ||
-        !safePasswordMatch(
-          submittedPassword,
-          expectedPassword
-        )
-      ) {
+      if (!submitted || !safePasswordMatch(submitted, expected)) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "Incorrect administrator password.",
-          },
+          { ok: false, error: "Incorrect administrator password." },
           { status: 403 }
         );
       }
 
-      await writeMessages([]);
+      const messages = store.messages.filter(
+        (message) => message.roomId !== roomId
+      );
 
-      return NextResponse.json({
-        ok: true,
-        messages: [],
-      });
+      await writeStore({ ...store, messages });
+
+      return NextResponse.json({ ok: true, messages: [] });
     }
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Unsupported chat action.",
-      },
+      { ok: false, error: "Unsupported chat action." },
       { status: 400 }
     );
   } catch (error: any) {
-    console.error("Team chat DELETE error:", error);
-
     return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error?.message || "Unable to update team chat.",
-      },
+      { ok: false, error: error?.message || "Unable to update chat." },
       { status: 500 }
     );
   }
