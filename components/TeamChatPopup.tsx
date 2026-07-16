@@ -7,36 +7,29 @@ type ReactionMap = Record<string, string[]>;
 
 type ChatMessage = {
   id: string;
+  roomId: string;
   sender: string;
-  senderEmail?: string;
+  senderEmail: string;
   text: string;
   createdAt: string;
-  reactions?: ReactionMap;
-  mentions?: string[];
-  readBy?: string[];
+  reactions: ReactionMap;
+  mentions: string[];
+  readBy: string[];
 };
 
 type ChatUser = {
   name: string;
   email: string;
-  lastSeenAt?: string;
 };
 
-const CHAT_POLL_MS = 30000;
-const MAX_VISIBLE_MESSAGES = 30;
+type ChatRoom = {
+  id: string;
+  name: string;
+};
+
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
-
-const formatChatTime = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
+const POLL_MS = 30000;
+const LIMIT = 30;
 
 const normalizeEmail = (value: unknown) =>
   String(value || "").trim().toLowerCase();
@@ -44,51 +37,56 @@ const normalizeEmail = (value: unknown) =>
 const unique = (values: string[]) =>
   Array.from(new Set(values.filter(Boolean)));
 
+const formatTime = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+};
+
 export default function TeamChatPopup() {
   const [open, setOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatUsers, setChatUsers] = useState<ChatUser[]>([
-    { name: "analyst", email: "analyst@sunbeamsimpexinc.com" },
-    { name: "Ayen Quintos", email: "marketing@sunbeamsimpexinc.com" },
-    { name: "Charlene Quizon", email: "mariacharlenemae.quizon@gmail.com" },
-    { name: "Che Navarro", email: "design@sunbeamsimpexinc.com" },
-    { name: "design2", email: "design2@sunbeamsimpexinc.com" },
-    { name: "Janssen Balneg", email: "janssenbalneg14@gmail.com" },
-    { name: "operations", email: "operations@sunbeamsimpexinc.com" },
-    { name: "Philip Jimenez Cute", email: "jimenezphilip91@gmail.com" },
-    { name: "ravi", email: "ravi@sunbeamsimpexinc.com" },
-    { name: "Reggienald Vargas", email: "admin@sunbeamsimpexinc.com" },
-  ]);
-  const [draft, setDraft] = useState("");
   const [sender, setSender] = useState("EMDC User");
   const [senderEmail, setSenderEmail] = useState("");
+  const [rooms, setRooms] = useState<ChatRoom[]>([
+    { id: "general", name: "General" },
+  ]);
+  const [roomId, setRoomId] = useState("general");
+  const [users, setUsers] = useState<ChatUser[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [unread, setUnread] = useState(0);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [reactionPickerId, setReactionPickerId] = useState("");
+  const [reactionDetailsKey, setReactionDetailsKey] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [deletingSelected, setDeletingSelected] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [reactionMessageId, setReactionMessageId] = useState("");
-  const [reactionDetailsKey, setReactionDetailsKey] = useState("");
-  const [reactionBusyKey, setReactionBusyKey] = useState("");
-  const [mentionOpen, setMentionOpen] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const latestMessageIdRef = useRef("");
-  const lastMarkedReadRef = useRef("");
 
   useEffect(() => {
     const updateMobile = () => setMobile(window.innerWidth < 760);
-
     updateMobile();
     window.addEventListener("resize", updateMobile);
-
-    return () => {
-      window.removeEventListener("resize", updateMobile);
-    };
+    return () => window.removeEventListener("resize", updateMobile);
   }, []);
+
+  useEffect(() => {
+    const savedRoom = localStorage.getItem("emdc-chat-room");
+    if (savedRoom) setRoomId(savedRoom);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("emdc-chat-room", roomId);
+  }, [roomId]);
 
   useEffect(() => {
     let active = true;
@@ -96,183 +94,53 @@ export default function TeamChatPopup() {
 
     const applyUser = (user: any) => {
       if (!active || !user) return;
-
-      const metadata =
-        user?.user_metadata ||
-        user?.raw_user_meta_data ||
-        {};
-
-      const resolvedName = String(
-        metadata?.display_name ||
-        metadata?.full_name ||
-        metadata?.name ||
-        metadata?.preferred_username ||
-        user?.email ||
-        "EMDC User"
-      ).trim();
-
-      setSender(resolvedName || "EMDC User");
+      const metadata = user?.user_metadata || {};
+      setSender(
+        String(
+          metadata?.display_name ||
+            metadata?.full_name ||
+            metadata?.name ||
+            user?.email ||
+            "EMDC User"
+        ).trim()
+      );
       setSenderEmail(String(user?.email || "").trim());
     };
 
-    const loadCurrentUser = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) applyUser(data.user);
+    });
 
-        if (user) applyUser(user);
-      } catch {}
-    };
-
-    loadCurrentUser();
-
-    const { data: authListener } =
-      supabase.auth.onAuthStateChange((_event, session) => {
-        if (session?.user) applyUser(session.user);
-      });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) applyUser(session.user);
+    });
 
     return () => {
       active = false;
-      authListener?.subscription?.unsubscribe();
+      data?.subscription?.unsubscribe();
     };
   }, []);
-
-  const markRead = async (
-    nextMessages: ChatMessage[],
-    silent = true
-  ) => {
-    const email = normalizeEmail(senderEmail);
-    if (!email || !open || document.visibilityState !== "visible") return;
-
-    const unreadIds = nextMessages
-      .filter((message) => {
-        const author = normalizeEmail(message.senderEmail);
-        const readers = (message.readBy || []).map(normalizeEmail);
-        return author && author !== email && !readers.includes(email);
-      })
-      .map((message) => message.id);
-
-    if (!unreadIds.length) return;
-
-    const signature = unreadIds.join(",");
-    if (lastMarkedReadRef.current === signature) return;
-    lastMarkedReadRef.current = signature;
-
-    try {
-      const response = await fetch("/api/team-chat", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "mark-read",
-          messageIds: unreadIds,
-          requesterEmail: email,
-        }),
-      });
-
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || "Unable to update read receipts.");
-      }
-
-      if (Array.isArray(json.messages)) {
-        setMessages(json.messages);
-      }
-    } catch (readError: any) {
-      if (!silent) {
-        setError(
-          readError?.message || "Unable to update read receipts."
-        );
-      }
-    }
-  };
-
-  const registerCurrentUser = async () => {
-    const email = normalizeEmail(senderEmail);
-    const name = String(sender || "").trim();
-
-    if (!email || !name) return;
-
-    try {
-      const response = await fetch("/api/team-chat", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "register-user",
-          requesterEmail: email,
-          requesterName: name,
-        }),
-      });
-
-      const json = await response.json().catch(() => null);
-
-      if (response.ok && json?.ok && Array.isArray(json.users)) {
-        setChatUsers(json.users);
-      }
-    } catch {
-      // Registration is optional and should never block chat.
-    }
-  };
 
   const loadMessages = async (silent = false) => {
     if (!silent) setLoading(true);
 
     try {
       const response = await fetch(
-        `/api/team-chat?limit=${MAX_VISIBLE_MESSAGES}&t=${Date.now()}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
+        `/api/team-chat?roomId=${encodeURIComponent(roomId)}&limit=${LIMIT}&t=${Date.now()}`,
+        { cache: "no-store" }
       );
-
       const json = await response.json().catch(() => null);
 
       if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || "Unable to load team chat.");
+        throw new Error(json?.error || "Unable to load chat.");
       }
 
-      const nextMessages = Array.isArray(json.messages)
-        ? json.messages
-        : [];
-
-      if (Array.isArray(json.users)) {
-        setChatUsers(json.users);
-      }
-
-      const latestId =
-        nextMessages[nextMessages.length - 1]?.id || "";
-
-      if (
-        !open &&
-        latestMessageIdRef.current &&
-        latestId &&
-        latestId !== latestMessageIdRef.current
-      ) {
-        const previousIndex = nextMessages.findIndex(
-          (message: ChatMessage) =>
-            message.id === latestMessageIdRef.current
-        );
-
-        const addedCount =
-          previousIndex >= 0
-            ? nextMessages.length - previousIndex - 1
-            : 1;
-
-        setUnread((value) => value + Math.max(addedCount, 1));
-      }
-
-      latestMessageIdRef.current = latestId;
-      setMessages(nextMessages);
+      setRooms(Array.isArray(json.rooms) ? json.rooms : []);
+      setUsers(Array.isArray(json.users) ? json.users : []);
+      setMessages(Array.isArray(json.messages) ? json.messages : []);
       setError("");
-
-      if (open) {
-        void markRead(nextMessages);
-      }
     } catch (loadError: any) {
-      if (!silent) {
-        setError(loadError?.message || "Unable to load team chat.");
-      }
+      if (!silent) setError(loadError?.message || "Unable to load chat.");
     } finally {
       if (!silent) setLoading(false);
     }
@@ -281,100 +149,88 @@ export default function TeamChatPopup() {
   useEffect(() => {
     if (!open) return;
 
-    setUnread(0);
-    void registerCurrentUser();
     loadMessages();
 
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         loadMessages(true);
       }
-    }, CHAT_POLL_MS);
+    }, POLL_MS);
 
     return () => window.clearInterval(timer);
-  }, [open, senderEmail]);
+  }, [open, roomId]);
 
   useEffect(() => {
     if (!open || !listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [open, messages.length]);
-
-  const participantSuggestions = useMemo(() => {
-    const byEmail = new Map<string, string>();
-
-    // Always include the currently signed-in user so mention testing works
-    // immediately, even before any other teammate has opened Team Chat.
-    const currentEmail = normalizeEmail(senderEmail);
-    const currentName = String(sender || "").trim();
-
-    if (currentEmail && currentName) {
-      byEmail.set(currentEmail, currentName);
-    }
-
-    chatUsers.forEach((user) => {
-      const email = normalizeEmail(user.email);
-      const name = String(user.name || "").trim();
-
-      if (email && name) {
-        byEmail.set(email, name);
-      }
-    });
-
-    messages.forEach((message) => {
-      const email = normalizeEmail(message.senderEmail);
-      const name = String(message.sender || "").trim();
-
-      if (email && name) {
-        byEmail.set(email, name);
-      }
-    });
-
-    return Array.from(byEmail.entries())
-      .map(([email, name]) => ({ email, name }))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [chatUsers, messages, sender, senderEmail]);
+  }, [messages.length, open]);
 
   const mentionQuery = useMemo(() => {
-    const cursorText = draft;
-    const match = cursorText.match(/(?:^|\s)@([^\n@]*)$/);
-    return match
-      ? String(match[1] || "").trim().toLowerCase()
-      : "";
+    const match = draft.match(/(?:^|\s)@([^\n@]*)$/);
+    return match ? String(match[1] || "").trim().toLowerCase() : "";
   }, [draft]);
 
-  const filteredMentions = useMemo(() => {
-    if (!mentionOpen) return [];
-
-    return participantSuggestions
-      .filter((person) => {
+  const mentionOptions = useMemo(() => {
+    return users
+      .filter((user) => {
         if (!mentionQuery) return true;
         return (
-          person.name.toLowerCase().includes(mentionQuery) ||
-          person.email.toLowerCase().includes(mentionQuery)
+          user.name.toLowerCase().includes(mentionQuery) ||
+          user.email.toLowerCase().includes(mentionQuery)
         );
       })
-      .slice(0, 6);
-  }, [mentionOpen, mentionQuery, participantSuggestions]);
+      .slice(0, 10);
+  }, [mentionQuery, users]);
 
-  const addMention = (person: { name: string; email: string }) => {
+  const userNameByEmail = useMemo(() => {
+    const map = new Map<string, string>();
+    users.forEach((user) => map.set(normalizeEmail(user.email), user.name));
+    messages.forEach((message) =>
+      map.set(normalizeEmail(message.senderEmail), message.sender)
+    );
+    return map;
+  }, [users, messages]);
+
+  const addMention = (user: ChatUser) => {
     setDraft((current) =>
       current.replace(
-        /(?:^|\s)@([^\s@]*)$/,
-        (matched) => {
-          const leading = matched.startsWith(" ") ? " " : "";
-          return `${leading}@${person.name} `;
-        }
+        /(?:^|\s)@([^\n@]*)$/,
+        (matched) =>
+          `${matched.startsWith(" ") ? " " : ""}@${user.name} `
       )
     );
     setMentionOpen(false);
   };
 
-  const sendMessage = async () => {
-    const cleanText = draft.trim();
-    const cleanSender = sender.trim() || "EMDC User";
-    const cleanEmail = normalizeEmail(senderEmail);
+  const createRoom = async () => {
+    const name = window.prompt("Enter the new group chat name:");
+    if (!name?.trim()) return;
 
-    if (!cleanText || !cleanEmail || sending) return;
+    const response = await fetch("/api/team-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create-room",
+        name: name.trim(),
+        requesterEmail: senderEmail,
+      }),
+    });
+
+    const json = await response.json().catch(() => null);
+
+    if (!response.ok || !json?.ok) {
+      setError(json?.error || "Unable to create group chat.");
+      return;
+    }
+
+    setRooms(json.rooms);
+    setRoomId(json.room.id);
+    setMessages([]);
+  };
+
+  const sendMessage = async () => {
+    const clean = draft.trim();
+    if (!clean || !senderEmail || sending) return;
 
     setSending(true);
     setError("");
@@ -384,10 +240,10 @@ export default function TeamChatPopup() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sender: cleanSender,
-          senderEmail: cleanEmail,
-          text: cleanText,
-          mentionDirectory: participantSuggestions,
+          roomId,
+          sender,
+          senderEmail,
+          text: clean,
         }),
       });
 
@@ -399,16 +255,7 @@ export default function TeamChatPopup() {
 
       setDraft("");
       setMentionOpen(false);
-
-      if (Array.isArray(json?.messages)) {
-        setMessages(json.messages);
-        latestMessageIdRef.current =
-          json.messages[json.messages.length - 1]?.id || "";
-      } else if (json?.message) {
-        setMessages((current) =>
-          [...current, json.message].slice(-MAX_VISIBLE_MESSAGES)
-        );
-      }
+      setMessages(json.messages || []);
     } catch (sendError: any) {
       setError(sendError?.message || "Unable to send message.");
     } finally {
@@ -420,129 +267,64 @@ export default function TeamChatPopup() {
     message: ChatMessage,
     emoji: string
   ) => {
-    const email = normalizeEmail(senderEmail);
-    if (!email) return;
+    const response = await fetch("/api/team-chat", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "toggle-reaction",
+        roomId,
+        messageId: message.id,
+        emoji,
+        requesterEmail: senderEmail,
+      }),
+    });
 
-    const busyKey = `${message.id}:${emoji}`;
-    setReactionBusyKey(busyKey);
-    setError("");
+    const json = await response.json().catch(() => null);
 
-    try {
-      const response = await fetch("/api/team-chat", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "toggle-reaction",
-          messageId: message.id,
-          emoji,
-          requesterEmail: email,
-        }),
-      });
-
-      const json = await response.json().catch(() => null);
-
-      if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || "Unable to update reaction.");
-      }
-
-      if (Array.isArray(json.messages)) {
-        setMessages(json.messages);
-      }
-    } catch (reactionError: any) {
-      setError(
-        reactionError?.message || "Unable to update reaction."
-      );
-    } finally {
-      setReactionBusyKey("");
-      setReactionMessageId("");
+    if (!response.ok || !json?.ok) {
+      setError(json?.error || "Unable to update reaction.");
+      return;
     }
-  };
 
-  const toggleSelected = (message: ChatMessage) => {
-    const mine =
-      normalizeEmail(message.senderEmail) ===
-      normalizeEmail(senderEmail);
-
-    if (!mine) return;
-
-    setSelectedIds((current) =>
-      current.includes(message.id)
-        ? current.filter((id) => id !== message.id)
-        : [...current, message.id]
-    );
+    setMessages(json.messages || []);
+    setReactionPickerId("");
   };
 
   const deleteSelected = async () => {
-    if (!selectedIds.length || deletingSelected) return;
-
-    if (
-      !window.confirm(
-        `Delete ${selectedIds.length} selected message${
-          selectedIds.length === 1 ? "" : "s"
-        }?`
-      )
-    ) {
+    if (!selectedIds.length) return;
+    if (!window.confirm(`Delete ${selectedIds.length} selected message(s)?`)) {
       return;
     }
 
-    setDeletingSelected(true);
-    setError("");
+    const response = await fetch("/api/team-chat", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "delete-selected",
+        roomId,
+        messageIds: selectedIds,
+        requesterEmail: senderEmail,
+      }),
+    });
 
-    try {
-      const response = await fetch("/api/team-chat", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "delete-selected",
-          messageIds: selectedIds,
-          requesterEmail: normalizeEmail(senderEmail),
-        }),
-      });
+    const json = await response.json().catch(() => null);
 
-      const json = await response.json().catch(() => null);
-
-      if (!response.ok || !json?.ok) {
-        throw new Error(
-          json?.error || "Unable to delete selected messages."
-        );
-      }
-
-      setMessages(
-        Array.isArray(json.messages) ? json.messages : []
-      );
-      setSelectedIds([]);
-      setSelectionMode(false);
-    } catch (deleteError: any) {
-      setError(
-        deleteError?.message ||
-          "Unable to delete selected messages."
-      );
-    } finally {
-      setDeletingSelected(false);
+    if (!response.ok || !json?.ok) {
+      setError(json?.error || "Unable to delete messages.");
+      return;
     }
+
+    setMessages(json.messages || []);
+    setSelectedIds([]);
+    setSelectionMode(false);
   };
 
-  const clearEntireChat = async () => {
-    const adminPassword = window.prompt(
-      "Enter the Team Chat administrator password:"
-    );
-
-    if (adminPassword === null) return;
-    if (!adminPassword) {
-      setError("Administrator password is required.");
-      return;
-    }
-
-    if (
-      !window.confirm(
-        "Clear the entire team chat? This cannot be undone."
-      )
-    ) {
-      return;
-    }
+  const clearRoom = async () => {
+    const password = window.prompt("Enter the chat administrator password:");
+    if (password === null) return;
+    if (!window.confirm("Clear all messages in this group chat?")) return;
 
     setClearing(true);
-    setError("");
 
     try {
       const response = await fetch("/api/team-chat", {
@@ -550,7 +332,8 @@ export default function TeamChatPopup() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "clear-chat",
-          adminPassword,
+          roomId,
+          adminPassword: password,
         }),
       });
 
@@ -561,66 +344,12 @@ export default function TeamChatPopup() {
       }
 
       setMessages([]);
-      setSelectedIds([]);
-      setSelectionMode(false);
-      latestMessageIdRef.current = "";
-      setUnread(0);
     } catch (clearError: any) {
       setError(clearError?.message || "Unable to clear chat.");
     } finally {
       setClearing(false);
     }
   };
-
-  const userNameByEmail = useMemo(() => {
-    const map = new Map<string, string>();
-
-    chatUsers.forEach((user) => {
-      const email = normalizeEmail(user.email);
-      const name = String(user.name || "").trim();
-
-      if (email && name) map.set(email, name);
-    });
-
-    messages.forEach((message) => {
-      const email = normalizeEmail(message.senderEmail);
-      const name = String(message.sender || "").trim();
-
-      if (email && name) map.set(email, name);
-    });
-
-    if (normalizeEmail(senderEmail) && sender.trim()) {
-      map.set(normalizeEmail(senderEmail), sender.trim());
-    }
-
-    return map;
-  }, [chatUsers, messages, sender, senderEmail]);
-
-  const pendingMentionCount = useMemo(() => {
-    const email = normalizeEmail(senderEmail);
-    if (!email) return 0;
-
-    return messages.filter((message) => {
-      const mentions = (message.mentions || []).map(normalizeEmail);
-      const readers = (message.readBy || []).map(normalizeEmail);
-
-      return (
-        mentions.includes(email) &&
-        normalizeEmail(message.senderEmail) !== email &&
-        !readers.includes(email)
-      );
-    }).length;
-  }, [messages, senderEmail]);
-
-  const sortedMessages = useMemo(
-    () =>
-      [...messages].sort(
-        (left, right) =>
-          new Date(left.createdAt).getTime() -
-          new Date(right.createdAt).getTime()
-      ),
-    [messages]
-  );
 
   return (
     <>
@@ -636,10 +365,10 @@ export default function TeamChatPopup() {
             zIndex: 9998,
             width: mobile
               ? "auto"
-              : "min(390px, calc(100vw - 24px))",
+              : "min(410px, calc(100vw - 24px))",
             height: mobile
-              ? "min(590px, calc(100vh - 110px - env(safe-area-inset-bottom)))"
-              : "min(590px, calc(100vh - 130px))",
+              ? "min(620px, calc(100vh - 110px - env(safe-area-inset-bottom)))"
+              : "min(620px, calc(100vh - 130px))",
             background: "#FFFFFF",
             border: "1px solid #E5E7EB",
             borderRadius: 18,
@@ -651,253 +380,150 @@ export default function TeamChatPopup() {
         >
           <div
             style={{
-              padding: "12px 12px 10px",
+              padding: 10,
               borderBottom: "1px solid #E5E7EB",
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
+              gap: 6,
             }}
           >
-            {selectionMode ? (
-              <>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 900 }}>
-                    Selected ({selectedIds.length})
-                  </div>
-                  <div style={{ fontSize: 10, color: "#6B7280" }}>
-                    Only your own messages can be selected.
-                  </div>
-                </div>
+            <select
+              value={roomId}
+              onChange={(event) => {
+                setRoomId(event.target.value);
+                setMessages([]);
+                setSelectedIds([]);
+                setSelectionMode(false);
+              }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: 36,
+                border: "1px solid #D1D5DB",
+                borderRadius: 9,
+                padding: "0 8px",
+                fontWeight: 900,
+              }}
+            >
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
 
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={deleteSelected}
-                    disabled={!selectedIds.length || deletingSelected}
-                    style={{
-                      height: 34,
-                      padding: "0 10px",
-                      borderRadius: 9,
-                      border: "1px solid #FCA5A5",
-                      background: "#FEF2F2",
-                      color: "#B91C1C",
-                      fontSize: 10,
-                      fontWeight: 900,
-                    }}
-                  >
-                    {deletingSelected
-                      ? "Deleting…"
-                      : "Delete Selected"}
-                  </button>
+            <button
+              type="button"
+              onClick={createRoom}
+              title="Create group chat"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 9,
+                border: "1px solid #D1D5DB",
+                background: "#FFFFFF",
+                fontSize: 20,
+                fontWeight: 900,
+              }}
+            >
+              +
+            </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectionMode(false);
-                      setSelectedIds([]);
-                    }}
-                    style={{
-                      height: 34,
-                      padding: "0 10px",
-                      borderRadius: 9,
-                      border: "1px solid #E5E7EB",
-                      background: "#FFFFFF",
-                      fontSize: 10,
-                      fontWeight: 900,
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 900,
-                      color: "#111827",
-                    }}
-                  >
-                    EMDC Team Chat
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "#6B7280",
-                      marginTop: 2,
-                    }}
-                  >
-                    Lazy mode · refreshes only while open
-                  </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectionMode((value) => !value);
+                setSelectedIds([]);
+              }}
+              style={{
+                height: 36,
+                padding: "0 9px",
+                borderRadius: 9,
+                border: "1px solid #D1D5DB",
+                background: "#FFFFFF",
+                fontSize: 10,
+                fontWeight: 900,
+              }}
+            >
+              {selectionMode ? "Cancel" : "Select"}
+            </button>
 
-                  {pendingMentionCount > 0 && (
-                    <div
-                      style={{
-                        marginTop: 4,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        padding: "3px 7px",
-                        borderRadius: 999,
-                        background: "#FEF3C7",
-                        color: "#92400E",
-                        fontSize: 9,
-                        fontWeight: 900,
-                      }}
-                    >
-                      @ {pendingMentionCount} mention
-                      {pendingMentionCount === 1 ? "" : "s"} for you
-                    </div>
-                  )}
-                </div>
+            <button
+              type="button"
+              onClick={clearRoom}
+              disabled={clearing}
+              style={{
+                height: 36,
+                padding: "0 9px",
+                borderRadius: 9,
+                border: "1px solid #FCA5A5",
+                background: "#FFFFFF",
+                color: "#B91C1C",
+                fontSize: 10,
+                fontWeight: 900,
+              }}
+            >
+              {clearing ? "..." : "Clear"}
+            </button>
 
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectionMode(true)}
-                    style={{
-                      height: 34,
-                      padding: "0 9px",
-                      borderRadius: 9,
-                      border: "1px solid #E5E7EB",
-                      background: "#FFFFFF",
-                      color: "#374151",
-                      fontSize: 10,
-                      fontWeight: 900,
-                    }}
-                  >
-                    Select
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={clearEntireChat}
-                    disabled={clearing}
-                    title="Admin password required"
-                    style={{
-                      height: 34,
-                      padding: "0 9px",
-                      borderRadius: 9,
-                      border: "1px solid #E5E7EB",
-                      background: "#FFFFFF",
-                      color: "#B91C1C",
-                      fontSize: 10,
-                      fontWeight: 900,
-                    }}
-                  >
-                    {clearing ? "Clearing…" : "Clear Chat"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setOpen(false)}
-                    aria-label="Close team chat"
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 999,
-                      border: "1px solid #E5E7EB",
-                      background: "#F9FAFB",
-                      fontSize: 20,
-                      color: "#374151",
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                border: "1px solid #D1D5DB",
+                background: "#F9FAFB",
+                fontSize: 20,
+              }}
+            >
+              ×
+            </button>
           </div>
+
+          {selectionMode && (
+            <div
+              style={{
+                padding: "7px 10px",
+                borderBottom: "1px solid #E5E7EB",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ fontSize: 10, fontWeight: 900 }}>
+                Selected: {selectedIds.length}
+              </span>
+              <button
+                type="button"
+                onClick={deleteSelected}
+                disabled={!selectedIds.length}
+                style={{
+                  border: 0,
+                  borderRadius: 8,
+                  padding: "7px 10px",
+                  background: selectedIds.length ? "#B91C1C" : "#D1D5DB",
+                  color: "#FFFFFF",
+                  fontSize: 10,
+                  fontWeight: 900,
+                }}
+              >
+                Delete Selected
+              </button>
+            </div>
+          )}
 
           <div
             style={{
-              padding: "9px 12px",
+              padding: "8px 10px",
               borderBottom: "1px solid #E5E7EB",
               background: "#F9FAFB",
+              fontSize: 10,
             }}
           >
-            <div
-              style={{
-                fontSize: 9,
-                fontWeight: 800,
-                color: "#6B7280",
-                marginBottom: 5,
-                textTransform: "uppercase",
-              }}
-            >
-              Signed in as
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                border: "1px solid #D1D5DB",
-                borderRadius: 10,
-                padding: "8px 9px",
-                background: "#FFFFFF",
-              }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 999,
-                  background: "#111827",
-                  color: "#FFFFFF",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 12,
-                  fontWeight: 900,
-                  flexShrink: 0,
-                }}
-              >
-                {sender
-                  .split(/\s+/)
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((part) => part[0]?.toUpperCase())
-                  .join("") || "EU"}
-              </div>
-
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 900,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {sender}
-                </div>
-                {senderEmail && (
-                  <div
-                    style={{
-                      fontSize: 9,
-                      color: "#6B7280",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {senderEmail}
-                  </div>
-                )}
-              </div>
-            </div>
+            <strong>{sender}</strong>
+            <div style={{ color: "#6B7280" }}>{senderEmail}</div>
           </div>
 
           <div
@@ -909,115 +535,64 @@ export default function TeamChatPopup() {
               background: "#F8FAFC",
             }}
           >
-            {loading && !sortedMessages.length ? (
-              <div
-                style={{
-                  padding: 24,
-                  textAlign: "center",
-                  color: "#6B7280",
-                  fontSize: 13,
-                }}
-              >
-                Loading messages…
+            {loading && !messages.length ? (
+              <div style={{ textAlign: "center", color: "#6B7280" }}>
+                Loading…
               </div>
-            ) : !sortedMessages.length ? (
-              <div
-                style={{
-                  padding: 24,
-                  textAlign: "center",
-                  color: "#6B7280",
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                }}
-              >
-                No messages yet.
-                <br />
-                Start the team conversation.
+            ) : !messages.length ? (
+              <div style={{ textAlign: "center", color: "#6B7280" }}>
+                No messages in this group yet.
               </div>
             ) : (
-              sortedMessages.map((message) => {
+              messages.map((message) => {
                 const mine =
                   normalizeEmail(message.senderEmail) ===
                   normalizeEmail(senderEmail);
-
                 const selected = selectedIds.includes(message.id);
-                const reactionEntries = Object.entries(
-                  message.reactions || {}
-                ).filter(([, emails]) => emails.length > 0);
-
-                const seenCount = unique(
-                  (message.readBy || [])
-                    .map(normalizeEmail)
-                    .filter(
-                      (email) =>
-                        email &&
-                        email !== normalizeEmail(message.senderEmail)
-                    )
-                ).length;
+                const entries = Object.entries(message.reactions || {}).filter(
+                  ([, emails]) => Array.isArray(emails) && emails.length > 0
+                );
 
                 return (
                   <div
                     key={message.id}
                     onClick={() => {
-                      if (selectionMode && mine) toggleSelected(message);
+                      if (!selectionMode || !mine) return;
+                      setSelectedIds((current) =>
+                        current.includes(message.id)
+                          ? current.filter((id) => id !== message.id)
+                          : [...current, message.id]
+                      );
                     }}
                     style={{
                       display: "flex",
                       justifyContent: mine ? "flex-end" : "flex-start",
-                      marginBottom: 10,
-                      cursor:
-                        selectionMode && mine ? "pointer" : "default",
+                      marginBottom: 12,
                     }}
                   >
                     <div
                       style={{
                         position: "relative",
-                        maxWidth: "84%",
+                        maxWidth: "86%",
+                        padding: "9px 11px",
                         borderRadius: mine
                           ? "14px 14px 4px 14px"
                           : "14px 14px 14px 4px",
-                        padding: "9px 11px",
                         background: mine ? "#111827" : "#FFFFFF",
+                        color: mine ? "#FFFFFF" : "#111827",
                         border: selected
                           ? "2px solid #3B82F6"
                           : mine
                             ? "1px solid #111827"
                             : "1px solid #E5E7EB",
-                        color: mine ? "#FFFFFF" : "#111827",
-                        boxShadow: "0 1px 2px rgba(15,23,42,.04)",
                       }}
                     >
-                      {selectionMode && mine && (
-                        <span
-                          style={{
-                            position: "absolute",
-                            top: -7,
-                            right: -7,
-                            width: 19,
-                            height: 19,
-                            borderRadius: 999,
-                            background: selected
-                              ? "#3B82F6"
-                              : "#FFFFFF",
-                            border: "2px solid #3B82F6",
-                            color: "#FFFFFF",
-                            fontSize: 11,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          {selected ? "✓" : ""}
-                        </span>
-                      )}
-
                       {!mine && (
                         <div
                           style={{
+                            marginBottom: 4,
                             fontSize: 10,
                             fontWeight: 900,
-                            marginBottom: 4,
-                            color: "#374151",
                           }}
                         >
                           {message.sender}
@@ -1029,14 +604,12 @@ export default function TeamChatPopup() {
                         .includes(normalizeEmail(senderEmail)) && (
                         <div
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
+                            display: "inline-block",
                             marginBottom: 6,
                             padding: "3px 7px",
                             borderRadius: 999,
-                            background: mine ? "rgba(255,255,255,.15)" : "#FEF3C7",
-                            color: mine ? "#FFFFFF" : "#92400E",
+                            background: "#FEF3C7",
+                            color: "#92400E",
                             fontSize: 9,
                             fontWeight: 900,
                           }}
@@ -1047,90 +620,71 @@ export default function TeamChatPopup() {
 
                       <div
                         style={{
-                          fontSize: 13,
-                          lineHeight: 1.45,
                           whiteSpace: "pre-wrap",
                           overflowWrap: "anywhere",
+                          fontSize: 13,
+                          lineHeight: 1.45,
                         }}
                       >
                         {message.text}
                       </div>
 
-                      {reactionEntries.length > 0 && (
+                      {entries.length > 0 && (
                         <div
                           style={{
                             display: "flex",
                             flexWrap: "wrap",
-                            gap: 4,
-                            marginTop: 7,
+                            gap: 5,
+                            marginTop: 8,
                           }}
                         >
-                          {reactionEntries.map(([emoji, emails]) => {
+                          {entries.map(([emoji, emails]) => {
+                            const key = `${message.id}:${emoji}`;
                             const reacted = emails
                               .map(normalizeEmail)
                               .includes(normalizeEmail(senderEmail));
 
                             return (
-                              <div
-                                key={emoji}
-                                style={{
-                                  position: "relative",
-                                }}
-                              >
+                              <div key={emoji} style={{ position: "relative" }}>
                                 <button
                                   type="button"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     setReactionDetailsKey(
-                                      reactionDetailsKey ===
-                                        `${message.id}:${emoji}`
-                                        ? ""
-                                        : `${message.id}:${emoji}`
+                                      reactionDetailsKey === key ? "" : key
                                     );
                                   }}
-                                  onDoubleClick={(event) => {
-                                    event.stopPropagation();
-                                    toggleReaction(message, emoji);
-                                  }}
-                                  title="Click to see who reacted. Double-click to toggle your reaction."
                                   style={{
                                     border: reacted
                                       ? "1px solid #60A5FA"
                                       : "1px solid #D1D5DB",
-                                    background: reacted
-                                      ? "#EFF6FF"
-                                      : "#FFFFFF",
-                                    color: "#111827",
                                     borderRadius: 999,
                                     padding: "4px 9px",
+                                    background: reacted ? "#EFF6FF" : "#FFFFFF",
+                                    color: "#111827",
                                     fontSize: 13,
-                                    fontWeight: 700,
                                     cursor: "pointer",
                                   }}
                                 >
                                   {emoji} {emails.length}
                                 </button>
 
-                                {reactionDetailsKey ===
-                                  `${message.id}:${emoji}` && (
+                                {reactionDetailsKey === key && (
                                   <div
-                                    onClick={(event) =>
-                                      event.stopPropagation()
-                                    }
+                                    onClick={(event) => event.stopPropagation()}
                                     style={{
                                       position: "absolute",
                                       left: 0,
                                       bottom: "calc(100% + 6px)",
-                                      zIndex: 40,
-                                      minWidth: 180,
-                                      maxWidth: 240,
-                                      padding: 8,
+                                      zIndex: 60,
+                                      minWidth: 220,
+                                      padding: 9,
                                       borderRadius: 10,
-                                      border: "1px solid #E5E7EB",
+                                      border: "1px solid #D1D5DB",
                                       background: "#FFFFFF",
                                       color: "#111827",
                                       boxShadow:
-                                        "0 12px 30px rgba(15,23,42,.16)",
+                                        "0 14px 35px rgba(15,23,42,.18)",
                                     }}
                                   >
                                     <div
@@ -1144,33 +698,28 @@ export default function TeamChatPopup() {
                                     </div>
 
                                     {emails.map((email) => {
-                                      const normalized =
-                                        normalizeEmail(email);
-                                      const name =
-                                        userNameByEmail.get(normalized) ||
-                                        normalized;
-
+                                      const normalized = normalizeEmail(email);
                                       return (
                                         <div
                                           key={normalized}
                                           style={{
-                                            padding: "4px 0",
-                                            borderTop:
-                                              "1px solid #F3F4F6",
-                                            fontSize: 10,
+                                            padding: "6px 0",
+                                            borderTop: "1px solid #F3F4F6",
                                           }}
                                         >
                                           <div
                                             style={{
-                                              fontWeight: 800,
+                                              fontSize: 10,
+                                              fontWeight: 900,
                                             }}
                                           >
-                                            {name}
+                                            {userNameByEmail.get(normalized) ||
+                                              normalized}
                                           </div>
                                           <div
                                             style={{
-                                              color: "#6B7280",
                                               fontSize: 9,
+                                              color: "#6B7280",
                                             }}
                                           >
                                             {normalized}
@@ -1181,25 +730,21 @@ export default function TeamChatPopup() {
 
                                     <button
                                       type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        toggleReaction(message, emoji);
-                                      }}
+                                      onClick={() =>
+                                        toggleReaction(message, emoji)
+                                      }
                                       style={{
                                         width: "100%",
                                         marginTop: 7,
-                                        padding: "6px 8px",
+                                        padding: "7px 8px",
                                         borderRadius: 8,
                                         border: "1px solid #D1D5DB",
                                         background: reacted
                                           ? "#FEF2F2"
                                           : "#F9FAFB",
-                                        color: reacted
-                                          ? "#B91C1C"
-                                          : "#111827",
+                                        color: reacted ? "#B91C1C" : "#111827",
                                         fontSize: 9,
                                         fontWeight: 900,
-                                        cursor: "pointer",
                                       }}
                                     >
                                       {reacted
@@ -1220,29 +765,11 @@ export default function TeamChatPopup() {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "flex-end",
-                          gap: 8,
+                          gap: 7,
                         }}
                       >
-                        {mine && (
-                          <span
-                            style={{
-                              fontSize: 8.5,
-                              opacity: 0.72,
-                            }}
-                          >
-                            {seenCount > 0
-                              ? `Seen by ${seenCount}`
-                              : "Sent"}
-                          </span>
-                        )}
-
-                        <span
-                          style={{
-                            fontSize: 8.5,
-                            opacity: 0.68,
-                          }}
-                        >
-                          {formatChatTime(message.createdAt)}
+                        <span style={{ fontSize: 8.5, opacity: 0.68 }}>
+                          {formatTime(message.createdAt)}
                         </span>
 
                         {!selectionMode && (
@@ -1250,33 +777,23 @@ export default function TeamChatPopup() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              setReactionMessageId(
-                                reactionMessageId === message.id
+                              setReactionPickerId(
+                                reactionPickerId === message.id
                                   ? ""
                                   : message.id
                               );
                             }}
                             style={{
-                              padding: 0,
-                              border: 0,
-                              background: "transparent",
-                              color: mine ? "#FFFFFF" : "#374151",
-                              width: 28,
-                              height: 28,
-                              border: mine
-                                ? "1px solid rgba(255,255,255,.38)"
-                                : "1px solid #D1D5DB",
+                              width: 30,
+                              height: 30,
                               borderRadius: 999,
+                              border: mine
+                                ? "1px solid rgba(255,255,255,.35)"
+                                : "1px solid #D1D5DB",
                               background: mine
                                 ? "rgba(255,255,255,.12)"
-                                : "#F9FAFB",
-                              color: mine ? "#FFFFFF" : "#111827",
-                              fontSize: 17,
-                              opacity: 1,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
+                                : "#FFFFFF",
+                              fontSize: 18,
                             }}
                           >
                             😊
@@ -1284,39 +801,30 @@ export default function TeamChatPopup() {
                         )}
                       </div>
 
-                      {reactionMessageId === message.id && (
+                      {reactionPickerId === message.id && (
                         <div
                           style={{
                             marginTop: 7,
                             display: "flex",
-                            gap: 5,
-                            padding: 6,
+                            gap: 4,
+                            padding: 5,
                             borderRadius: 12,
+                            border: "1px solid #D1D5DB",
                             background: "#FFFFFF",
-                            border: "1px solid #E5E7EB",
                           }}
                         >
                           {REACTIONS.map((emoji) => (
                             <button
                               key={emoji}
                               type="button"
-                              disabled={
-                                reactionBusyKey ===
-                                `${message.id}:${emoji}`
-                              }
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleReaction(message, emoji);
-                              }}
+                              onClick={() => toggleReaction(message, emoji)}
                               style={{
-                                border: 0,
-                                background: "transparent",
                                 width: 34,
                                 height: 34,
+                                border: 0,
                                 borderRadius: 999,
+                                background: "#FFFFFF",
                                 fontSize: 23,
-                                padding: 2,
-                                cursor: "pointer",
                               }}
                             >
                               {emoji}
@@ -1334,8 +842,7 @@ export default function TeamChatPopup() {
           {error && (
             <div
               style={{
-                padding: "7px 12px",
-                borderTop: "1px solid #FCA5A5",
+                padding: "7px 10px",
                 background: "#FEF2F2",
                 color: "#B91C1C",
                 fontSize: 10,
@@ -1349,64 +856,49 @@ export default function TeamChatPopup() {
             <div
               style={{
                 position: "relative",
-                padding: 12,
+                padding: 10,
                 borderTop: "1px solid #E5E7EB",
-                background: "#FFFFFF",
               }}
             >
               {mentionOpen && (
                 <div
                   style={{
                     position: "absolute",
-                    left: 12,
-                    right: 12,
+                    left: 10,
+                    right: 10,
                     bottom: "100%",
-                    maxHeight: 190,
+                    zIndex: 50,
+                    maxHeight: 210,
                     overflowY: "auto",
-                    border: "1px solid #E5E7EB",
+                    border: "1px solid #D1D5DB",
                     borderRadius: 10,
                     background: "#FFFFFF",
-                    boxShadow: "0 10px 30px rgba(15,23,42,.12)",
-                    zIndex: 30,
+                    boxShadow: "0 12px 30px rgba(15,23,42,.15)",
                   }}
                 >
-                  {filteredMentions.length > 0 ? (
-                    filteredMentions.map((person) => (
-                      <button
-                        key={person.email}
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => addMention(person)}
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          border: 0,
-                          borderBottom: "1px solid #F3F4F6",
-                          background: "#FFFFFF",
-                          textAlign: "left",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div style={{ fontSize: 12, fontWeight: 900 }}>
-                          {person.name}
-                        </div>
-                        <div style={{ fontSize: 10, color: "#6B7280" }}>
-                          {person.email}
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <div
+                  {mentionOptions.map((user) => (
+                    <button
+                      key={user.email}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => addMention(user)}
                       style={{
-                        padding: "12px 10px",
-                        fontSize: 11,
-                        color: "#6B7280",
+                        width: "100%",
+                        padding: "9px 10px",
+                        border: 0,
+                        borderBottom: "1px solid #F3F4F6",
+                        background: "#FFFFFF",
+                        textAlign: "left",
                       }}
                     >
-                      No matching user yet. Teammates appear here after they
-                      open Team Chat once.
-                    </div>
-                  )}
+                      <div style={{ fontSize: 11, fontWeight: 900 }}>
+                        {user.name}
+                      </div>
+                      <div style={{ fontSize: 9, color: "#6B7280" }}>
+                        {user.email}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               )}
 
@@ -1415,9 +907,7 @@ export default function TeamChatPopup() {
                 onChange={(event) => {
                   const value = event.target.value;
                   setDraft(value);
-                  setMentionOpen(
-                    /(?:^|\s)@[^\n@]*$/i.test(value)
-                  );
+                  setMentionOpen(/(?:^|\s)@[^\n@]*$/i.test(value));
                 }}
                 onKeyDown={(event) => {
                   if (
@@ -1431,7 +921,6 @@ export default function TeamChatPopup() {
                   }
                 }}
                 rows={2}
-                maxLength={2000}
                 placeholder="Write a message… Use @ to mention"
                 style={{
                   width: "100%",
@@ -1440,44 +929,27 @@ export default function TeamChatPopup() {
                   borderRadius: 10,
                   padding: "9px 10px",
                   fontSize: 13,
-                  outline: "none",
-                  color: "#111827",
                 }}
               />
 
               <div
                 style={{
+                  marginTop: 7,
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 10,
-                  marginTop: 8,
+                  justifyContent: "flex-end",
                 }}
               >
-                <span style={{ fontSize: 9, color: "#9CA3AF" }}>
-                  Enter to send · Shift+Enter for a new line
-                </span>
-
                 <button
                   type="button"
                   onClick={sendMessage}
-                  disabled={
-                    !draft.trim() ||
-                    !normalizeEmail(senderEmail) ||
-                    sending
-                  }
+                  disabled={!draft.trim() || sending}
                   style={{
                     border: 0,
                     borderRadius: 9,
                     padding: "9px 15px",
                     background:
-                      !draft.trim() ||
-                      !normalizeEmail(senderEmail) ||
-                      sending
-                        ? "#D1D5DB"
-                        : "#111827",
+                      !draft.trim() || sending ? "#D1D5DB" : "#111827",
                     color: "#FFFFFF",
-                    fontSize: 12,
                     fontWeight: 900,
                   }}
                 >
@@ -1491,11 +963,7 @@ export default function TeamChatPopup() {
 
       <button
         type="button"
-        onClick={() => {
-          setOpen((value) => !value);
-          setUnread(0);
-        }}
-        aria-label="Open EMDC team chat"
+        onClick={() => setOpen((value) => !value)}
         style={{
           position: "fixed",
           right: 18,
@@ -1510,43 +978,10 @@ export default function TeamChatPopup() {
           background: "#111827",
           color: "#FFFFFF",
           boxShadow: "0 12px 30px rgba(15,23,42,.25)",
-          cursor: "pointer",
           fontSize: 23,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
         }}
       >
         {open ? "×" : "💬"}
-
-        {!open && (unread > 0 || pendingMentionCount > 0) && (
-          <span
-            style={{
-              position: "absolute",
-              top: -3,
-              right: -3,
-              minWidth: 22,
-              height: 22,
-              borderRadius: 999,
-              padding: "0 5px",
-              background:
-                pendingMentionCount > 0 ? "#F59E0B" : "#EF4444",
-              color: "#FFFFFF",
-              border: "2px solid #FFFFFF",
-              fontSize: 10,
-              fontWeight: 900,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {pendingMentionCount > 0
-              ? `@${pendingMentionCount > 9 ? "9+" : pendingMentionCount}`
-              : unread > 9
-                ? "9+"
-                : unread}
-          </span>
-        )}
       </button>
     </>
   );
