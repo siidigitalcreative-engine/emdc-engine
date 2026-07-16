@@ -7,46 +7,7 @@ export const dynamic = "force-dynamic";
 const CHECKLIST_GROUPS_PATH =
   "emdc-state/checklist-groups/all.json";
 
-const cleanText = (value: unknown, maxLength: number) =>
-  String(value || "").trim().slice(0, maxLength);
-
-const normalizeGroups = (value: unknown) => {
-  const source = Array.isArray(value)
-    ? value
-    : Array.isArray((value as any)?.checklistGroups)
-      ? (value as any).checklistGroups
-      : [];
-
-  return source
-    .map((group: any) => ({
-      id: cleanText(
-        group?.id ||
-          group?.groupId ||
-          group?.checklistGroupId ||
-          group?.key,
-        180
-      ),
-      name: cleanText(
-        group?.groupName ||
-          group?.name ||
-          group?.title ||
-          group?.projectName,
-        240
-      ),
-    }))
-    .filter(
-      (group: { id: string; name: string }) =>
-        group.id && group.name
-    )
-    .sort(
-      (
-        left: { name: string },
-        right: { name: string }
-      ) => left.name.localeCompare(right.name)
-    );
-};
-
-export async function GET() {
+const readExistingGroups = async (): Promise<any[]> => {
   try {
     const result = await get(CHECKLIST_GROUPS_PATH, {
       access: "private",
@@ -58,46 +19,26 @@ export async function GET() {
       result.statusCode === 304 ||
       !result.stream
     ) {
-      return NextResponse.json({
-        ok: true,
-        groups: [],
-        count: 0,
-      });
+      return [];
     }
 
     const raw = await new Response(result.stream).text();
     const parsed = JSON.parse(raw || "[]");
-    const groups = normalizeGroups(parsed);
 
-    return NextResponse.json(
-      {
-        ok: true,
-        groups,
-        count: groups.length,
-      },
-      {
-        headers: {
-          "Cache-Control":
-            "private, no-store, no-cache, must-revalidate",
-        },
-      }
-    );
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error?.message ||
-          "Unable to load checklist groups.",
-      },
-      { status: 500 }
-    );
+    return Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.checklistGroups)
+        ? parsed.checklistGroups
+        : [];
+  } catch {
+    return [];
   }
-}
+};
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
+
     const checklistGroups = Array.isArray(
       body?.checklistGroups
     )
@@ -109,6 +50,33 @@ export async function POST(req: NextRequest) {
       body.updatedAt
         ? body.updatedAt
         : new Date().toISOString();
+
+    const allowEmptyOverwrite =
+      body?.allowEmptyOverwrite === true;
+
+    // Safety guard:
+    // only perform a Blob read when an empty array is about to be saved.
+    // This prevents a temporary empty client state from deleting every
+    // checklist group, while keeping normal non-empty saves fast.
+    if (
+      checklistGroups.length === 0 &&
+      !allowEmptyOverwrite
+    ) {
+      const existingGroups = await readExistingGroups();
+
+      if (existingGroups.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            protected: true,
+            error:
+              "Blocked an accidental empty checklist-group overwrite.",
+            existingCount: existingGroups.length,
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     await put(
       CHECKLIST_GROUPS_PATH,
