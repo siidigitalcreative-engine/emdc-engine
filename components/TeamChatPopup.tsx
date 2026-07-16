@@ -368,7 +368,7 @@ export default function TeamChatPopup() {
 
     try {
       const response = await fetch(
-        `/api/checklist-group-tags?t=${Date.now()}`,
+        `/api/checklist-groups-fast?t=${Date.now()}`,
         {
           method: "GET",
           cache: "no-store",
@@ -383,15 +383,43 @@ export default function TeamChatPopup() {
         );
       }
 
+      const sourceGroups = Array.isArray(json.groups)
+        ? json.groups
+        : Array.isArray(json.checklistGroups)
+          ? json.checklistGroups
+          : [];
+
       setChecklistGroups(
-        Array.isArray(json.groups) ? json.groups : []
+        sourceGroups
+          .map((group: any) => ({
+            id: String(
+              group?.id ||
+              group?.groupId ||
+              group?.checklistGroupId ||
+              group?.key ||
+              ""
+            ).trim(),
+            name: String(
+              group?.groupName ||
+              group?.name ||
+              group?.title ||
+              group?.projectName ||
+              ""
+            ).trim(),
+          }))
+          .filter(
+            (group: ChecklistGroupTag) =>
+              group.id && group.name
+          )
       );
-      setChecklistGroupsLoaded(true);
     } catch (checklistError: any) {
       setError(
         checklistError?.message ||
           "Unable to load checklist groups."
       );
+      setChecklistGroups([]);
+    } finally {
+      setChecklistGroupsLoaded(true);
     }
   };
 
@@ -531,12 +559,6 @@ export default function TeamChatPopup() {
     const name = window.prompt("Enter the new group chat name:");
     if (!name?.trim()) return;
 
-    const roomPassword = window.prompt(
-      "Optional: Enter a password for this group. Leave blank for no password."
-    );
-
-    if (roomPassword === null) return;
-
     const response = await fetch("/api/team-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -544,7 +566,6 @@ export default function TeamChatPopup() {
         action: "create-room",
         name: name.trim(),
         requesterEmail: senderEmail,
-        roomPassword: roomPassword.trim(),
       }),
     });
 
@@ -558,11 +579,8 @@ export default function TeamChatPopup() {
     if (Array.isArray(json.rooms) && json.rooms.length > 0) {
       setRooms(json.rooms);
     }
+
     setRoomId(json.room.id);
-    setRoomPasswords((current) => ({
-      ...current,
-      [json.room.id]: roomPassword.trim(),
-    }));
     setShowRoomList(false);
     setMessages([]);
   };
