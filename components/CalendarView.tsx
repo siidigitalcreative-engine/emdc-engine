@@ -5030,20 +5030,39 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [groupEditModal,setGroupEditModal] = useState(false);
   const buildCurrentChecklistDefaults = () => {
     const out:any = {};
+    const summaryDepartments =
+      group?.progressSummary?.departments &&
+      typeof group.progressSummary.departments === "object"
+        ? group.progressSummary.departments
+        : {};
 
     Object.keys(DEPTS).forEach((dept:string)=>{
-      out[dept] = (
+      const templateRows = (
         templates?.[group?.launchType]?.[dept] || []
-      ).map((taskText:string)=>({
-        id:uid(),
-        text:taskText,
-        done:false,
-        link:"",
-        note:"",
-        assignee:"",
-        statusId:"",
-        custom:false,
-      }));
+      );
+
+      const summaryDone = Math.max(
+        0,
+        Number(
+          summaryDepartments?.[dept]?.done || 0
+        )
+      );
+
+      out[dept] = templateRows.map(
+        (taskText:string,index:number)=>({
+          id:uid(),
+          text:taskText,
+          // Exact item state is preferred from Sync v2 or the last-good
+          // per-group backup. This fallback is used only when neither exists,
+          // so at minimum it restores the progress count shown on the card.
+          done:index < summaryDone,
+          link:"",
+          note:"",
+          assignee:"",
+          statusId:"",
+          custom:false,
+        })
+      );
     });
 
     return dedupeChecklistItemsObject(out);
@@ -16576,7 +16595,63 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  if(activeGroup){
+    const activeGroupItemsLoaded =
+      !!allGroupItems &&
+      Object.prototype.hasOwnProperty.call(
+        allGroupItems,
+        activeGroup.id
+      );
+
+    if(!activeGroupItemsLoaded){
+      return (
+        <div>
+          <button
+            type="button"
+            onClick={()=>{
+              setActive(null);
+              if(onRouteChange){
+                onRouteChange({
+                  tab:"checklists",
+                  groupId:null,
+                  groupTab:"tasks",
+                });
+              }
+            }}
+            style={{
+              border:0,
+              background:"transparent",
+              padding:0,
+              marginBottom:12,
+              color:C.textSub,
+              fontSize:12,
+              cursor:"pointer",
+            }}
+          >
+            ‹ All Groups
+          </button>
+
+          <div
+            style={{
+              minHeight:360,
+              border:`1px solid ${C.border}`,
+              borderRadius:12,
+              background:C.surface,
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"center",
+              color:C.muted,
+              fontSize:13,
+            }}
+          >
+            Loading saved checklist progress…
+          </div>
+        </div>
+      );
+    }
+
+    return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  }
 
   return (
     <div>
@@ -21986,10 +22061,13 @@ export default function App({
         resolvedGroupItems = backupGroupItems;
         shouldRepairCloud = true;
       } else if(!currentHasGroup){
-        // This group has never had a local checklist payload on this browser.
-        // Do not install an empty object. Leaving it undefined allows
-        // ChecklistBoard to rebuild the operational-type defaults safely.
-        return;
+        // The authoritative request has completed and confirmed that no
+        // per-group item payload exists. Install an empty object as the
+        // explicit "loaded but empty" state. ChecklistView will not mount the
+        // board before this point, preventing temporary defaults from
+        // overwriting real remote task edits while the request is still
+        // pending.
+        resolvedGroupItems = {};
       }
     }
 
