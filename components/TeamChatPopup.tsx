@@ -72,6 +72,7 @@ export default function TeamChatPopup() {
   const [deletingSelected, setDeletingSelected] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [reactionMessageId, setReactionMessageId] = useState("");
+  const [reactionDetailsKey, setReactionDetailsKey] = useState("");
   const [reactionBusyKey, setReactionBusyKey] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -571,6 +572,46 @@ export default function TeamChatPopup() {
     }
   };
 
+  const userNameByEmail = useMemo(() => {
+    const map = new Map<string, string>();
+
+    chatUsers.forEach((user) => {
+      const email = normalizeEmail(user.email);
+      const name = String(user.name || "").trim();
+
+      if (email && name) map.set(email, name);
+    });
+
+    messages.forEach((message) => {
+      const email = normalizeEmail(message.senderEmail);
+      const name = String(message.sender || "").trim();
+
+      if (email && name) map.set(email, name);
+    });
+
+    if (normalizeEmail(senderEmail) && sender.trim()) {
+      map.set(normalizeEmail(senderEmail), sender.trim());
+    }
+
+    return map;
+  }, [chatUsers, messages, sender, senderEmail]);
+
+  const pendingMentionCount = useMemo(() => {
+    const email = normalizeEmail(senderEmail);
+    if (!email) return 0;
+
+    return messages.filter((message) => {
+      const mentions = (message.mentions || []).map(normalizeEmail);
+      const readers = (message.readBy || []).map(normalizeEmail);
+
+      return (
+        mentions.includes(email) &&
+        normalizeEmail(message.senderEmail) !== email &&
+        !readers.includes(email)
+      );
+    }).length;
+  }, [messages, senderEmail]);
+
   const sortedMessages = useMemo(
     () =>
       [...messages].sort(
@@ -691,6 +732,26 @@ export default function TeamChatPopup() {
                   >
                     Lazy mode · refreshes only while open
                   </div>
+
+                  {pendingMentionCount > 0 && (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        padding: "3px 7px",
+                        borderRadius: 999,
+                        background: "#FEF3C7",
+                        color: "#92400E",
+                        fontSize: 9,
+                        fontWeight: 900,
+                      }}
+                    >
+                      @ {pendingMentionCount} mention
+                      {pendingMentionCount === 1 ? "" : "s"} for you
+                    </div>
+                  )}
                 </div>
 
                 <div
@@ -963,6 +1024,27 @@ export default function TeamChatPopup() {
                         </div>
                       )}
 
+                      {(message.mentions || [])
+                        .map(normalizeEmail)
+                        .includes(normalizeEmail(senderEmail)) && (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            marginBottom: 6,
+                            padding: "3px 7px",
+                            borderRadius: 999,
+                            background: mine ? "rgba(255,255,255,.15)" : "#FEF3C7",
+                            color: mine ? "#FFFFFF" : "#92400E",
+                            fontSize: 9,
+                            fontWeight: 900,
+                          }}
+                        >
+                          @ Mentioned you
+                        </div>
+                      )}
+
                       <div
                         style={{
                           fontSize: 13,
@@ -989,29 +1071,144 @@ export default function TeamChatPopup() {
                               .includes(normalizeEmail(senderEmail));
 
                             return (
-                              <button
+                              <div
                                 key={emoji}
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  toggleReaction(message, emoji);
-                                }}
                                 style={{
-                                  border: reacted
-                                    ? "1px solid #60A5FA"
-                                    : "1px solid #D1D5DB",
-                                  background: reacted
-                                    ? "#EFF6FF"
-                                    : "#FFFFFF",
-                                  color: "#111827",
-                                  borderRadius: 999,
-                                  padding: "4px 9px",
-                                  fontSize: 13,
-                                  fontWeight: 700,
+                                  position: "relative",
                                 }}
                               >
-                                {emoji} {emails.length}
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setReactionDetailsKey(
+                                      reactionDetailsKey ===
+                                        `${message.id}:${emoji}`
+                                        ? ""
+                                        : `${message.id}:${emoji}`
+                                    );
+                                  }}
+                                  onDoubleClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleReaction(message, emoji);
+                                  }}
+                                  title="Click to see who reacted. Double-click to toggle your reaction."
+                                  style={{
+                                    border: reacted
+                                      ? "1px solid #60A5FA"
+                                      : "1px solid #D1D5DB",
+                                    background: reacted
+                                      ? "#EFF6FF"
+                                      : "#FFFFFF",
+                                    color: "#111827",
+                                    borderRadius: 999,
+                                    padding: "4px 9px",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {emoji} {emails.length}
+                                </button>
+
+                                {reactionDetailsKey ===
+                                  `${message.id}:${emoji}` && (
+                                  <div
+                                    onClick={(event) =>
+                                      event.stopPropagation()
+                                    }
+                                    style={{
+                                      position: "absolute",
+                                      left: 0,
+                                      bottom: "calc(100% + 6px)",
+                                      zIndex: 40,
+                                      minWidth: 180,
+                                      maxWidth: 240,
+                                      padding: 8,
+                                      borderRadius: 10,
+                                      border: "1px solid #E5E7EB",
+                                      background: "#FFFFFF",
+                                      color: "#111827",
+                                      boxShadow:
+                                        "0 12px 30px rgba(15,23,42,.16)",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        marginBottom: 6,
+                                        fontSize: 10,
+                                        fontWeight: 900,
+                                      }}
+                                    >
+                                      {emoji} Reacted by
+                                    </div>
+
+                                    {emails.map((email) => {
+                                      const normalized =
+                                        normalizeEmail(email);
+                                      const name =
+                                        userNameByEmail.get(normalized) ||
+                                        normalized;
+
+                                      return (
+                                        <div
+                                          key={normalized}
+                                          style={{
+                                            padding: "4px 0",
+                                            borderTop:
+                                              "1px solid #F3F4F6",
+                                            fontSize: 10,
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              fontWeight: 800,
+                                            }}
+                                          >
+                                            {name}
+                                          </div>
+                                          <div
+                                            style={{
+                                              color: "#6B7280",
+                                              fontSize: 9,
+                                            }}
+                                          >
+                                            {normalized}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        toggleReaction(message, emoji);
+                                      }}
+                                      style={{
+                                        width: "100%",
+                                        marginTop: 7,
+                                        padding: "6px 8px",
+                                        borderRadius: 8,
+                                        border: "1px solid #D1D5DB",
+                                        background: reacted
+                                          ? "#FEF2F2"
+                                          : "#F9FAFB",
+                                        color: reacted
+                                          ? "#B91C1C"
+                                          : "#111827",
+                                        fontSize: 9,
+                                        fontWeight: 900,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      {reacted
+                                        ? "Remove my reaction"
+                                        : "Add my reaction"}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
@@ -1322,17 +1519,18 @@ export default function TeamChatPopup() {
       >
         {open ? "×" : "💬"}
 
-        {!open && unread > 0 && (
+        {!open && (unread > 0 || pendingMentionCount > 0) && (
           <span
             style={{
               position: "absolute",
               top: -3,
               right: -3,
-              minWidth: 20,
-              height: 20,
+              minWidth: 22,
+              height: 22,
               borderRadius: 999,
               padding: "0 5px",
-              background: "#EF4444",
+              background:
+                pendingMentionCount > 0 ? "#F59E0B" : "#EF4444",
               color: "#FFFFFF",
               border: "2px solid #FFFFFF",
               fontSize: 10,
@@ -1342,7 +1540,11 @@ export default function TeamChatPopup() {
               justifyContent: "center",
             }}
           >
-            {unread > 9 ? "9+" : unread}
+            {pendingMentionCount > 0
+              ? `@${pendingMentionCount > 9 ? "9+" : pendingMentionCount}`
+              : unread > 9
+                ? "9+"
+                : unread}
           </span>
         )}
       </button>
