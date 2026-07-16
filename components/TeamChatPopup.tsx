@@ -48,7 +48,18 @@ export default function TeamChatPopup() {
   const [open, setOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
+  const [chatUsers, setChatUsers] = useState<ChatUser[]>([
+    { name: "analyst", email: "analyst@sunbeamsimpexinc.com" },
+    { name: "Ayen Quintos", email: "marketing@sunbeamsimpexinc.com" },
+    { name: "Charlene Quizon", email: "mariacharlenemae.quizon@gmail.com" },
+    { name: "Che Navarro", email: "design@sunbeamsimpexinc.com" },
+    { name: "design2", email: "design2@sunbeamsimpexinc.com" },
+    { name: "Janssen Balneg", email: "janssenbalneg14@gmail.com" },
+    { name: "operations", email: "operations@sunbeamsimpexinc.com" },
+    { name: "Philip Jimenez Cute", email: "jimenezphilip91@gmail.com" },
+    { name: "ravi", email: "ravi@sunbeamsimpexinc.com" },
+    { name: "Reggienald Vargas", email: "admin@sunbeamsimpexinc.com" },
+  ]);
   const [draft, setDraft] = useState("");
   const [sender, setSender] = useState("EMDC User");
   const [senderEmail, setSenderEmail] = useState("");
