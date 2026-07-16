@@ -36,6 +36,11 @@ type RoomSummary = {
   mentionMessageId?: string;
 };
 
+type ChecklistGroupTag = {
+  id: string;
+  name: string;
+};
+
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 const POLL_MS = 30000;
 const LIMIT = 30;
@@ -81,6 +86,12 @@ export default function TeamChatPopup() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
+  const [checklistTagOpen, setChecklistTagOpen] = useState(false);
+  const [checklistGroups, setChecklistGroups] = useState<
+    ChecklistGroupTag[]
+  >([]);
+  const [checklistGroupsLoaded, setChecklistGroupsLoaded] =
+    useState(false);
   const [reactionPickerId, setReactionPickerId] = useState("");
   const [reactionDetailsKey, setReactionDetailsKey] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
@@ -327,6 +338,135 @@ export default function TeamChatPopup() {
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages.length, open]);
 
+  const loadChecklistGroups = async () => {
+    if (checklistGroupsLoaded) return;
+
+    try {
+      const response = await fetch(
+        `/api/checklist-group-tags?t=${Date.now()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.ok) {
+        throw new Error(
+          json?.error || "Unable to load checklist groups."
+        );
+      }
+
+      setChecklistGroups(
+        Array.isArray(json.groups) ? json.groups : []
+      );
+      setChecklistGroupsLoaded(true);
+    } catch (checklistError: any) {
+      setError(
+        checklistError?.message ||
+          "Unable to load checklist groups."
+      );
+    }
+  };
+
+  const checklistTagQuery = useMemo(() => {
+    const match = draft.match(/(?:^|\s)#([^\n#]*)$/);
+
+    return match
+      ? String(match[1] || "").trim().toLowerCase()
+      : "";
+  }, [draft]);
+
+  const filteredChecklistGroups = useMemo(() => {
+    if (!checklistTagOpen) return [];
+
+    return checklistGroups
+      .filter((group) => {
+        if (!checklistTagQuery) return true;
+
+        return group.name
+          .toLowerCase()
+          .includes(checklistTagQuery);
+      })
+      .slice(0, 12);
+  }, [
+    checklistGroups,
+    checklistTagOpen,
+    checklistTagQuery,
+  ]);
+
+  const addChecklistTag = (group: ChecklistGroupTag) => {
+    setDraft((current) =>
+      current.replace(
+        /(?:^|\s)#([^\n#]*)$/,
+        (matched) =>
+          `${matched.startsWith(" ") ? " " : ""}#[${group.name}](${group.id}) `
+      )
+    );
+
+    setChecklistTagOpen(false);
+  };
+
+  const openChecklistGroup = (groupId: string) => {
+    const params = new URLSearchParams();
+    params.set("group", groupId);
+    params.set("groupTab", "tasks");
+
+    window.location.hash = `#/checklists?${params.toString()}`;
+    setOpen(false);
+  };
+
+  const renderMessageText = (messageText: string) => {
+    const pattern = /#\[([^\]]+)\]\(([^)]+)\)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(messageText)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(
+          messageText.slice(lastIndex, match.index)
+        );
+      }
+
+      const label = match[1];
+      const groupId = match[2];
+
+      parts.push(
+        <button
+          key={`${groupId}-${match.index}`}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openChecklistGroup(groupId);
+          }}
+          style={{
+            display: "inline",
+            padding: 0,
+            border: 0,
+            background: "transparent",
+            color: "#2563EB",
+            font: "inherit",
+            fontWeight: 900,
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          #{label}
+        </button>
+      );
+
+      lastIndex = pattern.lastIndex;
+    }
+
+    if (lastIndex < messageText.length) {
+      parts.push(messageText.slice(lastIndex));
+    }
+
+    return parts.length ? parts : messageText;
+  };
+
   const mentionQuery = useMemo(() => {
     const match = draft.match(/(?:^|\s)@([^\n@]*)$/);
     return match ? String(match[1] || "").trim().toLowerCase() : "";
@@ -430,6 +570,7 @@ export default function TeamChatPopup() {
 
       setDraft("");
       setMentionOpen(false);
+      setChecklistTagOpen(false);
       setMessages(json.messages || []);
     } catch (sendError: any) {
       setError(sendError?.message || "Unable to send message.");
@@ -1216,7 +1357,6 @@ export default function TeamChatPopup() {
                           color: "#6B7280",
                         }}
                       >
-                        <span aria-hidden="true">🔒</span>
                         <span>Password protected</span>
                       </div>
                     ) : mentionedYou ? (
@@ -1507,7 +1647,7 @@ export default function TeamChatPopup() {
                           lineHeight: 1.45,
                         }}
                       >
-                        {message.text}
+                        {renderMessageText(message.text)}
                       </div>
 
                       {entries.length > 0 && (
@@ -1769,6 +1909,80 @@ export default function TeamChatPopup() {
                 background: "#FFFFFF",
               }}
             >
+              {checklistTagOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    right: 12,
+                    bottom: "100%",
+                    zIndex: 55,
+                    maxHeight: 230,
+                    overflowY: "auto",
+                    border: "1px solid #D1D5DB",
+                    borderRadius: 10,
+                    background: "#FFFFFF",
+                    boxShadow:
+                      "0 12px 30px rgba(15,23,42,.15)",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "8px 10px",
+                      borderBottom: "1px solid #E5E7EB",
+                      color: "#6B7280",
+                      fontSize: 9,
+                      fontWeight: 900,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Tag checklist group
+                  </div>
+
+                  {filteredChecklistGroups.length > 0 ? (
+                    filteredChecklistGroups.map((group) => (
+                      <button
+                        key={group.id}
+                        type="button"
+                        onMouseDown={(event) =>
+                          event.preventDefault()
+                        }
+                        onClick={() =>
+                          addChecklistTag(group)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          border: 0,
+                          borderBottom:
+                            "1px solid #F3F4F6",
+                          background: "#FFFFFF",
+                          color: "#111827",
+                          textAlign: "left",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {group.name}
+                      </button>
+                    ))
+                  ) : (
+                    <div
+                      style={{
+                        padding: "12px 10px",
+                        color: "#6B7280",
+                        fontSize: 11,
+                      }}
+                    >
+                      {checklistGroupsLoaded
+                        ? "No matching checklist group."
+                        : "Loading checklist groups…"}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {mentionOpen && (
                 <div
                   style={{
@@ -1815,22 +2029,33 @@ export default function TeamChatPopup() {
                 value={draft}
                 onChange={(event) => {
                   const value = event.target.value;
+                  const shouldOpenMention =
+                    /(?:^|\s)@[^\n@]*$/i.test(value);
+                  const shouldOpenChecklist =
+                    /(?:^|\s)#[^\n#]*$/i.test(value);
+
                   setDraft(value);
-                  setMentionOpen(/(?:^|\s)@[^\n@]*$/i.test(value));
+                  setMentionOpen(shouldOpenMention);
+                  setChecklistTagOpen(shouldOpenChecklist);
+
+                  if (shouldOpenChecklist) {
+                    void loadChecklistGroups();
+                  }
                 }}
                 onKeyDown={(event) => {
                   if (
                     event.key === "Enter" &&
                     !event.shiftKey &&
                     !event.nativeEvent.isComposing &&
-                    !mentionOpen
+                    !mentionOpen &&
+                    !checklistTagOpen
                   ) {
                     event.preventDefault();
                     sendMessage();
                   }
                 }}
                 rows={2}
-                placeholder="Write a message… Use @ to mention"
+                placeholder="Write a message… Use @ for users or # for checklist groups"
                 style={{
                   width: "100%",
                   resize: "none",
