@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import MaterialIcon from "@/components/MaterialIcon";
 
 type ReactionMap = Record<string, string[]>;
 
@@ -122,12 +123,15 @@ export default function TeamChatPopup() {
     };
   }, []);
 
-  const loadMessages = async (silent = false) => {
+  const loadMessages = async (
+    silent = false,
+    requestedRoomId = roomId
+  ) => {
     if (!silent) setLoading(true);
 
     try {
       const response = await fetch(
-        `/api/team-chat?roomId=${encodeURIComponent(roomId)}&limit=${LIMIT}&t=${Date.now()}`,
+        `/api/team-chat?roomId=${encodeURIComponent(requestedRoomId)}&limit=${LIMIT}&t=${Date.now()}`,
         { cache: "no-store" }
       );
       const json = await response.json().catch(() => null);
@@ -150,16 +154,24 @@ export default function TeamChatPopup() {
   useEffect(() => {
     if (!open) return;
 
-    loadMessages();
+    if (!showRoomList) {
+      loadMessages(false, roomId);
+    } else {
+      // Load once for the room/group directory while showing the list.
+      loadMessages(true, roomId);
+    }
 
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadMessages(true);
+      if (
+        document.visibilityState === "visible" &&
+        !showRoomList
+      ) {
+        loadMessages(true, roomId);
       }
     }, POLL_MS);
 
     return () => window.clearInterval(timer);
-  }, [open, roomId]);
+  }, [open, roomId, showRoomList]);
 
   useEffect(() => {
     if (!open || !listRef.current) return;
@@ -319,6 +331,61 @@ export default function TeamChatPopup() {
     setMessages(json.messages || []);
     setSelectedIds([]);
     setSelectionMode(false);
+  };
+
+  const deleteCurrentRoom = async () => {
+    if (roomId === "general") {
+      setError("The General group cannot be deleted.");
+      return;
+    }
+
+    const password = window.prompt(
+      "Enter the chat administrator password to delete this group:"
+    );
+
+    if (password === null) return;
+
+    if (
+      !window.confirm(
+        `Delete "${currentRoom.name}" and all of its messages? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete-room",
+          roomId,
+          adminPassword: password,
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "Unable to delete group chat.");
+      }
+
+      const nextRooms = Array.isArray(json.rooms)
+        ? json.rooms
+        : [{ id: "general", name: "General" }];
+
+      setRooms(nextRooms);
+      setRoomId("general");
+      setMessages([]);
+      setSelectedIds([]);
+      setSelectionMode(false);
+      setShowRoomList(true);
+      localStorage.setItem("emdc-chat-room", "general");
+    } catch (deleteError: any) {
+      setError(
+        deleteError?.message || "Unable to delete group chat."
+      );
+    }
   };
 
   const clearRoom = async () => {
@@ -609,6 +676,27 @@ export default function TeamChatPopup() {
                   {clearing ? "..." : "Clear"}
                 </button>
 
+                {roomId !== "general" && (
+                  <button
+                    type="button"
+                    onClick={deleteCurrentRoom}
+                    title="Delete this group"
+                    style={{
+                      height: 34,
+                      padding: "0 9px",
+                      borderRadius: 9,
+                      border: "1px solid #DC2626",
+                      background: "#FFFFFF",
+                      color: "#DC2626",
+                      fontSize: 10,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Delete Group
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
@@ -647,9 +735,11 @@ export default function TeamChatPopup() {
                   onClick={() => {
                     setRoomId(room.id);
                     setShowRoomList(false);
-                    setMessages([]);
                     setSelectedIds([]);
                     setSelectionMode(false);
+                    setReactionDetailsKey("");
+                    setReactionPickerId("");
+                    void loadMessages(false, room.id);
                   }}
                   style={{
                     width: "100%",
@@ -1115,18 +1205,20 @@ export default function TeamChatPopup() {
                               style={{
                                 position: "absolute",
                                 inset: 0,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: 18,
-                                lineHeight: 1,
-                                transform: "translate(-0.5px,-3.5px)",
-                                fontFamily:
-                                  '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
+                                display: "grid",
+                                placeItems: "center",
                                 pointerEvents: "none",
                               }}
                             >
-                              😊
+                              <MaterialIcon
+                                name="sentiment_satisfied"
+                                size={18}
+                                weight={500}
+                                style={{
+                                  display: "block",
+                                  lineHeight: 1,
+                                }}
+                              />
                             </span>
                           </button>
                         )}
