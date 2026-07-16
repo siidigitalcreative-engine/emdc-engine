@@ -29,6 +29,85 @@ type ChatStore = {
   users: ChatUser[];
 };
 
+
+const DEFAULT_CHAT_USERS: ChatUser[] = [
+  {
+    name: "analyst",
+    email: "analyst@sunbeamsimpexinc.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "Ayen Quintos",
+    email: "marketing@sunbeamsimpexinc.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "Charlene Quizon",
+    email: "mariacharlenemae.quizon@gmail.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "Che Navarro",
+    email: "design@sunbeamsimpexinc.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "design2",
+    email: "design2@sunbeamsimpexinc.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "Janssen Balneg",
+    email: "janssenbalneg14@gmail.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "operations",
+    email: "operations@sunbeamsimpexinc.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "Philip Jimenez Cute",
+    email: "jimenezphilip91@gmail.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "ravi",
+    email: "ravi@sunbeamsimpexinc.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+  {
+    name: "Reggienald Vargas",
+    email: "admin@sunbeamsimpexinc.com",
+    lastSeenAt: "2026-07-16T00:00:00.000Z",
+  },
+];
+
+const mergeUsers = (...groups: ChatUser[][]) => {
+  const byEmail = new Map<string, ChatUser>();
+
+  groups.flat().forEach((user) => {
+    const email = normalizeEmail(user?.email);
+    const name = cleanText(user?.name, 100);
+
+    if (!email || !name) return;
+
+    const existing = byEmail.get(email);
+    byEmail.set(email, {
+      name,
+      email,
+      lastSeenAt:
+        user?.lastSeenAt ||
+        existing?.lastSeenAt ||
+        "2026-07-16T00:00:00.000Z",
+    });
+  });
+
+  return Array.from(byEmail.values()).sort((left, right) =>
+    left.name.localeCompare(right.name)
+  );
+};
+
 const CHAT_PATH = "emdc-team-chat/recent.json";
 const MAX_STORED_MESSAGES = 100;
 const DEFAULT_LIMIT = 30;
@@ -74,9 +153,12 @@ const readStore = async (): Promise<ChatStore> => {
     messages: Array.isArray(json?.messages)
       ? json.messages.filter(Boolean)
       : [],
-    users: Array.isArray(json?.users)
-      ? json.users.filter(Boolean)
-      : [],
+    users: mergeUsers(
+      DEFAULT_CHAT_USERS,
+      Array.isArray(json?.users)
+        ? json.users.filter(Boolean)
+        : []
+    ),
   };
 };
 
@@ -157,13 +239,10 @@ export async function GET(request: NextRequest) {
       {
         ok: true,
         messages: store.messages.slice(-limit),
-        users: store.users
-          .sort(
-            (left, right) =>
-              new Date(right.lastSeenAt).getTime() -
-              new Date(left.lastSeenAt).getTime()
-          )
-          .slice(0, 100),
+        users: mergeUsers(
+        DEFAULT_CHAT_USERS,
+        store.users
+      ).slice(0, 100),
       },
       {
         headers: {
@@ -286,12 +365,13 @@ export async function PATCH(request: NextRequest) {
         lastSeenAt: new Date().toISOString(),
       };
 
-      const users = [
-        ...store.users.filter(
+      const users = mergeUsers(
+        DEFAULT_CHAT_USERS,
+        store.users.filter(
           (user) => normalizeEmail(user.email) !== requesterEmail
         ),
-        nextUser,
-      ];
+        [nextUser]
+      );
 
       await writeStore({ ...store, users });
 
