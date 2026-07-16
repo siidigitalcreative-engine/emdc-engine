@@ -1116,9 +1116,15 @@ export default function TeamChatPopup() {
                             <span
                               aria-hidden="true"
                               style={{
-                                display: "block",
-                                lineHeight: 1,
-                                transform: "translateY(-1px)",
+                                width: "100%",
+                                height: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                lineHeight: 0,
+                                transform: "translateY(-2px)",
+                                fontFamily:
+                                  '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
                               }}
                             >
                               😊
