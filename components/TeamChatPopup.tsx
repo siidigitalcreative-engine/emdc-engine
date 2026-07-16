@@ -87,6 +87,7 @@ export default function TeamChatPopup() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [clearing, setClearing] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const lastMarkedReadRef = useRef("");
 
   useEffect(() => {
     const updateMobile = () => setMobile(window.innerWidth < 760);
@@ -136,6 +137,75 @@ export default function TeamChatPopup() {
       data?.subscription?.unsubscribe();
     };
   }, []);
+
+  const markRoomMessagesRead = async (
+    roomMessages: ChatMessage[],
+    targetRoomId: string
+  ) => {
+    const email = normalizeEmail(senderEmail);
+
+    if (!email || !roomMessages.length) return;
+
+    const unreadIds = roomMessages
+      .filter((message) => {
+        const readers = (message.readBy || []).map(
+          normalizeEmail
+        );
+
+        return (
+          normalizeEmail(message.senderEmail) !== email &&
+          !readers.includes(email)
+        );
+      })
+      .map((message) => message.id);
+
+    if (!unreadIds.length) return;
+
+    const signature = `${targetRoomId}:${unreadIds.join(",")}`;
+
+    if (lastMarkedReadRef.current === signature) return;
+    lastMarkedReadRef.current = signature;
+
+    try {
+      const response = await fetch("/api/team-chat", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "mark-read",
+          roomId: targetRoomId,
+          messageIds: unreadIds,
+          requesterEmail: email,
+          roomPassword:
+            roomPasswords[targetRoomId] || "",
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (response.ok && json?.ok) {
+        if (Array.isArray(json.messages)) {
+          setMessages(json.messages);
+        }
+
+        // Update mention previews immediately in local state.
+        setRoomSummaryData((current) =>
+          current.map((summary) =>
+            summary.roomId === targetRoomId
+              ? {
+                  ...summary,
+                  mentionedYou: false,
+                  mentionMessageId: "",
+                }
+              : summary
+          )
+        );
+      }
+    } catch {
+      // Read receipts must never block the conversation.
+    }
+  };
 
   const loadMessages = async (
     silent = false,
@@ -189,13 +259,24 @@ export default function TeamChatPopup() {
 
       setRooms(Array.isArray(json.rooms) ? json.rooms : []);
       setUsers(Array.isArray(json.users) ? json.users : []);
-      setMessages(Array.isArray(json.messages) ? json.messages : []);
+      const nextMessages = Array.isArray(json.messages)
+        ? json.messages
+        : [];
+
+      setMessages(nextMessages);
       setRoomSummaryData(
         Array.isArray(json.roomSummaries)
           ? json.roomSummaries
           : []
       );
       setError("");
+
+      if (!showRoomList && requestedRoomId === roomId) {
+        void markRoomMessagesRead(
+          nextMessages,
+          requestedRoomId
+        );
+      }
     } catch (loadError: any) {
       if (!silent) setError(loadError?.message || "Unable to load chat.");
     } finally {
@@ -712,7 +793,8 @@ export default function TeamChatPopup() {
             >
               <div
                 style={{
-                  display: "flex",
+                  display: "grid",
+                  gridTemplateColumns: "36px minmax(0,1fr) 36px",
                   alignItems: "center",
                   gap: 8,
                 }}
@@ -720,17 +802,31 @@ export default function TeamChatPopup() {
                 <button
                   type="button"
                   onClick={() => {
+                    setRoomSummaryData((current) =>
+                      current.map((summary) =>
+                        summary.roomId === roomId
+                          ? {
+                              ...summary,
+                              mentionedYou: false,
+                              mentionMessageId: "",
+                            }
+                          : summary
+                      )
+                    );
                     setShowRoomList(true);
                     setSelectionMode(false);
                     setSelectedIds([]);
                     setReactionDetailsKey("");
                     setReactionPickerId("");
+
+                    window.setTimeout(() => {
+                      void loadMessages(true, roomId);
+                    }, 0);
                   }}
                   aria-label="Back to group chat list"
                   style={{
                     width: 36,
                     height: 36,
-                    flexShrink: 0,
                     borderRadius: 999,
                     border: "1px solid #D1D5DB",
                     background: "#F9FAFB",
@@ -744,31 +840,45 @@ export default function TeamChatPopup() {
                     padding: 0,
                   }}
                 >
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      display: "block",
-                      lineHeight: 1,
-                      transform: "translateY(-1px)",
-                    }}
-                  >
-                    ←
-                  </span>
+                  ←
                 </button>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ minWidth: 0 }}>
                   <div
                     style={{
-                      fontSize: 15,
-                      fontWeight: 900,
-                      color: "#111827",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      minWidth: 0,
                     }}
                   >
-                    {currentRoom.name}
+                    <div
+                      style={{
+                        minWidth: 0,
+                        fontSize: 15,
+                        fontWeight: 900,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {currentRoom.name}
+                    </div>
+
+                    {currentRoom.passwordProtected && (
+                      <span
+                        title="Password protected"
+                        style={{
+                          flexShrink: 0,
+                          fontSize: 12,
+                        }}
+                      >
+                        🔒
+                      </span>
+                    )}
                   </div>
+
                   <div
                     style={{
                       marginTop: 2,
@@ -776,18 +886,53 @@ export default function TeamChatPopup() {
                       color: "#6B7280",
                     }}
                   >
-                    Group conversation
+                    {currentUserIsRoomOwner
+                      ? "Group owner"
+                      : "Group conversation"}
                   </div>
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close team chat"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 999,
+                    border: "1px solid #D1D5DB",
+                    background: "#F9FAFB",
+                    color: "#374151",
+                    fontSize: 20,
+                    lineHeight: 1,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+                  gap: 7,
+                  marginTop: 9,
+                }}
+              >
                 {currentUserIsRoomOwner && (
                   <button
                     type="button"
                     onClick={manageRoomPassword}
                     title="Manage group password"
                     style={{
-                      height: 34,
-                      padding: "0 9px",
+                      minWidth: 0,
+                      height: 36,
+                      padding: "0 8px",
                       borderRadius: 9,
                       border: "1px solid #D1D5DB",
                       background: currentRoom.passwordProtected
@@ -814,28 +959,36 @@ export default function TeamChatPopup() {
                     setSelectedIds([]);
                   }}
                   style={{
-                    height: 34,
-                    padding: "0 9px",
+                    minWidth: 0,
+                    height: 36,
+                    padding: "0 8px",
                     borderRadius: 9,
                     border: "1px solid #D1D5DB",
-                    background: selectionMode ? "#EFF6FF" : "#FFFFFF",
-                    color: selectionMode ? "#1D4ED8" : "#374151",
+                    background: selectionMode
+                      ? "#EFF6FF"
+                      : "#FFFFFF",
+                    color: selectionMode
+                      ? "#1D4ED8"
+                      : "#374151",
                     fontSize: 10,
                     fontWeight: 900,
                     cursor: "pointer",
                   }}
                 >
-                  {selectionMode ? "Cancel" : "Select"}
+                  {selectionMode
+                    ? "Cancel Selection"
+                    : "Select Messages"}
                 </button>
 
                 <button
                   type="button"
                   onClick={clearRoom}
                   disabled={clearing}
-                  title="Admin password required"
+                  title="Administrator password required"
                   style={{
-                    height: 34,
-                    padding: "0 9px",
+                    minWidth: 0,
+                    height: 36,
+                    padding: "0 8px",
                     borderRadius: 9,
                     border: "1px solid #FCA5A5",
                     background: "#FEF2F2",
@@ -845,7 +998,7 @@ export default function TeamChatPopup() {
                     cursor: clearing ? "wait" : "pointer",
                   }}
                 >
-                  {clearing ? "..." : "Clear"}
+                  {clearing ? "Clearing…" : "Clear Messages"}
                 </button>
 
                 {roomId !== "general" && (
@@ -854,8 +1007,9 @@ export default function TeamChatPopup() {
                     onClick={deleteCurrentRoom}
                     title="Delete this group"
                     style={{
-                      height: 34,
-                      padding: "0 9px",
+                      minWidth: 0,
+                      height: 36,
+                      padding: "0 8px",
                       borderRadius: 9,
                       border: "1px solid #DC2626",
                       background: "#FFFFFF",
@@ -868,25 +1022,6 @@ export default function TeamChatPopup() {
                     Delete Group
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="Close team chat"
-                  style={{
-                    width: 34,
-                    height: 34,
-                    flexShrink: 0,
-                    borderRadius: 999,
-                    border: "1px solid #D1D5DB",
-                    background: "#F9FAFB",
-                    color: "#374151",
-                    fontSize: 20,
-                    cursor: "pointer",
-                  }}
-                >
-                  ×
-                </button>
               </div>
             </div>
           )}
