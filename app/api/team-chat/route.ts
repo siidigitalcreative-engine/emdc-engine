@@ -29,6 +29,9 @@ type ChatRoom = {
   name: string;
   createdAt: string;
   createdBy: string;
+  ownerEmail: string;
+  passwordHash?: string;
+  passwordSalt?: string;
 };
 
 type ChatStore = {
@@ -71,6 +74,7 @@ const defaultRoom = (): ChatRoom => ({
   name: "General",
   createdAt: new Date().toISOString(),
   createdBy: "system",
+  ownerEmail: "system",
 });
 
 const emptyStore = (): ChatStore => ({
@@ -94,7 +98,14 @@ const readStore = async (): Promise<ChatStore> => {
     const parsed = JSON.parse(raw || "{}");
 
     const rooms = Array.isArray(parsed?.rooms) && parsed.rooms.length
-      ? parsed.rooms
+      ? parsed.rooms.map((room: any) => ({
+          ...room,
+          ownerEmail: normalizeEmail(
+            room?.ownerEmail ||
+            room?.createdBy ||
+            "system"
+          ),
+        }))
       : [defaultRoom()];
 
     const roomIds = new Set(rooms.map((room: ChatRoom) => room.id));
@@ -163,6 +174,48 @@ const safePasswordMatch = (submitted: string, expected: string) => {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 };
 
+const hashRoomPassword = (password: string, salt: string) =>
+  crypto.scryptSync(password, salt, 64).toString("hex");
+
+const createRoomPassword = (password: string) => {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return {
+    passwordSalt: salt,
+    passwordHash: hashRoomPassword(password, salt),
+  };
+};
+
+const verifyRoomPassword = (
+  room: ChatRoom,
+  submittedPassword: unknown
+) => {
+  if (!room.passwordHash || !room.passwordSalt) return true;
+
+  const submitted = String(submittedPassword || "");
+  if (!submitted) return false;
+
+  const submittedHash = hashRoomPassword(
+    submitted,
+    room.passwordSalt
+  );
+
+  return safePasswordMatch(
+    submittedHash,
+    room.passwordHash
+  );
+};
+
+const publicRoom = (room: ChatRoom) => ({
+  id: room.id,
+  name: room.name,
+  createdAt: room.createdAt,
+  createdBy: room.createdBy,
+  ownerEmail: room.ownerEmail,
+  passwordProtected: Boolean(
+    room.passwordHash && room.passwordSalt
+  ),
+});
+
 const extractMentions = (text: string) => {
   const lower = text.toLowerCase();
 
@@ -177,9 +230,6 @@ export async function GET(request: NextRequest) {
     const roomId =
       cleanText(request.nextUrl.searchParams.get("roomId"), 100) ||
       DEFAULT_ROOM_ID;
-    const requesterEmail = normalizeEmail(
-      request.nextUrl.searchParams.get("requesterEmail")
-    );
     const requestedLimit = Number(
       request.nextUrl.searchParams.get("limit") || DEFAULT_LIMIT
     );
@@ -188,9 +238,31 @@ export async function GET(request: NextRequest) {
       100
     );
 
-    const messages = store.messages
-      .filter((message) => message.roomId === roomId)
-      .slice(-limit);
+    const currentRoom =
+      store.rooms.find((room) => room.id === roomId) ||
+      store.rooms[0];
+
+    const requesterEmail = normalizeEmail(
+      request.nextUrl.searchParams.get("requesterEmail")
+    );
+
+    const roomPassword =
+      request.nextUrl.searchParams.get("roomPassword") || "";
+
+    const requesterIsOwner =
+      requesterEmail &&
+      requesterEmail ===
+        normalizeEmail(currentRoom?.ownerEmail);
+
+    const roomUnlocked =
+      requesterIsOwner ||
+      verifyRoomPassword(currentRoom, roomPassword);
+
+    const messages = roomUnlocked
+      ? store.messages
+          .filter((message) => message.roomId === roomId)
+          .slice(-limit)
+      : [];
 
     const roomSummaries = store.rooms.map((room) => {
       const roomMessages = store.messages.filter(
@@ -232,10 +304,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        rooms: store.rooms,
+        rooms: store.rooms.map(publicRoom),
         users: DEFAULT_USERS,
         messages,
         roomSummaries,
+        roomUnlocked,
+        currentRoom: publicRoom(currentRoom),
       },
       {
         headers: {
@@ -260,6 +334,7 @@ export async function POST(request: NextRequest) {
     if (action === "create-room") {
       const name = cleanText(payload?.name, 80);
       const requesterEmail = normalizeEmail(payload?.requesterEmail);
+      const roomPassword = cleanText(payload?.roomPassword, 200);
 
       if (!name || !requesterEmail) {
         return NextResponse.json(
@@ -268,11 +343,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const passwordFields = roomPassword
+        ? createRoomPassword(roomPassword)
+        : {};
+
       const room: ChatRoom = {
         id: crypto.randomUUID(),
         name,
         createdAt: new Date().toISOString(),
         createdBy: requesterEmail,
+        ownerEmail: requesterEmail,
+        ...passwordFields,
       };
 
       const nextStore = {
@@ -284,8 +365,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         ok: true,
-        room,
-        rooms: nextStore.rooms,
+        room: publicRoom(room),
+        rooms: nextStore.rooms.map(publicRoom),
       });
     }
 
@@ -294,10 +375,34 @@ export async function POST(request: NextRequest) {
     const senderEmail = normalizeEmail(payload?.senderEmail);
     const text = cleanText(payload?.text, 2000);
 
-    if (!store.rooms.some((room) => room.id === roomId)) {
+    const currentRoom = store.rooms.find(
+      (room) => room.id === roomId
+    );
+
+    if (!currentRoom) {
       return NextResponse.json(
         { ok: false, error: "Chat group was not found." },
         { status: 404 }
+      );
+    }
+
+    const requesterIsOwner =
+      normalizeEmail(currentRoom.ownerEmail) === senderEmail;
+
+    if (
+      !requesterIsOwner &&
+      !verifyRoomPassword(
+        currentRoom,
+        payload?.roomPassword
+      )
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Incorrect group password.",
+          code: "ROOM_PASSWORD_REQUIRED",
+        },
+        { status: 403 }
       );
     }
 
@@ -354,6 +459,87 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Signed-in user is required." },
         { status: 400 }
+      );
+    }
+
+    const currentRoom = store.rooms.find(
+      (room) => room.id === roomId
+    );
+
+    if (!currentRoom) {
+      return NextResponse.json(
+        { ok: false, error: "Group chat was not found." },
+        { status: 404 }
+      );
+    }
+
+    const requesterIsOwner =
+      normalizeEmail(currentRoom.ownerEmail) ===
+      requesterEmail;
+
+    if (action === "set-room-password") {
+      if (!requesterIsOwner) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Only the group owner can change the password.",
+          },
+          { status: 403 }
+        );
+      }
+
+      const newPassword = cleanText(
+        payload?.newPassword,
+        200
+      );
+
+      const rooms = store.rooms.map((room) => {
+        if (room.id !== roomId) return room;
+
+        if (!newPassword) {
+          const {
+            passwordHash,
+            passwordSalt,
+            ...withoutPassword
+          } = room;
+
+          return withoutPassword as ChatRoom;
+        }
+
+        return {
+          ...room,
+          ...createRoomPassword(newPassword),
+        };
+      });
+
+      await writeStore({ ...store, rooms });
+
+      const updatedRoom = rooms.find(
+        (room) => room.id === roomId
+      )!;
+
+      return NextResponse.json({
+        ok: true,
+        room: publicRoom(updatedRoom),
+        rooms: rooms.map(publicRoom),
+      });
+    }
+
+    if (
+      !requesterIsOwner &&
+      !verifyRoomPassword(
+        currentRoom,
+        payload?.roomPassword
+      )
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Incorrect group password.",
+          code: "ROOM_PASSWORD_REQUIRED",
+        },
+        { status: 403 }
       );
     }
 
@@ -474,6 +660,33 @@ export async function DELETE(request: NextRequest) {
           .filter(Boolean)
       );
 
+      const currentRoom = store.rooms.find(
+        (room) => room.id === roomId
+      );
+
+      const requesterIsOwner =
+        currentRoom &&
+        normalizeEmail(currentRoom.ownerEmail) ===
+          requesterEmail;
+
+      if (
+        currentRoom &&
+        !requesterIsOwner &&
+        !verifyRoomPassword(
+          currentRoom,
+          payload?.roomPassword
+        )
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Incorrect group password.",
+            code: "ROOM_PASSWORD_REQUIRED",
+          },
+          { status: 403 }
+        );
+      }
+
       if (!requesterEmail || !ids.size) {
         return NextResponse.json(
           { ok: false, error: "Selected messages are required." },
@@ -510,27 +723,34 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (action === "delete-room") {
+      const requesterEmail = normalizeEmail(
+        payload?.requesterEmail
+      );
+
+      const roomToDelete = store.rooms.find(
+        (room) => room.id === roomId
+      );
+
+      const requesterIsOwner =
+        roomToDelete &&
+        normalizeEmail(roomToDelete.ownerEmail) ===
+          requesterEmail;
+
       const expected = String(
         process.env.TEAM_CHAT_ADMIN_PASSWORD || ""
       );
       const submitted = String(payload?.adminPassword || "");
 
-      if (!expected) {
+      const validAdmin =
+        Boolean(expected && submitted) &&
+        safePasswordMatch(submitted, expected);
+
+      if (!requesterIsOwner && !validAdmin) {
         return NextResponse.json(
           {
             ok: false,
             error:
-              "TEAM_CHAT_ADMIN_PASSWORD is not configured in Vercel.",
-          },
-          { status: 500 }
-        );
-      }
-
-      if (!submitted || !safePasswordMatch(submitted, expected)) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Incorrect administrator password.",
+              "Only the group owner or an administrator can delete this group.",
           },
           { status: 403 }
         );
