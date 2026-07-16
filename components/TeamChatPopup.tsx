@@ -290,11 +290,20 @@ export default function TeamChatPopup() {
   const participantSuggestions = useMemo(() => {
     const byEmail = new Map<string, string>();
 
+    // Always include the currently signed-in user so mention testing works
+    // immediately, even before any other teammate has opened Team Chat.
+    const currentEmail = normalizeEmail(senderEmail);
+    const currentName = String(sender || "").trim();
+
+    if (currentEmail && currentName) {
+      byEmail.set(currentEmail, currentName);
+    }
+
     chatUsers.forEach((user) => {
       const email = normalizeEmail(user.email);
       const name = String(user.name || "").trim();
 
-      if (email && name && email !== normalizeEmail(senderEmail)) {
+      if (email && name) {
         byEmail.set(email, name);
       }
     });
@@ -303,7 +312,7 @@ export default function TeamChatPopup() {
       const email = normalizeEmail(message.senderEmail);
       const name = String(message.sender || "").trim();
 
-      if (email && name && email !== normalizeEmail(senderEmail)) {
+      if (email && name) {
         byEmail.set(email, name);
       }
     });
@@ -311,7 +320,7 @@ export default function TeamChatPopup() {
     return Array.from(byEmail.entries())
       .map(([email, name]) => ({ email, name }))
       .sort((left, right) => left.name.localeCompare(right.name));
-  }, [chatUsers, messages, senderEmail]);
+  }, [chatUsers, messages, sender, senderEmail]);
 
   const mentionQuery = useMemo(() => {
     const cursorText = draft;
@@ -1137,44 +1146,59 @@ export default function TeamChatPopup() {
                 background: "#FFFFFF",
               }}
             >
-              {mentionOpen && filteredMentions.length > 0 && (
+              {mentionOpen && (
                 <div
                   style={{
                     position: "absolute",
                     left: 12,
                     right: 12,
                     bottom: "100%",
-                    maxHeight: 170,
+                    maxHeight: 190,
                     overflowY: "auto",
                     border: "1px solid #E5E7EB",
                     borderRadius: 10,
                     background: "#FFFFFF",
                     boxShadow: "0 10px 30px rgba(15,23,42,.12)",
-                    zIndex: 3,
+                    zIndex: 30,
                   }}
                 >
-                  {filteredMentions.map((person) => (
-                    <button
-                      key={person.email}
-                      type="button"
-                      onClick={() => addMention(person)}
+                  {filteredMentions.length > 0 ? (
+                    filteredMentions.map((person) => (
+                      <button
+                        key={person.email}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => addMention(person)}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          border: 0,
+                          borderBottom: "1px solid #F3F4F6",
+                          background: "#FFFFFF",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 900 }}>
+                          {person.name}
+                        </div>
+                        <div style={{ fontSize: 10, color: "#6B7280" }}>
+                          {person.email}
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div
                       style={{
-                        width: "100%",
-                        padding: "9px 10px",
-                        border: 0,
-                        borderBottom: "1px solid #F3F4F6",
-                        background: "#FFFFFF",
-                        textAlign: "left",
+                        padding: "12px 10px",
+                        fontSize: 11,
+                        color: "#6B7280",
                       }}
                     >
-                      <div style={{ fontSize: 11, fontWeight: 900 }}>
-                        {person.name}
-                      </div>
-                      <div style={{ fontSize: 9, color: "#6B7280" }}>
-                        {person.email}
-                      </div>
-                    </button>
-                  ))}
+                      No matching user yet. Teammates appear here after they
+                      open Team Chat once.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1184,7 +1208,7 @@ export default function TeamChatPopup() {
                   const value = event.target.value;
                   setDraft(value);
                   setMentionOpen(
-                    /(?:^|\s)@[^\n@]*$/.test(value)
+                    /(?:^|\s)@[^\n@]*$/i.test(value)
                   );
                 }}
                 onKeyDown={(event) => {
