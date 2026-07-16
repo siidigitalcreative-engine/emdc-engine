@@ -5041,7 +5041,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     ) || "done";
 
   const normalizeChecklistDoneState = (sourceItems:any) => {
-    const cleanItems = normalizeChecklistDoneState(sourceItems || {});
+    const cleanItems = dedupeChecklistItemsObject(sourceItems || {});
     const next:any = {};
 
     Object.keys(DEPTS).forEach((dept:string)=>{
