@@ -21890,21 +21890,131 @@ export default function App({
     );
     const json = await res.json().catch(()=>null);
 
-    if(!res.ok || !json?.ok || !json?.groupItems || typeof json.groupItems!=="object") {
+    if(
+      !res.ok ||
+      !json?.ok ||
+      !json?.groupItems ||
+      typeof json.groupItems!=="object"
+    ){
       return;
     }
 
-    const cleanGroupItems = dedupeChecklistItemsObject(json.groupItems);
+    const remoteItems = dedupeChecklistItemsObject(
+      json.groupItems
+    );
+    const remoteCount = countEmdcChecklistItems(remoteItems);
+
+    let resolvedItems = remoteItems;
+    let shouldRepairRemote = false;
+
+    setChecklistAllItems((previous:any)=>{
+      const currentItems = dedupeChecklistItemsObject(
+        previous?.[groupId] || {}
+      );
+      const currentCount =
+        countEmdcChecklistItems(currentItems);
+
+      let backupItems:any = {};
+      try {
+        const backups = readEmdcChecklistItemsBackups();
+        backupItems = dedupeChecklistItemsObject(
+          backups?.[groupId]?.items || {}
+        );
+      } catch {}
+
+      const backupCount =
+        countEmdcChecklistItems(backupItems);
+
+      // Never allow an empty/stale Sync v2 response to erase checklist tasks
+      // that are already visible or were restored from backup/defaults.
+      if(remoteCount===0){
+        if(currentCount>0){
+          resolvedItems = currentItems;
+          shouldRepairRemote = true;
+        } else if(backupCount>0){
+          resolvedItems = backupItems;
+          shouldRepairRemote = true;
+        }
+      }
+
+      const resolvedCount =
+        countEmdcChecklistItems(resolvedItems);
+
+      if(resolvedCount>0){
+        try {
+          writeEmdcChecklistItemsBackup(
+            groupId,
+            resolvedItems
+          );
+        } catch {}
+      }
+
+      return {
+        ...(previous || {}),
+        [groupId]:resolvedItems,
+      };
+    });
 
     syncV2ApplyingRef.current = true;
     try {
-      setChecklistAllItems((previous:any)=>({
-        ...(previous || {}),
-        [groupId]:cleanGroupItems,
-      }));
-      try { writeEmdcChecklistItemsBackup(groupId,cleanGroupItems); } catch {}
+      // Repair the cloud only when it returned empty while a known-good local
+      // checklist exists. This prevents the progress from disappearing again
+      // during later sync polls.
+      if(
+        shouldRepairRemote &&
+        countEmdcChecklistItems(resolvedItems)>0
+      ){
+        try {
+          const repairResponse = await fetch(
+            "/api/checklist-items-fast",
+            {
+              method:"POST",
+              headers:{
+                "Content-Type":"application/json",
+              },
+              cache:"no-store",
+              body:JSON.stringify({
+                clientId:cloudClientIdRef.current,
+                updatedAt:new Date().toISOString(),
+                groupId,
+                groupItems:resolvedItems,
+              }),
+            }
+          );
+
+          const repairJson = await repairResponse
+            .json()
+            .catch(()=>null);
+
+          if(repairResponse.ok && repairJson?.ok){
+            syncV2ItemsVersionRef.current = Math.max(
+              syncV2ItemsVersionRef.current,
+              Number(
+                repairJson?.checklistItemsVersion || 0
+              )
+            );
+
+            if(repairJson?.groupId){
+              syncV2ItemGroupVersionsRef.current[
+                String(repairJson.groupId)
+              ] = Math.max(
+                Number(
+                  syncV2ItemGroupVersionsRef.current[
+                    String(repairJson.groupId)
+                  ] || 0
+                ),
+                Number(repairJson?.groupVersion || 0)
+              );
+            }
+
+            syncV2EtagRef.current = "";
+          }
+        } catch {}
+      }
     } finally {
-      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
+      setTimeout(()=>{
+        syncV2ApplyingRef.current = false;
+      },0);
     }
   };
 
