@@ -27,6 +27,7 @@ const formatChatTime = (value: string) => {
 
 export default function TeamChatPopup() {
   const [open, setOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sender, setSender] = useState("Signed-in EMDC User");
@@ -37,6 +38,18 @@ export default function TeamChatPopup() {
   const [unread, setUnread] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const latestMessageIdRef = useRef("");
+
+  useEffect(() => {
+    const updateMobile = () => setMobile(window.innerWidth < 760);
+
+    updateMobile();
+    window.addEventListener("resize", updateMobile);
+
+    return () => {
+      window.removeEventListener("resize", updateMobile);
+    };
+  }, []);
+
 
   useEffect(() => {
     let active = true;
@@ -243,11 +256,18 @@ export default function TeamChatPopup() {
         <div
           style={{
             position: "fixed",
-            right: 18,
-            bottom: 88,
+            right: mobile ? 8 : 18,
+            left: mobile ? 8 : "auto",
+            bottom: mobile
+              ? "calc(76px + env(safe-area-inset-bottom))"
+              : 88,
             zIndex: 9998,
-            width: "min(390px, calc(100vw - 24px))",
-            height: "min(590px, calc(100vh - 130px))",
+            width: mobile
+              ? "auto"
+              : "min(390px, calc(100vw - 24px))",
+            height: mobile
+              ? "min(590px, calc(100vh - 110px - env(safe-area-inset-bottom)))"
+              : "min(590px, calc(100vh - 130px))",
             background: "#FFFFFF",
             border: "1px solid #E5E7EB",
             borderRadius: 18,
@@ -572,57 +592,59 @@ export default function TeamChatPopup() {
       )}
 
       <button
-        type="button"
-        onClick={() => {
-          setOpen((value) => !value);
-          setUnread(0);
-        }}
-        aria-label="Open EMDC team chat"
-        style={{
-          position: "fixed",
-          right: 18,
-          bottom: 20,
-          zIndex: 9997,
-          width: 56,
-          height: 56,
-          borderRadius: 999,
-          border: "1px solid rgba(255,255,255,.18)",
-          background: "#111827",
-          color: "#FFFFFF",
-          boxShadow: "0 12px 30px rgba(15,23,42,.25)",
-          cursor: "pointer",
-          fontSize: 23,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {open ? "×" : "💬"}
-
-        {!open && unread > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: -3,
-              right: -3,
-              minWidth: 20,
-              height: 20,
-              borderRadius: 999,
-              padding: "0 5px",
-              background: "#EF4444",
-              color: "#FFFFFF",
-              border: "2px solid #FFFFFF",
-              fontSize: 10,
-              fontWeight: 900,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </button>
+          type="button"
+          onClick={() => {
+            setOpen((value) => !value);
+            setUnread(0);
+          }}
+          aria-label="Open EMDC team chat"
+          style={{
+            position: "fixed",
+            right: 18,
+            bottom: mobile
+              ? "calc(92px + env(safe-area-inset-bottom))"
+              : 20,
+            zIndex: 9997,
+            width: 56,
+            height: 56,
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,.18)",
+            background: "#111827",
+            color: "#FFFFFF",
+            boxShadow: "0 12px 30px rgba(15,23,42,.25)",
+            cursor: "pointer",
+            fontSize: 23,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {open ? "×" : "💬"}
+  
+          {!open && unread > 0 && (
+            <span
+              style={{
+                position: "absolute",
+                top: -3,
+                right: -3,
+                minWidth: 20,
+                height: 20,
+                borderRadius: 999,
+                padding: "0 5px",
+                background: "#EF4444",
+                color: "#FFFFFF",
+                border: "2px solid #FFFFFF",
+                fontSize: 10,
+                fontWeight: 900,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
     </>
   );
 }
