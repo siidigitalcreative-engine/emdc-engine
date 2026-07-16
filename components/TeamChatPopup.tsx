@@ -28,7 +28,8 @@ export default function TeamChatPopup() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [sender, setSender] = useState("EMDC User");
+  const [sender, setSender] = useState("Signed-in EMDC User");
+  const [senderEmail, setSenderEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -37,17 +38,61 @@ export default function TeamChatPopup() {
   const latestMessageIdRef = useRef("");
 
   useEffect(() => {
-    try {
-      const savedName = localStorage.getItem("emdc-team-chat-name");
-      if (savedName?.trim()) setSender(savedName.trim());
-    } catch {}
-  }, []);
+    const readSignedInUser = () => {
+      try {
+        const storageKeys = Object.keys(localStorage);
+        const authKey = storageKeys.find(
+          (key) =>
+            key.startsWith("sb-") &&
+            key.endsWith("-auth-token")
+        );
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("emdc-team-chat-name", sender.trim() || "EMDC User");
-    } catch {}
-  }, [sender]);
+        if (!authKey) return;
+
+        const raw = localStorage.getItem(authKey);
+        if (!raw) return;
+
+        const parsed = JSON.parse(raw);
+        const user =
+          parsed?.user ||
+          parsed?.currentSession?.user ||
+          parsed?.session?.user ||
+          parsed?.data?.session?.user;
+
+        if (!user) return;
+
+        const metadata =
+          user?.user_metadata ||
+          user?.raw_user_meta_data ||
+          {};
+
+        const resolvedName = String(
+          metadata?.full_name ||
+          metadata?.name ||
+          metadata?.display_name ||
+          user?.email ||
+          "Signed-in EMDC User"
+        ).trim();
+
+        const resolvedEmail = String(
+          user?.email || ""
+        ).trim();
+
+        setSender(resolvedName || "Signed-in EMDC User");
+        setSenderEmail(resolvedEmail);
+      } catch {
+        // Keep the safe fallback when the auth payload is unavailable.
+      }
+    };
+
+    readSignedInUser();
+
+    const handleStorage = () => readSignedInUser();
+    window.addEventListener("storage", handleStorage);
+
+    return () =>
+      window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const loadMessages = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -152,7 +197,32 @@ export default function TeamChatPopup() {
       }
 
       setDraft("");
-      await loadMessages(true);
+
+      const returnedMessages = Array.isArray(json?.messages)
+        ? json.messages
+        : [];
+
+      if (returnedMessages.length) {
+        const latestId =
+          returnedMessages[returnedMessages.length - 1]?.id || "";
+
+        latestMessageIdRef.current = latestId;
+        setMessages(returnedMessages);
+      } else if (json?.message) {
+        latestMessageIdRef.current = json.message.id || "";
+        setMessages((current) => {
+          const withoutDuplicate = current.filter(
+            (item) => item.id !== json.message.id
+          );
+
+          return [
+            ...withoutDuplicate,
+            json.message,
+          ].slice(-MAX_VISIBLE_MESSAGES);
+        });
+      } else {
+        await loadMessages(true);
+      }
     } catch (sendError: any) {
       setError(sendError?.message || "Unable to send message.");
     } finally {
@@ -236,34 +306,83 @@ export default function TeamChatPopup() {
               background: "#F9FAFB",
             }}
           >
-            <label
+            <div
               style={{
-                display: "block",
                 fontSize: 10,
                 fontWeight: 800,
                 color: "#6B7280",
-                marginBottom: 5,
+                marginBottom: 6,
                 textTransform: "uppercase",
                 letterSpacing: ".04em",
               }}
             >
-              Your display name
-            </label>
-            <input
-              value={sender}
-              onChange={(event) => setSender(event.target.value)}
-              maxLength={60}
+              Signed in as
+            </div>
+
+            <div
               style={{
-                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
                 border: "1px solid #D1D5DB",
-                borderRadius: 9,
-                padding: "8px 10px",
-                fontSize: 13,
-                outline: "none",
+                borderRadius: 10,
+                padding: "9px 10px",
                 background: "#FFFFFF",
-                color: "#111827",
               }}
-            />
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 999,
+                  background: "#111827",
+                  color: "#FFFFFF",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  flexShrink: 0,
+                }}
+              >
+                {sender
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((part) => part[0]?.toUpperCase())
+                  .join("") || "EU"}
+              </div>
+
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: "#111827",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {sender}
+                </div>
+
+                {senderEmail && (
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontSize: 10,
+                      color: "#6B7280",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {senderEmail}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div
