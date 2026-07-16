@@ -765,219 +765,125 @@ export default function TeamChatPopup() {
                   +
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="Close team chat"
+                <div
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 999,
-                    border: "1px solid #D1D5DB",
-                    background: "#F9FAFB",
-                    color: "#374151",
-                    fontSize: 20,
-                    cursor: "pointer",
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                padding: "10px 12px",
-                borderBottom: "1px solid #E5E7EB",
-                background: "#FFFFFF",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "36px minmax(0,1fr) 36px",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoomSummaryData((current) =>
-                      current.map((summary) =>
-                        summary.roomId === roomId
-                          ? {
-                              ...summary,
-                              mentionedYou: false,
-                              mentionMessageId: "",
-                            }
-                          : summary
-                      )
-                    );
-                    setShowRoomList(true);
-                    setSelectionMode(false);
-                    setSettingsOpen(false);
-                    setSelectedIds([]);
-                    setReactionDetailsKey("");
-                    setReactionPickerId("");
-
-                    window.setTimeout(() => {
-                      void loadMessages(true, roomId);
-                    }, 0);
-                  }}
-                  aria-label="Back to group chat list"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 999,
-                    border: "1px solid #D1D5DB",
-                    background: "#F9FAFB",
-                    color: "#111827",
-                    fontSize: 20,
-                    lineHeight: 1,
-                    cursor: "pointer",
-                    display: "inline-flex",
+                    position: "relative",
+                    display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
+                    gap: 7,
+                    flexShrink: 0,
                   }}
                 >
-                  ←
-                </button>
-
-                <div style={{ minWidth: 0 }}>
-                  <div
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSettingsOpen((value) => !value)
+                    }
+                    aria-label="Open group settings"
+                    title="Group settings"
                     style={{
-                      display: "flex",
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      border: settingsOpen
+                        ? "1px solid #111827"
+                        : "1px solid #D1D5DB",
+                      background: settingsOpen
+                        ? "#111827"
+                        : "#FFFFFF",
+                      color: settingsOpen
+                        ? "#FFFFFF"
+                        : "#374151",
+                      cursor: "pointer",
+                      display: "inline-flex",
                       alignItems: "center",
-                      gap: 6,
-                      minWidth: 0,
+                      justifyContent: "center",
+                      padding: 0,
+                      fontSize: 18,
+                      lineHeight: 1,
                     }}
                   >
+                    ⚙
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      setOpen(false);
+                    }}
+                    aria-label="Close team chat"
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 999,
+                      border: "1px solid #D1D5DB",
+                      background: "#F9FAFB",
+                      color: "#374151",
+                      fontSize: 20,
+                      lineHeight: 1,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+
+                  {settingsOpen && (
                     <div
                       style={{
-                        minWidth: 0,
-                        fontSize: 15,
-                        fontWeight: 900,
-                        color: "#111827",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        position: "absolute",
+                        right: 0,
+                        top: "calc(100% + 7px)",
+                        zIndex: 80,
+                        width:
+                          "min(240px, calc(100vw - 48px))",
+                        padding: 7,
+                        borderRadius: 12,
+                        border: "1px solid #E5E7EB",
+                        background: "#FFFFFF",
+                        boxShadow:
+                          "0 16px 40px rgba(15,23,42,.18)",
                       }}
                     >
-                      {currentRoom.name}
-                    </div>
+                      {currentUserIsRoomOwner && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsOpen(false);
+                            manageRoomPassword();
+                          }}
+                          style={{
+                            width: "100%",
+                            minHeight: 38,
+                            padding: "8px 10px",
+                            border: 0,
+                            borderRadius: 8,
+                            background: "#FFFFFF",
+                            color: "#111827",
+                            textAlign: "left",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {currentRoom.passwordProtected
+                            ? "Change Group Password"
+                            : "Set Group Password"}
+                        </button>
+                      )}
 
-                    {currentRoom.passwordProtected && (
-                      <span
-                        title="Password protected"
-                        style={{
-                          flexShrink: 0,
-                          fontSize: 12,
-                        }}
-                      >
-                        🔒
-                      </span>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 2,
-                      fontSize: 10,
-                      color: "#6B7280",
-                    }}
-                  >
-                    {currentUserIsRoomOwner
-                      ? "Group owner"
-                      : "Group conversation"}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="Close team chat"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 999,
-                    border: "1px solid #D1D5DB",
-                    background: "#F9FAFB",
-                    color: "#374151",
-                    fontSize: 20,
-                    lineHeight: 1,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div
-                style={{
-                  position: "relative",
-                  marginTop: 9,
-                  display: "flex",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setSettingsOpen((value) => !value)}
-                  aria-label="Open group settings"
-                  title="Group settings"
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 10,
-                    border: settingsOpen
-                      ? "1px solid #111827"
-                      : "1px solid #D1D5DB",
-                    background: settingsOpen
-                      ? "#111827"
-                      : "#FFFFFF",
-                    color: settingsOpen
-                      ? "#FFFFFF"
-                      : "#374151",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
-                    fontSize: 19,
-                    lineHeight: 1,
-                  }}
-                >
-                  ⚙
-                </button>
-
-                {settingsOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 7px)",
-                      zIndex: 80,
-                      width: "min(240px, calc(100vw - 48px))",
-                      padding: 7,
-                      borderRadius: 12,
-                      border: "1px solid #E5E7EB",
-                      background: "#FFFFFF",
-                      boxShadow:
-                        "0 16px 40px rgba(15,23,42,.18)",
-                    }}
-                  >
-                    {currentUserIsRoomOwner && (
                       <button
                         type="button"
                         onClick={() => {
                           setSettingsOpen(false);
-                          manageRoomPassword();
+                          setSelectionMode(
+                            (value) => !value
+                          );
+                          setSelectedIds([]);
                         }}
                         style={{
                           width: "100%",
@@ -993,90 +899,66 @@ export default function TeamChatPopup() {
                           cursor: "pointer",
                         }}
                       >
-                        {currentRoom.passwordProtected
-                          ? "Change Group Password"
-                          : "Set Group Password"}
+                        {selectionMode
+                          ? "Cancel Message Selection"
+                          : "Select Messages"}
                       </button>
-                    )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsOpen(false);
-                        setSelectionMode((value) => !value);
-                        setSelectedIds([]);
-                      }}
-                      style={{
-                        width: "100%",
-                        minHeight: 38,
-                        padding: "8px 10px",
-                        border: 0,
-                        borderRadius: 8,
-                        background: "#FFFFFF",
-                        color: "#111827",
-                        textAlign: "left",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {selectionMode
-                        ? "Cancel Message Selection"
-                        : "Select Messages"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsOpen(false);
-                        clearRoom();
-                      }}
-                      disabled={clearing}
-                      style={{
-                        width: "100%",
-                        minHeight: 38,
-                        padding: "8px 10px",
-                        border: 0,
-                        borderRadius: 8,
-                        background: "#FFF7F7",
-                        color: "#B91C1C",
-                        textAlign: "left",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        cursor: clearing ? "wait" : "pointer",
-                      }}
-                    >
-                      {clearing
-                        ? "Clearing Messages…"
-                        : "Clear Messages"}
-                    </button>
-
-                    {roomId !== "general" && (
                       <button
                         type="button"
                         onClick={() => {
                           setSettingsOpen(false);
-                          deleteCurrentRoom();
+                          clearRoom();
                         }}
+                        disabled={clearing}
                         style={{
                           width: "100%",
                           minHeight: 38,
                           padding: "8px 10px",
                           border: 0,
                           borderRadius: 8,
-                          background: "#FEF2F2",
-                          color: "#DC2626",
+                          background: "#FFF7F7",
+                          color: "#B91C1C",
                           textAlign: "left",
                           fontSize: 11,
-                          fontWeight: 900,
-                          cursor: "pointer",
+                          fontWeight: 800,
+                          cursor: clearing
+                            ? "wait"
+                            : "pointer",
                         }}
                       >
-                        Delete Group
+                        {clearing
+                          ? "Clearing Messages…"
+                          : "Clear Messages"}
                       </button>
-                    )}
-                  </div>
-                )}
+
+                      {roomId !== "general" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsOpen(false);
+                            deleteCurrentRoom();
+                          }}
+                          style={{
+                            width: "100%",
+                            minHeight: 38,
+                            padding: "8px 10px",
+                            border: 0,
+                            borderRadius: 8,
+                            background: "#FEF2F2",
+                            color: "#DC2626",
+                            textAlign: "left",
+                            fontSize: 11,
+                            fontWeight: 900,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Delete Group
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
