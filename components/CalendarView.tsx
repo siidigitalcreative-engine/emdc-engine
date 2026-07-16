@@ -5028,61 +5028,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
-  const buildCurrentChecklistDefaults = () => {
-    const out:any = {};
-    const summaryDepartments =
-      group?.progressSummary?.departments &&
-      typeof group.progressSummary.departments === "object"
-        ? group.progressSummary.departments
-        : {};
-
-    Object.keys(DEPTS).forEach((dept:string)=>{
-      const templateRows = (
-        templates?.[group?.launchType]?.[dept] || []
-      );
-
-      const summaryDone = Math.max(
-        0,
-        Number(
-          summaryDepartments?.[dept]?.done || 0
-        )
-      );
-
-      out[dept] = templateRows.map(
-        (taskText:string,index:number)=>({
-          id:uid(),
-          text:taskText,
-          // Exact item state is preferred from Sync v2 or the last-good
-          // per-group backup. This fallback is used only when neither exists,
-          // so at minimum it restores the progress count shown on the card.
-          done:index < summaryDone,
-          link:"",
-          note:"",
-          assignee:"",
-          statusId:"",
-          custom:false,
-        })
-      );
-    });
-
-    return dedupeChecklistItemsObject(out);
-  };
-
-  const [items,setItems] = useState(()=>{
-    const cleanInitialItems = dedupeChecklistItemsObject(
-      initialItems || {}
-    );
-
-    if(countEmdcChecklistItems(cleanInitialItems)>0){
-      return cleanInitialItems;
-    }
-
-    return buildCurrentChecklistDefaults();
-  });
+  const [items,setItems] = useState(()=>{ if(initialItems) return initialItems; const out:any={}; Object.keys(DEPTS).forEach(dept=>{ out[dept]=(templates[group.launchType]?.[dept]||[]).map((t:string)=>({id:uid(),text:t,done:false,link:"",note:"",assignee:"",statusId:"",custom:false})); }); return out; });
   const checklistBoardItemsRef = useRef<any>(items);
   const checklistBoardLocalEditRef = useRef(false);
-  const checklistBoardLastLocalEditAtRef = useRef(0);
-  const checklistDefaultsPersistedRef = useRef(false);
   const [newText,setNewText]         = useState({ecommerce:"",marketing:"",digital:""});
   const [activeDept,setActiveDept]   = useState("all");
   const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
@@ -5167,131 +5115,25 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[items]);
 
   useEffect(()=>{
-    // Each checklist group needs its own one-time default recovery.
-    checklistDefaultsPersistedRef.current = false;
-    checklistBoardLocalEditRef.current = false;
-    checklistBoardLastLocalEditAtRef.current = 0;
+    if(!initialItems) return;
 
-    const incoming = dedupeChecklistItemsObject(
-      initialItems || {}
-    );
-    const incomingCount = countEmdcChecklistItems(incoming);
-
-    if(incomingCount>0){
-      checklistBoardItemsRef.current = incoming;
-      setItems(incoming);
-      return;
-    }
-
-    const defaults = buildCurrentChecklistDefaults();
-    const defaultsCount = countEmdcChecklistItems(defaults);
-
-    // Templates may arrive after the checklist screen first renders. Seed the
-    // board as soon as they are available instead of leaving the columns empty.
-    if(defaultsCount>0){
-      checklistBoardItemsRef.current = defaults;
-      setItems(defaults);
-    }
-  },[
-    group?.id,
-    group?.launchType,
-    templates,
-  ]);
-
-  useEffect(()=>{
-    const incoming = dedupeChecklistItemsObject(
-      initialItems || {}
-    );
-    const incomingCount = countEmdcChecklistItems(incoming);
-    const current = dedupeChecklistItemsObject(
-      checklistBoardItemsRef.current || {}
-    );
-    const currentCount = countEmdcChecklistItems(current);
-
-    // An empty cloud/parent payload must never wipe visible or newly seeded
-    // tasks. It commonly arrives briefly while Sync v2 is loading.
-    if(incomingCount===0){
-      if(currentCount===0){
-        const defaults = buildCurrentChecklistDefaults();
-        const defaultsCount =
-          countEmdcChecklistItems(defaults);
-
-        if(defaultsCount>0){
-          checklistBoardItemsRef.current = defaults;
-          setItems(defaults);
-        }
-      }
-      return;
-    }
-
+    const incoming = dedupeChecklistItemsObject(initialItems);
     const incomingSignature = JSON.stringify(incoming);
-    const currentSignature = JSON.stringify(current);
+    const currentSignature = JSON.stringify(checklistBoardItemsRef.current || {});
 
-    if(incomingSignature===currentSignature){
+    // Parent caught up with the local edit. Keep the same visible state and
+    // release the local lock.
+    if (incomingSignature === currentSignature) {
       checklistBoardLocalEditRef.current = false;
-      checklistBoardLastLocalEditAtRef.current = 0;
       return;
     }
 
-    const localEditAge =
-      Date.now() -
-      Number(
-        checklistBoardLastLocalEditAtRef.current || 0
-      );
+    // Ignore stale parent/cloud props while a local status edit is still being
+    // propagated. This prevents the dropdown from visibly reverting.
+    if (checklistBoardLocalEditRef.current) return;
 
-    // Ignore only the immediate stale echo after a local edit. After the short
-    // grace period, accept newer cloud/other-user checklist updates.
-    if(
-      checklistBoardLocalEditRef.current &&
-      localEditAge < 2500
-    ){
-      return;
-    }
-
-    checklistBoardLocalEditRef.current = false;
-    checklistBoardLastLocalEditAtRef.current = 0;
-    checklistBoardItemsRef.current = incoming;
     setItems(incoming);
-  },[
-    initialItems,
-    group?.id,
-    group?.launchType,
-    templates,
-  ]);
-
-  useEffect(()=>{
-    if(checklistDefaultsPersistedRef.current) return;
-
-    const incomingCount = countEmdcChecklistItems(
-      dedupeChecklistItemsObject(initialItems || {})
-    );
-    const visibleItems = dedupeChecklistItemsObject(
-      checklistBoardItemsRef.current || items || {}
-    );
-    const visibleCount =
-      countEmdcChecklistItems(visibleItems);
-
-    // Persist only real default tasks. This repairs the group once without
-    // ever saving an empty board over an existing checklist.
-    if(incomingCount===0 && visibleCount>0){
-      checklistDefaultsPersistedRef.current = true;
-      checklistBoardLocalEditRef.current = true;
-      checklistBoardLastLocalEditAtRef.current = Date.now();
-
-      if(onItemsChange){
-        onItemsChange(
-          JSON.parse(JSON.stringify(visibleItems))
-        );
-      }
-    }
-  },[
-    group?.id,
-    group?.launchType,
-    initialItems,
-    items,
-    templates,
-    onItemsChange,
-  ]);
+  },[initialItems]);
 
   useEffect(()=>{
     setActiveGroupTabState(safeChecklistInnerTab(initialGroupTab));
@@ -5299,7 +5141,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const upd = (dept:string,item:any) => {
     checklistBoardLocalEditRef.current = true;
-    checklistBoardLastLocalEditAtRef.current = Date.now();
     setItems((previous:any)=>{
       const prevDeptItems = Array.isArray(previous?.[dept]) ? previous[dept] : [];
       const nextDeptItems = prevDeptItems.map((existing:any)=>
@@ -5316,7 +5157,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
   const del = (dept:string,id:string) => {
     checklistBoardLocalEditRef.current = true;
-    checklistBoardLastLocalEditAtRef.current = Date.now();
     setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById((p?.[dept]||[]).filter((i:any)=>String(i?.id)!==String(id)))};
     if(onItemsChange) onItemsChange(next);
@@ -5324,13 +5164,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return next;
   });
   };
-  const addItem= (dept:string)=>{ const nextTaskText=String(newText?.[dept] || "").trim(); if(!nextTaskText) return; checklistBoardLocalEditRef.current = true; checklistBoardLastLocalEditAtRef.current = Date.now(); setItems((p:any)=>{
+  const addItem= (dept:string)=>{ const nextTaskText=String(newText?.[dept] || "").trim(); if(!nextTaskText) return; checklistBoardLocalEditRef.current = true; setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text:nextTaskText,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
     checklistBoardItemsRef.current = next;
     if(onItemsChange) onItemsChange(next);
     return next;
   }); setNewText((p:any)=>({...p,[dept]:""})); };
-  const addFromSKU=(dept,s)=>{ checklistBoardLocalEditRef.current = true; checklistBoardLastLocalEditAtRef.current = Date.now(); const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
+  const addFromSKU=(dept,s)=>{ checklistBoardLocalEditRef.current = true; const b=brands.find(x=>x.id===s.brandId); const text=[b?.name,s.productName,s.sku].filter(Boolean).join(" - "); setItems((p:any)=>{
     const next={...p,[dept]:dedupeChecklistItemsById([...(p?.[dept]||[]),{id:uid(),text,done:false,link:"",note:"",assignee:"",statusId:"",custom:true}])};
     checklistBoardItemsRef.current = next;
     if(onItemsChange) onItemsChange(next);
@@ -16595,63 +16435,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup){
-    const activeGroupItemsLoaded =
-      !!allGroupItems &&
-      Object.prototype.hasOwnProperty.call(
-        allGroupItems,
-        activeGroup.id
-      );
-
-    if(!activeGroupItemsLoaded){
-      return (
-        <div>
-          <button
-            type="button"
-            onClick={()=>{
-              setActive(null);
-              if(onRouteChange){
-                onRouteChange({
-                  tab:"checklists",
-                  groupId:null,
-                  groupTab:"tasks",
-                });
-              }
-            }}
-            style={{
-              border:0,
-              background:"transparent",
-              padding:0,
-              marginBottom:12,
-              color:C.textSub,
-              fontSize:12,
-              cursor:"pointer",
-            }}
-          >
-            ‹ All Groups
-          </button>
-
-          <div
-            style={{
-              minHeight:360,
-              border:`1px solid ${C.border}`,
-              borderRadius:12,
-              background:C.surface,
-              display:"flex",
-              alignItems:"center",
-              justifyContent:"center",
-              color:C.muted,
-              fontSize:13,
-            }}
-          >
-            Loading saved checklist progress…
-          </div>
-        </div>
-      );
-    }
-
-    return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
-  }
+  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
 
   return (
     <div>
@@ -22030,50 +21814,7 @@ export default function App({
       return;
     }
 
-    const remoteGroupItems = dedupeChecklistItemsObject(json.groupItems);
-    const remoteCount = countEmdcChecklistItems(remoteGroupItems);
-
-    const currentHasGroup = Object.prototype.hasOwnProperty.call(
-      checklistAllItems || {},
-      groupId
-    );
-    const currentGroupItems = dedupeChecklistItemsObject(
-      (checklistAllItems || {})[groupId] || {}
-    );
-    const currentCount = countEmdcChecklistItems(currentGroupItems);
-
-    const checklistBackups = readEmdcChecklistItemsBackups();
-    const backupGroupItems = dedupeChecklistItemsObject(
-      checklistBackups?.[groupId]?.items || {}
-    );
-    const backupCount = countEmdcChecklistItems(backupGroupItems);
-
-    let resolvedGroupItems = remoteGroupItems;
-    let shouldRepairCloud = false;
-
-    // Never let an unexpectedly empty cloud file erase useful checklist tasks
-    // already present on this browser or in its last-good per-group backup.
-    if(remoteCount===0){
-      if(currentCount>0){
-        resolvedGroupItems = currentGroupItems;
-        shouldRepairCloud = true;
-      } else if(backupCount>0){
-        resolvedGroupItems = backupGroupItems;
-        shouldRepairCloud = true;
-      } else if(!currentHasGroup){
-        // The authoritative request has completed and confirmed that no
-        // per-group item payload exists. Install an empty object as the
-        // explicit "loaded but empty" state. ChecklistView will not mount the
-        // board before this point, preventing temporary defaults from
-        // overwriting real remote task edits while the request is still
-        // pending.
-        resolvedGroupItems = {};
-      }
-    }
-
-    const cleanGroupItems = dedupeChecklistItemsObject(
-      resolvedGroupItems
-    );
+    const cleanGroupItems = dedupeChecklistItemsObject(json.groupItems);
 
     syncV2ApplyingRef.current = true;
     try {
@@ -22081,71 +21822,9 @@ export default function App({
         ...(previous || {}),
         [groupId]:cleanGroupItems,
       }));
-
-      if(countEmdcChecklistItems(cleanGroupItems)>0){
-        try {
-          writeEmdcChecklistItemsBackup(
-            groupId,
-            cleanGroupItems
-          );
-        } catch {}
-      }
+      try { writeEmdcChecklistItemsBackup(groupId,cleanGroupItems); } catch {}
     } finally {
-      setTimeout(()=>{
-        syncV2ApplyingRef.current = false;
-      },0);
-    }
-
-    // Repair only a genuinely empty remote file with a known good local copy.
-    // This is one request at recovery time, not additional polling.
-    if(shouldRepairCloud && countEmdcChecklistItems(cleanGroupItems)>0){
-      try {
-        const updatedAt = new Date().toISOString();
-        const repairResponse = await fetch(
-          "/api/checklist-items-fast",
-          {
-            method:"POST",
-            headers:{
-              "Content-Type":"application/json",
-            },
-            cache:"no-store",
-            body:JSON.stringify({
-              clientId:cloudClientIdRef.current,
-              updatedAt,
-              groupId,
-              groupItems:cleanGroupItems,
-            }),
-          }
-        );
-
-        const repairJson = await repairResponse
-          .json()
-          .catch(()=>null);
-
-        if(repairResponse.ok && repairJson?.ok){
-          syncV2ItemsVersionRef.current = Math.max(
-            syncV2ItemsVersionRef.current,
-            Number(
-              repairJson?.checklistItemsVersion || 0
-            )
-          );
-
-          if(repairJson?.groupId){
-            syncV2ItemGroupVersionsRef.current[
-              String(repairJson.groupId)
-            ] = Math.max(
-              Number(
-                syncV2ItemGroupVersionsRef.current[
-                  String(repairJson.groupId)
-                ] || 0
-              ),
-              Number(repairJson?.groupVersion || 0)
-            );
-          }
-
-          syncV2EtagRef.current = "";
-        }
-      } catch {}
+      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
     }
   };
 
