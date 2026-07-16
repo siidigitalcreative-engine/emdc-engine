@@ -84,6 +84,7 @@ export default function TeamChatPopup() {
   const [reactionPickerId, setReactionPickerId] = useState("");
   const [reactionDetailsKey, setReactionDetailsKey] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [clearing, setClearing] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -815,6 +816,7 @@ export default function TeamChatPopup() {
                     );
                     setShowRoomList(true);
                     setSelectionMode(false);
+                    setSettingsOpen(false);
                     setSelectedIds([]);
                     setReactionDetailsKey("");
                     setReactionPickerId("");
@@ -918,109 +920,162 @@ export default function TeamChatPopup() {
 
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-                  gap: 7,
+                  position: "relative",
                   marginTop: 9,
+                  display: "flex",
+                  justifyContent: "flex-end",
                 }}
               >
-                {currentUserIsRoomOwner && (
-                  <button
-                    type="button"
-                    onClick={manageRoomPassword}
-                    title="Manage group password"
-                    style={{
-                      minWidth: 0,
-                      height: 36,
-                      padding: "0 8px",
-                      borderRadius: 9,
-                      border: "1px solid #D1D5DB",
-                      background: currentRoom.passwordProtected
-                        ? "#EFF6FF"
-                        : "#FFFFFF",
-                      color: currentRoom.passwordProtected
-                        ? "#1D4ED8"
-                        : "#374151",
-                      fontSize: 10,
-                      fontWeight: 900,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {currentRoom.passwordProtected
-                      ? "Change Password"
-                      : "Set Password"}
-                  </button>
-                )}
-
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectionMode((value) => !value);
-                    setSelectedIds([]);
-                  }}
+                  onClick={() => setSettingsOpen((value) => !value)}
+                  aria-label="Open group settings"
+                  title="Group settings"
                   style={{
-                    minWidth: 0,
-                    height: 36,
-                    padding: "0 8px",
-                    borderRadius: 9,
-                    border: "1px solid #D1D5DB",
-                    background: selectionMode
-                      ? "#EFF6FF"
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    border: settingsOpen
+                      ? "1px solid #111827"
+                      : "1px solid #D1D5DB",
+                    background: settingsOpen
+                      ? "#111827"
                       : "#FFFFFF",
-                    color: selectionMode
-                      ? "#1D4ED8"
+                    color: settingsOpen
+                      ? "#FFFFFF"
                       : "#374151",
-                    fontSize: 10,
-                    fontWeight: 900,
                     cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                    fontSize: 19,
+                    lineHeight: 1,
                   }}
                 >
-                  {selectionMode
-                    ? "Cancel Selection"
-                    : "Select Messages"}
+                  ⚙
                 </button>
 
-                <button
-                  type="button"
-                  onClick={clearRoom}
-                  disabled={clearing}
-                  title="Administrator password required"
-                  style={{
-                    minWidth: 0,
-                    height: 36,
-                    padding: "0 8px",
-                    borderRadius: 9,
-                    border: "1px solid #FCA5A5",
-                    background: "#FEF2F2",
-                    color: "#B91C1C",
-                    fontSize: 10,
-                    fontWeight: 900,
-                    cursor: clearing ? "wait" : "pointer",
-                  }}
-                >
-                  {clearing ? "Clearing…" : "Clear Messages"}
-                </button>
-
-                {roomId !== "general" && (
-                  <button
-                    type="button"
-                    onClick={deleteCurrentRoom}
-                    title="Delete this group"
+                {settingsOpen && (
+                  <div
                     style={{
-                      minWidth: 0,
-                      height: 36,
-                      padding: "0 8px",
-                      borderRadius: 9,
-                      border: "1px solid #DC2626",
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 7px)",
+                      zIndex: 80,
+                      width: "min(240px, calc(100vw - 48px))",
+                      padding: 7,
+                      borderRadius: 12,
+                      border: "1px solid #E5E7EB",
                       background: "#FFFFFF",
-                      color: "#DC2626",
-                      fontSize: 10,
-                      fontWeight: 900,
-                      cursor: "pointer",
+                      boxShadow:
+                        "0 16px 40px rgba(15,23,42,.18)",
                     }}
                   >
-                    Delete Group
-                  </button>
+                    {currentUserIsRoomOwner && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsOpen(false);
+                          manageRoomPassword();
+                        }}
+                        style={{
+                          width: "100%",
+                          minHeight: 38,
+                          padding: "8px 10px",
+                          border: 0,
+                          borderRadius: 8,
+                          background: "#FFFFFF",
+                          color: "#111827",
+                          textAlign: "left",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {currentRoom.passwordProtected
+                          ? "Change Group Password"
+                          : "Set Group Password"}
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        setSelectionMode((value) => !value);
+                        setSelectedIds([]);
+                      }}
+                      style={{
+                        width: "100%",
+                        minHeight: 38,
+                        padding: "8px 10px",
+                        border: 0,
+                        borderRadius: 8,
+                        background: "#FFFFFF",
+                        color: "#111827",
+                        textAlign: "left",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {selectionMode
+                        ? "Cancel Message Selection"
+                        : "Select Messages"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        clearRoom();
+                      }}
+                      disabled={clearing}
+                      style={{
+                        width: "100%",
+                        minHeight: 38,
+                        padding: "8px 10px",
+                        border: 0,
+                        borderRadius: 8,
+                        background: "#FFF7F7",
+                        color: "#B91C1C",
+                        textAlign: "left",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: clearing ? "wait" : "pointer",
+                      }}
+                    >
+                      {clearing
+                        ? "Clearing Messages…"
+                        : "Clear Messages"}
+                    </button>
+
+                    {roomId !== "general" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsOpen(false);
+                          deleteCurrentRoom();
+                        }}
+                        style={{
+                          width: "100%",
+                          minHeight: 38,
+                          padding: "8px 10px",
+                          border: 0,
+                          borderRadius: 8,
+                          background: "#FEF2F2",
+                          color: "#DC2626",
+                          textAlign: "left",
+                          fontSize: 11,
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete Group
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
