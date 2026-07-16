@@ -468,6 +468,75 @@ export async function DELETE(request: NextRequest) {
       });
     }
 
+    if (action === "delete-room") {
+      const expected = String(
+        process.env.TEAM_CHAT_ADMIN_PASSWORD || ""
+      );
+      const submitted = String(payload?.adminPassword || "");
+
+      if (!expected) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "TEAM_CHAT_ADMIN_PASSWORD is not configured in Vercel.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!submitted || !safePasswordMatch(submitted, expected)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Incorrect administrator password.",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (roomId === DEFAULT_ROOM_ID) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "The General group cannot be deleted.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const roomExists = store.rooms.some(
+        (room) => room.id === roomId
+      );
+
+      if (!roomExists) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Group chat was not found.",
+          },
+          { status: 404 }
+        );
+      }
+
+      const nextStore = {
+        ...store,
+        rooms: store.rooms.filter(
+          (room) => room.id !== roomId
+        ),
+        messages: store.messages.filter(
+          (message) => message.roomId !== roomId
+        ),
+      };
+
+      await writeStore(nextStore);
+
+      return NextResponse.json({
+        ok: true,
+        rooms: nextStore.rooms,
+      });
+    }
+
     if (action === "clear-chat") {
       const expected = String(process.env.TEAM_CHAT_ADMIN_PASSWORD || "");
       const submitted = String(payload?.adminPassword || "");
