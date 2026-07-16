@@ -765,6 +765,127 @@ export default function TeamChatPopup() {
                   +
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close team chat"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 999,
+                    border: "1px solid #D1D5DB",
+                    background: "#F9FAFB",
+                    color: "#374151",
+                    fontSize: 20,
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderBottom: "1px solid #E5E7EB",
+                background: "#FFFFFF",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "36px minmax(0,1fr) auto",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoomSummaryData((current) =>
+                      current.map((summary) =>
+                        summary.roomId === roomId
+                          ? {
+                              ...summary,
+                              mentionedYou: false,
+                              mentionMessageId: "",
+                            }
+                          : summary
+                      )
+                    );
+                    setShowRoomList(true);
+                    setSelectionMode(false);
+                    setSettingsOpen(false);
+                    setSelectedIds([]);
+                    setReactionDetailsKey("");
+                    setReactionPickerId("");
+
+                    window.setTimeout(() => {
+                      void loadMessages(true, roomId);
+                    }, 0);
+                  }}
+                  aria-label="Back to group chat list"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 999,
+                    border: "1px solid #D1D5DB",
+                    background: "#F9FAFB",
+                    color: "#111827",
+                    fontSize: 20,
+                    lineHeight: 1,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                  }}
+                >
+                  ←
+                </button>
+
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      minWidth: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        minWidth: 0,
+                        fontSize: 15,
+                        fontWeight: 900,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {currentRoom.name}
+                    </div>
+
+                    {currentRoom.passwordProtected && (
+                      <span title="Password protected">🔒</span>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontSize: 10,
+                      color: "#6B7280",
+                    }}
+                  >
+                    {currentUserIsRoomOwner
+                      ? "Group owner"
+                      : "Group conversation"}
+                  </div>
+                </div>
+
                 <div
                   style={{
                     position: "relative",
@@ -880,9 +1001,7 @@ export default function TeamChatPopup() {
                         type="button"
                         onClick={() => {
                           setSettingsOpen(false);
-                          setSelectionMode(
-                            (value) => !value
-                          );
+                          setSelectionMode((value) => !value);
                           setSelectedIds([]);
                         }}
                         style={{
@@ -922,9 +1041,7 @@ export default function TeamChatPopup() {
                           textAlign: "left",
                           fontSize: 11,
                           fontWeight: 800,
-                          cursor: clearing
-                            ? "wait"
-                            : "pointer",
+                          cursor: clearing ? "wait" : "pointer",
                         }}
                       >
                         {clearing
