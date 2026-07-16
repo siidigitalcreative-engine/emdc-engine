@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { list, put } from "@vercel/blob";
+import { get, put } from "@vercel/blob";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -22,52 +22,24 @@ const cleanText = (value: unknown, maxLength: number) =>
     .trim()
     .slice(0, maxLength);
 
-const getBlobToken = () => {
-  const token = String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
-
-  if (!token) {
-    throw new Error("BLOB_READ_WRITE_TOKEN is not configured.");
-  }
-
-  return token;
+const streamToText = async (
+  stream: ReadableStream<Uint8Array>
+) => {
+  return new Response(stream).text();
 };
 
 const readMessages = async (): Promise<ChatMessage[]> => {
-  const token = getBlobToken();
-
-  const result = await list({
-    prefix: CHAT_PATH,
-    limit: 5,
-    token,
+  const result = await get(CHAT_PATH, {
+    access: "private",
+    useCache: false,
   });
 
-  const blob = result.blobs.find(
-    (item) => item.pathname === CHAT_PATH
-  );
-
-  if (!blob?.url) return [];
-
-  // Private Blob URLs must be read server-side with the Blob token.
-  const response = await fetch(blob.url, {
-    method: "GET",
-    cache: "no-store",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (response.status === 404) return [];
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `Unable to read private chat storage (${response.status})${
-        detail ? `: ${detail.slice(0, 180)}` : ""
-      }`
-    );
+  if (!result || result.statusCode === 304 || !result.stream) {
+    return [];
   }
 
-  const json = await response.json().catch(() => null);
+  const raw = await streamToText(result.stream);
+  const json = JSON.parse(raw || "{}");
 
   return Array.isArray(json?.messages)
     ? json.messages.filter(Boolean)
@@ -75,8 +47,6 @@ const readMessages = async (): Promise<ChatMessage[]> => {
 };
 
 const writeMessages = async (messages: ChatMessage[]) => {
-  const token = getBlobToken();
-
   await put(
     CHAT_PATH,
     JSON.stringify({
@@ -90,7 +60,6 @@ const writeMessages = async (messages: ChatMessage[]) => {
       allowOverwrite: true,
       contentType: "application/json",
       cacheControlMaxAge: 0,
-      token,
     }
   );
 };
