@@ -1095,6 +1095,7 @@ export default function TeamChatPopup() {
                               );
                             }}
                             style={{
+                              position: "relative",
                               width: 30,
                               height: 30,
                               borderRadius: 999,
@@ -1104,27 +1105,25 @@ export default function TeamChatPopup() {
                               background: mine
                                 ? "rgba(255,255,255,.12)"
                                 : "#FFFFFF",
-                              fontSize: 18,
-                              lineHeight: 1,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
                               padding: 0,
                               cursor: "pointer",
+                              overflow: "hidden",
                             }}
                           >
                             <span
                               aria-hidden="true"
                               style={{
-                                width: "100%",
-                                height: "100%",
+                                position: "absolute",
+                                inset: 0,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                lineHeight: 0,
-                                transform: "translateY(-2px)",
+                                fontSize: 18,
+                                lineHeight: 1,
+                                transform: "translate(-0.5px,-3.5px)",
                                 fontFamily:
                                   '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
+                                pointerEvents: "none",
                               }}
                             >
                               😊
