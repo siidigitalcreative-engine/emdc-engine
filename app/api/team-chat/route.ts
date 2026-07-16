@@ -5,17 +5,30 @@ import crypto from "crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type ReactionMap = Record<string, string[]>;
+
 type ChatMessage = {
   id: string;
   sender: string;
   senderEmail?: string;
   text: string;
   createdAt: string;
+  reactions?: ReactionMap;
+  mentions?: string[];
+  readBy?: string[];
 };
 
 const CHAT_PATH = "emdc-team-chat/recent.json";
 const MAX_STORED_MESSAGES = 100;
 const DEFAULT_LIMIT = 30;
+const ALLOWED_REACTIONS = new Set([
+  "👍",
+  "❤️",
+  "😂",
+  "😮",
+  "😢",
+  "👏",
+]);
 
 const cleanText = (value: unknown, maxLength: number) =>
   String(value || "")
@@ -23,11 +36,15 @@ const cleanText = (value: unknown, maxLength: number) =>
     .trim()
     .slice(0, maxLength);
 
+const normalizeEmail = (value: unknown) =>
+  cleanText(value, 200).toLowerCase();
+
+const unique = (values: string[]) =>
+  Array.from(new Set(values.filter(Boolean)));
+
 const streamToText = async (
   stream: ReadableStream<Uint8Array>
-) => {
-  return new Response(stream).text();
-};
+) => new Response(stream).text();
 
 const readMessages = async (): Promise<ChatMessage[]> => {
   const result = await get(CHAT_PATH, {
@@ -51,7 +68,7 @@ const writeMessages = async (messages: ChatMessage[]) => {
   await put(
     CHAT_PATH,
     JSON.stringify({
-      version: 1,
+      version: 2,
       updatedAt: new Date().toISOString(),
       messages: messages.slice(-MAX_STORED_MESSAGES),
     }),
@@ -65,10 +82,39 @@ const writeMessages = async (messages: ChatMessage[]) => {
   );
 };
 
+const safePasswordMatch = (
+  submitted: string,
+  expected: string
+) => {
+  const left = Buffer.from(submitted);
+  const right = Buffer.from(expected);
+
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+};
+
+const extractMentions = (
+  text: string,
+  directory: Array<{ name?: string; email?: string }>
+) => {
+  const lowerText = text.toLowerCase();
+
+  return unique(
+    directory
+      .filter((person) => {
+        const name = cleanText(person?.name, 100);
+        return name && lowerText.includes(`@${name.toLowerCase()}`);
+      })
+      .map((person) => normalizeEmail(person?.email))
+      .filter(Boolean)
+  );
+};
+
 export async function GET(request: NextRequest) {
   try {
     const requestedLimit = Number(
-      request.nextUrl.searchParams.get("limit") || DEFAULT_LIMIT
+      request.nextUrl.searchParams.get("limit") ||
+        DEFAULT_LIMIT
     );
 
     const limit = Math.min(
@@ -102,8 +148,7 @@ export async function GET(request: NextRequest) {
       {
         ok: false,
         error:
-          error?.message ||
-          "Unable to load team chat.",
+          error?.message || "Unable to load team chat.",
       },
       { status: 500 }
     );
@@ -114,14 +159,20 @@ export async function POST(request: NextRequest) {
   try {
     const payload = await request.json().catch(() => null);
     const sender = cleanText(payload?.sender, 80);
-    const senderEmail = cleanText(payload?.senderEmail, 160).toLowerCase();
+    const senderEmail = normalizeEmail(payload?.senderEmail);
     const text = cleanText(payload?.text, 2000);
+    const mentionDirectory = Array.isArray(
+      payload?.mentionDirectory
+    )
+      ? payload.mentionDirectory.slice(0, 100)
+      : [];
 
     if (!sender || !senderEmail || !text) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Signed-in user and message are required.",
+          error:
+            "Signed-in user and message are required.",
         },
         { status: 400 }
       );
@@ -135,6 +186,9 @@ export async function POST(request: NextRequest) {
       senderEmail,
       text,
       createdAt: new Date().toISOString(),
+      reactions: {},
+      mentions: extractMentions(text, mentionDirectory),
+      readBy: [senderEmail],
     };
 
     const nextMessages = [
@@ -156,75 +210,206 @@ export async function POST(request: NextRequest) {
       {
         ok: false,
         error:
-          error?.message ||
-          "Unable to send team chat message.",
+          error?.message || "Unable to send team chat message.",
       },
       { status: 500 }
     );
   }
 }
 
-
-const safePasswordMatch = (submitted: string, expected: string) => {
-  const left = Buffer.from(submitted);
-  const right = Buffer.from(expected);
-
-  if (left.length !== right.length) return false;
-  return crypto.timingSafeEqual(left, right);
-};
-
-export async function DELETE(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   try {
     const payload = await request.json().catch(() => null);
-    const action = cleanText(payload?.action, 30);
+    const action = cleanText(payload?.action, 40);
+    const requesterEmail = normalizeEmail(
+      payload?.requesterEmail
+    );
+
+    if (!requesterEmail) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Signed-in user is required.",
+        },
+        { status: 400 }
+      );
+    }
+
     const currentMessages = await readMessages();
+    let changed = false;
 
-    if (action === "delete-message") {
+    if (action === "toggle-reaction") {
       const messageId = cleanText(payload?.messageId, 100);
-      const requesterEmail = cleanText(
-        payload?.requesterEmail,
-        160
-      ).toLowerCase();
+      const emoji = cleanText(payload?.emoji, 10);
 
-      if (!messageId || !requesterEmail) {
+      if (!messageId || !ALLOWED_REACTIONS.has(emoji)) {
         return NextResponse.json(
           {
             ok: false,
-            error: "Message and signed-in user are required.",
+            error: "Invalid reaction request.",
           },
           { status: 400 }
         );
       }
 
-      const target = currentMessages.find(
-        (message) => message.id === messageId
-      );
+      const nextMessages = currentMessages.map((message) => {
+        if (message.id !== messageId) return message;
 
-      if (!target) {
+        const reactions: ReactionMap = {
+          ...(message.reactions || {}),
+        };
+
+        const existing = unique(
+          (reactions[emoji] || []).map(normalizeEmail)
+        );
+
+        reactions[emoji] = existing.includes(requesterEmail)
+          ? existing.filter(
+              (email) => email !== requesterEmail
+            )
+          : [...existing, requesterEmail];
+
+        if (!reactions[emoji].length) {
+          delete reactions[emoji];
+        }
+
+        changed = true;
+        return { ...message, reactions };
+      });
+
+      if (!changed) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "Message was not found.",
-          },
+          { ok: false, error: "Message was not found." },
           { status: 404 }
         );
       }
 
-      if (
-        !target.senderEmail ||
-        target.senderEmail.toLowerCase() !== requesterEmail
-      ) {
+      await writeMessages(nextMessages);
+
+      return NextResponse.json({
+        ok: true,
+        messages: nextMessages.slice(-DEFAULT_LIMIT),
+      });
+    }
+
+    if (action === "mark-read") {
+      const messageIds = unique(
+        (Array.isArray(payload?.messageIds)
+          ? payload.messageIds
+          : []
+        )
+          .map((id: unknown) => cleanText(id, 100))
+          .filter(Boolean)
+      ).slice(0, 50);
+
+      if (!messageIds.length) {
+        return NextResponse.json({
+          ok: true,
+          messages: currentMessages.slice(-DEFAULT_LIMIT),
+        });
+      }
+
+      const idSet = new Set(messageIds);
+
+      const nextMessages = currentMessages.map((message) => {
+        if (!idSet.has(message.id)) return message;
+
+        const readers = unique(
+          (message.readBy || []).map(normalizeEmail)
+        );
+
+        if (readers.includes(requesterEmail)) {
+          return message;
+        }
+
+        changed = true;
+        return {
+          ...message,
+          readBy: [...readers, requesterEmail],
+        };
+      });
+
+      if (changed) await writeMessages(nextMessages);
+
+      return NextResponse.json({
+        ok: true,
+        messages: nextMessages.slice(-DEFAULT_LIMIT),
+      });
+    }
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Unsupported chat action.",
+      },
+      { status: 400 }
+    );
+  } catch (error: any) {
+    console.error("Team chat PATCH error:", error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error?.message || "Unable to update team chat.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const payload = await request.json().catch(() => null);
+    const action = cleanText(payload?.action, 40);
+    const currentMessages = await readMessages();
+
+    if (action === "delete-selected") {
+      const requesterEmail = normalizeEmail(
+        payload?.requesterEmail
+      );
+
+      const messageIds = unique(
+        (Array.isArray(payload?.messageIds)
+          ? payload.messageIds
+          : []
+        )
+          .map((id: unknown) => cleanText(id, 100))
+          .filter(Boolean)
+      ).slice(0, 50);
+
+      if (!requesterEmail || !messageIds.length) {
         return NextResponse.json(
           {
             ok: false,
-            error: "You can delete only your own messages.",
+            error:
+              "Selected messages and signed-in user are required.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const idSet = new Set(messageIds);
+      const unauthorized = currentMessages.some(
+        (message) =>
+          idSet.has(message.id) &&
+          normalizeEmail(message.senderEmail) !==
+            requesterEmail
+      );
+
+      if (unauthorized) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "You can delete only your own messages.",
           },
           { status: 403 }
         );
       }
 
       const nextMessages = currentMessages.filter(
-        (message) => message.id !== messageId
+        (message) => !idSet.has(message.id)
       );
 
       await writeMessages(nextMessages);
@@ -239,6 +424,7 @@ export async function DELETE(request: NextRequest) {
       const submittedPassword = String(
         payload?.adminPassword || ""
       );
+
       const expectedPassword = String(
         process.env.TEAM_CHAT_ADMIN_PASSWORD || ""
       );
@@ -256,7 +442,10 @@ export async function DELETE(request: NextRequest) {
 
       if (
         !submittedPassword ||
-        !safePasswordMatch(submittedPassword, expectedPassword)
+        !safePasswordMatch(
+          submittedPassword,
+          expectedPassword
+        )
       ) {
         return NextResponse.json(
           {
@@ -289,8 +478,7 @@ export async function DELETE(request: NextRequest) {
       {
         ok: false,
         error:
-          error?.message ||
-          "Unable to update team chat.",
+          error?.message || "Unable to update team chat.",
       },
       { status: 500 }
     );
