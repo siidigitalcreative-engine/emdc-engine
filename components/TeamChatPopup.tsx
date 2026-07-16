@@ -368,7 +368,7 @@ export default function TeamChatPopup() {
 
     try {
       const response = await fetch(
-        `/api/checklist-groups-fast?t=${Date.now()}`,
+        `/api/checklist-group-tags?t=${Date.now()}`,
         {
           method: "GET",
           cache: "no-store",
