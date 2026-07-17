@@ -292,21 +292,12 @@ export async function GET(request: NextRequest) {
             }) || null
         : null;
 
-      const passwordProtected = Boolean(
-        room.passwordHash && room.passwordSalt
-      );
-
       return {
         roomId: room.id,
-        latestMessage: passwordProtected
-          ? null
-          : latestMessage,
-        mentionedYou: passwordProtected
-          ? false
-          : Boolean(latestMentionForRequester),
-        mentionMessageId: passwordProtected
-          ? ""
-          : latestMentionForRequester?.id || "",
+        latestMessage,
+        mentionedYou: Boolean(latestMentionForRequester),
+        mentionMessageId:
+          latestMentionForRequester?.id || "",
       };
     });
 
