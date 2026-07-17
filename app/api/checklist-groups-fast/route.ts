@@ -53,9 +53,9 @@ function summarizeGroupItems(groupItems: any) {
 }
 
 async function readProgressIndex() {
-  const existing = await readJson(SUMMARY_PATH, null);
-  if (isRecord(existing)) return existing;
-
+  // Always rebuild preview progress from the authoritative checklist items.
+  // The cached summary index can become stale, which is why a card may show
+  // 6/30 first and only change to 12/30 after opening the checklist.
   const legacyItems = await readJson(LEGACY_ITEMS_PATH, {});
   const summaryIndex: Record<string,any> = {};
 
