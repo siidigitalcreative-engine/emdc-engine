@@ -29,6 +29,10 @@ function isRecord(value: any) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function checklistItemsGroupPath(groupId: string) {
+  return `emdc-sync/v2/checklist-items/${encodeURIComponent(groupId)}.json`;
+}
+
 function summarizeGroupItems(groupItems: any) {
   const departments: Record<string,{ done:number; total:number }> = {};
   let done = 0;
@@ -53,9 +57,9 @@ function summarizeGroupItems(groupItems: any) {
 }
 
 async function readProgressIndex() {
-  // Always rebuild preview progress from the authoritative checklist items.
-  // The cached summary index can become stale, which is why a card may show
-  // 6/30 first and only change to 12/30 after opening the checklist.
+  const existing = await readJson(SUMMARY_PATH, null);
+  if (isRecord(existing)) return existing;
+
   const legacyItems = await readJson(LEGACY_ITEMS_PATH, {});
   const summaryIndex: Record<string,any> = {};
 
@@ -170,19 +174,45 @@ export async function GET(req: NextRequest) {
   }
 
   if (mode === "index") {
-    const progressIndex = await readProgressIndex();
+    const cachedProgressIndex = await readProgressIndex();
+
+    // The current checklist-items route stores the real task state in one
+    // Blob per checklist group. Read those exact files for the list preview.
+    // This prevents cards from showing an older cached summary until the user
+    // opens the group.
+    const checklistGroupsWithLiveProgress = await Promise.all(
+      checklistGroups.map(async (group:any)=>{
+        const id = String(group?.id || "");
+        const directGroupItems = id
+          ? await readJson(
+              checklistItemsGroupPath(id),
+              null
+            )
+          : null;
+
+        const progressSummary = isRecord(directGroupItems)
+          ? summarizeGroupItems(directGroupItems)
+          : cachedProgressIndex?.[id];
+
+        return toChecklistIndexRow(
+          group,
+          progressSummary
+        );
+      })
+    );
 
     return NextResponse.json(
       {
         ok: true,
-        checklistGroups: checklistGroups.map((group:any)=>
-          toChecklistIndexRow(
-            group,
-            progressIndex?.[String(group?.id || "")]
-          )
-        ),
+        checklistGroups:
+          checklistGroupsWithLiveProgress,
       },
-      { headers: { "Cache-Control": "private, no-store" } }
+      {
+        headers: {
+          "Cache-Control":
+            "private, no-store, no-cache, must-revalidate",
+        },
+      }
     );
   }
 
