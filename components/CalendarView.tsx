@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import AppTopBar from "@/components/AppTopBar";
 import AppBottomNav from "@/components/AppBottomNav";
 import { logActivity } from "@/lib/activity";
-import TeamChatPopup from "@/components/TeamChatPopup";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const C = {
@@ -5759,29 +5758,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const getOverviewLocalStorageKey = () => group?.id ? `emdc_overview_items_v1_${group.id}` : "";
-  const getOverviewDeletedLocalStorageKey = () => group?.id ? `emdc_overview_deleted_v2_${group.id}` : "";
-
-  const overviewCanonicalKey = (item:any) => {
-    const sourceTab = String(item?.sourceRef?.tab || item?.sourceTab || "").trim().toLowerCase();
-    const sourceType = String(item?.sourceRef?.type || "").trim().toLowerCase();
-    const sourceId = String(item?.sourceRef?.id || "").trim().toLowerCase();
-    const title = String(item?.title || "").trim().toLowerCase().replace(/\s+/g," ");
-    const kind = String(item?.kind || "").trim().toLowerCase().replace(/\s+/g," ");
-
-    if(
-      sourceType==="productintroassetlinks" ||
-      (
-        sourceTab.includes("digital") &&
-        title.includes("product introduction digital creative asset links")
-      )
-    ){
-      return "digital:productintroassetlinks";
-    }
-
-    if(sourceType && sourceId) return `${sourceTab}:${sourceType}:${sourceId}`;
-    if(sourceType) return `${sourceTab}:${sourceType}:${title}`;
-    return String(item?.id || `${sourceTab}:${kind}:${title}:${item?.createdAt || ""}`).trim();
-  };
 
   const readOverviewItemsFromLocal = () => {
     if (typeof window === "undefined") return [];
@@ -5795,34 +5771,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     }
   };
 
-  const readOverviewDeletedFromLocal = () => {
-    if(typeof window === "undefined") return { ids:[], keys:[] };
-    const key = getOverviewDeletedLocalStorageKey();
-    if(!key) return { ids:[], keys:[] };
-    try {
-      const parsed = JSON.parse(localStorage.getItem(key) || "{}");
-      return {
-        ids:Array.isArray(parsed?.ids) ? parsed.ids.map(String) : [],
-        keys:Array.isArray(parsed?.keys) ? parsed.keys.map(String) : [],
-      };
-    } catch {
-      return { ids:[], keys:[] };
-    }
-  };
-
-  const writeOverviewDeletedToLocal = (value:any) => {
-    if(typeof window === "undefined") return;
-    const key = getOverviewDeletedLocalStorageKey();
-    if(!key) return;
-    try {
-      localStorage.setItem(key,JSON.stringify({
-        ids:Array.from(new Set((value?.ids || []).map(String))),
-        keys:Array.from(new Set((value?.keys || []).map(String))),
-        updatedAt:new Date().toISOString(),
-      }));
-    } catch {}
-  };
-
   const writeOverviewItemsToLocal = (items:any[] = []) => {
     if (typeof window === "undefined") return;
     const key = getOverviewLocalStorageKey();
@@ -5834,46 +5782,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const mergeOverviewItems = (...lists:any[][]) => {
-    const map = new Map<string,any>();
+    const map = new Map();
     lists.flat().filter(Boolean).forEach((item:any)=>{
-      const key = overviewCanonicalKey(item);
+      const key = String(item?.id || `${item?.title || ""}-${item?.createdAt || ""}-${item?.updatedAt || ""}`);
       if(!key.trim()) return;
-
-      const existing = map.get(key);
-      if(!existing){
-        map.set(key,item);
-        return;
-      }
-
-      const existingTime = String(existing?.updatedAt || existing?.createdAt || "");
-      const incomingTime = String(item?.updatedAt || item?.createdAt || "");
-      map.set(
-        key,
-        incomingTime >= existingTime
-          ? { ...existing, ...item }
-          : { ...item, ...existing }
-      );
+      map.set(key, { ...(map.get(key) || {}), ...item });
     });
     return Array.from(map.values()).sort((a:any,b:any)=>String(b?.updatedAt || b?.createdAt || "").localeCompare(String(a?.updatedAt || a?.createdAt || "")));
-  };
-
-  const getOverviewDeletionState = () => {
-    const currentOverview = ((group.aiWorkspace || {}).overview || {}) as any;
-    const persistedOverview = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}).overview || {}) as any;
-    const localDeleted = readOverviewDeletedFromLocal();
-
-    return {
-      ids:Array.from(new Set([
-        ...(Array.isArray(currentOverview.deletedItemIds) ? currentOverview.deletedItemIds : []),
-        ...(Array.isArray(persistedOverview.deletedItemIds) ? persistedOverview.deletedItemIds : []),
-        ...(localDeleted.ids || []),
-      ].map(String))),
-      keys:Array.from(new Set([
-        ...(Array.isArray(currentOverview.deletedItemKeys) ? currentOverview.deletedItemKeys : []),
-        ...(Array.isArray(persistedOverview.deletedItemKeys) ? persistedOverview.deletedItemKeys : []),
-        ...(localDeleted.keys || []),
-      ].map(String))),
-    };
   };
 
   const getOverviewItems = () => {
@@ -5882,64 +5797,27 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const currentItems = Array.isArray(currentOverview.items) ? currentOverview.items : [];
     const persistedItems = Array.isArray(persistedOverview.items) ? persistedOverview.items : [];
     const localItems = readOverviewItemsFromLocal();
-    const deleted = getOverviewDeletionState();
-    const deletedIds = new Set(deleted.ids);
-    const deletedKeys = new Set(deleted.keys);
-
-    return mergeOverviewItems(currentItems,persistedItems,localItems).filter((item:any)=>
-      !deletedIds.has(String(item?.id || "")) &&
-      !deletedKeys.has(overviewCanonicalKey(item))
-    );
+    return mergeOverviewItems(currentItems,persistedItems,localItems);
   };
 
   const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output", sourceRef:any=null) => {
     const isStructured = content && typeof content === "object";
     const textContent = isStructured ? content : String(content || "").trim();
     if(!isStructured && !textContent) return;
-
-    const now = new Date().toISOString();
-    const candidate = {
+    const items = getOverviewItems();
+    const newItem = {
       id:uid(),
       sourceTab,
       kind,
       title:title || `${sourceTab} output`,
       content:textContent,
       sourceRef:sourceRef || null,
-      updatedAt:now,
-      createdAt:now,
+      updatedAt:new Date().toISOString(),
+      createdAt:new Date().toISOString(),
     };
-    const candidateKey = overviewCanonicalKey(candidate);
-    const items = getOverviewItems();
-    const existing = items.find((item:any)=>overviewCanonicalKey(item)===candidateKey);
-    const newItem = existing ? {
-      ...existing,
-      sourceTab,
-      kind,
-      title:title || existing.title || `${sourceTab} output`,
-      content:textContent,
-      sourceRef:sourceRef || existing.sourceRef || null,
-      updatedAt:now,
-    } : candidate;
-
-    const nextItems = [
-      ...items.filter((item:any)=>overviewCanonicalKey(item)!==candidateKey),
-      newItem,
-    ];
-
-    const deleted = getOverviewDeletionState();
-    const nextDeleted = {
-      ids:deleted.ids.filter((id:string)=>id!==String(newItem.id || "")),
-      keys:deleted.keys.filter((key:string)=>key!==candidateKey),
-    };
-
-    writeOverviewDeletedToLocal(nextDeleted);
+    const nextItems = [...items,newItem];
     writeOverviewItemsToLocal(nextItems);
-    updateAiWorkspace("overview",{
-      items:nextItems,
-      deletedItemIds:nextDeleted.ids,
-      deletedItemKeys:nextDeleted.keys,
-      updatedAt:now,
-    });
+    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
     markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
   };
 
@@ -6346,36 +6224,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const deleteOverviewItem = (id:string) => {
-    const items = getOverviewItems();
-    const target = items.find((item:any)=>String(item?.id || "")===String(id || ""));
-    if(!target) return;
-
-    const targetKey = overviewCanonicalKey(target);
-    const removedItems = items.filter((item:any)=>overviewCanonicalKey(item)===targetKey);
-    const nextItems = items.filter((item:any)=>overviewCanonicalKey(item)!==targetKey);
-    const deleted = getOverviewDeletionState();
-    const nextDeleted = {
-      ids:Array.from(new Set([
-        ...deleted.ids,
-        ...removedItems.map((item:any)=>String(item?.id || "")).filter(Boolean),
-        String(id || ""),
-      ])),
-      keys:Array.from(new Set([
-        ...deleted.keys,
-        targetKey,
-      ])),
-    };
-    const now = new Date().toISOString();
-
-    writeOverviewDeletedToLocal(nextDeleted);
+    const nextItems = getOverviewItems().filter((item:any)=>item.id!==id);
     writeOverviewItemsToLocal(nextItems);
-    updateAiWorkspace("overview",{
-      items:nextItems,
-      deletedItemIds:nextDeleted.ids,
-      deletedItemKeys:nextDeleted.keys,
-      updatedAt:now,
-    });
-    markActionDone(`overview-delete-${targetKey}`);
+    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
   };
 
   const overviewItemToText = (item:any) => {
@@ -23301,49 +23152,7 @@ export default function App({
 
       let nextWorkspace = mergeObjects(currentWorkspace, storedBackup);
 
-      let localOverviewDeleted:any = { ids:[], keys:[] };
-      try {
-        const parsed = JSON.parse(
-          localStorage.getItem(`emdc_overview_deleted_v2_${groupId}`) || "{}"
-        );
-        localOverviewDeleted = {
-          ids:Array.isArray(parsed?.ids) ? parsed.ids.map(String) : [],
-          keys:Array.isArray(parsed?.keys) ? parsed.keys.map(String) : [],
-        };
-      } catch {}
-
-      const recoveryOverviewCanonicalKey = (item:any) => {
-        const sourceTab = String(item?.sourceRef?.tab || item?.sourceTab || "").trim().toLowerCase();
-        const sourceType = String(item?.sourceRef?.type || "").trim().toLowerCase();
-        const sourceId = String(item?.sourceRef?.id || "").trim().toLowerCase();
-        const title = String(item?.title || "").trim().toLowerCase().replace(/\s+/g," ");
-        const kind = String(item?.kind || "").trim().toLowerCase().replace(/\s+/g," ");
-        if(
-          sourceType==="productintroassetlinks" ||
-          (
-            sourceTab.includes("digital") &&
-            title.includes("product introduction digital creative asset links")
-          )
-        ) return "digital:productintroassetlinks";
-        if(sourceType && sourceId) return `${sourceTab}:${sourceType}:${sourceId}`;
-        if(sourceType) return `${sourceTab}:${sourceType}:${title}`;
-        return String(item?.id || `${sourceTab}:${kind}:${title}:${item?.createdAt || ""}`).trim();
-      };
-
-      const recoveryDeletedIds = new Set([
-        ...(Array.isArray(currentWorkspace?.overview?.deletedItemIds) ? currentWorkspace.overview.deletedItemIds : []),
-        ...(Array.isArray(storedBackup?.overview?.deletedItemIds) ? storedBackup.overview.deletedItemIds : []),
-        ...(localOverviewDeleted.ids || []),
-      ].map(String));
-
-      const recoveryDeletedKeys = new Set([
-        ...(Array.isArray(currentWorkspace?.overview?.deletedItemKeys) ? currentWorkspace.overview.deletedItemKeys : []),
-        ...(Array.isArray(storedBackup?.overview?.deletedItemKeys) ? storedBackup.overview.deletedItemKeys : []),
-        ...(localOverviewDeleted.keys || []),
-      ].map(String));
-
-      const recoveryOverviewMap = new Map<string,any>();
-      mergeRows(
+      const overviewItems = mergeRows(
         Array.isArray(currentWorkspace?.overview?.items)
           ? currentWorkspace.overview.items
           : [],
@@ -23351,36 +23160,15 @@ export default function App({
           ? storedBackup.overview.items
           : [],
         localOverviewItems
-      ).forEach((item:any)=>{
-        const canonicalKey = recoveryOverviewCanonicalKey(item);
-        if(
-          recoveryDeletedIds.has(String(item?.id || "")) ||
-          recoveryDeletedKeys.has(canonicalKey)
-        ) return;
+      );
 
-        const existing = recoveryOverviewMap.get(canonicalKey);
-        const existingTime = String(existing?.updatedAt || existing?.createdAt || "");
-        const incomingTime = String(item?.updatedAt || item?.createdAt || "");
-        if(!existing || incomingTime >= existingTime){
-          recoveryOverviewMap.set(canonicalKey,{ ...(existing || {}), ...item });
-        }
-      });
-
-      const overviewItems = Array.from(recoveryOverviewMap.values());
-
-      if (
-        overviewItems.length ||
-        recoveryDeletedIds.size ||
-        recoveryDeletedKeys.size
-      ) {
+      if (overviewItems.length) {
         nextWorkspace = {
           ...nextWorkspace,
           overview: {
             ...(currentWorkspace?.overview || {}),
             ...(storedBackup?.overview || {}),
             items: overviewItems,
-            deletedItemIds:Array.from(recoveryDeletedIds),
-            deletedItemKeys:Array.from(recoveryDeletedKeys),
             updatedAt: new Date().toISOString(),
           },
         };
@@ -23629,7 +23417,6 @@ export default function App({
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
 
-        <TeamChatPopup />
         <AppBottomNav />
       </div>
     </>
