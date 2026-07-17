@@ -23059,8 +23059,12 @@ export default function App({
 
   useEffect(() => {
     if(!cloudHydrated) return;
-    if(tab==="skus") void fetchSkuItemsV2();
-  }, [cloudHydrated,tab]);
+
+    // Load SKU Storage once immediately after cloud hydration so checklist
+    // product rows, product names, brands, categories, and image links are
+    // available without opening the SKU Storage tab first.
+    void fetchSkuItemsV2();
+  }, [cloudHydrated]);
 
   useEffect(() => {
     if (!cloudHydrated || !Array.isArray(checklistGroups) || !checklistGroups.length) {
