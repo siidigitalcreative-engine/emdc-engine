@@ -246,29 +246,13 @@ function mergeChecklistGroup(existing: any, incoming: any) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-
     const incomingGroups = Array.isArray(body?.checklistGroups)
       ? body.checklistGroups
-      : body?.group && isRecord(body.group)
-        ? [body.group]
-        : [];
-
+      : [];
     const updatedAt =
       typeof body?.updatedAt === "string" && body.updatedAt
         ? body.updatedAt
         : new Date().toISOString();
-
-    const fullReplace = body?.fullReplace === true;
-
-    const deletedGroupIds = new Set(
-      (
-        Array.isArray(body?.deletedGroupIds)
-          ? body.deletedGroupIds
-          : []
-      )
-        .map((id:any)=>String(id || "").trim())
-        .filter(Boolean)
-    );
 
     const existingRaw = await readJson(DATA_PATH, []);
     const existingGroups = Array.isArray(existingRaw)
@@ -282,141 +266,42 @@ export async function POST(req: NextRequest) {
       ])
     );
 
-    const incomingById = new Map(
-      incomingGroups
-        .filter((group:any)=>String(group?.id || "").trim())
-        .map((group:any)=>[
-          String(group?.id || ""),
-          group,
-        ])
-    );
-
-    // Merge incoming rows with their complete stored versions.
-    const mergedIncoming = incomingGroups
-      .filter((group:any)=>{
-        const id = String(group?.id || "");
-        return id && !deletedGroupIds.has(id);
-      })
-      .map((incoming:any)=>{
-        const id = String(incoming?.id || "");
-        return mergeChecklistGroup(
-          existingById.get(id),
-          incoming
-        );
-      });
-
-    let checklistGroups:any[];
-
-    if (fullReplace) {
-      // Use only when the client intentionally sends the complete group list.
-      checklistGroups = mergedIncoming;
-    } else {
-      // Safe default: partial/lazy saves update only the supplied groups and
-      // preserve every stored group that was not part of this request.
-      const untouchedExisting = existingGroups.filter((group:any)=>{
-        const id = String(group?.id || "");
-        return (
-          id &&
-          !incomingById.has(id) &&
-          !deletedGroupIds.has(id)
-        );
-      });
-
-      checklistGroups = [
-        ...untouchedExisting,
-        ...mergedIncoming,
-      ];
-    }
-
-    // Never let an empty or partial UI state wipe all checklist groups unless
-    // the caller explicitly requests a full replacement.
-    if (
-      checklistGroups.length === 0 &&
-      existingGroups.length > 0 &&
-      !fullReplace &&
-      deletedGroupIds.size === 0
-    ) {
-      return NextResponse.json(
-        {
-          ok:false,
-          protected:true,
-          error:
-            "Blocked an accidental empty checklist-group save.",
-          existingCount:existingGroups.length,
-        },
-        { status:409 }
+    // Keep the incoming list order and deletion behavior, but merge every row
+    // with its complete stored version so omitted lazy-loaded fields survive.
+    const checklistGroups = incomingGroups.map((incoming:any)=>{
+      const id = String(incoming?.id || "");
+      return mergeChecklistGroup(
+        existingById.get(id),
+        incoming
       );
-    }
+    });
 
     await put(DATA_PATH, JSON.stringify(checklistGroups), {
-      access:"private",
-      addRandomSuffix:false,
-      allowOverwrite:true,
-      contentType:"application/json",
-    } as any);
-
-    // Keep the compact preview progress index synchronized with any progress
-    // summaries included in the saved rows.
-    const currentProgressIndex = await readProgressIndex();
-    const nextProgressIndex:Record<string,any> = {
-      ...(isRecord(currentProgressIndex)
-        ? currentProgressIndex
-        : {}),
-    };
-
-    mergedIncoming.forEach((group:any)=>{
-      const id = String(group?.id || "");
-      if (!id) return;
-
-      if (
-        group?.progressSummary &&
-        typeof group.progressSummary === "object"
-      ) {
-        nextProgressIndex[id] = {
-          ...group.progressSummary,
-          updatedAt:
-            group.progressSummary.updatedAt || updatedAt,
-        };
-      }
-    });
-
-    deletedGroupIds.forEach((id:string)=>{
-      delete nextProgressIndex[id];
-    });
-
-    await put(SUMMARY_PATH, JSON.stringify(nextProgressIndex), {
-      access:"private",
-      addRandomSuffix:false,
-      allowOverwrite:true,
-      contentType:"application/json",
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
     } as any);
 
     const sync = await bump(updatedAt);
 
     return NextResponse.json({
-      ok:true,
+      ok: true,
       updatedAt,
-      count:checklistGroups.length,
-      savedCount:mergedIncoming.length,
-      deletedCount:deletedGroupIds.size,
-      fullReplace,
-      syncVersion:sync.version,
-      checklistGroupsVersion:
-        sync.checklistGroupsVersion,
-      preservedWorkspaceData:true,
-      preservedUnsentGroups:!fullReplace,
-      progressIndexUpdated:true,
+      count: checklistGroups.length,
+      syncVersion: sync.version,
+      checklistGroupsVersion: sync.checklistGroupsVersion,
+      preservedWorkspaceData: true,
     });
-  } catch (error:any) {
+  } catch (error: any) {
     return NextResponse.json(
       {
-        ok:false,
+        ok: false,
         error:
           error?.message ||
           "Unable to save checklist groups.",
       },
-      { status:500 }
+      { status: 500 }
     );
   }
 }
-
