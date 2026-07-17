@@ -36,11 +36,6 @@ type RoomSummary = {
   mentionMessageId?: string;
 };
 
-type ChecklistGroupTag = {
-  id: string;
-  name: string;
-};
-
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 const POLL_MS = 30000;
 const LIMIT = 30;
@@ -86,12 +81,6 @@ export default function TeamChatPopup() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
-  const [checklistTagOpen, setChecklistTagOpen] = useState(false);
-  const [checklistGroups, setChecklistGroups] = useState<
-    ChecklistGroupTag[]
-  >([]);
-  const [checklistGroupsLoaded, setChecklistGroupsLoaded] =
-    useState(false);
   const [reactionPickerId, setReactionPickerId] = useState("");
   const [reactionDetailsKey, setReactionDetailsKey] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
@@ -279,43 +268,18 @@ export default function TeamChatPopup() {
         throw new Error(json?.error || "Unable to load chat.");
       }
 
-      const returnedRooms = Array.isArray(json.rooms)
-        ? json.rooms.filter(
-            (room: ChatRoom) => room?.id && room?.name
-          )
-        : [];
-
-      // Never erase the existing group list because of a temporary,
-      // incomplete, or stale API response.
-      if (returnedRooms.length > 0) {
-        setRooms(returnedRooms);
-      }
-
-      const returnedUsers = Array.isArray(json.users)
-        ? json.users.filter(
-            (user: ChatUser) => user?.email && user?.name
-          )
-        : [];
-
-      if (returnedUsers.length > 0) {
-        setUsers(returnedUsers);
-      }
-
+      setRooms(Array.isArray(json.rooms) ? json.rooms : []);
+      setUsers(Array.isArray(json.users) ? json.users : []);
       const nextMessages = Array.isArray(json.messages)
         ? json.messages
         : [];
 
       setMessages(nextMessages);
-
-      const returnedSummaries = Array.isArray(
-        json.roomSummaries
-      )
-        ? json.roomSummaries
-        : [];
-
-      if (returnedSummaries.length > 0) {
-        setRoomSummaryData(returnedSummaries);
-      }
+      setRoomSummaryData(
+        Array.isArray(json.roomSummaries)
+          ? json.roomSummaries
+          : []
+      );
       setError("");
 
       if (!showRoomList && requestedRoomId === roomId) {
@@ -363,166 +327,6 @@ export default function TeamChatPopup() {
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages.length, open]);
 
-  const loadChecklistGroups = async () => {
-    if (checklistGroupsLoaded) return;
-
-    try {
-      const response = await fetch(
-        `/api/checklist-group-tags?t=${Date.now()}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
-      );
-
-      const json = await response.json().catch(() => null);
-
-      if (!response.ok || !json?.ok) {
-        throw new Error(
-          json?.error || "Unable to load checklist groups."
-        );
-      }
-
-      const sourceGroups = Array.isArray(json.groups)
-        ? json.groups
-        : Array.isArray(json.checklistGroups)
-          ? json.checklistGroups
-          : [];
-
-      setChecklistGroups(
-        sourceGroups
-          .map((group: any) => ({
-            id: String(
-              group?.id ||
-              group?.groupId ||
-              group?.checklistGroupId ||
-              group?.key ||
-              ""
-            ).trim(),
-            name: String(
-              group?.groupName ||
-              group?.name ||
-              group?.title ||
-              group?.projectName ||
-              ""
-            ).trim(),
-          }))
-          .filter(
-            (group: ChecklistGroupTag) =>
-              group.id && group.name
-          )
-      );
-    } catch (checklistError: any) {
-      setError(
-        checklistError?.message ||
-          "Unable to load checklist groups."
-      );
-      setChecklistGroups([]);
-    } finally {
-      setChecklistGroupsLoaded(true);
-    }
-  };
-
-  const checklistTagQuery = useMemo(() => {
-    const match = draft.match(/(?:^|\s)#([^\n#]*)$/);
-
-    return match
-      ? String(match[1] || "").trim().toLowerCase()
-      : "";
-  }, [draft]);
-
-  const filteredChecklistGroups = useMemo(() => {
-    if (!checklistTagOpen) return [];
-
-    return checklistGroups
-      .filter((group) => {
-        if (!checklistTagQuery) return true;
-
-        return group.name
-          .toLowerCase()
-          .includes(checklistTagQuery);
-      })
-      .slice(0, 12);
-  }, [
-    checklistGroups,
-    checklistTagOpen,
-    checklistTagQuery,
-  ]);
-
-  const addChecklistTag = (group: ChecklistGroupTag) => {
-    const safeName = group.name.replace(/\]\]/g, "");
-    const safeId = group.id.replace(/\]\]/g, "");
-
-    setDraft((current) =>
-      current.replace(
-        /(?:^|\s)#([^\n#]*)$/,
-        (matched) =>
-          `${matched.startsWith(" ") ? " " : ""}[[CHECKLIST:${safeId}::${safeName}]] `
-      )
-    );
-
-    setChecklistTagOpen(false);
-  };
-
-  const openChecklistGroup = (groupId: string) => {
-    const params = new URLSearchParams();
-    params.set("group", groupId);
-    params.set("groupTab", "tasks");
-
-    window.location.hash = `#/checklists?${params.toString()}`;
-    setOpen(false);
-  };
-
-  const renderMessageText = (messageText: string) => {
-    const pattern =
-      /\[\[CHECKLIST:([^:\]]+)::([^\]]+)\]\]|#\[([^\]]+)\]\(([^)]+)\)/g;
-
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-
-    while ((match = pattern.exec(messageText)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(messageText.slice(lastIndex, match.index));
-      }
-
-      const groupId = match[1] || match[4];
-      const label = match[2] || match[3];
-
-      parts.push(
-        <button
-          key={`${groupId}-${match.index}`}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            openChecklistGroup(groupId);
-          }}
-          style={{
-            display: "inline",
-            padding: 0,
-            border: 0,
-            background: "transparent",
-            color: "#2563EB",
-            font: "inherit",
-            fontWeight: 900,
-            textDecoration: "underline",
-            cursor: "pointer",
-          }}
-        >
-          #{label}
-        </button>
-      );
-
-      lastIndex = pattern.lastIndex;
-    }
-
-    if (lastIndex < messageText.length) {
-      parts.push(messageText.slice(lastIndex));
-    }
-
-    return parts.length ? parts : messageText;
-  };
-
   const mentionQuery = useMemo(() => {
     const match = draft.match(/(?:^|\s)@([^\n@]*)$/);
     return match ? String(match[1] || "").trim().toLowerCase() : "";
@@ -564,6 +368,12 @@ export default function TeamChatPopup() {
     const name = window.prompt("Enter the new group chat name:");
     if (!name?.trim()) return;
 
+    const roomPassword = window.prompt(
+      "Optional: Enter a password for this group. Leave blank for no password."
+    );
+
+    if (roomPassword === null) return;
+
     const response = await fetch("/api/team-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -571,6 +381,7 @@ export default function TeamChatPopup() {
         action: "create-room",
         name: name.trim(),
         requesterEmail: senderEmail,
+        roomPassword: roomPassword.trim(),
       }),
     });
 
@@ -581,33 +392,14 @@ export default function TeamChatPopup() {
       return;
     }
 
-    const createdRoom = json?.room;
-
-    if (Array.isArray(json.rooms) && json.rooms.length > 0) {
-      setRooms(json.rooms);
-    } else if (createdRoom?.id && createdRoom?.name) {
-      setRooms((current) => {
-        const withoutDuplicate = current.filter(
-          (room) => room.id !== createdRoom.id
-        );
-
-        return [...withoutDuplicate, createdRoom];
-      });
-    }
-
-    if (!createdRoom?.id) {
-      setError("The group was created but no group ID was returned.");
-      return;
-    }
-
-    setRoomId(createdRoom.id);
+    setRooms(json.rooms);
+    setRoomId(json.room.id);
+    setRoomPasswords((current) => ({
+      ...current,
+      [json.room.id]: roomPassword.trim(),
+    }));
     setShowRoomList(false);
     setMessages([]);
-    setError("");
-
-    window.setTimeout(() => {
-      void loadMessages(false, createdRoom.id);
-    }, 0);
   };
 
   const sendMessage = async () => {
@@ -616,8 +408,6 @@ export default function TeamChatPopup() {
 
     setSending(true);
     setError("");
-    setMentionOpen(false);
-    setChecklistTagOpen(false);
 
     try {
       const response = await fetch("/api/team-chat", {
@@ -635,17 +425,11 @@ export default function TeamChatPopup() {
       const json = await response.json().catch(() => null);
 
       if (!response.ok || !json?.ok) {
-        const detail =
-          json?.error ||
-          json?.message ||
-          `Unable to send message (${response.status}).`;
-
-        throw new Error(detail);
+        throw new Error(json?.error || "Unable to send message.");
       }
 
       setDraft("");
       setMentionOpen(false);
-      setChecklistTagOpen(false);
       setMessages(json.messages || []);
     } catch (sendError: any) {
       setError(sendError?.message || "Unable to send message.");
@@ -814,9 +598,7 @@ export default function TeamChatPopup() {
         ? json.rooms
         : [{ id: "general", name: "General" }];
 
-      if (nextRooms.length > 0) {
-        setRooms(nextRooms);
-      }
+      setRooms(nextRooms);
       setRoomId("general");
       setMessages([]);
       setSelectedIds([]);
@@ -894,14 +676,10 @@ export default function TeamChatPopup() {
       return {
         room,
         latest,
-        mentionedYou:
-          !room.passwordProtected &&
-          Boolean(summary?.mentionedYou),
-        preview: room.passwordProtected
-          ? "Password Protected"
-          : latest
-            ? `${latest.sender}: ${latest.text}`
-            : "No messages yet",
+        mentionedYou: Boolean(summary?.mentionedYou),
+        preview: latest
+          ? `${latest.sender}: ${latest.text}`
+          : "No messages yet",
       };
     });
   }, [rooms, messages, roomSummaryData]);
@@ -1423,20 +1201,7 @@ export default function TeamChatPopup() {
                       {room.name}
                       {room.passwordProtected ? " 🔒" : ""}
                     </div>
-                    {room.passwordProtected ? (
-                      <div
-                        style={{
-                          marginTop: 4,
-                          fontSize: 10,
-                          color: "#6B7280",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Password Protected
-                      </div>
-                    ) : mentionedYou ? (
+                    {mentionedYou ? (
                       <div
                         style={{
                           marginTop: 4,
@@ -1724,7 +1489,7 @@ export default function TeamChatPopup() {
                           lineHeight: 1.45,
                         }}
                       >
-                        {renderMessageText(message.text)}
+                        {message.text}
                       </div>
 
                       {entries.length > 0 && (
@@ -1986,80 +1751,6 @@ export default function TeamChatPopup() {
                 background: "#FFFFFF",
               }}
             >
-              {checklistTagOpen && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 12,
-                    right: 12,
-                    bottom: "100%",
-                    zIndex: 55,
-                    maxHeight: 230,
-                    overflowY: "auto",
-                    border: "1px solid #D1D5DB",
-                    borderRadius: 10,
-                    background: "#FFFFFF",
-                    boxShadow:
-                      "0 12px 30px rgba(15,23,42,.15)",
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "8px 10px",
-                      borderBottom: "1px solid #E5E7EB",
-                      color: "#6B7280",
-                      fontSize: 9,
-                      fontWeight: 900,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Tag checklist group
-                  </div>
-
-                  {filteredChecklistGroups.length > 0 ? (
-                    filteredChecklistGroups.map((group) => (
-                      <button
-                        key={group.id}
-                        type="button"
-                        onMouseDown={(event) =>
-                          event.preventDefault()
-                        }
-                        onClick={() =>
-                          addChecklistTag(group)
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          border: 0,
-                          borderBottom:
-                            "1px solid #F3F4F6",
-                          background: "#FFFFFF",
-                          color: "#111827",
-                          textAlign: "left",
-                          fontSize: 11,
-                          fontWeight: 800,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {group.name}
-                      </button>
-                    ))
-                  ) : (
-                    <div
-                      style={{
-                        padding: "12px 10px",
-                        color: "#6B7280",
-                        fontSize: 11,
-                      }}
-                    >
-                      {checklistGroupsLoaded
-                        ? "No matching checklist group."
-                        : "Loading checklist groups…"}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {mentionOpen && (
                 <div
                   style={{
@@ -2106,33 +1797,22 @@ export default function TeamChatPopup() {
                 value={draft}
                 onChange={(event) => {
                   const value = event.target.value;
-                  const shouldOpenMention =
-                    /(?:^|\s)@[^\n@]*$/i.test(value);
-                  const shouldOpenChecklist =
-                    /(?:^|\s)#[^\n#]*$/i.test(value);
-
                   setDraft(value);
-                  setMentionOpen(shouldOpenMention);
-                  setChecklistTagOpen(shouldOpenChecklist);
-
-                  if (shouldOpenChecklist) {
-                    void loadChecklistGroups();
-                  }
+                  setMentionOpen(/(?:^|\s)@[^\n@]*$/i.test(value));
                 }}
                 onKeyDown={(event) => {
                   if (
                     event.key === "Enter" &&
                     !event.shiftKey &&
                     !event.nativeEvent.isComposing &&
-                    !mentionOpen &&
-                    !checklistTagOpen
+                    !mentionOpen
                   ) {
                     event.preventDefault();
                     sendMessage();
                   }
                 }}
                 rows={2}
-                placeholder="Write a message… Use @ for users or # for checklist groups"
+                placeholder="Write a message… Use @ to mention"
                 style={{
                   width: "100%",
                   resize: "none",
