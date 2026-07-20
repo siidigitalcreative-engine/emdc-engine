@@ -9806,40 +9806,19 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         { id:"sampling-poster", name:"Sampling Poster", link:"" },
         { id:"youtube-link", name:"YouTube Link", link:"" },
       ];
-      const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
-        const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-        const normalizeAssetKey = (value:any) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
-        const standardAssetKeys = new Set([
-          "main-google-drive-folder",
-          "product-image",
-          "product-images",
-          "cem-banner",
-          "store-banner",
-          "feed",
-          "story",
-          "showcase-video",
-          "a4-signage",
-          "sampling-poster",
-          "youtube-link",
-          "youtube",
-        ]);
-        const looksLikeStandardDefaults = sourceRows.length > 0 && sourceRows.every((row:any)=>{
-          const keys = [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean);
-          return keys.some((key:string)=>standardAssetKeys.has(key));
-        });
-        if (sourceRows.length && !looksLikeStandardDefaults) return sourceRows;
-        const sourceByKey = new Map<string,any>();
-        sourceRows.forEach((row:any)=>{
-          [row?.id,row?.name].map(normalizeAssetKey).filter(Boolean).forEach((key:string)=>{
-            if (!sourceByKey.has(key)) sourceByKey.set(key,row);
-          });
-        });
-        if (sourceByKey.has("product-images") && !sourceByKey.has("product-image")) sourceByKey.set("product-image",sourceByKey.get("product-images"));
-        if (sourceByKey.has("youtube") && !sourceByKey.has("youtube-link")) sourceByKey.set("youtube-link",sourceByKey.get("youtube"));
-        return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
-          const match = sourceByKey.get(normalizeAssetKey(defaultRow.id)) || sourceByKey.get(normalizeAssetKey(defaultRow.name));
-          return match ? { ...defaultRow, link:match.link || match.url || match.outputLink || "" } : defaultRow;
-        });
+      const normalizeProductIntroDigitalAssetRows = (
+        rows:any[] | undefined | null
+      ) => {
+        // Defaults are created only before this table has ever been saved.
+        // Once an array exists, even an empty or partial one, preserve it
+        // exactly so deleting a default row does not recreate it.
+        if (Array.isArray(rows)) {
+          return rows.filter(Boolean);
+        }
+
+        return defaultProductIntroDigitalAssetRows.map(
+          (row:any)=>({ ...row })
+        );
       };
       const productIntroDigitalAssetRows = normalizeProductIntroDigitalAssetRows(((group.aiWorkspace || {}).digital || {}).productIntroAssetLinks);
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
@@ -12129,65 +12108,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         { id:"sampling-poster", name:"Sampling Poster", link:"" },
         { id:"youtube-link", name:"YouTube Link", link:"" },
       ];
-      const normalizeProductIntroDigitalAssetRows = (rows:any[] = []) => {
-        const sourceRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-        const normalizeAssetKey = (value:any) =>
-          String(value || "")
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g,"-")
-            .replace(/^-+|-+$/g,"");
-
-        const sourceByKey = new Map<string,any>();
-
-        sourceRows.forEach((row:any)=>{
-          [row?.id,row?.name,row?.assetName,row?.label]
-            .map(normalizeAssetKey)
-            .filter(Boolean)
-            .forEach((key:string)=>{
-              if (!sourceByKey.has(key)) sourceByKey.set(key,row);
-            });
-        });
-
-        // Migrate the previous plural Product Images row.
-        if (
-          sourceByKey.has("product-images") &&
-          !sourceByKey.has("product-image")
-        ) {
-          sourceByKey.set(
-            "product-image",
-            sourceByKey.get("product-images")
-          );
+      const normalizeProductIntroDigitalAssetRows = (
+        rows:any[] | undefined | null
+      ) => {
+        // Defaults are created only before this table has ever been saved.
+        // Once an array exists, even an empty or partial one, preserve it
+        // exactly so deleting a default row does not recreate it.
+        if (Array.isArray(rows)) {
+          return rows.filter(Boolean);
         }
 
-        // Accept common YouTube naming variations.
-        if (
-          sourceByKey.has("youtube") &&
-          !sourceByKey.has("youtube-link")
-        ) {
-          sourceByKey.set(
-            "youtube-link",
-            sourceByKey.get("youtube")
-          );
-        }
-
-        return defaultProductIntroDigitalAssetRows.map((defaultRow:any)=>{
-          const match =
-            sourceByKey.get(normalizeAssetKey(defaultRow.id)) ||
-            sourceByKey.get(normalizeAssetKey(defaultRow.name));
-
-          return match
-            ? {
-                ...defaultRow,
-                link:String(
-                  match?.link ||
-                  match?.url ||
-                  match?.outputLink ||
-                  ""
-                ).trim(),
-              }
-            : defaultRow;
-        });
+        return defaultProductIntroDigitalAssetRows.map(
+          (row:any)=>({ ...row })
+        );
       };
       const productIntroDigitalAssetRows = normalizeProductIntroDigitalAssetRows(digitalData.productIntroAssetLinks);
       const updateProductIntroDigitalAssetRows = (rows:any[]) => {
