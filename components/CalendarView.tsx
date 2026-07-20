@@ -12391,12 +12391,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         );
 
         const productSummary = [
-          brands.length ? `Brand: ${brands.join(", ")}` : "",
-          `Products / SKUs: ${
-            actualSkus.length
-              ? actualSkus.join(", ")
-              : "Not available"
+          `Checklist Title: ${
+            String(
+              group?.groupName ||
+              group?.name ||
+              "Untitled Checklist"
+            ).trim()
           }`,
+          `No. of SKU: ${actualSkus.length}`,
           `Checklist Type: ${checklistAnnouncementType}`,
         ].filter(Boolean).join("\n");
 
