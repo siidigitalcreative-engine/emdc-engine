@@ -5776,8 +5776,21 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const visibleWorkspaceTabs = workspaceTabs.filter((tab:any)=>{
     if(tab.id==="livestream") return canShowLivestreamTab;
     if(tab.id==="budget") return isProductIntroOrReactivation;
+    if(tab.id==="training") return isProductIntroOrReactivation;
     return true;
   });
+
+  useEffect(()=>{
+    if(
+      activeGroupTab==="training" &&
+      !isProductIntroOrReactivation
+    ){
+      setActiveGroupTab("tasks");
+    }
+  },[
+    activeGroupTab,
+    isProductIntroOrReactivation,
+  ]);
 
   const workspaceConfig:any = {
     budget:{
@@ -9964,17 +9977,85 @@ ${sectionsHtml}
       };
 
       const exportTrainingPdf = () => {
-        if(!String(trainingMaterialsDraft || "").trim()) return;
-        const printWindow = window.open("","_blank","noopener,noreferrer");
-        if(!printWindow) return;
-        printWindow.document.open();
-        printWindow.document.write(getTrainingExportHtml());
-        printWindow.document.close();
-        printWindow.onload = () => {
-          printWindow.focus();
-          printWindow.print();
+        if(
+          !String(
+            trainingMaterialsDraft || ""
+          ).trim()
+        ){
+          return;
+        }
+
+        const frame =
+          document.createElement("iframe");
+
+        frame.setAttribute(
+          "aria-hidden",
+          "true"
+        );
+
+        Object.assign(frame.style,{
+          position:"fixed",
+          right:"0",
+          bottom:"0",
+          width:"1px",
+          height:"1px",
+          border:"0",
+          opacity:"0",
+          pointerEvents:"none",
+        });
+
+        document.body.appendChild(frame);
+
+        const frameWindow =
+          frame.contentWindow;
+        const frameDocument =
+          frame.contentDocument ||
+          frameWindow?.document;
+
+        if(
+          !frameWindow ||
+          !frameDocument
+        ){
+          frame.remove();
+          return;
+        }
+
+        frameDocument.open();
+        frameDocument.write(
+          getTrainingExportHtml()
+        );
+        frameDocument.close();
+
+        const runPrint = () => {
+          try {
+            frameWindow.focus();
+            frameWindow.print();
+
+            markActionDone(
+              "training-materials-export-pdf"
+            );
+          } finally {
+            window.setTimeout(
+              ()=>frame.remove(),
+              1800
+            );
+          }
         };
-        markActionDone("training-materials-export-pdf");
+
+        if(
+          frameDocument.readyState==="complete"
+        ){
+          window.setTimeout(
+            runPrint,
+            200
+          );
+        } else {
+          frame.onload = () =>
+            window.setTimeout(
+              runPrint,
+              200
+            );
+        }
       };
 
       const exportTrainingPowerPoint = () => {
