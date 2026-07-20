@@ -4543,6 +4543,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [showSortOptions,setShowSortOptions] = useState(false);
   const [sortMenuId,setSortMenuId] = useState<any>(null);
   const [generatingProductsFor,setGeneratingProductsFor] = useState<any>(null);
+  const [generatingStoredSkuProductsFor,setGeneratingStoredSkuProductsFor] = useState<any>(null);
   const [productGenerationError,setProductGenerationError] = useState<any>({});
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
@@ -4922,6 +4923,265 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
     }
   };
 
+  const generateRecommendedStoredSkuProducts = async (ev:any) => {
+    const eventId = String(ev?.id || "");
+
+    if(
+      !eventId ||
+      generatingStoredSkuProductsFor
+    ){
+      return;
+    }
+
+    setGeneratingStoredSkuProductsFor(eventId);
+    setProductGenerationError((previous:any)=>({
+      ...previous,
+      [eventId]:"",
+    }));
+
+    try {
+      const availableSkus = (
+        Array.isArray(skuStorage)
+          ? skuStorage
+          : []
+      )
+        .map((item:any)=>({
+          sku:String(
+            item?.skuCode ||
+            item?.sku ||
+            ""
+          ).trim(),
+          brand:String(
+            item?.brand ||
+            ""
+          ).trim(),
+          category:String(
+            item?.collection ||
+            item?.category ||
+            item?.productCategory ||
+            ""
+          ).trim(),
+          product:String(
+            item?.productName ||
+            item?.product ||
+            item?.name ||
+            ""
+          ).trim(),
+        }))
+        .filter(
+          (item:any)=>
+            item.sku &&
+            item.product
+        );
+
+      if(!availableSkus.length){
+        throw new Error(
+          "No products are available in SKU Storage."
+        );
+      }
+
+      const existingProducts = Array.isArray(
+        ev?.products
+      )
+        ? ev.products.filter(Boolean)
+        : [];
+
+      const instruction = [
+        "Choose the most recommendable products for this Philippine season, holiday, campaign, or event from the supplied SKU Storage list only.",
+        "Do not recommend anything outside the supplied SKU list.",
+        "Prioritize strong seasonal relevance, practical demand, gifting potential, promotional appeal, and likely purchase intent in the Philippines.",
+        "Consider Filipino weather, school calendar, payday and sale periods, family occasions, home and lifestyle demand, and local cultural habits.",
+        "Select 8 to 15 products when enough relevant SKUs are available.",
+        "Avoid duplicates and do not repeat products already listed.",
+        "Return only a valid JSON array.",
+        "Each item must use this exact format:",
+        '{"sku":"SKU CODE","product":"Product Name","brand":"Brand","reason":"Concise reason"}',
+        "No markdown and no explanation outside the JSON array.",
+      ].join("\n");
+
+      const response = await fetch(
+        "/api/ai/generate-text",
+        {
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json",
+          },
+          body:JSON.stringify({
+            task:
+              "philippines_event_sku_storage_recommendations",
+            taskLabel:
+              "Recommend Products from SKU Storage",
+            tone:
+              "commercial and practical",
+            instruction,
+            input:JSON.stringify({
+              market:"Philippines",
+              event:{
+                name:String(ev?.name || ""),
+                displayDate:String(ev?.date || ""),
+                calendarDate:String(
+                  ev?.calDate || ""
+                ),
+                calendarEndDate:String(
+                  ev?.calDateEnd || ""
+                ),
+                type:String(
+                  eventTypeLabel(ev?.type) ||
+                  ev?.type ||
+                  ""
+                ),
+                description:String(
+                  ev?.desc || ""
+                ),
+              },
+              existingRecommendedProducts:
+                existingProducts,
+              skuStorage:availableSkus,
+            },null,2),
+            maxOutputTokens:2200,
+          }),
+        }
+      );
+
+      const rawResponse =
+        await response.text();
+
+      let payload:any = {};
+
+      try {
+        payload = rawResponse
+          ? JSON.parse(rawResponse)
+          : {};
+      } catch {
+        payload = {
+          text:rawResponse,
+        };
+      }
+
+      if(!response.ok){
+        throw new Error(
+          payload?.error ||
+          payload?.message ||
+          "Unable to generate SKU Storage recommendations."
+        );
+      }
+
+      const raw = String(
+        payload?.text ||
+        payload?.output ||
+        payload?.content ||
+        ""
+      )
+        .replace(/^```(?:json)?/i,"")
+        .replace(/```$/,"")
+        .trim();
+
+      let parsed:any[] = [];
+
+      try {
+        const value = JSON.parse(raw);
+        parsed = Array.isArray(value)
+          ? value
+          : Array.isArray(value?.products)
+            ? value.products
+            : [];
+      } catch {
+        parsed = [];
+      }
+
+      const generated = parsed
+        .map((item:any)=>{
+          const sku = String(
+            item?.sku || ""
+          ).trim();
+          const product = String(
+            item?.product ||
+            item?.name ||
+            ""
+          ).trim();
+          const brand = String(
+            item?.brand || ""
+          ).trim();
+          const reason = String(
+            item?.reason || ""
+          ).trim();
+
+          if(!sku || !product){
+            return "";
+          }
+
+          return [
+            brand,
+            product,
+            `SKU: ${sku}`,
+            reason,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+        })
+        .filter(Boolean);
+
+      if(!generated.length){
+        throw new Error(
+          "AI returned no usable SKU Storage recommendations."
+        );
+      }
+
+      updProds(
+        eventId,
+        (current:any[])=>{
+          const currentProducts =
+            Array.isArray(current)
+              ? current.filter(Boolean)
+              : [];
+
+          const existingKeys = new Set(
+            currentProducts.map((item:any)=>
+              String(item || "")
+                .trim()
+                .toLowerCase()
+            )
+          );
+
+          const uniqueGenerated =
+            generated.filter(
+              (item:string)=>{
+                const key = item
+                  .trim()
+                  .toLowerCase();
+
+                if(
+                  !key ||
+                  existingKeys.has(key)
+                ){
+                  return false;
+                }
+
+                existingKeys.add(key);
+                return true;
+              }
+            );
+
+          return [
+            ...currentProducts,
+            ...uniqueGenerated,
+          ];
+        }
+      );
+    } catch(error:any) {
+      setProductGenerationError((previous:any)=>({
+        ...previous,
+        [eventId]:
+          error?.message ||
+          "Unable to generate SKU Storage recommendations.",
+      }));
+    } finally {
+      setGeneratingStoredSkuProductsFor(
+        null
+      );
+    }
+  };
+
   const renderEvForm = ({ form, setForm, onSave, onDelete, saveLabel }) => (
     <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
       <Field label="Event Name"><TI value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="e.g. Brand Anniversary Sale" /></Field>
@@ -5030,20 +5290,45 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                       <p style={{ margin:0,fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>
                         Recommended Products
                       </p>
-                      <Btn
-                        xs
-                        variant="outline"
-                        onClick={()=>
-                          generateRecommendedProducts(ev)
-                        }
-                        disabled={
-                          !!generatingProductsFor
-                        }
+                      <div
+                        style={{
+                          display:"flex",
+                          gap:6,
+                          flexWrap:"wrap",
+                        }}
                       >
-                        {generatingProductsFor===ev.id
-                          ? "Generating..."
-                          : "Generate Recommendations"}
-                      </Btn>
+                        <Btn
+                          xs
+                          variant="outline"
+                          onClick={()=>
+                            generateRecommendedProducts(ev)
+                          }
+                          disabled={
+                            !!generatingProductsFor ||
+                            !!generatingStoredSkuProductsFor
+                          }
+                        >
+                          {generatingProductsFor===ev.id
+                            ? "Generating..."
+                            : "Generate Market Recommendations"}
+                        </Btn>
+
+                        <Btn
+                          xs
+                          variant="outline"
+                          onClick={()=>
+                            generateRecommendedStoredSkuProducts(ev)
+                          }
+                          disabled={
+                            !!generatingProductsFor ||
+                            !!generatingStoredSkuProductsFor
+                          }
+                        >
+                          {generatingStoredSkuProductsFor===ev.id
+                            ? "Checking SKU Storage..."
+                            : "Recommend from SKU Storage"}
+                        </Btn>
+                      </div>
                     </div>
 
                     {!!productGenerationError?.[ev.id]&&(
@@ -10178,7 +10463,8 @@ ${slidesHtml}
           "30-Second Selling Pitch",
           "Questions to Ask the Customer",
           "Suggested Add-On or Cross-Sell Products",
-          "Care and Use",
+          "Care & Use Instructions",
+          "How-to-Use",
           "Important Do's and Don'ts",
           "Likely Customer Questions and Suggested Answers",
           "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
@@ -10968,7 +11254,7 @@ ${slidesHtml}
                   }}
                 >
                   {
-                    "Collection overview\nProduct guide per SKU\nSelling pitches\nDemonstration steps\nObjection handling\nFAQ and suggested answers\nComparison guide\nPromodiser cheat sheet\nKnowledge-check quiz"
+                    "Collection overview\nProduct guide per SKU\nSelling pitches\nCare & Use Instructions\nHow-to-Use\nDemonstration steps\nObjection handling\nFAQ and suggested answers\nComparison guide\nPromodiser cheat sheet\nKnowledge-check quiz"
                   }
                 </p>
               </div>
