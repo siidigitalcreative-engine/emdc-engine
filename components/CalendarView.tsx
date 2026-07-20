@@ -5098,6 +5098,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [aiError,setAiError] = useState<any>({});
   const [savedEcommercePreview,setSavedEcommercePreview] = useState<any>(null);
   const [newEcommerceSection,setNewEcommerceSection] = useState("");
+  const [trainingMaterialsDraft,setTrainingMaterialsDraft] = useState("");
+  const [trainingMaterialsDraftSource,setTrainingMaterialsDraftSource] = useState("");
   const [editingEcommerceSection,setEditingEcommerceSection] = useState<any>(null);
   const [editingEcommerceSectionValue,setEditingEcommerceSectionValue] = useState("");
   const [editingEcommerceInstructionValue,setEditingEcommerceInstructionValue] = useState("");
@@ -5534,6 +5536,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     { id:"marketing", label:"Marketing", sub:"Campaign copy and ads direction" },
     { id:"digital", label:"Digital Creative", sub:"Creative briefs and image prompts" },
     { id:"livestream", label:"Livestream", sub:"Live selling plan and scripts" },
+    { id:"training", label:"Training Materials", sub:"AI promodiser training guide" },
     { id:"overview", label:"Overview", sub:"Collected final outputs" },
   ];
 
@@ -5586,6 +5589,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       imageLabel:"Livestream Visual Direction",
       imagePlaceholder:"Example: Create a live selling setup direction with table arrangement, product placement, props, lighting, and background.",
       outputHint:"Livestream planning outputs will appear here once AI generation is connected.",
+    },
+    training:{
+      title:"Training Materials",
+      description:"Generate a comprehensive AI training guide for promodisers using the saved E-commerce output as the primary source.",
     },
     overview:{
       title:"Overview",
@@ -9403,6 +9410,781 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       return renderBudgetWorkspace(data);
     }
 
+    if(tab==="training"){
+      const ecommerceBackupData =
+        (
+          backupWorkspace &&
+          typeof backupWorkspace.ecommerce === "object" &&
+          backupWorkspace.ecommerce
+        )
+          ? backupWorkspace.ecommerce
+          : {};
+
+      const ecommercePersistedData =
+        (
+          persistedWorkspace &&
+          typeof persistedWorkspace.ecommerce === "object" &&
+          persistedWorkspace.ecommerce
+        )
+          ? persistedWorkspace.ecommerce
+          : {};
+
+      const ecommerceGroupData =
+        (
+          ((group.aiWorkspace || {}) as any).ecommerce &&
+          typeof ((group.aiWorkspace || {}) as any).ecommerce === "object"
+        )
+          ? ((group.aiWorkspace || {}) as any).ecommerce
+          : {};
+
+      const ecommerceData = getMergedEcommerceData({
+        ...ecommerceBackupData,
+        ...ecommercePersistedData,
+        ...ecommerceGroupData,
+      });
+
+      const ecommerceSavedOutputs = Array.isArray(
+        ecommerceData?.savedOutputs
+      )
+        ? ecommerceData.savedOutputs
+        : [];
+
+      const latestSavedEcommerceOutput =
+        ecommerceSavedOutputs.length
+          ? [...ecommerceSavedOutputs].sort(
+              (a:any,b:any)=>
+                String(
+                  b?.updatedAt ||
+                  b?.createdAt ||
+                  ""
+                ).localeCompare(
+                  String(
+                    a?.updatedAt ||
+                    a?.createdAt ||
+                    ""
+                  )
+                )
+            )[0]
+          : null;
+
+      const ecommerceSourceText = String(
+        ecommerceData?.generatedText ||
+        latestSavedEcommerceOutput?.text ||
+        latestSavedEcommerceOutput?.generatedText ||
+        ""
+      ).trim();
+
+      const storedTrainingOutput = String(
+        data?.generatedText ||
+        data?.trainingGuide ||
+        ""
+      );
+
+      const trainingSourceSignature = [
+        String(group?.id || ""),
+        String(data?.generatedAt || ""),
+        storedTrainingOutput,
+      ].join("|");
+
+      if(
+        trainingMaterialsDraftSource !== trainingSourceSignature &&
+        trainingMaterialsDraft !== storedTrainingOutput
+      ){
+        window.setTimeout(()=>{
+          setTrainingMaterialsDraft(storedTrainingOutput);
+          setTrainingMaterialsDraftSource(
+            trainingSourceSignature
+          );
+        },0);
+      }
+
+      const trainingProductRows = productRows.map(
+        (row:any,index:number)=>({
+          no:index+1,
+          brand:String(row?.brand || ""),
+          collection:String(
+            row?.collection ||
+            row?.category ||
+            ""
+          ),
+          product:String(
+            row?.product ||
+            row?.productName ||
+            ""
+          ),
+          sku:String(
+            row?.skuCode ||
+            row?.sku ||
+            ""
+          ),
+        })
+      );
+
+      const generateTrainingMaterials = async () => {
+        if(!ecommerceSourceText){
+          setAiError((previous:any)=>({
+            ...previous,
+            training:
+              "Generate or save the E-commerce output first. Training Materials uses the E-commerce output as its primary source.",
+          }));
+          return;
+        }
+
+        setAiBusy((previous:any)=>({
+          ...previous,
+          training:true,
+        }));
+        setAiError((previous:any)=>({
+          ...previous,
+          training:"",
+        }));
+
+        const instruction = [
+          "You are creating an internal product training manual for retail promodisers in the Philippines.",
+          "Use the supplied E-commerce generated output as the primary and authoritative product knowledge source.",
+          "Do not invent exact specifications, claims, certifications, materials, capacities, dimensions, compatibility, or safety information that are not present in the source.",
+          "When information is missing, write: To be confirmed.",
+          "Write clear professional English that is easy for promodisers to understand, remember, and explain to customers.",
+          "Avoid em dashes.",
+          "Do not use markdown heading symbols such as ###.",
+          "Do not number the main section titles.",
+          "Create one comprehensive collection guide plus a clear product guide for every listed SKU.",
+          "",
+          "Use this exact output structure:",
+          "TRAINING MANUAL TITLE",
+          "COLLECTION OVERVIEW",
+          "BRAND AND COLLECTION POSITIONING",
+          "TARGET CUSTOMERS",
+          "COLLECTION-WIDE KEY SELLING POINTS",
+          "VARIANTS AND DIFFERENCES",
+          "PRODUCT TRAINING GUIDES",
+          "For every product or SKU include:",
+          "Product Name",
+          "SKU",
+          "Product Overview",
+          "Top Selling Points",
+          "Key Features and Customer Benefits",
+          "Specifications",
+          "Best Use Cases",
+          "How to Demonstrate the Product",
+          "15-Second Selling Pitch",
+          "30-Second Selling Pitch",
+          "Questions to Ask the Customer",
+          "Suggested Add-On or Cross-Sell Products",
+          "Care and Use",
+          "Important Do's and Don'ts",
+          "Likely Customer Questions and Suggested Answers",
+          "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
+          "PRODUCT COMPARISON GUIDE",
+          "PROMODISER DEMONSTRATION FLOW",
+          "PROMODISER QUICK CHEAT SHEET",
+          "KNOWLEDGE CHECK QUIZ",
+          "Create 10 multiple-choice questions and include an answer key.",
+          "",
+          "Keep all claims grounded in the supplied E-commerce output.",
+        ].join("\n");
+
+        try {
+          const response = await fetch(
+            "/api/ai/generate-text",
+            {
+              method:"POST",
+              headers:{
+                "Content-Type":"application/json",
+              },
+              body:JSON.stringify({
+                task:"promodiser_training_materials",
+                taskLabel:
+                  "Promodiser Training Materials",
+                tone:"professional and practical",
+                instruction,
+                input:JSON.stringify({
+                  checklist:{
+                    title:String(
+                      group?.groupName ||
+                      group?.name ||
+                      ""
+                    ),
+                    operationalType:String(
+                      lt?.label ||
+                      group?.launchType ||
+                      ""
+                    ),
+                  },
+                  products:trainingProductRows,
+                  ecommerceGeneratedOutput:
+                    ecommerceSourceText,
+                },null,2),
+                maxOutputTokens:10000,
+              }),
+            }
+          );
+
+          const raw = await response.text();
+          let payload:any = {};
+
+          try {
+            payload = raw
+              ? JSON.parse(raw)
+              : {};
+          } catch {
+            throw new Error(
+              raw ||
+              "Training material generation failed."
+            );
+          }
+
+          if(!response.ok){
+            throw new Error(
+              payload?.error ||
+              payload?.message ||
+              "Training material generation failed."
+            );
+          }
+
+          const generatedText =
+            cleanReadyToUseOutput(
+              payload?.text || ""
+            );
+
+          setTrainingMaterialsDraft(
+            generatedText
+          );
+
+          const generatedAt =
+            new Date().toISOString();
+
+          updateAiWorkspace("training",{
+            generatedText,
+            trainingGuide:generatedText,
+            generatedAt,
+            source:"E-commerce Generated Output",
+            sourceEcommerceGeneratedAt:
+              ecommerceData?.generatedAt ||
+              latestSavedEcommerceOutput?.createdAt ||
+              "",
+            coveredSkuCount:
+              trainingProductRows.length,
+          });
+
+          setTrainingMaterialsDraftSource(
+            [
+              String(group?.id || ""),
+              generatedAt,
+              generatedText,
+            ].join("|")
+          );
+        } catch(error:any) {
+          setAiError((previous:any)=>({
+            ...previous,
+            training:
+              error?.message ||
+              "Training material generation failed.",
+          }));
+        } finally {
+          setAiBusy((previous:any)=>({
+            ...previous,
+            training:false,
+          }));
+        }
+      };
+
+      const saveTrainingMaterials = () => {
+        const cleanDraft = String(
+          trainingMaterialsDraft || ""
+        ).trim();
+
+        if(!cleanDraft) return;
+
+        const savedAt =
+          new Date().toISOString();
+
+        updateAiWorkspace("training",{
+          generatedText:cleanDraft,
+          trainingGuide:cleanDraft,
+          savedAt,
+          source:
+            data?.source ||
+            "E-commerce Generated Output",
+          coveredSkuCount:
+            trainingProductRows.length,
+        });
+
+        setTrainingMaterialsDraftSource(
+          [
+            String(group?.id || ""),
+            String(data?.generatedAt || ""),
+            cleanDraft,
+          ].join("|")
+        );
+
+        markActionDone(
+          "training-materials-save"
+        );
+      };
+
+      const copyTrainingMaterials = async () => {
+        const value = String(
+          trainingMaterialsDraft || ""
+        ).trim();
+
+        if(!value) return;
+
+        try {
+          await navigator.clipboard.writeText(
+            value
+          );
+          markActionDone(
+            "training-materials-copy"
+          );
+        } catch {}
+      };
+
+      const addTrainingMaterialsToOverview = () => {
+        const value = String(
+          trainingMaterialsDraft || ""
+        ).trim();
+
+        if(!value) return;
+
+        addToOverview(
+          "Training Materials",
+          `${
+            String(
+              group?.groupName ||
+              group?.name ||
+              "Product"
+            ).trim()
+          } Training Guide`,
+          value,
+          "Promodiser Training Guide",
+          {
+            tab:"training",
+            type:"trainingGuide",
+          }
+        );
+
+        markActionDone(
+          "overview-training-materials"
+        );
+      };
+
+      return (
+        <div
+          style={{
+            display:"flex",
+            flexDirection:"column",
+            gap:14,
+            minWidth:0,
+          }}
+        >
+          <div
+            style={{
+              padding:isMobile?12:16,
+              background:C.surface,
+              border:`1.5px solid ${C.border}`,
+              borderRadius:12,
+            }}
+          >
+            <div
+              style={{
+                display:"flex",
+                justifyContent:"space-between",
+                alignItems:"flex-start",
+                gap:12,
+                flexWrap:"wrap",
+              }}
+            >
+              <div style={{minWidth:0,flex:1}}>
+                <h3
+                  style={{
+                    margin:"0 0 5px",
+                    fontSize:16,
+                    fontWeight:900,
+                    color:C.text,
+                  }}
+                >
+                  Training Materials
+                </h3>
+                <p
+                  style={{
+                    margin:0,
+                    fontSize:12,
+                    color:C.muted,
+                    lineHeight:1.5,
+                    maxWidth:920,
+                  }}
+                >
+                  Generate a comprehensive product and
+                  collection training manual for
+                  promodisers. The AI uses the saved
+                  E-commerce generated output as its
+                  primary source.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display:"flex",
+                  gap:8,
+                  flexWrap:"wrap",
+                  width:isMobile?"100%":"auto",
+                }}
+              >
+                <Btn
+                  sm
+                  onClick={
+                    generateTrainingMaterials
+                  }
+                  disabled={
+                    !!aiBusy.training ||
+                    !ecommerceSourceText
+                  }
+                >
+                  {aiBusy.training
+                    ? "Generating..."
+                    : trainingMaterialsDraft
+                      ? "Regenerate Guide"
+                      : "Generate Training Guide"}
+                </Btn>
+                <Btn
+                  sm
+                  variant="outline"
+                  onClick={
+                    saveTrainingMaterials
+                  }
+                  disabled={
+                    !String(
+                      trainingMaterialsDraft || ""
+                    ).trim()
+                  }
+                >
+                  {actionDone(
+                    "training-materials-save"
+                  )
+                    ? "✓ Saved"
+                    : "Save"}
+                </Btn>
+                <Btn
+                  sm
+                  variant="outline"
+                  onClick={
+                    copyTrainingMaterials
+                  }
+                  disabled={
+                    !String(
+                      trainingMaterialsDraft || ""
+                    ).trim()
+                  }
+                >
+                  {actionDone(
+                    "training-materials-copy"
+                  )
+                    ? "✓ Copied"
+                    : "Copy All"}
+                </Btn>
+                <Btn
+                  sm
+                  variant={
+                    actionDone(
+                      "overview-training-materials"
+                    )
+                      ? "primary"
+                      : "outline"
+                  }
+                  onClick={
+                    addTrainingMaterialsToOverview
+                  }
+                  disabled={
+                    !String(
+                      trainingMaterialsDraft || ""
+                    ).trim()
+                  }
+                >
+                  {actionDone(
+                    "overview-training-materials"
+                  )
+                    ? "✓ Added"
+                    : "Add to Overview"}
+                </Btn>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display:"grid",
+              gridTemplateColumns:
+                isMobile
+                  ? "1fr"
+                  : "minmax(0,1fr) 290px",
+              gap:14,
+              alignItems:"start",
+              minWidth:0,
+            }}
+          >
+            <div
+              style={{
+                padding:isMobile?12:16,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+                minWidth:0,
+              }}
+            >
+              <div
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"center",
+                  gap:8,
+                  marginBottom:10,
+                  flexWrap:"wrap",
+                }}
+              >
+                <div>
+                  <h4
+                    style={{
+                      margin:0,
+                      fontSize:13,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    AI Training Guide
+                  </h4>
+                  <p
+                    style={{
+                      margin:"3px 0 0",
+                      fontSize:10.5,
+                      color:C.faint,
+                    }}
+                  >
+                    Editable before saving or adding to
+                    Overview.
+                  </p>
+                </div>
+                {!!data?.generatedAt&&(
+                  <span
+                    style={{
+                      fontSize:10.5,
+                      color:C.faint,
+                    }}
+                  >
+                    Generated{" "}
+                    {new Date(
+                      data.generatedAt
+                    ).toLocaleString("en-PH",{
+                      month:"short",
+                      day:"numeric",
+                      hour:"2-digit",
+                      minute:"2-digit",
+                    })}
+                  </span>
+                )}
+              </div>
+
+              <textarea
+                value={trainingMaterialsDraft}
+                onChange={(event:any)=>
+                  setTrainingMaterialsDraft(
+                    event.target.value
+                  )
+                }
+                placeholder={
+                  ecommerceSourceText
+                    ? "Click Generate Training Guide to create the promodiser training manual."
+                    : "Generate or save the E-commerce output first."
+                }
+                rows={isMobile?24:34}
+                style={{
+                  width:"100%",
+                  boxSizing:"border-box",
+                  minHeight:isMobile?520:720,
+                  resize:"vertical",
+                  border:`1.5px solid ${C.border}`,
+                  borderRadius:10,
+                  background:C.bg,
+                  color:C.text,
+                  fontSize:12.5,
+                  lineHeight:1.6,
+                  padding:"12px 13px",
+                  outline:"none",
+                }}
+              />
+
+              {!!aiError.training&&(
+                <div
+                  style={{
+                    marginTop:10,
+                    padding:"9px 11px",
+                    background:"#FEF2F2",
+                    border:"1px solid #FECACA",
+                    borderRadius:8,
+                    color:"#B91C1C",
+                    fontSize:11,
+                    lineHeight:1.45,
+                  }}
+                >
+                  {aiError.training}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display:"flex",
+                flexDirection:"column",
+                gap:12,
+                minWidth:0,
+              }}
+            >
+              <div
+                style={{
+                  padding:14,
+                  background:"#ECFDF5",
+                  border:"1.5px solid #A7F3D0",
+                  borderRadius:12,
+                }}
+              >
+                <h4
+                  style={{
+                    margin:"0 0 6px",
+                    fontSize:13,
+                    fontWeight:900,
+                    color:"#065F46",
+                  }}
+                >
+                  E-commerce Source
+                </h4>
+                <p
+                  style={{
+                    margin:0,
+                    fontSize:11.5,
+                    color:"#065F46",
+                    lineHeight:1.5,
+                  }}
+                >
+                  {ecommerceSourceText
+                    ? "Ready. The saved E-commerce output will be included in the AI prompt."
+                    : "No generated E-commerce output found. Complete and save the E-commerce output first."}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  padding:14,
+                  background:C.surface,
+                  border:`1.5px solid ${C.border}`,
+                  borderRadius:12,
+                }}
+              >
+                <h4
+                  style={{
+                    margin:"0 0 8px",
+                    fontSize:13,
+                    fontWeight:900,
+                    color:C.text,
+                  }}
+                >
+                  Coverage
+                </h4>
+                <div
+                  style={{
+                    display:"grid",
+                    gap:8,
+                    fontSize:11.5,
+                    color:C.textSub,
+                  }}
+                >
+                  <div
+                    style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      gap:8,
+                    }}
+                  >
+                    <span>Checklist</span>
+                    <strong
+                      style={{
+                        textAlign:"right",
+                        overflowWrap:"anywhere",
+                      }}
+                    >
+                      {group?.groupName ||
+                        group?.name ||
+                        "Untitled"}
+                    </strong>
+                  </div>
+                  <div
+                    style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      gap:8,
+                    }}
+                  >
+                    <span>No. of SKU</span>
+                    <strong>
+                      {trainingProductRows.length}
+                    </strong>
+                  </div>
+                  <div
+                    style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      gap:8,
+                    }}
+                  >
+                    <span>Primary source</span>
+                    <strong
+                      style={{
+                        textAlign:"right",
+                      }}
+                    >
+                      E-commerce Output
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding:14,
+                  background:C.surfaceAlt,
+                  border:`1px solid ${C.border}`,
+                  borderRadius:12,
+                }}
+              >
+                <h4
+                  style={{
+                    margin:"0 0 7px",
+                    fontSize:12,
+                    fontWeight:900,
+                    color:C.text,
+                  }}
+                >
+                  Generated Sections
+                </h4>
+                <p
+                  style={{
+                    margin:0,
+                    whiteSpace:"pre-line",
+                    fontSize:10.8,
+                    color:C.muted,
+                    lineHeight:1.55,
+                  }}
+                >
+                  {
+                    "Collection overview\nProduct guide per SKU\nSelling pitches\nDemonstration steps\nObjection handling\nFAQ and suggested answers\nComparison guide\nPromodiser cheat sheet\nKnowledge-check quiz"
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if(tab==="overview"){
       const overviewItems = getOverviewItems();
       const isCampaignOverview = String(lt?.label || group?.launchType || group?.type || "").toLowerCase().includes("campaign");
@@ -9543,13 +10325,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           ) : (
             <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start" }}>
               {(() => {
-                const sourceRank:any = { "E-commerce":0, "Marketing":1, "Digital Creative":2, "Livestream":3 };
+                const sourceRank:any = { "E-commerce":0, "Marketing":1, "Digital Creative":2, "Livestream":3, "Training Materials":4 };
                 const normalizeSource = (value:any) => {
                   const v = String(value || "").toLowerCase();
                   if(v.includes("e-commerce") || v.includes("ecommerce")) return "E-commerce";
                   if(v.includes("marketing")) return "Marketing";
                   if(v.includes("digital")) return "Digital Creative";
                   if(v.includes("livestream") || v.includes("live")) return "Livestream";
+                  if(v.includes("training")) return "Training Materials";
                   return "Other";
                 };
                 const sorted = [...overviewItems].sort((a:any,b:any)=>{
@@ -21622,7 +22405,7 @@ const AIEngineView = ({ skuStorage=[], brands=[] }: any) => {
 
 // ─── SHAREABLE PAGE LINKS ────────────────────────────────────────────────────
 const safeRouteTab = (value:any) => ["calendar","events","checklists","skus","ai"].includes(String(value||"")) ? String(value) : "calendar";
-const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","budget","marketing","digital","livestream","overview"].includes(String(value||"")) ? String(value) : "tasks";
+const safeChecklistInnerTab = (value:any) => ["tasks","ecommerce","budget","marketing","digital","livestream","training","overview"].includes(String(value||"")) ? String(value) : "tasks";
 
 const parseEmdcRoute = () => {
   if (typeof window === "undefined") return { tab:"calendar", groupId:null, groupTab:"tasks" };
