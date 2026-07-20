@@ -4544,6 +4544,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [sortMenuId,setSortMenuId] = useState<any>(null);
   const [generatingProductsFor,setGeneratingProductsFor] = useState<any>(null);
   const [generatingStoredSkuProductsFor,setGeneratingStoredSkuProductsFor] = useState<any>(null);
+  const [eventProductView,setEventProductView] = useState<any>({});
   const [productGenerationError,setProductGenerationError] = useState<any>({});
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
@@ -5292,42 +5293,99 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                       </p>
                       <div
                         style={{
-                          display:"flex",
-                          gap:5,
-                          flexWrap:"wrap",
+                          display:"inline-flex",
+                          gap:3,
+                          padding:3,
+                          border:`1px solid ${C.border}`,
+                          borderRadius:7,
+                          background:C.surfaceAlt,
                         }}
                       >
-                        <Btn
-                          xs
-                          variant="outline"
-                          onClick={()=>
-                            generateRecommendedProducts(ev)
-                          }
+                        <button
+                          type="button"
+                          onClick={()=>{
+                            setEventProductView((previous:any)=>({
+                              ...previous,
+                              [ev.id]:"market",
+                            }));
+
+                            const hasMarketIdeas = evProducts.some(
+                              (item:any)=>
+                                !String(item || "").includes("SKU:")
+                            );
+
+                            if(!hasMarketIdeas){
+                              void generateRecommendedProducts(ev);
+                            }
+                          }}
                           disabled={
                             !!generatingProductsFor ||
                             !!generatingStoredSkuProductsFor
                           }
+                          style={{
+                            border:0,
+                            borderRadius:5,
+                            padding:"5px 8px",
+                            background:
+                              (eventProductView?.[ev.id] || "market")==="market"
+                                ? C.accent
+                                : "transparent",
+                            color:
+                              (eventProductView?.[ev.id] || "market")==="market"
+                                ? "#FFFFFF"
+                                : C.textSub,
+                            fontSize:10,
+                            fontWeight:800,
+                            cursor:"pointer",
+                          }}
                         >
                           {generatingProductsFor===ev.id
                             ? "Generating..."
                             : "Market Ideas"}
-                        </Btn>
+                        </button>
 
-                        <Btn
-                          xs
-                          variant="outline"
-                          onClick={()=>
-                            generateRecommendedStoredSkuProducts(ev)
-                          }
+                        <button
+                          type="button"
+                          onClick={()=>{
+                            setEventProductView((previous:any)=>({
+                              ...previous,
+                              [ev.id]:"sku",
+                            }));
+
+                            const hasSkuIdeas = evProducts.some(
+                              (item:any)=>
+                                String(item || "").includes("SKU:")
+                            );
+
+                            if(!hasSkuIdeas){
+                              void generateRecommendedStoredSkuProducts(ev);
+                            }
+                          }}
                           disabled={
                             !!generatingProductsFor ||
                             !!generatingStoredSkuProductsFor
                           }
+                          style={{
+                            border:0,
+                            borderRadius:5,
+                            padding:"5px 8px",
+                            background:
+                              eventProductView?.[ev.id]==="sku"
+                                ? C.accent
+                                : "transparent",
+                            color:
+                              eventProductView?.[ev.id]==="sku"
+                                ? "#FFFFFF"
+                                : C.textSub,
+                            fontSize:10,
+                            fontWeight:800,
+                            cursor:"pointer",
+                          }}
                         >
                           {generatingStoredSkuProductsFor===ev.id
-                            ? "Checking SKU Storage..."
+                            ? "Checking..."
                             : "From SKU Storage"}
-                        </Btn>
+                        </button>
                       </div>
                     </div>
 
@@ -5358,7 +5416,19 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                         paddingRight:2,
                       }}
                     >
-                      {evProducts.map((p,i)=>{
+                      {evProducts
+                        .map((p:any,i:number)=>({p,i}))
+                        .filter(({p}:any)=>{
+                          const selectedView =
+                            eventProductView?.[ev.id] || "market";
+                          const isSkuRecommendation =
+                            String(p || "").includes("SKU:");
+
+                          return selectedView==="sku"
+                            ? isSkuRecommendation
+                            : !isSkuRecommendation;
+                        })
+                        .map(({p,i}:any)=>{
                         const productText = String(p || "");
                         const parts = productText
                           .split("|")
@@ -5513,7 +5583,31 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                           </div>
                         );
                       })}
-                      {evProducts.length===0&&<p style={{ fontSize:12,color:C.faint,margin:"4px 0" }}>No products added yet.</p>}
+
+                      {!evProducts.some((item:any)=>{
+                        const selectedView =
+                          eventProductView?.[ev.id] || "market";
+                        const isSkuRecommendation =
+                          String(item || "").includes("SKU:");
+
+                        return selectedView==="sku"
+                          ? isSkuRecommendation
+                          : !isSkuRecommendation;
+                      })&&(
+                        <p
+                          style={{
+                            fontSize:10.5,
+                            color:C.faint,
+                            margin:"8px 0",
+                            textAlign:"center",
+                            lineHeight:1.4,
+                          }}
+                        >
+                          {(eventProductView?.[ev.id] || "market")==="sku"
+                            ? "No SKU Storage recommendations yet."
+                            : "No market recommendations yet."}
+                        </p>
+                      )}
                     </div>
 
                     {/* Add product panel */}
