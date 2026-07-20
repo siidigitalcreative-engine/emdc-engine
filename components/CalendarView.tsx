@@ -5758,18 +5758,117 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     };
   };
 
-  const getOverviewLocalStorageKey = () => group?.id ? `emdc_overview_items_v1_${group.id}` : "";
+  const getOverviewLocalStorageKey = () =>
+    group?.id ? `emdc_overview_items_v1_${group.id}` : "";
+
+  const getOverviewDeletedLocalStorageKey = () =>
+    group?.id ? `emdc_overview_deleted_v2_${group.id}` : "";
+
+  const overviewCanonicalKey = (item:any) => {
+    const sourceTab = String(
+      item?.sourceRef?.tab || item?.sourceTab || ""
+    ).trim().toLowerCase();
+    const sourceType = String(
+      item?.sourceRef?.type || ""
+    ).trim().toLowerCase();
+    const sourceId = String(
+      item?.sourceRef?.id || ""
+    ).trim().toLowerCase();
+    const title = String(item?.title || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g," ");
+    const kind = String(item?.kind || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g," ");
+
+    if(
+      sourceType==="productintroassetlinks" ||
+      (
+        sourceTab.includes("digital") &&
+        title.includes(
+          "product introduction digital creative asset links"
+        )
+      )
+    ){
+      return "digital:productintroassetlinks";
+    }
+
+    if(sourceType && sourceId){
+      return `${sourceTab}:${sourceType}:${sourceId}`;
+    }
+
+    if(sourceType){
+      return `${sourceTab}:${sourceType}:${title}`;
+    }
+
+    return String(
+      item?.id ||
+      `${sourceTab}:${kind}:${title}:${item?.createdAt || ""}`
+    ).trim();
+  };
 
   const readOverviewItemsFromLocal = () => {
     if (typeof window === "undefined") return [];
     const key = getOverviewLocalStorageKey();
     if(!key) return [];
     try {
-      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      const parsed = JSON.parse(
+        localStorage.getItem(key) || "[]"
+      );
       return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
+  };
+
+  const readOverviewDeletedFromLocal = () => {
+    if(typeof window === "undefined"){
+      return { ids:[], keys:[] };
+    }
+
+    const key = getOverviewDeletedLocalStorageKey();
+    if(!key) return { ids:[], keys:[] };
+
+    try {
+      const parsed = JSON.parse(
+        localStorage.getItem(key) || "{}"
+      );
+
+      return {
+        ids:Array.isArray(parsed?.ids)
+          ? parsed.ids.map(String)
+          : [],
+        keys:Array.isArray(parsed?.keys)
+          ? parsed.keys.map(String)
+          : [],
+      };
+    } catch {
+      return { ids:[], keys:[] };
+    }
+  };
+
+  const writeOverviewDeletedToLocal = (value:any) => {
+    if(typeof window === "undefined") return;
+
+    const key = getOverviewDeletedLocalStorageKey();
+    if(!key) return;
+
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          ids:Array.from(
+            new Set((value?.ids || []).map(String))
+          ),
+          keys:Array.from(
+            new Set((value?.keys || []).map(String))
+          ),
+          updatedAt:new Date().toISOString(),
+        })
+      );
+    } catch {}
   };
 
   const writeOverviewItemsToLocal = (items:any[] = []) => {
@@ -5777,49 +5876,241 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     const key = getOverviewLocalStorageKey();
     if(!key) return;
     try {
-      localStorage.setItem(key, JSON.stringify(Array.isArray(items) ? items : []));
-      window.dispatchEvent(new Event("emdc-local-sync"));
+      localStorage.setItem(
+        key,
+        JSON.stringify(
+          Array.isArray(items) ? items : []
+        )
+      );
+      window.dispatchEvent(
+        new Event("emdc-local-sync")
+      );
     } catch {}
   };
 
   const mergeOverviewItems = (...lists:any[][]) => {
-    const map = new Map();
-    lists.flat().filter(Boolean).forEach((item:any)=>{
-      const key = String(item?.id || `${item?.title || ""}-${item?.createdAt || ""}-${item?.updatedAt || ""}`);
-      if(!key.trim()) return;
-      map.set(key, { ...(map.get(key) || {}), ...item });
-    });
-    return Array.from(map.values()).sort((a:any,b:any)=>String(b?.updatedAt || b?.createdAt || "").localeCompare(String(a?.updatedAt || a?.createdAt || "")));
+    const map = new Map<string,any>();
+
+    lists
+      .flat()
+      .filter(Boolean)
+      .forEach((item:any)=>{
+        const key = overviewCanonicalKey(item);
+        if(!key.trim()) return;
+
+        const existing = map.get(key);
+
+        if(!existing){
+          map.set(key,item);
+          return;
+        }
+
+        const existingTime = String(
+          existing?.updatedAt ||
+          existing?.createdAt ||
+          ""
+        );
+        const incomingTime = String(
+          item?.updatedAt ||
+          item?.createdAt ||
+          ""
+        );
+
+        map.set(
+          key,
+          incomingTime >= existingTime
+            ? { ...existing, ...item }
+            : { ...item, ...existing }
+        );
+      });
+
+    return Array.from(map.values()).sort(
+      (a:any,b:any)=>
+        String(
+          b?.updatedAt || b?.createdAt || ""
+        ).localeCompare(
+          String(
+            a?.updatedAt || a?.createdAt || ""
+          )
+        )
+    );
+  };
+
+  const getOverviewDeletionState = () => {
+    const currentOverview =
+      ((group.aiWorkspace || {}).overview || {}) as any;
+    const persistedOverview =
+      (
+        (
+          (getPersistedChecklistGroup() || {})
+            .aiWorkspace || {}
+        ).overview || {}
+      ) as any;
+    const localDeleted =
+      readOverviewDeletedFromLocal();
+
+    return {
+      ids:Array.from(
+        new Set([
+          ...(Array.isArray(
+            currentOverview.deletedItemIds
+          )
+            ? currentOverview.deletedItemIds
+            : []),
+          ...(Array.isArray(
+            persistedOverview.deletedItemIds
+          )
+            ? persistedOverview.deletedItemIds
+            : []),
+          ...(localDeleted.ids || []),
+        ].map(String))
+      ),
+      keys:Array.from(
+        new Set([
+          ...(Array.isArray(
+            currentOverview.deletedItemKeys
+          )
+            ? currentOverview.deletedItemKeys
+            : []),
+          ...(Array.isArray(
+            persistedOverview.deletedItemKeys
+          )
+            ? persistedOverview.deletedItemKeys
+            : []),
+          ...(localDeleted.keys || []),
+        ].map(String))
+      ),
+    };
   };
 
   const getOverviewItems = () => {
-    const currentOverview = ((group.aiWorkspace || {}).overview || {}) as any;
-    const persistedOverview = (((getPersistedChecklistGroup() || {}).aiWorkspace || {}).overview || {}) as any;
-    const currentItems = Array.isArray(currentOverview.items) ? currentOverview.items : [];
-    const persistedItems = Array.isArray(persistedOverview.items) ? persistedOverview.items : [];
+    const currentOverview =
+      ((group.aiWorkspace || {}).overview || {}) as any;
+    const persistedOverview =
+      (
+        (
+          (getPersistedChecklistGroup() || {})
+            .aiWorkspace || {}
+        ).overview || {}
+      ) as any;
+    const currentItems = Array.isArray(
+      currentOverview.items
+    )
+      ? currentOverview.items
+      : [];
+    const persistedItems = Array.isArray(
+      persistedOverview.items
+    )
+      ? persistedOverview.items
+      : [];
     const localItems = readOverviewItemsFromLocal();
-    return mergeOverviewItems(currentItems,persistedItems,localItems);
+    const deleted = getOverviewDeletionState();
+    const deletedIds = new Set(deleted.ids);
+    const deletedKeys = new Set(deleted.keys);
+
+    return mergeOverviewItems(
+      currentItems,
+      persistedItems,
+      localItems
+    ).filter(
+      (item:any)=>
+        !deletedIds.has(
+          String(item?.id || "")
+        ) &&
+        !deletedKeys.has(
+          overviewCanonicalKey(item)
+        )
+    );
   };
 
-  const addToOverview = (sourceTab:string, title:string, content:any, kind:string="Text Output", sourceRef:any=null) => {
-    const isStructured = content && typeof content === "object";
-    const textContent = isStructured ? content : String(content || "").trim();
+  const addToOverview = (
+    sourceTab:string,
+    title:string,
+    content:any,
+    kind:string="Text Output",
+    sourceRef:any=null
+  ) => {
+    const isStructured =
+      content && typeof content === "object";
+    const textContent = isStructured
+      ? content
+      : String(content || "").trim();
+
     if(!isStructured && !textContent) return;
-    const items = getOverviewItems();
-    const newItem = {
+
+    const now = new Date().toISOString();
+    const candidate = {
       id:uid(),
       sourceTab,
       kind,
       title:title || `${sourceTab} output`,
       content:textContent,
       sourceRef:sourceRef || null,
-      updatedAt:new Date().toISOString(),
-      createdAt:new Date().toISOString(),
+      updatedAt:now,
+      createdAt:now,
     };
-    const nextItems = [...items,newItem];
+
+    const candidateKey =
+      overviewCanonicalKey(candidate);
+    const items = getOverviewItems();
+    const existing = items.find(
+      (item:any)=>
+        overviewCanonicalKey(item)===candidateKey
+    );
+
+    const newItem = existing
+      ? {
+          ...existing,
+          sourceTab,
+          kind,
+          title:
+            title ||
+            existing.title ||
+            `${sourceTab} output`,
+          content:textContent,
+          sourceRef:
+            sourceRef ||
+            existing.sourceRef ||
+            null,
+          updatedAt:now,
+        }
+      : candidate;
+
+    const nextItems = [
+      ...items.filter(
+        (item:any)=>
+          overviewCanonicalKey(item)!==candidateKey
+      ),
+      newItem,
+    ];
+
+    const deleted = getOverviewDeletionState();
+    const nextDeleted = {
+      ids:deleted.ids.filter(
+        (id:string)=>
+          id!==String(newItem.id || "")
+      ),
+      keys:deleted.keys.filter(
+        (key:string)=>key!==candidateKey
+      ),
+    };
+
+    writeOverviewDeletedToLocal(nextDeleted);
     writeOverviewItemsToLocal(nextItems);
-    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
-    markActionDone(`overview-${String(sourceTab||"").toLowerCase()}-${String(title||"").toLowerCase().replace(/[^a-z0-9]+/g,"-")}`);
+
+    updateAiWorkspace("overview",{
+      items:nextItems,
+      deletedItemIds:nextDeleted.ids,
+      deletedItemKeys:nextDeleted.keys,
+      updatedAt:now,
+    });
+
+    markActionDone(
+      `overview-${String(sourceTab||"")
+        .toLowerCase()}-${String(title||"")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g,"-")}`
+    );
   };
 
   const addProductIntroEcommerceOutputToOverview = (sourceData:any, actionKey:string="overview-ecommerce-product-rows") => {
@@ -6225,9 +6516,60 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const deleteOverviewItem = (id:string) => {
-    const nextItems = getOverviewItems().filter((item:any)=>item.id!==id);
+    const items = getOverviewItems();
+    const target = items.find(
+      (item:any)=>
+        String(item?.id || "")===String(id || "")
+    );
+
+    if(!target) return;
+
+    const targetKey = overviewCanonicalKey(target);
+    const removedItems = items.filter(
+      (item:any)=>
+        overviewCanonicalKey(item)===targetKey
+    );
+    const nextItems = items.filter(
+      (item:any)=>
+        overviewCanonicalKey(item)!==targetKey
+    );
+
+    const deleted = getOverviewDeletionState();
+    const nextDeleted = {
+      ids:Array.from(
+        new Set([
+          ...deleted.ids,
+          ...removedItems
+            .map((item:any)=>
+              String(item?.id || "")
+            )
+            .filter(Boolean),
+          String(id || ""),
+        ])
+      ),
+      keys:Array.from(
+        new Set([
+          ...deleted.keys,
+          targetKey,
+        ])
+      ),
+    };
+
+    const now = new Date().toISOString();
+
+    writeOverviewDeletedToLocal(nextDeleted);
     writeOverviewItemsToLocal(nextItems);
-    updateAiWorkspace("overview",{ items:nextItems, updatedAt:new Date().toISOString() });
+
+    updateAiWorkspace("overview",{
+      items:nextItems,
+      deletedItemIds:nextDeleted.ids,
+      deletedItemKeys:nextDeleted.keys,
+      updatedAt:now,
+    });
+
+    markActionDone(
+      `overview-delete-${targetKey}`
+    );
   };
 
   const overviewItemToText = (item:any) => {
