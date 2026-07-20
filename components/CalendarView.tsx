@@ -5100,6 +5100,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [newEcommerceSection,setNewEcommerceSection] = useState("");
   const [trainingMaterialsDraft,setTrainingMaterialsDraft] = useState("");
   const [trainingMaterialsDraftSource,setTrainingMaterialsDraftSource] = useState("");
+  const [trainingMaterialsEditMode,setTrainingMaterialsEditMode] = useState(false);
   const [editingEcommerceSection,setEditingEcommerceSection] = useState<any>(null);
   const [editingEcommerceSectionValue,setEditingEcommerceSectionValue] = useState("");
   const [editingEcommerceInstructionValue,setEditingEcommerceInstructionValue] = useState("");
@@ -9520,6 +9521,302 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         })
       );
 
+      const trainingLines = String(
+        trainingMaterialsDraft || ""
+      ).replace(/\r\n/g,"\n").split("\n");
+
+      const isTrainingHeading = (line:string) => {
+        const value = String(line || "").trim();
+        if(!value) return false;
+        const upper = value.toUpperCase();
+        const known = [
+          "COLLECTION OVERVIEW",
+          "BRAND AND COLLECTION POSITIONING",
+          "TARGET CUSTOMERS",
+          "COLLECTION-WIDE KEY SELLING POINTS",
+          "VARIANTS AND DIFFERENCES",
+          "PRODUCT TRAINING GUIDES",
+          "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
+          "PRODUCT COMPARISON GUIDE",
+          "PROMODISER DEMONSTRATION FLOW",
+          "PROMODISER QUICK CHEAT SHEET",
+          "KNOWLEDGE CHECK QUIZ",
+          "ANSWER KEY",
+        ];
+        return known.includes(upper) || (
+          value===upper &&
+          value.length>=4 &&
+          value.length<=90 &&
+          /[A-Z]/.test(value)
+        );
+      };
+
+      const trainingSections = (() => {
+        const sections:any[] = [];
+        let current:any = {
+          title:"Training Manual",
+          lines:[],
+        };
+
+        trainingLines.forEach((line:string)=>{
+          const trimmed = String(line || "").trim();
+          if(isTrainingHeading(trimmed)){
+            if(current.title || current.lines.length){
+              sections.push(current);
+            }
+            current = {
+              title:trimmed,
+              lines:[],
+            };
+          } else {
+            current.lines.push(line);
+          }
+        });
+
+        if(current.title || current.lines.length){
+          sections.push(current);
+        }
+
+        return sections.filter(
+          (section:any)=>
+            section.title ||
+            section.lines.some(
+              (line:string)=>String(line).trim()
+            )
+        );
+      })();
+
+      const trainingSlug = (value:string) =>
+        String(value || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g,"-")
+          .replace(/^-+|-+$/g,"");
+
+      const renderTrainingLine = (
+        line:string,
+        index:number
+      ) => {
+        const value = String(line || "").trim();
+
+        if(!value){
+          return <div key={`space-${index}`} style={{height:7}} />;
+        }
+
+        if(/^[-•✓✔]\s+/.test(value)){
+          return (
+            <div
+              key={`bullet-${index}`}
+              style={{
+                display:"flex",
+                gap:8,
+                alignItems:"flex-start",
+                margin:"5px 0",
+                lineHeight:1.55,
+              }}
+            >
+              <span style={{color:"#16A34A",fontWeight:900}}>✓</span>
+              <span>{value.replace(/^[-•✓✔]\s+/,"")}</span>
+            </div>
+          );
+        }
+
+        if(/^\d+[\.\)]\s+/.test(value)){
+          const match = value.match(/^(\d+)[\.\)]\s+(.*)$/);
+          return (
+            <div
+              key={`number-${index}`}
+              style={{
+                display:"flex",
+                gap:8,
+                alignItems:"flex-start",
+                margin:"5px 0",
+                lineHeight:1.55,
+              }}
+            >
+              <strong style={{minWidth:22,color:"#0F172A"}}>
+                {match?.[1]}.
+              </strong>
+              <span>{match?.[2] || value}</span>
+            </div>
+          );
+        }
+
+        const colonIndex = value.indexOf(":");
+        if(colonIndex>0 && colonIndex<45){
+          const label = value.slice(0,colonIndex+1);
+          const rest = value.slice(colonIndex+1).trim();
+          return (
+            <p
+              key={`label-${index}`}
+              style={{margin:"6px 0",lineHeight:1.6}}
+            >
+              <strong>{label}</strong>
+              {rest ? ` ${rest}` : ""}
+            </p>
+          );
+        }
+
+        return (
+          <p
+            key={`paragraph-${index}`}
+            style={{margin:"7px 0",lineHeight:1.65}}
+          >
+            {value}
+          </p>
+        );
+      };
+
+      const escapeTrainingHtml = (value:any) =>
+        String(value || "")
+          .replace(/&/g,"&amp;")
+          .replace(/</g,"&lt;")
+          .replace(/>/g,"&gt;");
+
+      const getTrainingExportHtml = () => {
+        const title = String(
+          group?.groupName ||
+          group?.name ||
+          "Product Training Manual"
+        ).trim();
+
+        const sectionsHtml = trainingSections
+          .map((section:any)=>{
+            const body = section.lines
+              .map((line:string)=>{
+                const value = String(line || "").trim();
+                if(!value) return "<div style='height:8px'></div>";
+                if(/^[-•✓✔]\s+/.test(value)){
+                  return `<div class="bullet"><span>✓</span><div>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
+                }
+                const colonIndex = value.indexOf(":");
+                if(colonIndex>0 && colonIndex<45){
+                  const label = escapeTrainingHtml(value.slice(0,colonIndex+1));
+                  const rest = escapeTrainingHtml(value.slice(colonIndex+1));
+                  return `<p><strong>${label}</strong>${rest}</p>`;
+                }
+                return `<p>${escapeTrainingHtml(value)}</p>`;
+              })
+              .join("");
+
+            return `<section><h2>${escapeTrainingHtml(section.title || "Section")}</h2>${body}</section>`;
+          })
+          .join("");
+
+        return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${escapeTrainingHtml(title)}</title>
+<style>
+@page{size:A4;margin:18mm}
+*{box-sizing:border-box}
+body{font-family:Arial,Helvetica,sans-serif;color:#111827;margin:0;line-height:1.55}
+.cover{min-height:90vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;page-break-after:always}
+.cover h1{font-size:30px;margin:0 0 12px}
+.cover p{font-size:14px;color:#6B7280}
+section{page-break-inside:avoid;margin:0 0 24px}
+h2{font-size:19px;border-bottom:2px solid #111827;padding-bottom:7px;margin:0 0 12px}
+p{font-size:12px;margin:6px 0}
+.bullet{display:flex;gap:8px;font-size:12px;margin:5px 0}
+.bullet span{font-weight:700}
+.meta{margin-top:22px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="cover">
+  <h1>${escapeTrainingHtml(title)}</h1>
+  <p>PROMODISER TRAINING MANUAL</p>
+  <div class="meta">Generated by EMDC AI<br>${new Date().toLocaleDateString("en-PH",{year:"numeric",month:"long",day:"numeric"})}</div>
+</div>
+${sectionsHtml}
+</body>
+</html>`;
+      };
+
+      const exportTrainingPdf = () => {
+        if(!String(trainingMaterialsDraft || "").trim()) return;
+        const printWindow = window.open("","_blank","noopener,noreferrer");
+        if(!printWindow) return;
+        printWindow.document.open();
+        printWindow.document.write(getTrainingExportHtml());
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.focus();
+          printWindow.print();
+        };
+        markActionDone("training-materials-export-pdf");
+      };
+
+      const exportTrainingPowerPoint = () => {
+        if(!String(trainingMaterialsDraft || "").trim()) return;
+
+        const title = String(
+          group?.groupName ||
+          group?.name ||
+          "Product Training Manual"
+        ).trim();
+
+        const slidesHtml = trainingSections
+          .map((section:any,index:number)=>{
+            const body = section.lines
+              .filter((line:string)=>String(line).trim())
+              .slice(0,14)
+              .map((line:string)=>`<p>${escapeTrainingHtml(line)}</p>`)
+              .join("");
+
+            return `<section class="slide">
+              <div class="slide-number">${index+2}</div>
+              <h2>${escapeTrainingHtml(section.title || "Section")}</h2>
+              <div>${body}</div>
+            </section>`;
+          })
+          .join("");
+
+        const pptHtml = `<!doctype html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<meta name="ProgId" content="PowerPoint.Slide">
+<title>${escapeTrainingHtml(title)}</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#111827}
+.slide{width:1280px;height:720px;padding:70px 85px;page-break-after:always;position:relative;overflow:hidden}
+.cover{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+.cover h1{font-size:48px;margin:0 0 18px}
+.cover p{font-size:24px;color:#6B7280}
+h2{font-size:36px;margin:0 0 28px;border-bottom:4px solid #111827;padding-bottom:12px}
+p{font-size:22px;line-height:1.45;margin:9px 0}
+.slide-number{position:absolute;right:38px;bottom:28px;color:#9CA3AF;font-size:16px}
+</style>
+</head>
+<body>
+<section class="slide cover">
+  <h1>${escapeTrainingHtml(title)}</h1>
+  <p>PROMODISER TRAINING MANUAL</p>
+  <p>Generated by EMDC AI</p>
+</section>
+${slidesHtml}
+</body>
+</html>`;
+
+        const blob = new Blob(
+          [pptHtml],
+          {type:"application/vnd.ms-powerpoint"}
+        );
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${trainingSlug(title) || "training-manual"}.ppt`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+        markActionDone("training-materials-export-ppt");
+      };
+
       const generateTrainingMaterials = async () => {
         if(!ecommerceSourceText){
           setAiError((previous:any)=>({
@@ -9868,6 +10165,24 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 <Btn
                   sm
                   variant="outline"
+                  onClick={()=>
+                    setTrainingMaterialsEditMode(
+                      (previous:boolean)=>!previous
+                    )
+                  }
+                  disabled={
+                    !String(
+                      trainingMaterialsDraft || ""
+                    ).trim()
+                  }
+                >
+                  {trainingMaterialsEditMode
+                    ? "Preview"
+                    : "Edit"}
+                </Btn>
+                <Btn
+                  sm
+                  variant="outline"
                   onClick={
                     copyTrainingMaterials
                   }
@@ -9882,6 +10197,30 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   )
                     ? "✓ Copied"
                     : "Copy All"}
+                </Btn>
+                <Btn
+                  sm
+                  variant="outline"
+                  onClick={exportTrainingPdf}
+                  disabled={
+                    !String(
+                      trainingMaterialsDraft || ""
+                    ).trim()
+                  }
+                >
+                  Export PDF
+                </Btn>
+                <Btn
+                  sm
+                  variant="outline"
+                  onClick={exportTrainingPowerPoint}
+                  disabled={
+                    !String(
+                      trainingMaterialsDraft || ""
+                    ).trim()
+                  }
+                >
+                  Export PowerPoint
                 </Btn>
                 <Btn
                   sm
@@ -9984,34 +10323,178 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 )}
               </div>
 
-              <textarea
-                value={trainingMaterialsDraft}
-                onChange={(event:any)=>
-                  setTrainingMaterialsDraft(
-                    event.target.value
-                  )
-                }
-                placeholder={
-                  ecommerceSourceText
-                    ? "Click Generate Training Guide to create the promodiser training manual."
-                    : "Generate or save the E-commerce output first."
-                }
-                rows={isMobile?24:34}
-                style={{
-                  width:"100%",
-                  boxSizing:"border-box",
-                  minHeight:isMobile?520:720,
-                  resize:"vertical",
-                  border:`1.5px solid ${C.border}`,
-                  borderRadius:10,
-                  background:C.bg,
-                  color:C.text,
-                  fontSize:12.5,
-                  lineHeight:1.6,
-                  padding:"12px 13px",
-                  outline:"none",
-                }}
-              />
+              {trainingMaterialsEditMode ? (
+                <textarea
+                  value={trainingMaterialsDraft}
+                  onChange={(event:any)=>
+                    setTrainingMaterialsDraft(
+                      event.target.value
+                    )
+                  }
+                  placeholder={
+                    ecommerceSourceText
+                      ? "Click Generate Training Guide to create the promodiser training manual."
+                      : "Generate or save the E-commerce output first."
+                  }
+                  rows={isMobile?24:34}
+                  style={{
+                    width:"100%",
+                    boxSizing:"border-box",
+                    minHeight:isMobile?520:720,
+                    resize:"vertical",
+                    border:`1.5px solid ${C.border}`,
+                    borderRadius:10,
+                    background:C.bg,
+                    color:C.text,
+                    fontSize:12.5,
+                    lineHeight:1.6,
+                    padding:"12px 13px",
+                    outline:"none",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    display:"grid",
+                    gridTemplateColumns:
+                      isMobile
+                        ? "1fr"
+                        : "210px minmax(0,1fr)",
+                    gap:14,
+                    alignItems:"start",
+                  }}
+                >
+                  {!isMobile&&(
+                    <div
+                      style={{
+                        position:"sticky",
+                        top:12,
+                        padding:12,
+                        border:`1px solid ${C.border}`,
+                        borderRadius:10,
+                        background:C.surfaceAlt,
+                        maxHeight:620,
+                        overflowY:"auto",
+                      }}
+                    >
+                      <div
+                        style={{
+                          marginBottom:8,
+                          fontSize:11,
+                          fontWeight:900,
+                          color:C.text,
+                          textTransform:"uppercase",
+                          letterSpacing:".04em",
+                        }}
+                      >
+                        Contents
+                      </div>
+                      <div style={{display:"grid",gap:6}}>
+                        {trainingSections.map(
+                          (section:any,index:number)=>(
+                            <button
+                              key={`${section.title}-${index}`}
+                              type="button"
+                              onClick={()=>{
+                                document
+                                  .getElementById(
+                                    `training-section-${trainingSlug(section.title)}-${index}`
+                                  )
+                                  ?.scrollIntoView({
+                                    behavior:"smooth",
+                                    block:"start",
+                                  });
+                              }}
+                              style={{
+                                border:0,
+                                background:"transparent",
+                                padding:0,
+                                color:C.textSub,
+                                fontSize:10.5,
+                                lineHeight:1.35,
+                                textAlign:"left",
+                                cursor:"pointer",
+                              }}
+                            >
+                              {section.title || `Section ${index+1}`}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      minHeight:isMobile?520:720,
+                      padding:isMobile?14:22,
+                      border:`1.5px solid ${C.border}`,
+                      borderRadius:10,
+                      background:"#FFFFFF",
+                      color:C.text,
+                      fontSize:12.5,
+                      overflowWrap:"anywhere",
+                    }}
+                  >
+                    {!String(trainingMaterialsDraft || "").trim() ? (
+                      <div
+                        style={{
+                          minHeight:420,
+                          display:"flex",
+                          alignItems:"center",
+                          justifyContent:"center",
+                          color:C.faint,
+                          textAlign:"center",
+                          lineHeight:1.6,
+                        }}
+                      >
+                        {ecommerceSourceText
+                          ? "Click Generate Training Guide to create the formatted promodiser training manual."
+                          : "Generate or save the E-commerce output first."}
+                      </div>
+                    ) : (
+                      trainingSections.map(
+                        (section:any,index:number)=>(
+                          <section
+                            key={`${section.title}-${index}`}
+                            id={`training-section-${trainingSlug(section.title)}-${index}`}
+                            style={{
+                              marginBottom:22,
+                              scrollMarginTop:16,
+                            }}
+                          >
+                            <h2
+                              style={{
+                                margin:"0 0 10px",
+                                paddingBottom:7,
+                                borderBottom:
+                                  index===0
+                                    ? "3px solid #111827"
+                                    : `2px solid ${C.border}`,
+                                color:C.text,
+                                fontSize:
+                                  index===0
+                                    ? (isMobile?20:24)
+                                    : (isMobile?15:17),
+                                fontWeight:950,
+                                lineHeight:1.25,
+                              }}
+                            >
+                              {section.title || `Section ${index+1}`}
+                            </h2>
+                            <div>
+                              {section.lines.map(
+                                (line:string,lineIndex:number)=>
+                                  renderTrainingLine(line,lineIndex)
+                              )}
+                            </div>
+                          </section>
+                        )
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
 
               {!!aiError.training&&(
                 <div
