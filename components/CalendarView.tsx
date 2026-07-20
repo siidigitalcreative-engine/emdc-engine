@@ -5276,24 +5276,24 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
               {isOpen&&(
                 <div style={{ borderTop:`1px solid ${C.border}` }}>
                   {ev.desc&&<p style={{ margin:0,padding:"12px 16px",fontSize:13,color:C.muted,lineHeight:1.6,borderBottom:`1px solid ${C.border}` }}>{ev.desc}</p>}
-                  <div style={{ padding:"14px 16px" }}>
+                  <div style={{ padding:"10px 12px" }}>
                     <div
                       style={{
                         display:"flex",
                         justifyContent:"space-between",
                         alignItems:"center",
-                        gap:8,
+                        gap:6,
                         flexWrap:"wrap",
-                        marginBottom:10,
+                        marginBottom:8,
                       }}
                     >
-                      <p style={{ margin:0,fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>
+                      <p style={{ margin:0,fontSize:10,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>
                         Recommended Products
                       </p>
                       <div
                         style={{
                           display:"flex",
-                          gap:6,
+                          gap:5,
                           flexWrap:"wrap",
                         }}
                       >
@@ -5310,7 +5310,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                         >
                           {generatingProductsFor===ev.id
                             ? "Generating..."
-                            : "Generate Market Recommendations"}
+                            : "Market Ideas"}
                         </Btn>
 
                         <Btn
@@ -5326,7 +5326,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                         >
                           {generatingStoredSkuProductsFor===ev.id
                             ? "Checking SKU Storage..."
-                            : "Recommend from SKU Storage"}
+                            : "From SKU Storage"}
                         </Btn>
                       </div>
                     </div>
@@ -5348,24 +5348,171 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                       </div>
                     )}
 
-                    <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
-                      {evProducts.map((p,i)=>(
-                        <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:isPhaseoutProduct(p)?"#FFFBEB":C.bg,borderRadius:8,borderLeft:`2px solid ${isPhaseoutProduct(p)?"#F59E0B":tc}` }}>
-                          {editingProd?.eventId===ev.id&&editingProd?.idx===i?(
-                            <div style={{ display:"flex",gap:6,flex:1,alignItems:"center" }}>
-                              <input value={edf} onChange={e=>setEdf(e.target.value)} style={{ flex:1,padding:"5px 8px",fontSize:12,borderRadius:6,border:`1.5px solid ${C.border}`,background:C.surface,color:C.text,outline:"none" }} />
-                              <button onClick={()=>{ updProds(ev.id,p=>p.map((x,j)=>j===i?edf:x)); setEditingProd(null); }} style={{ background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0 }}>Save</button>
-                              <button onClick={()=>setEditingProd(null)} style={{ background:"none",border:"none",cursor:"pointer",color:C.faint,fontSize:18,lineHeight:1 }}>&#215;</button>
-                            </div>
-                          ):(
-                            <>
-                              <span style={{ fontSize:12,color:C.textSub,flex:1 }}>{p}</span>
-                              <button onClick={()=>{setEditingProd({eventId:ev.id,idx:i});setEdf(p);}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.muted,fontWeight:600,padding:"2px 6px",borderRadius:4,flexShrink:0 }}>Edit</button>
-                              <button onClick={()=>updProds(ev.id,p=>p.filter((_,j)=>j!==i))} style={{ width:22,height:22,borderRadius:4,background:"#FEF2F2",border:"none",cursor:"pointer",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0 }}>&#215;</button>
-                            </>
-                          )}
-                        </div>
-                      ))}
+                    <div
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:4,
+                        maxHeight:420,
+                        overflowY:"auto",
+                        paddingRight:2,
+                      }}
+                    >
+                      {evProducts.map((p,i)=>{
+                        const productText = String(p || "");
+                        const parts = productText
+                          .split("|")
+                          .map((part:string)=>part.trim())
+                          .filter(Boolean);
+                        const mainText = parts.slice(0,3).join(" · ") || productText;
+                        const reasonText = parts.slice(3).join(" · ");
+
+                        return (
+                          <div
+                            key={i}
+                            style={{
+                              display:"flex",
+                              alignItems:"center",
+                              gap:6,
+                              padding:"6px 7px",
+                              background:isPhaseoutProduct(p)?"#FFFBEB":C.bg,
+                              borderRadius:6,
+                              borderLeft:`2px solid ${isPhaseoutProduct(p)?"#F59E0B":tc}`,
+                              minWidth:0,
+                            }}
+                          >
+                            {editingProd?.eventId===ev.id&&editingProd?.idx===i?(
+                              <div style={{ display:"flex",gap:5,flex:1,alignItems:"center",minWidth:0 }}>
+                                <input
+                                  value={edf}
+                                  onChange={e=>setEdf(e.target.value)}
+                                  style={{
+                                    flex:1,
+                                    minWidth:0,
+                                    padding:"4px 6px",
+                                    fontSize:10.5,
+                                    borderRadius:5,
+                                    border:`1px solid ${C.border}`,
+                                    background:C.surface,
+                                    color:C.text,
+                                    outline:"none",
+                                  }}
+                                />
+                                <button
+                                  onClick={()=>{ updProds(ev.id,p=>p.map((x,j)=>j===i?edf:x)); setEditingProd(null); }}
+                                  style={{
+                                    background:C.accent,
+                                    color:"#fff",
+                                    border:"none",
+                                    borderRadius:5,
+                                    padding:"4px 7px",
+                                    fontSize:10,
+                                    fontWeight:700,
+                                    cursor:"pointer",
+                                    flexShrink:0,
+                                  }}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={()=>setEditingProd(null)}
+                                  style={{
+                                    background:"none",
+                                    border:"none",
+                                    cursor:"pointer",
+                                    color:C.faint,
+                                    fontSize:16,
+                                    lineHeight:1,
+                                    padding:0,
+                                  }}
+                                >
+                                  &#215;
+                                </button>
+                              </div>
+                            ):(
+                              <>
+                                <div
+                                  title={productText}
+                                  style={{
+                                    flex:1,
+                                    minWidth:0,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize:10.5,
+                                      color:C.textSub,
+                                      fontWeight:700,
+                                      lineHeight:1.3,
+                                      whiteSpace:"nowrap",
+                                      overflow:"hidden",
+                                      textOverflow:"ellipsis",
+                                    }}
+                                  >
+                                    {mainText}
+                                  </div>
+                                  {!!reasonText&&(
+                                    <div
+                                      style={{
+                                        marginTop:1,
+                                        fontSize:9.5,
+                                        color:C.faint,
+                                        lineHeight:1.25,
+                                        whiteSpace:"nowrap",
+                                        overflow:"hidden",
+                                        textOverflow:"ellipsis",
+                                      }}
+                                    >
+                                      {reasonText}
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={()=>{setEditingProd({eventId:ev.id,idx:i});setEdf(p);}}
+                                  title="Edit"
+                                  aria-label="Edit product"
+                                  style={{
+                                    width:20,
+                                    height:20,
+                                    border:"none",
+                                    borderRadius:4,
+                                    background:C.surface,
+                                    cursor:"pointer",
+                                    fontSize:10,
+                                    color:C.muted,
+                                    fontWeight:700,
+                                    padding:0,
+                                    flexShrink:0,
+                                  }}
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  onClick={()=>updProds(ev.id,p=>p.filter((_,j)=>j!==i))}
+                                  title="Delete"
+                                  aria-label="Delete product"
+                                  style={{
+                                    width:20,
+                                    height:20,
+                                    borderRadius:4,
+                                    background:"#FEF2F2",
+                                    border:"none",
+                                    cursor:"pointer",
+                                    color:"#DC2626",
+                                    display:"flex",
+                                    alignItems:"center",
+                                    justifyContent:"center",
+                                    fontSize:11,
+                                    flexShrink:0,
+                                  }}
+                                >
+                                  &#215;
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                       {evProducts.length===0&&<p style={{ fontSize:12,color:C.faint,margin:"4px 0" }}>No products added yet.</p>}
                     </div>
 
@@ -5396,7 +5543,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                         {prodMode==="storage"&&<div style={{ marginTop:10 }}><Btn xs variant="ghost" onClick={()=>setAddingTo(null)}>Cancel</Btn></div>}
                       </div>
                     ):(
-                      <button onClick={()=>{setAddingTo(ev.id);setCf({brand:"",product:"",sku:""});setProdMode("manual");}} style={{ marginTop:12,width:"100%",padding:"9px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px dashed ${C.borderStrong}`,background:"transparent",color:C.muted }}>+ Add product</button>
+                      <button onClick={()=>{setAddingTo(ev.id);setCf({brand:"",product:"",sku:""});setProdMode("manual");}} style={{ marginTop:8,width:"100%",padding:"7px",borderRadius:7,fontSize:10.5,fontWeight:700,cursor:"pointer",border:`1px dashed ${C.borderStrong}`,background:"transparent",color:C.muted }}>+ Add product</button>
                     )}
                   </div>
                 </div>
