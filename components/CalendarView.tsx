@@ -4542,6 +4542,8 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [sortMode,setSortMode] = useState("date");
   const [showSortOptions,setShowSortOptions] = useState(false);
   const [sortMenuId,setSortMenuId] = useState<any>(null);
+  const [generatingProductsFor,setGeneratingProductsFor] = useState<any>(null);
+  const [productGenerationError,setProductGenerationError] = useState<any>({});
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
   const normalizeTagLabel = (id:any) => String(id || "event")
@@ -4738,6 +4740,188 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
         window.dispatchEvent(new Event("emdc-local-sync"));
       } catch {} return next; });
 
+  const parseGeneratedProductRecommendations = (rawValue:any) => {
+    const raw = String(rawValue || "").trim();
+    if(!raw) return [];
+
+    try {
+      const parsed = JSON.parse(raw);
+      const list = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.products)
+          ? parsed.products
+          : [];
+
+      if(list.length){
+        return list
+          .map((item:any)=>
+            typeof item === "string"
+              ? item
+              : String(
+                  item?.product ||
+                  item?.name ||
+                  item?.recommendation ||
+                  ""
+                )
+          )
+          .map((item:string)=>item.trim())
+          .filter(Boolean);
+      }
+    } catch {}
+
+    return raw
+      .replace(/^```(?:json)?/i,"")
+      .replace(/```$/,"")
+      .split("\n")
+      .map((line:string)=>
+        line
+          .replace(/^\s*[-•*]\s*/,"")
+          .replace(/^\s*\d+[\.\)]\s*/,"")
+          .trim()
+      )
+      .filter((line:string)=>
+        !!line &&
+        !/^recommended products:?$/i.test(line)
+      );
+  };
+
+  const generateRecommendedProducts = async (ev:any) => {
+    const eventId = String(ev?.id || "");
+    if(!eventId || generatingProductsFor) return;
+
+    setGeneratingProductsFor(eventId);
+    setProductGenerationError((previous:any)=>({
+      ...previous,
+      [eventId]:"",
+    }));
+
+    try {
+      const existingProducts = Array.isArray(ev?.products)
+        ? ev.products.filter(Boolean)
+        : [];
+
+      const instruction = [
+        "Recommend high-volume product categories and specific retail product types for this Philippine season, holiday, campaign, or event.",
+        "Focus on products with strong mass-market demand, practical relevance, gifting potential, or seasonal purchase intent in the Philippines.",
+        "Consider Filipino shopping behavior, weather, school calendar, payday and sale periods, family occasions, home and lifestyle demand, and local cultural habits.",
+        "Give 8 to 12 concise recommendations.",
+        "Each recommendation must be specific enough for a merchandiser to understand, but should not invent a brand or SKU.",
+        "Avoid duplicate or near-duplicate recommendations.",
+        "Do not repeat products already listed.",
+        "Return only a valid JSON array of strings. No explanation and no markdown.",
+      ].join("\n");
+
+      const response = await fetch(
+        "/api/ai/generate-text",
+        {
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json",
+          },
+          body:JSON.stringify({
+            task:"philippines_seasonal_product_recommendations",
+            taskLabel:"Generate Recommended Products",
+            tone:"commercial and practical",
+            instruction,
+            input:JSON.stringify({
+              market:"Philippines",
+              event:{
+                name:String(ev?.name || ""),
+                displayDate:String(ev?.date || ""),
+                calendarDate:String(ev?.calDate || ""),
+                calendarEndDate:String(ev?.calDateEnd || ""),
+                type:String(
+                  eventTypeLabel(ev?.type) ||
+                  ev?.type ||
+                  ""
+                ),
+                description:String(ev?.desc || ""),
+              },
+              existingRecommendedProducts:
+                existingProducts,
+            },null,2),
+            maxOutputTokens:1400,
+          }),
+        }
+      );
+
+      const rawResponse = await response.text();
+      let payload:any = {};
+
+      try {
+        payload = rawResponse
+          ? JSON.parse(rawResponse)
+          : {};
+      } catch {
+        payload = { text:rawResponse };
+      }
+
+      if(!response.ok){
+        throw new Error(
+          payload?.error ||
+          payload?.message ||
+          "Unable to generate recommendations."
+        );
+      }
+
+      const generated = parseGeneratedProductRecommendations(
+        payload?.text ||
+        payload?.output ||
+        payload?.content ||
+        ""
+      );
+
+      if(!generated.length){
+        throw new Error(
+          "AI returned no usable product recommendations."
+        );
+      }
+
+      updProds(eventId,(current:any[])=>{
+        const currentProducts = Array.isArray(current)
+          ? current.filter(Boolean)
+          : [];
+
+        const existingKeys = new Set(
+          currentProducts.map((item:any)=>
+            String(item || "")
+              .trim()
+              .toLowerCase()
+          )
+        );
+
+        const uniqueGenerated = generated.filter(
+          (item:string)=>{
+            const key = String(item || "")
+              .trim()
+              .toLowerCase();
+
+            if(!key || existingKeys.has(key)){
+              return false;
+            }
+
+            existingKeys.add(key);
+            return true;
+          }
+        );
+
+        return [
+          ...currentProducts,
+          ...uniqueGenerated,
+        ];
+      });
+    } catch(error:any) {
+      setProductGenerationError((previous:any)=>({
+        ...previous,
+        [eventId]:
+          error?.message ||
+          "Unable to generate recommendations.",
+      }));
+    } finally {
+      setGeneratingProductsFor(null);
+    }
+  };
+
   const renderEvForm = ({ form, setForm, onSave, onDelete, saveLabel }) => (
     <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
       <Field label="Event Name"><TI value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="e.g. Brand Anniversary Sale" /></Field>
@@ -4789,7 +4973,7 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
               <h3 style={{ margin:0,fontSize:13,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:".05em" }}>{group.label}</h3>
               <span style={{ fontSize:11,color:C.faint,fontWeight:700 }}>{group.events.length}</span>
             </div>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,340px),1fr))",gap:12 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,340px),1fr))",gap:12,alignItems:"start" }}>
               {group.events.map((ev:any)=>{
           const isOpen=expanded===ev.id, tc=eventTypeColor(ev.type, ev.color || "#6B7280");
           const evProducts = Array.isArray(ev.products) ? ev.products : [];
@@ -4833,7 +5017,52 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                 <div style={{ borderTop:`1px solid ${C.border}` }}>
                   {ev.desc&&<p style={{ margin:0,padding:"12px 16px",fontSize:13,color:C.muted,lineHeight:1.6,borderBottom:`1px solid ${C.border}` }}>{ev.desc}</p>}
                   <div style={{ padding:"14px 16px" }}>
-                    <p style={{ margin:"0 0 10px",fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>Recommended Products</p>
+                    <div
+                      style={{
+                        display:"flex",
+                        justifyContent:"space-between",
+                        alignItems:"center",
+                        gap:8,
+                        flexWrap:"wrap",
+                        marginBottom:10,
+                      }}
+                    >
+                      <p style={{ margin:0,fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em" }}>
+                        Recommended Products
+                      </p>
+                      <Btn
+                        xs
+                        variant="outline"
+                        onClick={()=>
+                          generateRecommendedProducts(ev)
+                        }
+                        disabled={
+                          !!generatingProductsFor
+                        }
+                      >
+                        {generatingProductsFor===ev.id
+                          ? "Generating..."
+                          : "Generate Recommendations"}
+                      </Btn>
+                    </div>
+
+                    {!!productGenerationError?.[ev.id]&&(
+                      <div
+                        style={{
+                          marginBottom:9,
+                          padding:"7px 9px",
+                          border:"1px solid #FECACA",
+                          borderRadius:7,
+                          background:"#FEF2F2",
+                          color:"#B91C1C",
+                          fontSize:10.5,
+                          lineHeight:1.4,
+                        }}
+                      >
+                        {productGenerationError[ev.id]}
+                      </div>
+                    )}
+
                     <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
                       {evProducts.map((p,i)=>(
                         <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:isPhaseoutProduct(p)?"#FFFBEB":C.bg,borderRadius:8,borderLeft:`2px solid ${isPhaseoutProduct(p)?"#F59E0B":tc}` }}>
