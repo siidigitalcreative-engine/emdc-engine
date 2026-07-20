@@ -118,6 +118,59 @@ export default function TeamChatPopup() {
   }, []);
 
   useEffect(() => {
+    if (!open || !mobile) return;
+
+    const scrollY = window.scrollY;
+    const html = document.documentElement;
+    const body = document.body;
+
+    const previousHtmlOverflow = html.style.overflow;
+    const previousHtmlOverscrollBehavior =
+      html.style.overscrollBehavior;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyPosition = body.style.position;
+    const previousBodyTop = body.style.top;
+    const previousBodyLeft = body.style.left;
+    const previousBodyRight = body.style.right;
+    const previousBodyWidth = body.style.width;
+    const previousBodyTouchAction = body.style.touchAction;
+    const previousBodyOverscrollBehavior =
+      body.style.overscrollBehavior;
+
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+
+    // position: fixed is required on iOS Safari; overflow:hidden alone
+    // still allows the page behind the popup to move.
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.touchAction = "none";
+    body.style.overscrollBehavior = "none";
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      html.style.overscrollBehavior =
+        previousHtmlOverscrollBehavior;
+
+      body.style.overflow = previousBodyOverflow;
+      body.style.position = previousBodyPosition;
+      body.style.top = previousBodyTop;
+      body.style.left = previousBodyLeft;
+      body.style.right = previousBodyRight;
+      body.style.width = previousBodyWidth;
+      body.style.touchAction = previousBodyTouchAction;
+      body.style.overscrollBehavior =
+        previousBodyOverscrollBehavior;
+
+      window.scrollTo(0, scrollY);
+    };
+  }, [open, mobile]);
+
+  useEffect(() => {
     localStorage.setItem("emdc-chat-room", roomId);
   }, [roomId]);
 
