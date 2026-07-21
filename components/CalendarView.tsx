@@ -24710,6 +24710,10 @@ export default function App({
   const syncV2EtagRef = useRef("");
   const syncV2ApplyingRef = useRef(false);
   const checklistGroupDetailsLoadedRef = useRef<Record<string,boolean>>({});
+  const checklistGroupDetailRequestsRef = useRef<Record<string,Promise<any>>>({});
+  const checklistItemRequestsRef = useRef<Record<string,Promise<any>>>({});
+  const activeChecklistRequestControllerRef = useRef<AbortController | null>(null);
+  const activeRouteGroupIdRef = useRef("");
   const skuItemsLoadedRef = useRef(false);
   const skuItemsLoadingRef = useRef(false);
   const lastDirectSkuSaveSignatureRef = useRef("");
@@ -24967,35 +24971,93 @@ export default function App({
 
   const fetchChecklistGroupDetailV2 = async (
     groupId:string,
-    force=false
+    force=false,
+    signal?:AbortSignal
   ) => {
-    if(!groupId) return;
-    if(checklistGroupDetailsLoadedRef.current[groupId] && !force) return;
+    const id = String(groupId || "");
+    if(!id) return;
 
-    const res = await fetch(
-      `/api/checklist-groups-fast?groupId=${encodeURIComponent(groupId)}`,
-      { cache:"no-store" }
-    );
-    const json = await res.json().catch(()=>null);
-
-    if(!res.ok || !json?.ok || !json?.group) return;
-
-    checklistGroupDetailsLoadedRef.current[groupId] = true;
-
-    syncV2ApplyingRef.current = true;
-    try {
-      setChecklistGroups((previous:any[])=>
-        previous.some((group:any)=>String(group?.id)===String(groupId))
-          ? previous.map((group:any)=>
-              String(group?.id)===String(groupId)
-                ? { ...group, ...json.group }
-                : group
-            )
-          : [...previous,json.group]
-      );
-    } finally {
-      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
+    if(
+      checklistGroupDetailsLoadedRef.current[id] &&
+      !force
+    ){
+      return;
     }
+
+    const existingRequest =
+      checklistGroupDetailRequestsRef.current[id];
+
+    if(existingRequest && !force){
+      return existingRequest;
+    }
+
+    const request = (async()=>{
+      try {
+        const res = await fetch(
+          `/api/checklist-groups-fast?groupId=${encodeURIComponent(id)}`,
+          {
+            cache:"no-store",
+            signal,
+          }
+        );
+
+        const json =
+          await res.json().catch(()=>null);
+
+        if(
+          !res.ok ||
+          !json?.ok ||
+          !json?.group
+        ){
+          return;
+        }
+
+        checklistGroupDetailsLoadedRef.current[id] =
+          true;
+
+        syncV2ApplyingRef.current = true;
+
+        try {
+          setChecklistGroups(
+            (previous:any[])=>
+              previous.some(
+                (group:any)=>
+                  String(group?.id)===id
+              )
+                ? previous.map(
+                    (group:any)=>
+                      String(group?.id)===id
+                        ? {
+                            ...group,
+                            ...json.group,
+                          }
+                        : group
+                  )
+                : [
+                    ...previous,
+                    json.group,
+                  ]
+          );
+        } finally {
+          setTimeout(()=>{
+            syncV2ApplyingRef.current =
+              false;
+          },0);
+        }
+      } catch(error:any) {
+        if(error?.name!=="AbortError"){
+          throw error;
+        }
+      } finally {
+        delete checklistGroupDetailRequestsRef
+          .current[id];
+      }
+    })();
+
+    checklistGroupDetailRequestsRef.current[id] =
+      request;
+
+    return request;
   };
 
   const fetchSkuItemsV2 = async () => {
@@ -25043,10 +25105,17 @@ export default function App({
     }
   };
 
-  const fetchChecklistItemsGroupV2 = async (groupId:string) => {
-    if(!groupId) return;
+  const fetchChecklistItemsGroupV2 = async (
+    groupId:string,
+    options:any={}
+  ) => {
+    const id = String(groupId || "");
+    if(!id) return;
 
-    const id = String(groupId);
+    const {
+      signal,
+      force=false,
+    } = options || {};
 
     const queuedSnapshot =
       checklistItemsQueuedRef.current?.[id];
@@ -25058,34 +25127,86 @@ export default function App({
       queuedSnapshot ||
       (
         savingSnapshot &&
-        String(savingSnapshot.groupId || "")===id
+        String(
+          savingSnapshot.groupId || ""
+        )===id
       )
     ){
       return;
     }
 
-    const res = await fetch(
-      `/api/checklist-items-fast?groupId=${encodeURIComponent(groupId)}`,
-      { cache:"no-store" }
-    );
-    const json = await res.json().catch(()=>null);
+    const existingRequest =
+      checklistItemRequestsRef.current[id];
 
-    if(!res.ok || !json?.ok || !json?.groupItems || typeof json.groupItems!=="object") {
-      return;
+    if(existingRequest && !force){
+      return existingRequest;
     }
 
-    const cleanGroupItems = dedupeChecklistItemsObject(json.groupItems);
+    const request = (async()=>{
+      try {
+        const res = await fetch(
+          `/api/checklist-items-fast?groupId=${encodeURIComponent(id)}`,
+          {
+            cache:"no-store",
+            signal,
+          }
+        );
 
-    syncV2ApplyingRef.current = true;
-    try {
-      setChecklistAllItems((previous:any)=>({
-        ...(previous || {}),
-        [groupId]:cleanGroupItems,
-      }));
-      try { writeEmdcChecklistItemsBackup(groupId,cleanGroupItems); } catch {}
-    } finally {
-      setTimeout(()=>{ syncV2ApplyingRef.current = false; },0);
-    }
+        const json =
+          await res.json().catch(()=>null);
+
+        if(
+          !res.ok ||
+          !json?.ok ||
+          !json?.groupItems ||
+          typeof json.groupItems!=="object"
+        ){
+          return;
+        }
+
+        // Ignore a response from a checklist that is no longer active.
+        // It may still finish after the user has already opened another group.
+        if(
+          activeRouteGroupIdRef.current &&
+          activeRouteGroupIdRef.current!==id
+        ){
+          return;
+        }
+
+        const cleanGroupItems =
+          dedupeChecklistItemsObject(
+            json.groupItems
+          );
+
+        syncV2ApplyingRef.current = true;
+
+        try {
+          setChecklistAllItems(
+            (previous:any)=>({
+              ...(previous || {}),
+              [id]:cleanGroupItems,
+            })
+          );
+        } finally {
+          setTimeout(()=>{
+            syncV2ApplyingRef.current =
+              false;
+          },0);
+        }
+      } catch(error:any) {
+        if(error?.name!=="AbortError"){
+          throw error;
+        }
+      } finally {
+        delete checklistItemRequestsRef
+          .current[id];
+      }
+    })();
+
+    checklistItemRequestsRef.current[id] =
+      request;
+
+    return request;
   };
 
   const pollSyncV2 = async () => {
@@ -25119,13 +25240,17 @@ export default function App({
       if(groupVersion > syncV2GroupsVersionRef.current){
         jobs.push(fetchChecklistGroupsV2());
 
-        if(routeGroupId){
+        const activeGroupId =
+          activeRouteGroupIdRef.current;
+
+        if(activeGroupId){
           checklistGroupDetailsLoadedRef.current[
-            String(routeGroupId)
+            activeGroupId
           ] = false;
+
           jobs.push(
             fetchChecklistGroupDetailV2(
-              String(routeGroupId),
+              activeGroupId,
               true
             )
           );
@@ -25134,15 +25259,35 @@ export default function App({
         syncV2GroupsVersionRef.current = groupVersion;
       }
 
-      Object.entries(remoteItemGroupVersions).forEach(([groupId,version]:any)=>{
-        const remoteVersion = Number(version || 0);
-        const localVersion = Number(syncV2ItemGroupVersionsRef.current[groupId] || 0);
+      const activeGroupId =
+        activeRouteGroupIdRef.current;
+
+      if(activeGroupId){
+        const remoteVersion = Number(
+          remoteItemGroupVersions[
+            activeGroupId
+          ] || 0
+        );
+
+        const localVersion = Number(
+          syncV2ItemGroupVersionsRef.current[
+            activeGroupId
+          ] || 0
+        );
 
         if(remoteVersion > localVersion){
-          jobs.push(fetchChecklistItemsGroupV2(groupId));
-          syncV2ItemGroupVersionsRef.current[groupId] = remoteVersion;
+          jobs.push(
+            fetchChecklistItemsGroupV2(
+              activeGroupId,
+              { force:true }
+            )
+          );
+
+          syncV2ItemGroupVersionsRef.current[
+            activeGroupId
+          ] = remoteVersion;
         }
-      });
+      }
 
       syncV2ItemsVersionRef.current = Math.max(syncV2ItemsVersionRef.current,itemVersion);
       syncV2VersionRef.current = Number(data.version || 0);
@@ -26311,25 +26456,58 @@ export default function App({
   }, [cloudHydrated]);
 
   useEffect(() => {
-    if(!cloudHydrated || !routeGroupId){
+    const groupId = String(
+      routeGroupId || ""
+    );
+
+    activeRouteGroupIdRef.current =
+      groupId;
+
+    activeChecklistRequestControllerRef
+      .current
+      ?.abort();
+
+    if(!cloudHydrated || !groupId){
+      activeChecklistRequestControllerRef.current =
+        null;
       setChecklistItemsLoadingGroupId("");
       return;
     }
 
-    const groupId = String(routeGroupId);
+    const controller =
+      new AbortController();
+
+    activeChecklistRequestControllerRef.current =
+      controller;
+
     let cancelled = false;
 
     setChecklistItemsLoadingGroupId(groupId);
-    void fetchChecklistGroupDetailV2(groupId);
+
+    void fetchChecklistGroupDetailV2(
+      groupId,
+      false,
+      controller.signal
+    );
 
     void (async()=>{
       try {
-        await fetchChecklistItemsGroupV2(groupId);
+        await fetchChecklistItemsGroupV2(
+          groupId,
+          {
+            signal:controller.signal,
+          }
+        );
       } finally {
-        if(!cancelled){
+        if(
+          !cancelled &&
+          !controller.signal.aborted
+        ){
           setChecklistItemsLoadingGroupId(
             (current:string)=>
-              current===groupId ? "" : current
+              current===groupId
+                ? ""
+                : current
           );
         }
       }
@@ -26337,6 +26515,15 @@ export default function App({
 
     return ()=>{
       cancelled = true;
+      controller.abort();
+
+      if(
+        activeChecklistRequestControllerRef
+          .current===controller
+      ){
+        activeChecklistRequestControllerRef.current =
+          null;
+      }
     };
   }, [cloudHydrated,routeGroupId]);
 
