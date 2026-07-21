@@ -8,17 +8,29 @@ const DATA_PATH = "emdc-state/checklist-groups/all.json";
 const SUMMARY_PATH = "emdc-sync/v2/checklist-progress/index.json";
 const LEGACY_ITEMS_PATH = "emdc-state/checklist-items/all.json";
 const VERSION_PATH = "emdc-sync/v2/version.json";
+
 const EMPTY_VERSION = {
-  version: 0, updatedAt: "",
-  checklistGroupsVersion: 0, checklistGroupsUpdatedAt: "",
-  checklistItemsVersion: 0, checklistItemsUpdatedAt: "",
+  version: 0,
+  updatedAt: "",
+  checklistGroupsVersion: 0,
+  checklistGroupsUpdatedAt: "",
+  checklistItemsVersion: 0,
+  checklistItemsUpdatedAt: "",
 };
 
 async function readJson(path: string, fallback: any) {
   try {
-    const result: any = await get(path, { access: "private" } as any);
+    const result: any = await get(
+      path,
+      { access: "private" } as any
+    );
+
     if (!result?.stream) return fallback;
-    const text = await new Response(result.stream).text();
+
+    const text = await new Response(
+      result.stream
+    ).text();
+
     return JSON.parse(text || "null") ?? fallback;
   } catch {
     return fallback;
@@ -26,180 +38,372 @@ async function readJson(path: string, fallback: any) {
 }
 
 function isRecord(value: any) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
 }
 
 function checklistItemsGroupPath(groupId: string) {
-  return `emdc-sync/v2/checklist-items/${encodeURIComponent(groupId)}.json`;
+  return `emdc-sync/v2/checklist-items/${encodeURIComponent(
+    groupId
+  )}.json`;
 }
 
 function summarizeGroupItems(groupItems: any) {
-  const departments: Record<string,{ done:number; total:number }> = {};
+  const departments: Record<
+    string,
+    { done: number; total: number }
+  > = {};
+
   let done = 0;
   let total = 0;
 
-  Object.entries(isRecord(groupItems) ? groupItems : {}).forEach(
-    ([department,rows]: any) => {
-      const items = Array.isArray(rows) ? rows : [];
-      const departmentDone = items.filter((item:any)=>!!item?.done).length;
-      departments[department] = { done:departmentDone, total:items.length };
-      done += departmentDone;
-      total += items.length;
-    }
-  );
+  Object.entries(
+    isRecord(groupItems) ? groupItems : {}
+  ).forEach(([department, rows]: any) => {
+    const items = Array.isArray(rows) ? rows : [];
+    const departmentDone = items.filter(
+      (item: any) => !!item?.done
+    ).length;
+
+    departments[department] = {
+      done: departmentDone,
+      total: items.length,
+    };
+
+    done += departmentDone;
+    total += items.length;
+  });
 
   return {
     done,
     total,
-    departmentCount:Object.keys(departments).length,
+    departmentCount: Object.keys(
+      departments
+    ).length,
     departments,
   };
 }
 
 async function readProgressIndex() {
-  const existing = await readJson(SUMMARY_PATH, null);
-  if (isRecord(existing)) return existing;
-
-  const legacyItems = await readJson(LEGACY_ITEMS_PATH, {});
-  const summaryIndex: Record<string,any> = {};
-
-  Object.entries(isRecord(legacyItems) ? legacyItems : {}).forEach(
-    ([groupId,groupItems]: any) => {
-      summaryIndex[groupId] = summarizeGroupItems(groupItems);
-    }
+  const existing = await readJson(
+    SUMMARY_PATH,
+    null
   );
 
+  if (isRecord(existing)) return existing;
+
+  const legacyItems = await readJson(
+    LEGACY_ITEMS_PATH,
+    {}
+  );
+
+  const summaryIndex: Record<string, any> =
+    {};
+
+  Object.entries(
+    isRecord(legacyItems) ? legacyItems : {}
+  ).forEach(([groupId, groupItems]: any) => {
+    summaryIndex[groupId] =
+      summarizeGroupItems(groupItems);
+  });
+
   try {
-    await put(SUMMARY_PATH, JSON.stringify(summaryIndex), {
-      access:"private",
-      addRandomSuffix:false,
-      allowOverwrite:true,
-      contentType:"application/json",
-    } as any);
+    await put(
+      SUMMARY_PATH,
+      JSON.stringify(summaryIndex),
+      {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/json",
+      } as any
+    );
   } catch {}
 
   return summaryIndex;
 }
 
 async function bump(updatedAt: string) {
-  const current = { ...EMPTY_VERSION, ...(await readJson(VERSION_PATH, EMPTY_VERSION)) };
+  const current = {
+    ...EMPTY_VERSION,
+    ...(await readJson(
+      VERSION_PATH,
+      EMPTY_VERSION
+    )),
+  };
+
   const next = {
     ...current,
-    version: Number(current.version || 0) + 1,
+    version:
+      Number(current.version || 0) + 1,
     updatedAt,
-    checklistGroupsVersion: Number(current.checklistGroupsVersion || 0) + 1,
+    checklistGroupsVersion:
+      Number(
+        current.checklistGroupsVersion || 0
+      ) + 1,
     checklistGroupsUpdatedAt: updatedAt,
   };
-  await put(VERSION_PATH, JSON.stringify(next), {
-    access: "private", addRandomSuffix: false, allowOverwrite: true,
-    contentType: "application/json",
-  } as any);
+
+  await put(
+    VERSION_PATH,
+    JSON.stringify(next),
+    {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+    } as any
+  );
+
   return next;
 }
 
 function compactSku(row: any) {
   return {
-    id:row?.id || "",
-    brand:row?.brand || "",
-    productName:row?.productName || row?.product || "",
-    product:row?.product || row?.productName || "",
-    sku:row?.sku || row?.skuCode || "",
-    skuCode:row?.skuCode || row?.sku || "",
-    collection:row?.collection || row?.category || "",
-    category:row?.category || row?.collection || "",
-    imageLink:row?.imageLink || row?.image || "",
+    id: row?.id || "",
+    brand: row?.brand || "",
+    productName:
+      row?.productName ||
+      row?.product ||
+      "",
+    product:
+      row?.product ||
+      row?.productName ||
+      "",
+    sku:
+      row?.sku ||
+      row?.skuCode ||
+      "",
+    skuCode:
+      row?.skuCode ||
+      row?.sku ||
+      "",
+    collection:
+      row?.collection ||
+      row?.category ||
+      "",
+    category:
+      row?.category ||
+      row?.collection ||
+      "",
+    imageLink:
+      row?.imageLink ||
+      row?.image ||
+      "",
   };
 }
 
-function toChecklistIndexRow(group: any, progressSummary: any) {
+function toChecklistIndexRow(
+  group: any,
+  progressSummary: any
+) {
   return {
     id: group?.id,
-    groupName: group?.groupName || group?.name || "",
-    name: group?.name || group?.groupName || "",
+    groupName:
+      group?.groupName ||
+      group?.name ||
+      "",
+    name:
+      group?.name ||
+      group?.groupName ||
+      "",
     launchType: group?.launchType || "",
     arrivalStatus:
       group?.arrivalStatus ||
-      (group?.productsArrived ? "arrived" : "waiting"),
-    productsArrived: !!group?.productsArrived,
+      (
+        group?.productsArrived
+          ? "arrived"
+          : "waiting"
+      ),
+    productsArrived:
+      !!group?.productsArrived,
     arrivedAt: group?.arrivedAt || "",
     deadline: group?.deadline || "",
-    deadlineEnd: group?.deadlineEnd || "",
+    deadlineEnd:
+      group?.deadlineEnd || "",
     dateMode: group?.dateMode || "",
-    monthOnlyMonths: Array.isArray(group?.monthOnlyMonths)
-      ? group.monthOnlyMonths
-      : [],
-    calendarType: group?.calendarType || "",
-    calendarColor: group?.calendarColor || "",
-    linkedEventIds: Array.isArray(group?.linkedEventIds)
-      ? group.linkedEventIds
-      : [],
+    monthOnlyMonths:
+      Array.isArray(
+        group?.monthOnlyMonths
+      )
+        ? group.monthOnlyMonths
+        : [],
+    calendarType:
+      group?.calendarType || "",
+    calendarColor:
+      group?.calendarColor || "",
+    linkedEventIds:
+      Array.isArray(
+        group?.linkedEventIds
+      )
+        ? group.linkedEventIds
+        : [],
     createdAt: group?.createdAt || "",
-    skus:Array.isArray(group?.skus) ? group.skus.map(compactSku) : [],
+    skus:
+      Array.isArray(group?.skus)
+        ? group.skus.map(compactSku)
+        : [],
     progressSummary:
-      progressSummary && typeof progressSummary==="object"
+      progressSummary &&
+      typeof progressSummary === "object"
         ? progressSummary
-        : { done:0,total:0,departmentCount:0,departments:{} },
+        : {
+            done: 0,
+            total: 0,
+            departmentCount: 0,
+            departments: {},
+          },
   };
 }
 
-export async function GET(req: NextRequest) {
-  const checklistGroupsRaw = await readJson(DATA_PATH, []);
-  const checklistGroups = Array.isArray(checklistGroupsRaw)
-    ? checklistGroupsRaw
-    : [];
+/**
+ * Conservative detail compaction.
+ *
+ * The checklist item state and progress are authoritative in
+ * /api/checklist-items-fast and the progress index. Older stored group rows
+ * may still contain duplicated task/template/history payloads from legacy
+ * versions. Those fields are not used by the current checklist detail page
+ * and can make one group response hundreds of KB.
+ *
+ * aiWorkspace is intentionally preserved exactly, so E-commerce, Marketing,
+ * Digital Creative, Livestream, Training Materials, and Overview continue to
+ * load exactly as before.
+ */
+function toChecklistDetailRow(group: any) {
+  const detail: Record<string, any> = {
+    ...(isRecord(group) ? group : {}),
+  };
+
+  if (Array.isArray(detail.skus)) {
+    detail.skus =
+      detail.skus.map(compactSku);
+  }
+
+  const redundantLegacyKeys = [
+    "checklistItems",
+    "allGroupItems",
+    "items",
+    "tasks",
+    "taskItems",
+    "checklistTemplates",
+    "templates",
+    "templateTasks",
+    "taskHistory",
+    "history",
+    "activityHistory",
+    "snapshots",
+    "backups",
+    "legacyItems",
+    "cachedItems",
+  ];
+
+  redundantLegacyKeys.forEach((key) => {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        detail,
+        key
+      )
+    ) {
+      delete detail[key];
+    }
+  });
+
+  return detail;
+}
+
+export async function GET(
+  req: NextRequest
+) {
+  const checklistGroupsRaw =
+    await readJson(DATA_PATH, []);
+
+  const checklistGroups =
+    Array.isArray(checklistGroupsRaw)
+      ? checklistGroupsRaw
+      : [];
 
   const groupId = String(
-    req.nextUrl.searchParams.get("groupId") || ""
+    req.nextUrl.searchParams.get(
+      "groupId"
+    ) || ""
   ).trim();
+
   const mode = String(
-    req.nextUrl.searchParams.get("mode") || ""
+    req.nextUrl.searchParams.get(
+      "mode"
+    ) || ""
   ).trim();
 
   if (groupId) {
     const group = checklistGroups.find(
-      (row: any) => String(row?.id) === groupId
+      (row: any) =>
+        String(row?.id) === groupId
     );
 
     if (!group) {
       return NextResponse.json(
-        { ok: false, error: "Checklist group not found." },
+        {
+          ok: false,
+          error:
+            "Checklist group not found.",
+        },
         { status: 404 }
       );
     }
 
     return NextResponse.json(
-      { ok: true, group },
-      { headers: { "Cache-Control": "private, no-store" } }
+      {
+        ok: true,
+        group:
+          toChecklistDetailRow(group),
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "private, no-store",
+        },
+      }
     );
   }
 
   if (mode === "index") {
-    const cachedProgressIndex = await readProgressIndex();
+    const cachedProgressIndex =
+      await readProgressIndex();
 
-    // The current checklist-items route stores the real task state in one
-    // Blob per checklist group. Read those exact files for the list preview.
-    // This prevents cards from showing an older cached summary until the user
-    // opens the group.
-    const checklistGroupsWithLiveProgress = await Promise.all(
-      checklistGroups.map(async (group:any)=>{
-        const id = String(group?.id || "");
-        const directGroupItems = id
-          ? await readJson(
-              checklistItemsGroupPath(id),
-              null
-            )
-          : null;
+    // Progress remains authoritative from each group's exact checklist-item
+    // file. This logic is unchanged so preview progress cannot regress.
+    const checklistGroupsWithLiveProgress =
+      await Promise.all(
+        checklistGroups.map(
+          async (group: any) => {
+            const id = String(
+              group?.id || ""
+            );
 
-        const progressSummary = isRecord(directGroupItems)
-          ? summarizeGroupItems(directGroupItems)
-          : cachedProgressIndex?.[id];
+            const directGroupItems = id
+              ? await readJson(
+                  checklistItemsGroupPath(id),
+                  null
+                )
+              : null;
 
-        return toChecklistIndexRow(
-          group,
-          progressSummary
-        );
-      })
-    );
+            const progressSummary =
+              isRecord(directGroupItems)
+                ? summarizeGroupItems(
+                    directGroupItems
+                  )
+                : cachedProgressIndex?.[id];
+
+            return toChecklistIndexRow(
+              group,
+              progressSummary
+            );
+          }
+        )
+      );
 
     return NextResponse.json(
       {
@@ -217,110 +421,193 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { ok: true, checklistGroups },
-    { headers: { "Cache-Control": "private, no-store" } }
+    {
+      ok: true,
+      checklistGroups,
+    },
+    {
+      headers: {
+        "Cache-Control":
+          "private, no-store",
+      },
+    }
   );
 }
 
-function mergeWorkspace(existing: any, incoming: any) {
+function mergeWorkspace(
+  existing: any,
+  incoming: any
+) {
   if (!isRecord(incoming)) {
-    return isRecord(existing) ? existing : {};
+    return isRecord(existing)
+      ? existing
+      : {};
   }
 
-  const previous = isRecord(existing) ? existing : {};
-  const next: Record<string,any> = { ...previous };
+  const previous =
+    isRecord(existing)
+      ? existing
+      : {};
 
-  Object.entries(incoming).forEach(([tab,value]: any) => {
-    if (isRecord(value) && isRecord(previous?.[tab])) {
-      next[tab] = {
-        ...previous[tab],
-        ...value,
-      };
-    } else {
-      next[tab] = value;
+  const next: Record<string, any> = {
+    ...previous,
+  };
+
+  Object.entries(incoming).forEach(
+    ([tab, value]: any) => {
+      if (
+        isRecord(value) &&
+        isRecord(previous?.[tab])
+      ) {
+        next[tab] = {
+          ...previous[tab],
+          ...value,
+        };
+      } else {
+        next[tab] = value;
+      }
     }
-  });
+  );
 
   return next;
 }
 
-function mergeChecklistGroup(existing: any, incoming: any) {
-  const previous = isRecord(existing) ? existing : {};
-  const nextIncoming = isRecord(incoming) ? incoming : {};
+function mergeChecklistGroup(
+  existing: any,
+  incoming: any
+) {
+  const previous =
+    isRecord(existing)
+      ? existing
+      : {};
 
-  const merged: Record<string,any> = {
+  const nextIncoming =
+    isRecord(incoming)
+      ? incoming
+      : {};
+
+  const merged: Record<string, any> = {
     ...previous,
     ...nextIncoming,
   };
 
-  // The checklist overview now loads compact index rows. Those rows intentionally
-  // omit large workspace fields. Never let a compact save erase E-commerce,
-  // Digital Creative, Marketing, Livestream, Budget, or Overview data.
-  if (Object.prototype.hasOwnProperty.call(nextIncoming, "aiWorkspace")) {
-    merged.aiWorkspace = mergeWorkspace(
-      previous.aiWorkspace,
-      nextIncoming.aiWorkspace
-    );
-  } else if (Object.prototype.hasOwnProperty.call(previous, "aiWorkspace")) {
-    merged.aiWorkspace = previous.aiWorkspace;
+  // Compact client saves omit lazy or large workspace fields. Preserve every
+  // existing workspace tab unless that exact tab was intentionally updated.
+  if (
+    Object.prototype.hasOwnProperty.call(
+      nextIncoming,
+      "aiWorkspace"
+    )
+  ) {
+    merged.aiWorkspace =
+      mergeWorkspace(
+        previous.aiWorkspace,
+        nextIncoming.aiWorkspace
+      );
+  } else if (
+    Object.prototype.hasOwnProperty.call(
+      previous,
+      "aiWorkspace"
+    )
+  ) {
+    merged.aiWorkspace =
+      previous.aiWorkspace;
   }
 
-  // Preserve selected products when a compact row does not include them.
-  if (!Object.prototype.hasOwnProperty.call(nextIncoming, "skus")) {
-    merged.skus = Array.isArray(previous.skus) ? previous.skus : [];
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      nextIncoming,
+      "skus"
+    )
+  ) {
+    merged.skus =
+      Array.isArray(previous.skus)
+        ? previous.skus
+        : [];
   }
 
   return merged;
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest
+) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const incomingGroups = Array.isArray(body?.checklistGroups)
-      ? body.checklistGroups
-      : [];
+    const body =
+      await req.json().catch(
+        () => ({})
+      );
+
+    const incomingGroups =
+      Array.isArray(
+        body?.checklistGroups
+      )
+        ? body.checklistGroups
+        : [];
+
     const updatedAt =
-      typeof body?.updatedAt === "string" && body.updatedAt
+      typeof body?.updatedAt ===
+        "string" &&
+      body.updatedAt
         ? body.updatedAt
         : new Date().toISOString();
 
-    const existingRaw = await readJson(DATA_PATH, []);
-    const existingGroups = Array.isArray(existingRaw)
-      ? existingRaw
-      : [];
+    const existingRaw =
+      await readJson(DATA_PATH, []);
+
+    const existingGroups =
+      Array.isArray(existingRaw)
+        ? existingRaw
+        : [];
 
     const existingById = new Map(
-      existingGroups.map((group:any)=>[
-        String(group?.id || ""),
-        group,
-      ])
+      existingGroups.map(
+        (group: any) => [
+          String(group?.id || ""),
+          group,
+        ]
+      )
     );
 
-    // Keep the incoming list order and deletion behavior, but merge every row
-    // with its complete stored version so omitted lazy-loaded fields survive.
-    const checklistGroups = incomingGroups.map((incoming:any)=>{
-      const id = String(incoming?.id || "");
-      return mergeChecklistGroup(
-        existingById.get(id),
-        incoming
+    const checklistGroups =
+      incomingGroups.map(
+        (incoming: any) => {
+          const id = String(
+            incoming?.id || ""
+          );
+
+          return mergeChecklistGroup(
+            existingById.get(id),
+            incoming
+          );
+        }
       );
-    });
 
-    await put(DATA_PATH, JSON.stringify(checklistGroups), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-    } as any);
+    await put(
+      DATA_PATH,
+      JSON.stringify(
+        checklistGroups
+      ),
+      {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType:
+          "application/json",
+      } as any
+    );
 
-    const sync = await bump(updatedAt);
+    const sync =
+      await bump(updatedAt);
 
     return NextResponse.json({
       ok: true,
       updatedAt,
-      count: checklistGroups.length,
+      count:
+        checklistGroups.length,
       syncVersion: sync.version,
-      checklistGroupsVersion: sync.checklistGroupsVersion,
+      checklistGroupsVersion:
+        sync.checklistGroupsVersion,
       preservedWorkspaceData: true,
     });
   } catch (error: any) {
