@@ -17830,6 +17830,151 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             </div>
                           </div>
 
+                          <div
+                            style={{
+                              padding:"8px 10px",
+                              borderBottom:`1px solid ${C.border}`,
+                              background:selectedCampaignProductKeys.length
+                                ? "#F8FAFC"
+                                : C.surface,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                justifyContent:"space-between",
+                                gap:8,
+                                marginBottom:selectedCampaignProductKeys.length?6:0,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize:10.5,
+                                  fontWeight:900,
+                                  color:C.textSub,
+                                }}
+                              >
+                                {selectedCampaignProductKeys.length} selected SKU{selectedCampaignProductKeys.length===1?"":"s"}
+                              </span>
+
+                              {!!selectedCampaignProductKeys.length&&(
+                                <button
+                                  type="button"
+                                  onClick={()=>
+                                    setSelectedCampaignProductKeys([])
+                                  }
+                                  style={{
+                                    border:0,
+                                    background:"transparent",
+                                    color:"#DC2626",
+                                    fontSize:10,
+                                    fontWeight:800,
+                                    cursor:"pointer",
+                                    padding:0,
+                                  }}
+                                >
+                                  Clear all
+                                </button>
+                              )}
+                            </div>
+
+                            {!!selectedCampaignProductKeys.length&&(
+                              <div
+                                style={{
+                                  display:"flex",
+                                  gap:5,
+                                  flexWrap:"wrap",
+                                  maxHeight:90,
+                                  overflowY:"auto",
+                                }}
+                              >
+                                {selectedCampaignProductKeys.map(
+                                  (key:string)=>{
+                                    const selectedProduct =
+                                      getCampaignProductByOptionKey(
+                                        key
+                                      );
+
+                                    if(!selectedProduct){
+                                      return null;
+                                    }
+
+                                    const productName =
+                                      selectedProduct.product ||
+                                      selectedProduct.productName ||
+                                      "Selected product";
+
+                                    const sku =
+                                      selectedProduct.skuCode ||
+                                      selectedProduct.sku ||
+                                      "";
+
+                                    return (
+                                      <span
+                                        key={key}
+                                        style={{
+                                          display:"inline-flex",
+                                          alignItems:"center",
+                                          gap:5,
+                                          maxWidth:isMobile?"100%":320,
+                                          padding:"4px 5px 4px 8px",
+                                          border:`1px solid ${C.border}`,
+                                          borderRadius:999,
+                                          background:C.surface,
+                                          color:C.textSub,
+                                          fontSize:10,
+                                        }}
+                                        title={`${productName}${sku?` · ${sku}`:""}`}
+                                      >
+                                        <span
+                                          style={{
+                                            minWidth:0,
+                                            overflow:"hidden",
+                                            textOverflow:"ellipsis",
+                                            whiteSpace:"nowrap",
+                                          }}
+                                        >
+                                          {productName}
+                                          {sku?` · ${sku}`:""}
+                                        </span>
+
+                                        <button
+                                          type="button"
+                                          onClick={()=>
+                                            toggleSelectedCampaignProductKey(
+                                              key
+                                            )
+                                          }
+                                          aria-label={`Remove ${productName}`}
+                                          title="Remove selection"
+                                          style={{
+                                            width:18,
+                                            height:18,
+                                            flex:"0 0 auto",
+                                            display:"inline-flex",
+                                            alignItems:"center",
+                                            justifyContent:"center",
+                                            border:0,
+                                            borderRadius:"50%",
+                                            background:"#FEF2F2",
+                                            color:"#DC2626",
+                                            cursor:"pointer",
+                                            fontSize:11,
+                                            lineHeight:1,
+                                            padding:0,
+                                          }}
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            )}
+                          </div>
+
                           <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                             {filteredCampaignProductRows.map((row:any)=>{
                               const originalIndex =
