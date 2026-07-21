@@ -18770,56 +18770,271 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     };
   };
 
-  const syncChecklistItemsForTemplates = (
+  const normalizeLaunchTypeIdentity = (
+    value:any
+  ) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g," ");
+
+  const getLaunchTypeIdentity = (
+    launchTypeKey:any
+  ) => {
+    const key = String(
+      launchTypeKey || ""
+    ).trim();
+
+    const definition =
+      launchTypes?.[key] ||
+      LAUNCH_TYPES?.[key] ||
+      {};
+
+    return normalizeLaunchTypeIdentity(
+      definition?.label ||
+      definition?.tag ||
+      key
+    );
+  };
+
+  const resolveTemplateLaunchTypeKey = (
+    group:any,
+    nextTemplates:any,
+    targetLaunchType:any=null
+  ) => {
+    const groupKey = String(
+      group?.launchType || ""
+    ).trim();
+
+    if(
+      groupKey &&
+      nextTemplates?.[groupKey]
+    ){
+      return groupKey;
+    }
+
+    const groupIdentity =
+      getLaunchTypeIdentity(groupKey);
+
+    const targetKey = String(
+      targetLaunchType || ""
+    ).trim();
+
+    if(
+      targetKey &&
+      nextTemplates?.[targetKey] &&
+      groupIdentity ===
+        getLaunchTypeIdentity(targetKey)
+    ){
+      return targetKey;
+    }
+
+    return (
+      Object.keys(nextTemplates || {})
+        .find(
+          (templateKey:string)=>
+            getLaunchTypeIdentity(
+              templateKey
+            )===groupIdentity
+        ) ||
+      groupKey
+    );
+  };
+
+  const groupMatchesTemplateType = (
+    group:any,
+    targetLaunchType:any
+  ) => {
+    if(!targetLaunchType) return true;
+
+    const groupKey = String(
+      group?.launchType || ""
+    ).trim();
+    const targetKey = String(
+      targetLaunchType || ""
+    ).trim();
+
+    if(groupKey===targetKey){
+      return true;
+    }
+
+    return (
+      getLaunchTypeIdentity(groupKey) ===
+      getLaunchTypeIdentity(targetKey)
+    );
+  };
+
+  const readAuthoritativeChecklistItems = async (
+    groupId:string,
+    localFallback:any
+  ) => {
+    try {
+      const response = await fetch(
+        `/api/checklist-items-fast?groupId=${encodeURIComponent(
+          groupId
+        )}&t=${Date.now()}`,
+        {
+          method:"GET",
+          cache:"no-store",
+        }
+      );
+
+      const json =
+        await response.json().catch(()=>null);
+
+      const cloudItems =
+        json?.groupItems &&
+        typeof json.groupItems==="object"
+          ? dedupeChecklistItemsObject(
+              json.groupItems
+            )
+          : null;
+
+      if(
+        response.ok &&
+        cloudItems &&
+        Object.values(cloudItems).some(
+          (rows:any)=>
+            Array.isArray(rows) &&
+            rows.length>0
+        )
+      ){
+        return cloudItems;
+      }
+    } catch {}
+
+    return (
+      localFallback &&
+      typeof localFallback==="object"
+        ? dedupeChecklistItemsObject(
+            localFallback
+          )
+        : {}
+    );
+  };
+
+  const syncChecklistItemsForTemplates = async (
     nextTemplates:any,
     targetLaunchType:any=null,
     previousTemplates:any=null
   ) => {
-    setAllGroupItems((prev:any)=>{
-      const nextItems:any = {
-        ...(prev || {}),
-      };
+    const matchingGroups = (
+      groups || []
+    ).filter(
+      (group:any)=>
+        !!group?.id &&
+        !!group?.launchType &&
+        groupMatchesTemplateType(
+          group,
+          targetLaunchType
+        )
+    );
 
-      const updatedGroupIds:string[] = [];
+    if(!matchingGroups.length){
+      return;
+    }
 
-      (groups || []).forEach((group:any)=>{
-        if(
-          !group?.id ||
-          !group?.launchType
-        ){
-          return;
-        }
+    const currentLocalItems =
+      allGroupItems &&
+      typeof allGroupItems==="object"
+        ? allGroupItems
+        : {};
 
-        if(
-          targetLaunchType &&
-          group.launchType!==targetLaunchType
-        ){
-          return;
-        }
+    const reconciledEntries =
+      await Promise.all(
+        matchingGroups.map(
+          async (group:any)=>{
+            const groupId = String(
+              group.id
+            );
 
-        const reconciledItems =
-          buildChecklistItemsFromTemplates(
-            group.launchType,
-            nextTemplates,
-            nextItems[group.id] ||
-              prev?.[group.id],
-            previousTemplates
-          );
+            // Read each checklist's latest cloud payload before syncing.
+            // This protects checklist-level edits that may not be loaded in
+            // the current browser session.
+            const authoritativeItems =
+              await readAuthoritativeChecklistItems(
+                groupId,
+                currentLocalItems[groupId]
+              );
 
-        nextItems[group.id] =
+            const templateLaunchTypeKey =
+              resolveTemplateLaunchTypeKey(
+                group,
+                nextTemplates,
+                targetLaunchType
+              );
+
+            const reconciledItems =
+              buildChecklistItemsFromTemplates(
+                templateLaunchTypeKey,
+                nextTemplates,
+                authoritativeItems,
+                previousTemplates
+              );
+
+            return {
+              group,
+              groupId,
+              reconciledItems,
+            };
+          }
+        )
+      );
+
+    const nextItems:any = {
+      ...currentLocalItems,
+    };
+
+    reconciledEntries.forEach(
+      ({
+        groupId,
+        reconciledItems,
+      }:any)=>{
+        nextItems[groupId] =
           reconciledItems;
-        updatedGroupIds.push(
-          String(group.id)
-        );
 
         writeEmdcChecklistItemsBackup(
-          group.id,
+          groupId,
           reconciledItems
         );
+      }
+    );
 
+    setAllGroupItems(nextItems);
+    persistChecklistItemsNow(nextItems);
+
+    setGroups((currentGroups:any[])=>
+      currentGroups.map((group:any)=>{
+        const matched =
+          reconciledEntries.find(
+            (entry:any)=>
+              entry.groupId===
+              String(group?.id || "")
+          );
+
+        return matched
+          ? {
+              ...group,
+              progressSummary:
+                summarizeChecklistItemsForGroup(
+                  matched.reconciledItems
+                ),
+            }
+          : group;
+      })
+    );
+
+    // Save every reconciled checklist after local state is ready. The direct
+    // save queue is keyed by group ID, so no Product Introduction or Product
+    // Reactivation checklist can overwrite another pending save.
+    reconciledEntries.forEach(
+      ({
+        groupId,
+        reconciledItems,
+      }:any)=>{
         if(onChecklistItemsDirectSave){
           onChecklistItemsDirectSave(
-            group.id,
+            groupId,
             JSON.parse(
               JSON.stringify(
                 reconciledItems
@@ -18827,40 +19042,14 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
             )
           );
         }
-      });
-
-      persistChecklistItemsNow(nextItems);
-
-      // Do not also push the complete checklistItems object through the legacy
-      // app-state save path. The dedicated per-group Sync v2 saves above are
-      // authoritative. Sending the full old object here can race and restore
-      // the pre-sync task lists after a few seconds.
-      if(updatedGroupIds.length){
-        setGroups((currentGroups:any[])=>
-          currentGroups.map((group:any)=>
-            updatedGroupIds.includes(
-              String(group?.id || "")
-            )
-              ? {
-                  ...group,
-                  progressSummary:
-                    summarizeChecklistItemsForGroup(
-                      nextItems[group.id] || {}
-                    ),
-                }
-              : group
-          )
-        );
       }
+    );
 
-      try {
-        window.dispatchEvent(
-          new Event("emdc-local-sync")
-        );
-      } catch {}
-
-      return nextItems;
-    });
+    try {
+      window.dispatchEvent(
+        new Event("emdc-local-sync")
+      );
+    } catch {}
   };
 
   const updateTemplatesAndChecklistItems = (
@@ -18869,18 +19058,19 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   ) => {
     setTemplates((prev:any)=>{
       const next =
-        typeof updater === "function"
+        typeof updater==="function"
           ? updater(prev)
           : updater;
 
-      // Reconcile against both the previous and the new template:
-      // same tasks retain all checklist edits, new tasks are appended, and
-      // removed default tasks are removed from every matching checklist.
-      syncChecklistItemsForTemplates(
-        next,
-        targetLaunchType,
-        prev
-      );
+      // Run after React receives the new template value, while keeping the
+      // previous template available for safe task matching.
+      window.setTimeout(()=>{
+        void syncChecklistItemsForTemplates(
+          next,
+          targetLaunchType,
+          prev
+        );
+      },0);
 
       return next;
     });
