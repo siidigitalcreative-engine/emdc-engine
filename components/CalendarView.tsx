@@ -17147,9 +17147,45 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   gap:3,
                                 }}
                               >
-                                <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
-                                  Select mapped products
-                                </span>
+                                <div
+                                  style={{
+                                    display:"flex",
+                                    alignItems:"center",
+                                    gap:7,
+                                    flexWrap:"wrap",
+                                  }}
+                                >
+                                  <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                                    Select mapped products
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      display:"inline-flex",
+                                      alignItems:"center",
+                                      justifyContent:"center",
+                                      minHeight:21,
+                                      padding:"2px 8px",
+                                      borderRadius:999,
+                                      background:selectedCampaignProductKeys.length
+                                        ? C.accent
+                                        : C.surface,
+                                      border:`1px solid ${
+                                        selectedCampaignProductKeys.length
+                                          ? C.accent
+                                          : C.border
+                                      }`,
+                                      color:selectedCampaignProductKeys.length
+                                        ? "#FFFFFF"
+                                        : C.faint,
+                                      fontSize:10,
+                                      fontWeight:900,
+                                    }}
+                                  >
+                                    {selectedCampaignProductKeys.length} selected
+                                  </span>
+                                </div>
+
                                 <span
                                   style={{
                                     fontSize:10,
@@ -17290,6 +17326,161 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 )}
                               </div>
                             </div>
+
+                            {!!selectedCampaignProductKeys.length&&(
+                              <div
+                                style={{
+                                  padding:"8px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  background:"#F8FAFC",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display:"flex",
+                                    alignItems:"center",
+                                    justifyContent:"space-between",
+                                    gap:8,
+                                    marginBottom:6,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize:10,
+                                      fontWeight:900,
+                                      color:C.textSub,
+                                      textTransform:"uppercase",
+                                      letterSpacing:".05em",
+                                    }}
+                                  >
+                                    Selected products
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    onClick={()=>
+                                      setSelectedCampaignProductKeys([])
+                                    }
+                                    style={{
+                                      border:0,
+                                      background:"transparent",
+                                      color:"#DC2626",
+                                      fontSize:10,
+                                      fontWeight:800,
+                                      cursor:"pointer",
+                                      padding:0,
+                                    }}
+                                  >
+                                    Clear all
+                                  </button>
+                                </div>
+
+                                <div
+                                  style={{
+                                    display:"flex",
+                                    gap:5,
+                                    flexWrap:"wrap",
+                                    maxHeight:92,
+                                    overflowY:"auto",
+                                  }}
+                                >
+                                  {selectedCampaignProductKeys.map(
+                                    (key:string)=>{
+                                      const selectedProduct =
+                                        getCampaignProductByOptionKey(
+                                          key
+                                        );
+
+                                      if(!selectedProduct){
+                                        return null;
+                                      }
+
+                                      const selectedName =
+                                        selectedProduct.product ||
+                                        selectedProduct.productName ||
+                                        selectedProduct.skuCode ||
+                                        selectedProduct.sku ||
+                                        "Selected product";
+
+                                      const selectedSku =
+                                        selectedProduct.skuCode ||
+                                        selectedProduct.sku ||
+                                        "";
+
+                                      return (
+                                        <span
+                                          key={key}
+                                          title={[
+                                            selectedName,
+                                            selectedSku,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" · ")}
+                                          style={{
+                                            display:"inline-flex",
+                                            alignItems:"center",
+                                            gap:5,
+                                            maxWidth:isMobile
+                                              ? "100%"
+                                              : 290,
+                                            padding:"4px 5px 4px 8px",
+                                            border:`1px solid ${C.border}`,
+                                            borderRadius:999,
+                                            background:C.surface,
+                                            color:C.textSub,
+                                            fontSize:10,
+                                            lineHeight:1.2,
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              minWidth:0,
+                                              overflow:"hidden",
+                                              textOverflow:"ellipsis",
+                                              whiteSpace:"nowrap",
+                                            }}
+                                          >
+                                            {selectedName}
+                                            {selectedSku
+                                              ? ` · ${selectedSku}`
+                                              : ""}
+                                          </span>
+
+                                          <button
+                                            type="button"
+                                            onClick={()=>
+                                              toggleSelectedCampaignProductKey(
+                                                key
+                                              )
+                                            }
+                                            aria-label={`Remove ${selectedName}`}
+                                            title="Remove selection"
+                                            style={{
+                                              width:18,
+                                              height:18,
+                                              flex:"0 0 auto",
+                                              display:"inline-flex",
+                                              alignItems:"center",
+                                              justifyContent:"center",
+                                              border:0,
+                                              borderRadius:"50%",
+                                              background:"#FEF2F2",
+                                              color:"#DC2626",
+                                              cursor:"pointer",
+                                              fontSize:11,
+                                              lineHeight:1,
+                                              padding:0,
+                                            }}
+                                          >
+                                            ×
+                                          </button>
+                                        </span>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
                             <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                               {filteredCampaignProductRows.map((row:any,idx:number)=>{
