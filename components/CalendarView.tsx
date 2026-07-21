@@ -5919,6 +5919,42 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const closeDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: false }));
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
+  const [campaignProductSearch,setCampaignProductSearch] = useState("");
+  const deferredCampaignProductSearch = useDeferredValue(
+    campaignProductSearch
+  );
+
+  const filteredCampaignProductRows = useMemo(()=>{
+    const query = String(
+      deferredCampaignProductSearch || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if(!query){
+      return productRows;
+    }
+
+    return productRows.filter((row:any)=>{
+      const searchable = [
+        row?.product,
+        row?.productName,
+        row?.skuCode,
+        row?.sku,
+        row?.brand,
+        row?.collection,
+        row?.category,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  },[
+    productRows,
+    deferredCampaignProductSearch,
+  ]);
 
   useEffect(()=>{
     checklistBoardItemsRef.current = items;
@@ -11530,12 +11566,120 @@ ${slidesHtml}
         const platform = getAfter("Platform");
         const brand = getAfter("Brand") || getPrefixed("Brand:");
         const category = getAfter("Category") || getAfter("Collection") || getPrefixed("Collection:");
+        const sku =
+          getAfter("SKU") ||
+          getAfter("SKU / SKUs") ||
+          getAfter("Products / SKUs") ||
+          getPrefixed("SKU:") ||
+          getPrefixed("SKUs:");
         const headline = getAfter("Headline") || getPrefixed("Headline:");
         const subheadline = getAfter("Subheadline") || getPrefixed("Subheadline:");
         const cta = getAfter("CTA") || getPrefixed("CTA:");
         const hasCampaignFormat = !!(platform || brand || category || product || headline || subheadline || cta);
-        return { platform, brand, category, product, productCount, headline, subheadline, cta, hasCampaignFormat };
+        return { platform, brand, category, sku, product, productCount, headline, subheadline, cta, hasCampaignFormat };
       };
+      const replaceCampaignOverviewField = (
+        content:any,
+        field:
+          | "Headline"
+          | "Subheadline"
+          | "CTA",
+        nextValue:any
+      ) => {
+        const lines = String(content || "")
+          .split(/\r?\n/);
+
+        const value = String(nextValue || "");
+        const fieldLower =
+          field.toLowerCase();
+
+        const exactIndex =
+          lines.findIndex(
+            (line:string)=>
+              line.trim().toLowerCase()===
+              fieldLower
+          );
+
+        if(exactIndex>=0){
+          if(exactIndex+1<lines.length){
+            lines[exactIndex+1] = value;
+          } else {
+            lines.push(value);
+          }
+
+          return lines.join("\n");
+        }
+
+        const inlineIndex =
+          lines.findIndex(
+            (line:string)=>
+              line
+                .trim()
+                .toLowerCase()
+                .startsWith(
+                  `${fieldLower}:`
+                )
+          );
+
+        if(inlineIndex>=0){
+          lines[inlineIndex] =
+            `${field}: ${value}`;
+
+          return lines.join("\n");
+        }
+
+        return [
+          ...lines,
+          field,
+          value,
+        ].join("\n");
+      };
+
+      const updateCampaignOverviewCell = (
+        item:any,
+        field:
+          | "Headline"
+          | "Subheadline"
+          | "CTA",
+        nextValue:any
+      ) => {
+        const items = getOverviewItems();
+
+        const nextContent =
+          replaceCampaignOverviewField(
+            item?.content,
+            field,
+            nextValue
+          );
+
+        const now =
+          new Date().toISOString();
+
+        const nextItems =
+          items.map((entry:any)=>
+            String(entry?.id || "")===
+            String(item?.id || "")
+              ? {
+                  ...entry,
+                  content:nextContent,
+                  updatedAt:now,
+                }
+              : entry
+          );
+
+        writeOverviewItemsToLocal(nextItems);
+
+        updateAiWorkspace("overview",{
+          items:nextItems,
+          updatedAt:now,
+        });
+
+        updateOverviewSourceFromEdit(
+          item,
+          nextContent
+        );
+      };
+
       const campaignOverviewRows = overviewItems
         .map((item:any)=>({ item, row:parseCampaignOverviewCopy(item.content) }))
         .filter(({row}:any)=>row.hasCampaignFormat);
@@ -11590,10 +11734,10 @@ ${slidesHtml}
             ) : (
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                 <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?430:620 }}>
-                  <table style={{ width:"100%",minWidth:1180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                  <table style={{ width:"100%",minWidth:1320,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                     <thead>
                       <tr style={{ background:C.surfaceAlt }}>
-                        {["Platform","Brand","Category","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                        {["Platform","Brand","Category","SKU","Product","Headline","Subheadline","CTA"].map((label:string)=>(
                           <th key={label} style={{ position:"sticky",top:0,zIndex:2,background:C.surfaceAlt,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                         ))}
                       </tr>
@@ -11603,7 +11747,7 @@ ${slidesHtml}
                         <React.Fragment key={`${group.label || "all"}-${groupIndex}`}>
                           {campaignOverviewGroupBy!=="none"&&(
                             <tr>
-                              <td colSpan={7} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                              <td colSpan={8} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
                                 {group.label} <span style={{ color:C.faint,fontWeight:800,textTransform:"none",letterSpacing:0 }}>({group.rows.length} row{group.rows.length!==1?"s":""})</span>
                               </td>
                             </tr>
@@ -11613,10 +11757,118 @@ ${slidesHtml}
                               <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || ""}</td>
                               <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
                               <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:0 }}>{row.product || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:190 }}>{row.headline || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:300 }}>{row.subheadline || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:150,fontWeight:850,color:C.text }}>{row.cta || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:130,fontFamily:"monospace",fontSize:11.5,color:C.muted }}>{row.sku || ""}</td>
+                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+
+                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:210 }}>
+                                <textarea
+                                  defaultValue={row.headline || ""}
+                                  onBlur={(event:any)=>{
+                                    const nextValue =
+                                      event.target.value;
+
+                                    if(
+                                      nextValue !==
+                                      String(row.headline || "")
+                                    ){
+                                      updateCampaignOverviewCell(
+                                        item,
+                                        "Headline",
+                                        nextValue
+                                      );
+                                    }
+                                  }}
+                                  aria-label="Edit headline"
+                                  rows={3}
+                                  style={{
+                                    width:"100%",
+                                    boxSizing:"border-box",
+                                    minHeight:64,
+                                    resize:"vertical",
+                                    padding:"7px 8px",
+                                    border:`1px solid ${C.border}`,
+                                    borderRadius:7,
+                                    background:C.bg,
+                                    color:C.text,
+                                    fontSize:12,
+                                    lineHeight:1.4,
+                                    outline:"none",
+                                  }}
+                                />
+                              </td>
+
+                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:320 }}>
+                                <textarea
+                                  defaultValue={row.subheadline || ""}
+                                  onBlur={(event:any)=>{
+                                    const nextValue =
+                                      event.target.value;
+
+                                    if(
+                                      nextValue !==
+                                      String(row.subheadline || "")
+                                    ){
+                                      updateCampaignOverviewCell(
+                                        item,
+                                        "Subheadline",
+                                        nextValue
+                                      );
+                                    }
+                                  }}
+                                  aria-label="Edit subheadline"
+                                  rows={4}
+                                  style={{
+                                    width:"100%",
+                                    boxSizing:"border-box",
+                                    minHeight:82,
+                                    resize:"vertical",
+                                    padding:"7px 8px",
+                                    border:`1px solid ${C.border}`,
+                                    borderRadius:7,
+                                    background:C.bg,
+                                    color:C.text,
+                                    fontSize:12,
+                                    lineHeight:1.4,
+                                    outline:"none",
+                                  }}
+                                />
+                              </td>
+
+                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:170 }}>
+                                <input
+                                  type="text"
+                                  defaultValue={row.cta || ""}
+                                  onBlur={(event:any)=>{
+                                    const nextValue =
+                                      event.target.value;
+
+                                    if(
+                                      nextValue !==
+                                      String(row.cta || "")
+                                    ){
+                                      updateCampaignOverviewCell(
+                                        item,
+                                        "CTA",
+                                        nextValue
+                                      );
+                                    }
+                                  }}
+                                  aria-label="Edit CTA"
+                                  style={{
+                                    width:"100%",
+                                    boxSizing:"border-box",
+                                    minHeight:34,
+                                    padding:"7px 8px",
+                                    border:`1px solid ${C.border}`,
+                                    borderRadius:7,
+                                    background:C.bg,
+                                    color:C.text,
+                                    fontSize:12,
+                                    fontWeight:850,
+                                    outline:"none",
+                                  }}
+                                />
+                              </td>
                             </tr>
                           ))}
                         </React.Fragment>
@@ -16888,9 +17140,46 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         {productRows.length>0&&(
                           <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
                             <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                              <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
+                              <div
+                                style={{
+                                  display:"flex",
+                                  flexDirection:"column",
+                                  gap:3,
+                                }}
+                              >
+                                <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                                  Select mapped products
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize:10,
+                                    color:C.faint,
+                                  }}
+                                >
+                                  Showing {filteredCampaignProductRows.length} of {productRows.length}
+                                </span>
+                              </div>
+
                               <div style={{ display:"flex",gap:6,width:isMobile?"100%":"auto",flexWrap:"wrap",justifyContent:isMobile?"stretch":"flex-end" }}>
-                                <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
+                                <Btn xs variant="outline" onClick={()=>{
+  const filteredKeys = filteredCampaignProductRows.map(
+    (row:any,idx:number)=>
+      getCampaignProductOptionKey(
+        row,
+        productRows.indexOf(row)
+      )
+  );
+
+  setSelectedCampaignProductKeys(
+    (previous:string[])=>
+      Array.from(
+        new Set([
+          ...previous,
+          ...filteredKeys,
+        ])
+      )
+  );
+}}>Select All</Btn>
                                 <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
                                 <Btn xs variant="outline" onClick={()=>{
                                   const rows = getProductIntroDigitalRows();
@@ -16921,9 +17210,96 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 }} disabled={!productRows.length}>Add All as 1 Row</Btn>
                               </div>
                             </div>
+
+                            <div
+                              style={{
+                                padding:"8px 10px",
+                                borderBottom:`1px solid ${C.border}`,
+                                background:C.surface,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  position:"relative",
+                                }}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  style={{
+                                    position:"absolute",
+                                    left:10,
+                                    top:"50%",
+                                    transform:"translateY(-50%)",
+                                    color:C.faint,
+                                    fontSize:12,
+                                    pointerEvents:"none",
+                                  }}
+                                >
+                                  ⌕
+                                </span>
+
+                                <input
+                                  type="search"
+                                  value={campaignProductSearch}
+                                  onChange={(event:any)=>
+                                    setCampaignProductSearch(
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder="Search product, SKU, brand, or category..."
+                                  style={{
+                                    width:"100%",
+                                    minHeight:34,
+                                    boxSizing:"border-box",
+                                    padding:"7px 34px 7px 30px",
+                                    border:`1.5px solid ${C.border}`,
+                                    borderRadius:8,
+                                    background:C.bg,
+                                    color:C.text,
+                                    fontSize:11.5,
+                                    outline:"none",
+                                  }}
+                                />
+
+                                {!!campaignProductSearch&&(
+                                  <button
+                                    type="button"
+                                    onClick={()=>
+                                      setCampaignProductSearch("")
+                                    }
+                                    aria-label="Clear product search"
+                                    title="Clear search"
+                                    style={{
+                                      position:"absolute",
+                                      right:7,
+                                      top:"50%",
+                                      transform:"translateY(-50%)",
+                                      width:22,
+                                      height:22,
+                                      border:0,
+                                      borderRadius:5,
+                                      background:C.surfaceAlt,
+                                      color:C.muted,
+                                      cursor:"pointer",
+                                      fontSize:13,
+                                      lineHeight:1,
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
                             <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
-                              {productRows.map((row:any,idx:number)=>{
-                                const key = getCampaignProductOptionKey(row,idx);
+                              {filteredCampaignProductRows.map((row:any,idx:number)=>{
+                                const originalIndex =
+                                  productRows.indexOf(row);
+                                const key =
+                                  getCampaignProductOptionKey(
+                                    row,
+                                    originalIndex
+                                  );
                                 const checked = selectedCampaignProductKeys.includes(key);
                                 return (
                                   <label key={key} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:9,alignItems:"center",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:checked?"#EEF2FF":idx%2?C.surface:C.surfaceAlt,cursor:"pointer" }}>
@@ -16935,6 +17311,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   </label>
                                 );
                               })}
+
+                              {!filteredCampaignProductRows.length&&(
+                                <div
+                                  style={{
+                                    padding:"18px 12px",
+                                    textAlign:"center",
+                                    color:C.faint,
+                                    fontSize:11.5,
+                                  }}
+                                >
+                                  No mapped products match “{campaignProductSearch}”.
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
