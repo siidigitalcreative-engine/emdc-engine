@@ -17519,9 +17519,42 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       {productRows.length>0&&(
                         <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
                           <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                            <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Select mapped products</span>
+                            <div style={{ display:"flex",flexDirection:"column",gap:3 }}>
+                              <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                                Select mapped products
+                              </span>
+                              <span style={{ fontSize:10,color:C.faint }}>
+                                Showing {filteredCampaignProductRows.length} of {productRows.length}
+                              </span>
+                            </div>
+
                             <div style={{ display:"flex",gap:6,width:isMobile?"100%":"auto",flexWrap:"wrap",justifyContent:isMobile?"stretch":"flex-end" }}>
-                              <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys(productRows.map((row:any,idx:number)=>getCampaignProductOptionKey(row,idx)))}>Select All</Btn>
+                              <Btn
+                                xs
+                                variant="outline"
+                                onClick={()=>{
+                                  const filteredKeys =
+                                    filteredCampaignProductRows.map(
+                                      (row:any)=>
+                                        getCampaignProductOptionKey(
+                                          row,
+                                          productRows.indexOf(row)
+                                        )
+                                    );
+
+                                  setSelectedCampaignProductKeys(
+                                    (previous:string[])=>
+                                      Array.from(
+                                        new Set([
+                                          ...previous,
+                                          ...filteredKeys,
+                                        ])
+                                      )
+                                  );
+                                }}
+                              >
+                                Select All
+                              </Btn>
                               <Btn xs variant="outline" onClick={()=>setSelectedCampaignProductKeys([])}>Clear Selection</Btn>
                               <Btn xs variant="outline" onClick={addSelectedEcommerceCampaignProductRows} disabled={!selectedCampaignProductKeys.length}>Add Selected as Separate Rows</Btn>
                               <Btn xs onClick={addSelectedAsOneEcommerceCampaignProductRow} disabled={!selectedCampaignProductKeys.length}>Add Selected as 1 Row</Btn>
@@ -17529,12 +17562,99 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               <Btn xs variant="outline" onClick={addAllAsOneEcommerceCampaignProductRow} disabled={!productRows.length}>Add All as 1 Row</Btn>
                             </div>
                           </div>
+
+                          <div
+                            style={{
+                              padding:"8px 10px",
+                              borderBottom:`1px solid ${C.border}`,
+                              background:C.surface,
+                            }}
+                          >
+                            <div style={{ position:"relative" }}>
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  position:"absolute",
+                                  left:10,
+                                  top:"50%",
+                                  transform:"translateY(-50%)",
+                                  color:C.faint,
+                                  fontSize:12,
+                                  pointerEvents:"none",
+                                }}
+                              >
+                                ⌕
+                              </span>
+
+                              <input
+                                type="search"
+                                value={campaignProductSearch}
+                                onChange={(event:any)=>
+                                  setCampaignProductSearch(
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="Search product, SKU, brand, or category..."
+                                style={{
+                                  width:"100%",
+                                  minHeight:34,
+                                  boxSizing:"border-box",
+                                  padding:"7px 34px 7px 30px",
+                                  border:`1.5px solid ${C.border}`,
+                                  borderRadius:8,
+                                  background:C.bg,
+                                  color:C.text,
+                                  fontSize:11.5,
+                                  outline:"none",
+                                }}
+                              />
+
+                              {!!campaignProductSearch&&(
+                                <button
+                                  type="button"
+                                  onClick={()=>
+                                    setCampaignProductSearch("")
+                                  }
+                                  aria-label="Clear product search"
+                                  title="Clear search"
+                                  style={{
+                                    position:"absolute",
+                                    right:7,
+                                    top:"50%",
+                                    transform:"translateY(-50%)",
+                                    width:22,
+                                    height:22,
+                                    border:0,
+                                    borderRadius:5,
+                                    background:C.surfaceAlt,
+                                    color:C.muted,
+                                    cursor:"pointer",
+                                    fontSize:13,
+                                    lineHeight:1,
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
                           <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
-                            {productRows.map((row:any,idx:number)=>{
-                              const key = getCampaignProductOptionKey(row,idx);
-                              const checked = selectedCampaignProductKeys.includes(key);
+                            {filteredCampaignProductRows.map((row:any)=>{
+                              const originalIndex =
+                                productRows.indexOf(row);
+                              const key =
+                                getCampaignProductOptionKey(
+                                  row,
+                                  originalIndex
+                                );
+                              const checked =
+                                selectedCampaignProductKeys.includes(
+                                  key
+                                );
+
                               return (
-                                <label key={key} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:9,alignItems:"center",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:checked?"#EEF2FF":idx%2?C.surface:C.surfaceAlt,cursor:"pointer" }}>
+                                <label key={key} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:9,alignItems:"center",padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:checked?"#EEF2FF":originalIndex%2?C.surface:C.surfaceAlt,cursor:"pointer" }}>
                                   <input type="checkbox" checked={checked} onChange={()=>toggleSelectedCampaignProductKey(key)} />
                                   <span style={{ minWidth:0 }}>
                                     <span style={{ display:"block",fontSize:12,fontWeight:900,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{row.product || row.skuCode || "Unnamed Product"}</span>
@@ -17543,6 +17663,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 </label>
                               );
                             })}
+
+                            {!filteredCampaignProductRows.length&&(
+                              <div
+                                style={{
+                                  padding:"18px 12px",
+                                  textAlign:"center",
+                                  color:C.faint,
+                                  fontSize:11.5,
+                                }}
+                              >
+                                No mapped products match “{campaignProductSearch}”.
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
