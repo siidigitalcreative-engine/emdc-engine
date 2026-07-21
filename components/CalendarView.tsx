@@ -24628,6 +24628,7 @@ export default function App({
   const checklistItemsSaveTimerRef = useRef<any>(null);
   const checklistItemsQueuedRef = useRef<any>(null);
   const checklistItemsSaveInFlightRef = useRef(false);
+  const checklistItemsSavingSnapshotRef = useRef<any>(null);
   const checklistItemsSaveSequenceRef = useRef(0);
   const checklistItemsPendingUntilRef = useRef(0);
 
@@ -24943,6 +24944,24 @@ export default function App({
 
   const fetchChecklistItemsGroupV2 = async (groupId:string) => {
     if(!groupId) return;
+
+    const id = String(groupId);
+
+    const queuedSnapshot =
+      checklistItemsQueuedRef.current?.[id];
+
+    const savingSnapshot =
+      checklistItemsSavingSnapshotRef.current;
+
+    if(
+      queuedSnapshot ||
+      (
+        savingSnapshot &&
+        String(savingSnapshot.groupId || "")===id
+      )
+    ){
+      return;
+    }
 
     const res = await fetch(
       `/api/checklist-items-fast?groupId=${encodeURIComponent(groupId)}`,
@@ -25635,6 +25654,13 @@ export default function App({
     checklistItemsQueuedRef.current =
       queued;
 
+    checklistItemsSavingSnapshotRef.current = {
+      groupId:String(snapshot.groupId),
+      groupItems:JSON.parse(
+        JSON.stringify(snapshot.groupItems)
+      ),
+    };
+
     checklistItemsSaveInFlightRef.current =
       true;
     checklistItemsPendingUntilRef.current =
@@ -25707,6 +25733,19 @@ export default function App({
       }
 
       syncV2EtagRef.current = "";
+
+      // Keep the UI on the just-saved snapshot. A previously-started fetch may
+      // still finish after the click and would otherwise make the checkbox
+      // appear to revert briefly before returning.
+      setChecklistAllItems((previous:any)=>({
+        ...(previous || {}),
+        [String(snapshot.groupId)]:
+          JSON.parse(
+            JSON.stringify(
+              snapshot.groupItems
+            )
+          ),
+      }));
     } catch {
       // Requeue only this failed group. Other groups remain queued and will
       // continue saving one by one.
@@ -25721,6 +25760,8 @@ export default function App({
     } finally {
       checklistItemsSaveInFlightRef.current =
         false;
+      checklistItemsSavingSnapshotRef.current =
+        null;
 
       const hasMore =
         Object.keys(
