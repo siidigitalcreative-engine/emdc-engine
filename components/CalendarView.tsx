@@ -25581,10 +25581,27 @@ export default function App({
   };
 
   const flushChecklistItemsSave = async () => {
-    if (
-      cloudApplyingRef.current ||
-      checklistItemsSaveInFlightRef.current
-    ){
+    if(checklistItemsSaveInFlightRef.current){
+      return;
+    }
+
+    // A background cloud apply may briefly be active when the user edits a
+    // checklist. Never drop or strand that save. Keep the queue intact and
+    // retry immediately after the apply window.
+    if(cloudApplyingRef.current){
+      if(checklistItemsSaveTimerRef.current){
+        clearTimeout(
+          checklistItemsSaveTimerRef.current
+        );
+      }
+
+      checklistItemsSaveTimerRef.current =
+        setTimeout(()=>{
+          checklistItemsSaveTimerRef.current =
+            null;
+          void flushChecklistItemsSave();
+        },120);
+
       return;
     }
 
@@ -25629,7 +25646,7 @@ export default function App({
       new Date().toISOString();
 
     setCloudSyncStatus(
-      "Saved locally • syncing..."
+      "Saving checklist..."
     );
 
     try {
@@ -25739,10 +25756,7 @@ export default function App({
     groupId:string,
     groupItems:any
   ) => {
-    if(
-      cloudApplyingRef.current ||
-      !groupId
-    ){
+    if(!groupId){
       return;
     }
 
@@ -25785,6 +25799,40 @@ export default function App({
         void flushChecklistItemsSave();
       },25);
   };
+  useEffect(()=>{
+    const flushBeforeExit = () => {
+      if(
+        Object.keys(
+          checklistItemsQueuedRef.current ||
+          {}
+        ).length > 0 &&
+        !checklistItemsSaveInFlightRef.current
+      ){
+        void flushChecklistItemsSave();
+      }
+    };
+
+    window.addEventListener(
+      "pagehide",
+      flushBeforeExit
+    );
+    window.addEventListener(
+      "beforeunload",
+      flushBeforeExit
+    );
+
+    return ()=>{
+      window.removeEventListener(
+        "pagehide",
+        flushBeforeExit
+      );
+      window.removeEventListener(
+        "beforeunload",
+        flushBeforeExit
+      );
+    };
+  },[]);
+
   const flushChecklistGroupsSave = async () => {
     if (cloudApplyingRef.current) return;
 
