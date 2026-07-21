@@ -19190,6 +19190,15 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
           ? updater(prev)
           : updater;
 
+      // Save the edited default-task template to the shared app state.
+      // Without this cloud/app-state save, the checklist task sync can work,
+      // but reopening Manage Templates may restore the older template.
+      if(onStateChange){
+        onStateChange({
+          checklistTemplates:next,
+        });
+      }
+
       // Run after React receives the new template value, while keeping the
       // previous template available for safe task matching.
       window.setTimeout(()=>{
@@ -19220,9 +19229,16 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   },[launchTypes]);
 
   useEffect(()=>{
+    // Browser cache only. The shared app-state save in
+    // updateTemplatesAndChecklistItems is the authoritative persistence path.
     try {
-      localStorage.setItem("emdc_checklist_templates_v1", JSON.stringify(templates));
-      window.dispatchEvent(new Event("emdc-local-sync"));
+      localStorage.setItem(
+        "emdc_checklist_templates_v1",
+        JSON.stringify(templates)
+      );
+      window.dispatchEvent(
+        new Event("emdc-local-sync")
+      );
     } catch {}
   },[templates]);
 
