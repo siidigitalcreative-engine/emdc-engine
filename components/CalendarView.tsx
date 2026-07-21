@@ -19097,15 +19097,10 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         nextItems[groupId] =
           reconciledItems;
 
-        writeEmdcChecklistItemsBackup(
-          groupId,
-          reconciledItems
-        );
       }
     );
 
     setAllGroupItems(nextItems);
-    persistChecklistItemsNow(nextItems);
 
     setGroups((currentGroups:any[])=>
       currentGroups.map((group:any)=>{
