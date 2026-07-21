@@ -18469,7 +18469,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onChecklistItemsDirectSave, onChecklistGroupsDirectSave, onRouteChange, groups, setGroups, checklistTrash=[], setChecklistTrash, allGroupItems, setAllGroupItems, statuses, setStatuses }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onChecklistItemsDirectSave, onChecklistGroupsDirectSave, onRouteChange, groups, setGroups, checklistTrash=[], setChecklistTrash, allGroupItems, setAllGroupItems, statuses, setStatuses, checklistItemsLoadingGroupId="" }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
@@ -19575,7 +19575,81 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   };
   const activeGroup = groups.find((g:any)=>g.id===active);
 
-  if(activeGroup) return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  if(activeGroup){
+    const isLoadingAuthoritativeItems =
+      String(checklistItemsLoadingGroupId || "")===
+      String(activeGroup.id || "");
+
+    if(isLoadingAuthoritativeItems){
+      return (
+        <div>
+          <button
+            type="button"
+            onClick={()=>{
+              setActive(null);
+              if(onRouteChange){
+                onRouteChange({
+                  tab:"checklists",
+                  groupId:null,
+                  groupTab:"tasks",
+                });
+              }
+            }}
+            style={{
+              marginBottom:12,
+              padding:0,
+              border:0,
+              background:"transparent",
+              color:C.textSub,
+              fontSize:12,
+              fontWeight:700,
+              cursor:"pointer",
+            }}
+          >
+            ‹ All Groups
+          </button>
+
+          <div
+            style={{
+              minHeight:420,
+              padding:24,
+              border:`1.5px solid ${C.border}`,
+              borderRadius:12,
+              background:C.surface,
+              display:"flex",
+              flexDirection:"column",
+              alignItems:"center",
+              justifyContent:"center",
+              gap:12,
+              textAlign:"center",
+            }}
+          >
+            <div
+              style={{
+                width:28,
+                height:28,
+                borderRadius:"50%",
+                border:`3px solid ${C.border}`,
+                borderTopColor:C.accent,
+                animation:"emdcChecklistSpin .8s linear infinite",
+              }}
+            />
+            <div>
+              <div style={{fontSize:14,fontWeight:900,color:C.text}}>
+                Loading checklist
+              </div>
+              <div style={{marginTop:4,fontSize:11.5,color:C.muted}}>
+                Retrieving the latest saved tasks and edits.
+              </div>
+            </div>
+            <style>{`@keyframes emdcChecklistSpin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        </div>
+      );
+    }
+
+    return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+  }
 
   return (
     <div>
@@ -24595,6 +24669,7 @@ export default function App({
   const [appStateHydrated,setAppStateHydrated] = useState(false);
   const [cloudHydrated,setCloudHydrated] = useState(false);
   const [cloudSyncStatus,setCloudSyncStatus] = useState("Loading cloud...");
+  const [checklistItemsLoadingGroupId,setChecklistItemsLoadingGroupId] = useState("");
   const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
   const cloudApplyingRef = useRef(false);
@@ -26210,9 +26285,33 @@ export default function App({
   }, [cloudHydrated]);
 
   useEffect(() => {
-    if(!cloudHydrated || !routeGroupId) return;
-    void fetchChecklistGroupDetailV2(String(routeGroupId));
-    void fetchChecklistItemsGroupV2(String(routeGroupId));
+    if(!cloudHydrated || !routeGroupId){
+      setChecklistItemsLoadingGroupId("");
+      return;
+    }
+
+    const groupId = String(routeGroupId);
+    let cancelled = false;
+
+    setChecklistItemsLoadingGroupId(groupId);
+    void fetchChecklistGroupDetailV2(groupId);
+
+    void (async()=>{
+      try {
+        await fetchChecklistItemsGroupV2(groupId);
+      } finally {
+        if(!cancelled){
+          setChecklistItemsLoadingGroupId(
+            (current:string)=>
+              current===groupId ? "" : current
+          );
+        }
+      }
+    })();
+
+    return ()=>{
+      cancelled = true;
+    };
   }, [cloudHydrated,routeGroupId]);
 
   useEffect(() => {
@@ -26574,7 +26673,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleRootStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={handleRootStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} checklistTrash={checklistTrash} setChecklistTrash={setChecklistTrash} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} checklistTrash={checklistTrash} setChecklistTrash={setChecklistTrash} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} checklistItemsLoadingGroupId={checklistItemsLoadingGroupId} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
