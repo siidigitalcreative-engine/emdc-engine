@@ -714,26 +714,17 @@ const dedupeChecklistItemsObject = (items:any = {}) => {
 };
 
 
-const orderChecklistItemsByTemplate = (rows:any[] = [], templateList:any[] = []) => {
-  const list = Array.isArray(rows) ? dedupeChecklistItemsById(rows) : [];
-  const templates = Array.isArray(templateList) ? templateList.map((t:any)=>String(t||"").trim()) : [];
-  if (!templates.length) return list;
-
-  const order = new Map<string,number>();
-  templates.forEach((text:string,idx:number)=>{
-    const key = text.toLowerCase();
-    if (key && !order.has(key)) order.set(key,idx);
-  });
-
-  return [...list].sort((a:any,b:any)=>{
-    const ak = String(a?.text||"").trim().toLowerCase();
-    const bk = String(b?.text||"").trim().toLowerCase();
-    const ai = order.has(ak) ? order.get(ak) as number : 100000;
-    const bi = order.has(bk) ? order.get(bk) as number : 100000;
-    if (ai !== bi) return ai - bi;
-    if (!!a?.custom !== !!b?.custom) return a?.custom ? 1 : -1;
-    return 0;
-  });
+const orderChecklistItemsByTemplate = (
+  rows:any[] = [],
+  _templateList:any[] = []
+) => {
+  // The saved checklist array is the authoritative display order.
+  // Do not sort by Done status, template matching, device size, or any other
+  // UI state. This keeps mobile and desktop task arrangements identical and
+  // prevents completed tasks from moving to the top.
+  return Array.isArray(rows)
+    ? dedupeChecklistItemsById(rows)
+    : [];
 };
 
 const getEmdcExternalSkuCount = (state:any) => {
@@ -17480,7 +17471,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       <div style={{ marginBottom:20 }}>
         <button onClick={onBack} style={{ background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:13,fontWeight:600,padding:"0 0 10px",display:"flex",alignItems:"center",gap:5 }}>&#8249; All Groups</button>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10 }}>
-          <div>
+          <div
+            style={{
+              flex:"1 1 520px",
+              width:"100%",
+              minWidth:0,
+            }}
+          >
             <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:800,color:C.text }}>{group.groupName}</h2>
             <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
               <Tag color={groupColor}>{lt.label}</Tag>
@@ -17494,8 +17491,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               onClick={()=>setActiveGroupTab("overview")}
               style={{
                 marginTop:10,
-                minHeight:38,
-                width:isMobile?"100%":"auto",
+                minHeight:40,
+                width:"100%",
+                maxWidth:isMobile?"100%":520,
+                boxSizing:"border-box",
                 padding:"9px 16px",
                 border:0,
                 borderRadius:9,
