@@ -18630,28 +18630,54 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         (item:any)=>!item?.custom
       );
 
-      const usedExistingIds =
-        new Set<string>();
+      const previousTemplateKeys = new Set(
+        previousTemplateList.map(
+          (text:string)=>
+            normalizeTemplateTaskKey(text)
+        )
+      );
 
-      const takeExistingItem = (
-        predicate:(item:any,index:number)=>boolean
-      ) => {
-        const match = existingTemplateItems.find(
-          (item:any,index:number)=>
-            !usedExistingIds.has(
-              String(item?.id || `index-${index}`)
-            ) &&
-            predicate(item,index)
+      const usedExistingIds = new Set<string>();
+
+      const getExistingIdentity = (
+        item:any
+      ) =>
+        normalizeTemplateTaskKey(
+          item?.templateKey ||
+          item?.templateText ||
+          item?.text
         );
 
+      const takeExactExisting = (
+        nextKey:string
+      ) => {
+        const match =
+          existingTemplateItems.find(
+            (item:any,index:number)=>{
+              const itemIdentity =
+                getExistingIdentity(item);
+              const itemId = String(
+                item?.id ||
+                `legacy-${index}`
+              );
+
+              return (
+                !usedExistingIds.has(itemId) &&
+                itemIdentity===nextKey
+              );
+            }
+          );
+
         if(match){
-          const matchIndex =
-            existingTemplateItems.indexOf(match);
+          const index =
+            existingTemplateItems.indexOf(
+              match
+            );
 
           usedExistingIds.add(
             String(
               match?.id ||
-              `index-${matchIndex}`
+              `legacy-${index}`
             )
           );
         }
@@ -18659,60 +18685,9 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         return match;
       };
 
-      // Map the old template text to the matching checklist task before
-      // comparing it with the new template. This preserves Done, status,
-      // notes, links, assignee, IDs, and checklist-level wording edits.
-      const previousTaskSources =
-        new Map<string,any>();
-
-      previousTemplateList.forEach(
-        (
-          previousText:string,
-          index:number
-        )=>{
-          const previousKey =
-            normalizeTemplateTaskKey(
-              previousText
-            );
-
-          if(!previousKey) return;
-
-          const matchedByMetadata =
-            takeExistingItem(
-              (item:any)=>
-                normalizeTemplateTaskKey(
-                  item?.templateKey ||
-                  item?.templateText
-                )===previousKey
-            );
-
-          const matchedByText =
-            matchedByMetadata ||
-            takeExistingItem(
-              (item:any)=>
-                normalizeTemplateTaskKey(
-                  item?.text
-                )===previousKey
-            );
-
-          // Legacy checklist tasks may not have template metadata. Use the
-          // previous position only as a final fallback, and only once.
-          const matchedByLegacyPosition =
-            matchedByText ||
-            takeExistingItem(
-              (_item:any,itemIndex:number)=>
-                itemIndex===index
-            );
-
-          if(matchedByLegacyPosition){
-            previousTaskSources.set(
-              previousKey,
-              matchedByLegacyPosition
-            );
-          }
-        }
-      );
-
+      // Build every task from the NEW template. Existing checklist data is
+      // merged only when the same task can be identified exactly. This
+      // guarantees that all newly added defaults appear in every checklist.
       out[deptKey] = templateList.map(
         (nextText:string)=>{
           const nextKey =
@@ -18720,23 +18695,11 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
               nextText
             );
 
-          let source =
-            previousTaskSources.get(nextKey);
+          const source =
+            takeExactExisting(nextKey) ||
+            {};
 
-          if(!source){
-            source = takeExistingItem(
-              (item:any)=>
-                normalizeTemplateTaskKey(
-                  item?.templateKey ||
-                  item?.templateText ||
-                  item?.text
-                )===nextKey
-            );
-          }
-
-          source = source || {};
-
-          const previousCanonicalText =
+          const canonicalBeforeEdit =
             String(
               source?.templateText ||
               source?.templateKey ||
@@ -18754,7 +18717,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
               sourceText
             ) !==
               normalizeTemplateTaskKey(
-                previousCanonicalText
+                canonicalBeforeEdit
               );
 
           return {
@@ -18775,6 +18738,72 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
             templateKey:nextKey,
             templateText:nextText,
           };
+        }
+      );
+
+      // Preserve unmatched checklist tasks only when they contain actual
+      // checklist-level work or edits. Untouched defaults removed from the
+      // template are discarded.
+      existingTemplateItems.forEach(
+        (item:any,index:number)=>{
+          const itemId = String(
+            item?.id ||
+            `legacy-${index}`
+          );
+
+          if(usedExistingIds.has(itemId)){
+            return;
+          }
+
+          const itemText =
+            String(item?.text || "").trim();
+          const itemKey =
+            normalizeTemplateTaskKey(
+              itemText
+            );
+          const templateKey =
+            normalizeTemplateTaskKey(
+              item?.templateKey ||
+              item?.templateText
+            );
+
+          const hasUserWork =
+            !!item?.done ||
+            !!String(
+              item?.statusId || ""
+            ).trim() ||
+            !!String(
+              item?.note || ""
+            ).trim() ||
+            !!String(
+              item?.link || ""
+            ).trim() ||
+            !!String(
+              item?.assignee || ""
+            ).trim() ||
+            (
+              !!itemText &&
+              !!templateKey &&
+              itemKey!==templateKey
+            ) ||
+            (
+              !!itemText &&
+              !templateKey &&
+              !previousTemplateKeys.has(
+                itemKey
+              )
+            );
+
+          if(!hasUserWork){
+            return;
+          }
+
+          out[deptKey].push({
+            ...item,
+            id:item.id || uid(),
+            custom:true,
+            preservedFromTemplateSync:true,
+          });
         }
       );
 
