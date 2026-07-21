@@ -17488,6 +17488,33 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               {group.deadline&&<span style={{ fontSize:11,color:"#8B5CF6",fontWeight:600,background:"#F5F3FF",padding:"2px 8px",borderRadius:4,border:"1px solid #DDD6FE" }}>{group.deadlineEnd?`${group.deadline} → ${group.deadlineEnd}`:`Due ${group.deadline}`}</span>}
               {!group.deadline&&Array.isArray(group.monthOnlyMonths)&&group.monthOnlyMonths.length>0&&<span style={{ fontSize:11,color:"#0F766E",fontWeight:600,background:"#CCFBF1",padding:"2px 8px",borderRadius:4,border:"1px solid #99F6E4" }}>{formatMonthOnlyLabel(group.monthOnlyMonths)}</span>}
             </div>
+
+            <button
+              type="button"
+              onClick={()=>setActiveGroupTab("overview")}
+              style={{
+                marginTop:10,
+                minHeight:38,
+                width:isMobile?"100%":"auto",
+                padding:"9px 16px",
+                border:0,
+                borderRadius:9,
+                background:groupColor,
+                color:"#FFFFFF",
+                fontSize:12,
+                fontWeight:900,
+                cursor:"pointer",
+                boxShadow:`0 5px 14px ${groupColor}35`,
+                display:"inline-flex",
+                alignItems:"center",
+                justifyContent:"center",
+                gap:7,
+              }}
+            >
+              <span aria-hidden="true">▣</span>
+              Open Overview
+            </button>
+
             {linkedEvents.length>0&&(
               <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:8 }}>
                 <span style={{ fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em" }}>Linked:</span>
