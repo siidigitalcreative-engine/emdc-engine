@@ -5919,43 +5919,6 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const closeDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: false }));
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
-  const [campaignProductSearch,setCampaignProductSearch] = useState("");
-  const deferredCampaignProductSearch = useDeferredValue(
-    campaignProductSearch
-  );
-
-  const filteredCampaignProductRows = useMemo(()=>{
-    const query = String(
-      deferredCampaignProductSearch || ""
-    )
-      .trim()
-      .toLowerCase();
-
-    if(!query){
-      return productRows;
-    }
-
-    return productRows.filter((row:any)=>{
-      const searchable = [
-        row?.product,
-        row?.productName,
-        row?.skuCode,
-        row?.sku,
-        row?.brand,
-        row?.collection,
-        row?.category,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return searchable.includes(query);
-    });
-  },[
-    productRows,
-    deferredCampaignProductSearch,
-  ]);
-
   useEffect(()=>{
     checklistBoardItemsRef.current = items;
   },[items]);
@@ -6242,6 +6205,43 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   };
 
   const productRows = (group.skus||[]).map(getSkuInfo).filter((row:any)=>row.product || row.skuCode);
+
+  const [campaignProductSearch,setCampaignProductSearch] = useState("");
+  const deferredCampaignProductSearch = useDeferredValue(
+    campaignProductSearch
+  );
+
+  const filteredCampaignProductRows = useMemo(()=>{
+    const query = String(
+      deferredCampaignProductSearch || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if(!query){
+      return productRows;
+    }
+
+    return productRows.filter((row:any)=>{
+      const searchable = [
+        row?.product,
+        row?.productName,
+        row?.skuCode,
+        row?.sku,
+        row?.brand,
+        row?.collection,
+        row?.category,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  },[
+    productRows,
+    deferredCampaignProductSearch,
+  ]);
 
   const openProductDetail = (row:any) => {
     setProductDetail(row);
