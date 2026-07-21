@@ -486,13 +486,29 @@ const mergeChecklistTemplatesWithDefaults = (saved:any) => {
     });
   });
 
-  // Product Reactivation must always mirror Product Introduction settings/tasks.
-  // This also migrates older browsers that still have the previous relaunch template saved.
+  // Product Reactivation has its own editable template.
+  // Use its saved tasks when present. The built-in Reactivation defaults are
+  // used only when no saved department list exists.
   merged.reactivation = {
-    ecommerce:[...(merged.introduction?.ecommerce || [])],
-    marketing:[...(merged.introduction?.marketing || [])],
-    digital:[...(merged.introduction?.digital || [])],
+    ...(TEMPLATES as any).reactivation,
+    ...((safeSaved as any).reactivation || {}),
   };
+
+  Object.keys(DEPTS).forEach((deptKey:string)=>{
+    if(
+      !Array.isArray(
+        merged.reactivation?.[deptKey]
+      )
+    ){
+      merged.reactivation[deptKey] = [
+        ...(
+          (TEMPLATES as any)
+            .reactivation?.[deptKey] ||
+          []
+        ),
+      ];
+    }
+  });
 
   return merged;
 };
@@ -18614,18 +18630,55 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         (item:any)=>!item?.custom
       );
 
-      // Associate existing checklist tasks with the PREVIOUS template first.
-      // This lets us keep status, notes, links, assignees, completion, IDs and
-      // even a user-edited task description when the same default task remains.
-      const previousTaskSources = new Map<string,any>();
+      const usedExistingIds =
+        new Set<string>();
+
+      const takeExistingItem = (
+        predicate:(item:any,index:number)=>boolean
+      ) => {
+        const match = existingTemplateItems.find(
+          (item:any,index:number)=>
+            !usedExistingIds.has(
+              String(item?.id || `index-${index}`)
+            ) &&
+            predicate(item,index)
+        );
+
+        if(match){
+          const matchIndex =
+            existingTemplateItems.indexOf(match);
+
+          usedExistingIds.add(
+            String(
+              match?.id ||
+              `index-${matchIndex}`
+            )
+          );
+        }
+
+        return match;
+      };
+
+      // Map the old template text to the matching checklist task before
+      // comparing it with the new template. This preserves Done, status,
+      // notes, links, assignee, IDs, and checklist-level wording edits.
+      const previousTaskSources =
+        new Map<string,any>();
 
       previousTemplateList.forEach(
-        (previousText:string,index:number)=>{
+        (
+          previousText:string,
+          index:number
+        )=>{
           const previousKey =
-            normalizeTemplateTaskKey(previousText);
+            normalizeTemplateTaskKey(
+              previousText
+            );
+
+          if(!previousKey) return;
 
           const matchedByMetadata =
-            existingTemplateItems.find(
+            takeExistingItem(
               (item:any)=>
                 normalizeTemplateTaskKey(
                   item?.templateKey ||
@@ -18634,25 +18687,27 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
             );
 
           const matchedByText =
-            existingTemplateItems.find(
+            matchedByMetadata ||
+            takeExistingItem(
               (item:any)=>
                 normalizeTemplateTaskKey(
                   item?.text
                 )===previousKey
             );
 
-          const matchedByPosition =
-            existingTemplateItems[index];
-
-          const source =
-            matchedByMetadata ||
+          // Legacy checklist tasks may not have template metadata. Use the
+          // previous position only as a final fallback, and only once.
+          const matchedByLegacyPosition =
             matchedByText ||
-            matchedByPosition;
+            takeExistingItem(
+              (_item:any,itemIndex:number)=>
+                itemIndex===index
+            );
 
-          if(source && previousKey){
+          if(matchedByLegacyPosition){
             previousTaskSources.set(
               previousKey,
-              source
+              matchedByLegacyPosition
             );
           }
         }
@@ -18661,41 +18716,50 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       out[deptKey] = templateList.map(
         (nextText:string)=>{
           const nextKey =
-            normalizeTemplateTaskKey(nextText);
-          const source =
-            previousTaskSources.get(nextKey) ||
-            existingTemplateItems.find(
+            normalizeTemplateTaskKey(
+              nextText
+            );
+
+          let source =
+            previousTaskSources.get(nextKey);
+
+          if(!source){
+            source = takeExistingItem(
               (item:any)=>
                 normalizeTemplateTaskKey(
                   item?.templateKey ||
                   item?.templateText ||
                   item?.text
                 )===nextKey
-            ) ||
-            {};
+            );
+          }
+
+          source = source || {};
 
           const previousCanonicalText =
             String(
               source?.templateText ||
+              source?.templateKey ||
               nextText
             ).trim();
 
           const sourceText =
-            String(source?.text || "").trim();
+            String(
+              source?.text || ""
+            ).trim();
 
           const sourceWasManuallyEdited =
             !!sourceText &&
             normalizeTemplateTaskKey(
               sourceText
-            ) !== normalizeTemplateTaskKey(
-              previousCanonicalText
-            );
+            ) !==
+              normalizeTemplateTaskKey(
+                previousCanonicalText
+              );
 
           return {
             ...source,
             id:source.id || uid(),
-            // Preserve a checklist-level wording edit. Otherwise use the
-            // current template wording.
             text:
               sourceWasManuallyEdited
                 ? sourceText
@@ -18703,8 +18767,10 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
             done:!!source.done,
             link:source.link || "",
             note:source.note || "",
-            assignee:source.assignee || "",
-            statusId:source.statusId || "",
+            assignee:
+              source.assignee || "",
+            statusId:
+              source.statusId || "",
             custom:false,
             templateKey:nextKey,
             templateText:nextText,
@@ -18806,15 +18872,28 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       group?.launchType || ""
     ).trim();
 
+    const groupIdentity =
+      getLaunchTypeIdentity(groupKey);
+
+    // Support old Product Reactivation values such as "relaunch",
+    // "product-reactivation", or the full display label.
+    if(
+      [
+        "reactivation",
+        "product reactivation",
+        "relaunch",
+      ].includes(groupIdentity) &&
+      nextTemplates?.reactivation
+    ){
+      return "reactivation";
+    }
+
     if(
       groupKey &&
       nextTemplates?.[groupKey]
     ){
       return groupKey;
     }
-
-    const groupIdentity =
-      getLaunchTypeIdentity(groupKey);
 
     const targetKey = String(
       targetLaunchType || ""
@@ -18824,7 +18903,9 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       targetKey &&
       nextTemplates?.[targetKey] &&
       groupIdentity ===
-        getLaunchTypeIdentity(targetKey)
+        getLaunchTypeIdentity(
+          targetKey
+        )
     ){
       return targetKey;
     }
@@ -18858,9 +18939,32 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       return true;
     }
 
+    const groupIdentity =
+      getLaunchTypeIdentity(groupKey);
+    const targetIdentity =
+      getLaunchTypeIdentity(targetKey);
+
+    const reactivationAliases =
+      new Set([
+        "reactivation",
+        "product reactivation",
+        "relaunch",
+      ]);
+
+    if(
+      reactivationAliases.has(
+        groupIdentity
+      ) &&
+      reactivationAliases.has(
+        targetIdentity
+      )
+    ){
+      return true;
+    }
+
     return (
-      getLaunchTypeIdentity(groupKey) ===
-      getLaunchTypeIdentity(targetKey)
+      groupIdentity ===
+      targetIdentity
     );
   };
 
