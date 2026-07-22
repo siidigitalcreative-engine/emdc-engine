@@ -9859,743 +9859,380 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const renderBudgetWorkspace = (rawData:any = {}) => {
-    const sheet = normalizeBudgetSheet(rawData?.sheet || rawData);
-    const cells = sheet.cells;
-    const formats = sheet.formats || {};
-    const selectedRaw = String(cells?.[budgetSelectedCell] ?? "");
-    const selectedFormat = formats?.[budgetSelectedCell] || {};
+    const plannerData = rawData?.planner && typeof rawData.planner === "object"
+      ? rawData.planner
+      : {};
+    const savedPlannerRows = Array.isArray(plannerData?.rows)
+      ? plannerData.rows
+      : [];
+    const hasSavedPlanner = Array.isArray(plannerData?.rows);
+    const legacyCells = rawData?.sheet?.cells && typeof rawData.sheet.cells === "object"
+      ? rawData.sheet.cells
+      : {};
 
-    const parseBudgetAddress = (address:string) => {
-      const match = /^([A-Z]+)(\d+)$/.exec(String(address || "").toUpperCase());
-      if(!match) return { col:0,row:1 };
-      return {
-        col:Math.max(0,match[1].charCodeAt(0)-65),
-        row:Math.max(1,Number(match[2])),
-      };
-    };
-
-    const makeBudgetAddress = (col:number,row:number) =>
-      `${BUDGET_COLUMNS[Math.max(0,Math.min(BUDGET_COLUMNS.length-1,col))]}${Math.max(1,Math.min(sheet.rowCount,row))}`;
-
-    const getBudgetSelectionBounds = () => {
-      const start = parseBudgetAddress(budgetSelectionAnchor || budgetSelectedCell);
-      const end = parseBudgetAddress(budgetSelectionEnd || budgetSelectedCell);
-      return {
-        minCol:Math.min(start.col,end.col),
-        maxCol:Math.max(start.col,end.col),
-        minRow:Math.min(start.row,end.row),
-        maxRow:Math.max(start.row,end.row),
-      };
-    };
-
-    const getBudgetSelectionAddresses = () => {
-      const bounds = getBudgetSelectionBounds();
-      const addresses:string[] = [];
-      for(let row=bounds.minRow; row<=bounds.maxRow; row++){
-        for(let col=bounds.minCol; col<=bounds.maxCol; col++){
-          addresses.push(makeBudgetAddress(col,row));
-        }
-      }
-      return addresses;
-    };
-
-    const isBudgetCellInSelection = (address:string) => {
-      const point = parseBudgetAddress(address);
-      const bounds = getBudgetSelectionBounds();
-      return (
-        point.col>=bounds.minCol &&
-        point.col<=bounds.maxCol &&
-        point.row>=bounds.minRow &&
-        point.row<=bounds.maxRow
-      );
-    };
-
-    const selectBudgetCell = (address:string, extend=false) => {
-      setBudgetSelectedCell(address);
-      if(extend){
-        setBudgetSelectionEnd(address);
-      } else {
-        setBudgetSelectionAnchor(address);
-        setBudgetSelectionEnd(address);
-      }
-    };
-
-    const pushBudgetHistory = (currentSheet:any) => {
-      setBudgetUndoStack((previous:any[])=>[
-        ...previous.slice(-39),
-        JSON.parse(JSON.stringify(currentSheet)),
+    const normalizeBudgetSku = (value:any) => String(value || "").trim().toUpperCase();
+    const getBudgetSkuCode = (item:any) => String(
+      item?.skuCode ||
+      item?.sku ||
+      item?.value ||
+      item?.extraFields?.SKU ||
+      item?.extraFields?.Sku ||
+      ""
+    ).trim();
+    const getBudgetProductName = (item:any) => String(
+      item?.product ||
+      item?.productName ||
+      item?.name ||
+      item?.title ||
+      item?.value ||
+      ""
+    ).trim();
+    const getBudgetSrp = (item:any) => {
+      const direct =
+        item?.srp ??
+        item?.SRP ??
+        item?.retailPrice ??
+        item?.suggestedRetailPrice ??
+        item?.price;
+      const extra = item?.extraFields && typeof item.extraFields === "object"
+        ? item.extraFields
+        : {};
+      const extraValue = findExtraField(extra,[
+        "srp",
+        "suggested retail price",
+        "suggestedretailprice",
+        "retail price",
+        "retailprice",
       ]);
-      setBudgetRedoStack([]);
+      return budgetCellToNumber(direct ?? extraValue);
     };
 
-    const saveBudgetSheet = (nextSheet:any, remember = true) => {
-      if (remember) pushBudgetHistory(sheet);
+    const combinedCatalog = [...(productRows || []),...(Array.isArray(skuStorage) ? skuStorage : [])];
+    const budgetCatalogMap = new Map<string,any>();
+    const budgetCatalog:any[] = [];
+
+    combinedCatalog.forEach((item:any)=>{
+      const code = normalizeBudgetSku(getBudgetSkuCode(item));
+      if(!code || budgetCatalogMap.has(code)) return;
+      const normalized = {
+        ...item,
+        budgetSkuCode:getBudgetSkuCode(item),
+        budgetProductName:getBudgetProductName(item),
+        budgetSrp:getBudgetSrp(item),
+      };
+      budgetCatalogMap.set(code,normalized);
+      budgetCatalog.push(normalized);
+    });
+
+    const sourceRows = hasSavedPlanner
+      ? savedPlannerRows
+      : Array.from({length:Math.max(6,productRows.length)},(_,index)=>{
+          const sourceProduct = productRows[index] || {};
+          const legacyRow = index + 4;
+          const legacySku = String(legacyCells?.[`A${legacyRow}`] || "").trim();
+          const usefulLegacySku = legacySku && !/^SKU\s*\d+$/i.test(legacySku)
+            ? legacySku
+            : "";
+          const sku = getBudgetSkuCode(sourceProduct) || usefulLegacySku;
+          const linkedItem = budgetCatalogMap.get(normalizeBudgetSku(sku));
+          return {
+            id:`budget-row-${index+1}`,
+            sku,
+            qty:String(legacyCells?.[`B${legacyRow}`] ?? ""),
+            nameSnapshot:getBudgetProductName(linkedItem || sourceProduct),
+            srpSnapshot:getBudgetSrp(linkedItem || sourceProduct) || budgetCellToNumber(legacyCells?.[`C${legacyRow}`]),
+          };
+        });
+
+    const plannerRows = [...sourceRows].map((row:any,index:number)=>({
+      id:String(row?.id || `budget-row-${index+1}`),
+      sku:String(row?.sku || ""),
+      qty:String(row?.qty ?? ""),
+      nameSnapshot:String(row?.nameSnapshot || ""),
+      srpSnapshot:budgetCellToNumber(row?.srpSnapshot),
+    }));
+
+    while(plannerRows.length < 6){
+      plannerRows.push({
+        id:`budget-row-${plannerRows.length+1}`,
+        sku:"",
+        qty:"",
+        nameSnapshot:"",
+        srpSnapshot:0,
+      });
+    }
+
+    const saveBudgetPlannerRows = (rows:any[]) => {
       updateAiWorkspace("budget",{
-        sheet:{
-          ...nextSheet,
+        planner:{
+          version:2,
+          rows:rows.map((row:any,index:number)=>({
+            id:String(row?.id || `budget-row-${index+1}`),
+            sku:String(row?.sku || ""),
+            qty:String(row?.qty ?? ""),
+            nameSnapshot:String(row?.nameSnapshot || ""),
+            srpSnapshot:budgetCellToNumber(row?.srpSnapshot),
+          })),
           updatedAt:new Date().toISOString(),
         },
       });
     };
 
-    const setBudgetCell = (address:string,value:string) => {
-      saveBudgetSheet({
-        ...sheet,
-        cells:{...cells,[address]:value},
+    const patchBudgetPlannerRow = (rowId:string, patch:any) => {
+      saveBudgetPlannerRows(plannerRows.map((row:any)=>row.id===rowId ? {...row,...patch} : row));
+    };
+
+    const handleBudgetPlannerSkuChange = (row:any, value:string) => {
+      const linkedItem = budgetCatalogMap.get(normalizeBudgetSku(value));
+      patchBudgetPlannerRow(row.id,{
+        sku:value,
+        ...(linkedItem ? {
+          nameSnapshot:getBudgetProductName(linkedItem),
+          srpSnapshot:getBudgetSrp(linkedItem),
+        } : value.trim() ? {} : {
+          nameSnapshot:"",
+          srpSnapshot:0,
+        }),
       });
     };
 
-    const patchBudgetCellFormat = (patch:any) => {
-      saveBudgetSheet({
-        ...sheet,
-        formats:{
-          ...formats,
-          [budgetSelectedCell]:{
-            ...(formats?.[budgetSelectedCell] || {}),
-            ...patch,
-          },
+    const addBudgetPlannerRow = () => {
+      saveBudgetPlannerRows([
+        ...plannerRows,
+        {
+          id:`budget-row-${uid()}`,
+          sku:"",
+          qty:"",
+          nameSnapshot:"",
+          srpSnapshot:0,
         },
-      });
-    };
-
-    const undoBudget = () => {
-      const previous = budgetUndoStack[budgetUndoStack.length-1];
-      if(!previous) return;
-      setBudgetRedoStack((rows:any[])=>[
-        ...rows.slice(-39),
-        JSON.parse(JSON.stringify(sheet)),
       ]);
-      setBudgetUndoStack((rows:any[])=>rows.slice(0,-1));
-      updateAiWorkspace("budget",{sheet:{...previous,updatedAt:new Date().toISOString()}});
     };
 
-    const redoBudget = () => {
-      const next = budgetRedoStack[budgetRedoStack.length-1];
-      if(!next) return;
-      setBudgetUndoStack((rows:any[])=>[
-        ...rows.slice(-39),
-        JSON.parse(JSON.stringify(sheet)),
-      ]);
-      setBudgetRedoStack((rows:any[])=>rows.slice(0,-1));
-      updateAiWorkspace("budget",{sheet:{...next,updatedAt:new Date().toISOString()}});
-    };
-
-    const copyBudgetCell = async () => {
-      const bounds = getBudgetSelectionBounds();
-      const rows:string[][] = [];
-
-      for(let row=bounds.minRow; row<=bounds.maxRow; row++){
-        const values:string[] = [];
-        for(let col=bounds.minCol; col<=bounds.maxCol; col++){
-          const address = makeBudgetAddress(col,row);
-          values.push(String(cells?.[address] ?? ""));
-        }
-        rows.push(values);
-      }
-
-      const textPayload = rows
-        .map((row:string[])=>row.join("\t"))
-        .join("\n");
-
-      setBudgetClipboard({
-        matrix:rows,
-        formats:getBudgetSelectionAddresses().reduce(
-          (acc:any,address:string)=>{
-            if(formats?.[address]){
-              acc[address] = {
-                ...formats[address],
-              };
-            }
-            return acc;
-          },
-          {}
-        ),
-      });
-
-      try {
-        await navigator.clipboard?.writeText(
-          textPayload
-        );
-      } catch {}
-    };
-
-    const pasteBudgetMatrix = (
-      sourceText:string,
-      startAddress=budgetSelectedCell
-    ) => {
-      const rows = String(sourceText || "")
-        .replace(/\r/g,"")
-        .split("\n")
-        .map((line:string)=>line.split("\t"));
-
-      const startPoint =
-        parseBudgetAddress(startAddress);
-
-      const nextCells = {
-        ...cells,
+    const resolvedRows = plannerRows.map((row:any)=>{
+      const linkedItem = budgetCatalogMap.get(normalizeBudgetSku(row.sku));
+      const name = getBudgetProductName(linkedItem) || row.nameSnapshot || "";
+      const srp = getBudgetSrp(linkedItem) || budgetCellToNumber(row.srpSnapshot);
+      const qty = budgetCellToNumber(row.qty);
+      return {
+        ...row,
+        name,
+        srp,
+        qtyNumber:qty,
+        srpValue:srp * qty,
       };
+    });
 
-      rows.forEach(
-        (rowValues:string[],rowOffset:number)=>{
-          rowValues.forEach(
-            (value:string,colOffset:number)=>{
-              const col =
-                startPoint.col + colOffset;
-              const row =
-                startPoint.row + rowOffset;
+    const totalProductValue = resolvedRows.reduce((sum:number,row:any)=>sum + row.srpValue,0);
+    const totalBudget = totalProductValue * 0.12;
+    const formatBudgetMoney = (value:any) => `₱${Number(value || 0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const formatBudgetQuantity = (value:any) => Number(value || 0).toLocaleString("en-PH",{minimumFractionDigits:0,maximumFractionDigits:2});
+    const skuListId = `emdc-budget-sku-list-${String(group?.id || "group").replace(/[^a-z0-9_-]/gi,"-")}`;
 
-              if(
-                col<BUDGET_COLUMNS.length &&
-                row<=sheet.rowCount
-              ){
-                nextCells[
-                  makeBudgetAddress(col,row)
-                ] = value;
-              }
-            }
-          );
-        }
-      );
-
-      saveBudgetSheet({
-        ...sheet,
-        cells:nextCells,
-      });
-
-      const endAddress = makeBudgetAddress(
-        Math.min(
-          BUDGET_COLUMNS.length-1,
-          startPoint.col +
-            Math.max(
-              0,
-              (rows[0]?.length || 1)-1
-            )
-        ),
-        Math.min(
-          sheet.rowCount,
-          startPoint.row +
-            Math.max(0,rows.length-1)
-        )
-      );
-
-      setBudgetSelectionAnchor(
-        startAddress
-      );
-      setBudgetSelectionEnd(
-        endAddress
-      );
+    const panelStyle:any = {
+      minWidth:0,
+      padding:isMobile?14:22,
+      border:"1px solid #475569",
+      background:"#DCE6F7",
     };
-
-    const pasteBudgetCell = async () => {
-      let clipboardText = "";
-
-      try {
-        clipboardText =
-          await navigator.clipboard?.readText();
-      } catch {}
-
-      if(clipboardText){
-        pasteBudgetMatrix(
-          clipboardText
-        );
-        return;
-      }
-
-      const matrix =
-        budgetClipboard?.matrix;
-
-      if(Array.isArray(matrix)){
-        pasteBudgetMatrix(
-          matrix
-            .map((row:any[])=>row.join("\t"))
-            .join("\n")
-        );
-      }
+    const headerStyle:any = {
+      minHeight:34,
+      padding:"7px 7px 6px",
+      display:"flex",
+      alignItems:"flex-end",
+      justifyContent:"center",
+      fontSize:12,
+      fontWeight:900,
+      textAlign:"center",
+      color:C.text,
+      background:"#FFFFFF",
+      borderTop:"1px solid #4B5563",
+      borderRight:"1px solid #4B5563",
     };
-
-    const clearBudgetCell = () => {
-      const nextCells = {
-        ...cells,
-      };
-      const nextFormats = {
-        ...formats,
-      };
-
-      getBudgetSelectionAddresses().forEach(
-        (address:string)=>{
-          delete nextCells[address];
-          delete nextFormats[address];
-        }
-      );
-
-      saveBudgetSheet({
-        ...sheet,
-        cells:nextCells,
-        formats:nextFormats,
-      });
+    const rowLabelStyle:any = {
+      minHeight:34,
+      paddingRight:10,
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"flex-end",
+      whiteSpace:"nowrap",
+      fontSize:11,
+      fontWeight:700,
+      color:C.text,
     };
-
-    const moveBudgetSelection = (
-      colDelta:number,
-      rowDelta:number,
-      extend=false
-    ) => {
-      const current =
-        parseBudgetAddress(
-          budgetSelectedCell
-        );
-
-      const nextAddress =
-        makeBudgetAddress(
-          current.col + colDelta,
-          current.row + rowDelta
-        );
-
-      selectBudgetCell(
-        nextAddress,
-        extend
-      );
-
-      window.setTimeout(()=>{
-        document
-          .querySelector(
-            `[data-budget-address="${nextAddress}"]`
-          )
-          ?.scrollIntoView({
-            block:"nearest",
-            inline:"nearest",
-          });
-      },0);
+    const cellStyle:any = {
+      minWidth:0,
+      minHeight:34,
+      padding:"7px 9px",
+      display:"flex",
+      alignItems:"center",
+      borderRight:"1px solid #4B5563",
+      borderBottom:"1px solid #4B5563",
+      background:"#FFFFFF",
+      fontSize:12,
+      lineHeight:1.35,
+      overflow:"hidden",
+      color:C.text,
     };
-
-    const handleBudgetKeyDown = (
-      event:any,
-      address:string
-    ) => {
-      const key =
-        String(event.key || "");
-      const command =
-        event.ctrlKey ||
-        event.metaKey;
-
-      if(command && key.toLowerCase()==="c"){
-        event.preventDefault();
-        void copyBudgetCell();
-        return;
-      }
-
-      if(command && key.toLowerCase()==="v"){
-        event.preventDefault();
-        void pasteBudgetCell();
-        return;
-      }
-
-      if(command && key.toLowerCase()==="x"){
-        event.preventDefault();
-        void (async()=>{
-          await copyBudgetCell();
-          clearBudgetCell();
-        })();
-        return;
-      }
-
-      if(command && key.toLowerCase()==="z"){
-        event.preventDefault();
-        if(event.shiftKey){
-          redoBudget();
-        } else {
-          undoBudget();
-        }
-        return;
-      }
-
-      if(command && key.toLowerCase()==="y"){
-        event.preventDefault();
-        redoBudget();
-        return;
-      }
-
-      if(
-        key==="Delete" ||
-        key==="Backspace"
-      ){
-        if(
-          document.activeElement?.getAttribute(
-            "data-budget-address"
-          )===address &&
-          String(
-            (document.activeElement as HTMLInputElement)
-              ?.value || ""
-          )===String(
-            cells?.[address] ?? ""
-          )
-        ){
-          event.preventDefault();
-          clearBudgetCell();
-        }
-        return;
-      }
-
-      const navigation:any = {
-        ArrowLeft:[-1,0],
-        ArrowRight:[1,0],
-        ArrowUp:[0,-1],
-        ArrowDown:[0,1],
-      };
-
-      if(navigation[key]){
-        event.preventDefault();
-        moveBudgetSelection(
-          navigation[key][0],
-          navigation[key][1],
-          event.shiftKey
-        );
-        return;
-      }
-
-      if(key==="Tab"){
-        event.preventDefault();
-        moveBudgetSelection(
-          event.shiftKey ? -1 : 1,
-          0,
-          false
-        );
-        return;
-      }
-
-      if(key==="Enter"){
-        event.preventDefault();
-        moveBudgetSelection(
-          0,
-          event.shiftKey ? -1 : 1,
-          false
-        );
-        return;
-      }
-
-      if(key==="Escape"){
-        event.preventDefault();
-        selectBudgetCell(address);
-      }
+    const tableInputStyle:any = {
+      width:"100%",
+      minWidth:0,
+      minHeight:33,
+      padding:"7px 9px",
+      border:"none",
+      outline:"none",
+      background:"#FFFFFF",
+      color:C.text,
+      fontSize:12,
+      boxSizing:"border-box",
     };
-
-    const selectedBudgetRow = Math.max(
-      1,
-      Number((/\d+/.exec(budgetSelectedCell) || ["1"])[0])
-    );
-
-    const shiftBudgetRows = (direction:"insert"|"delete") => {
-      const nextCells:any = {};
-      const nextFormats:any = {};
-      const row = selectedBudgetRow;
-
-      Object.entries(cells).forEach(([address,value]:any)=>{
-        const match = /^([A-Z]+)(\d+)$/.exec(address);
-        if(!match) return;
-        const currentRow = Number(match[2]);
-        if(direction==="delete" && currentRow===row) return;
-        const nextRow = direction==="insert"
-          ? (currentRow>row ? currentRow+1 : currentRow)
-          : (currentRow>row ? currentRow-1 : currentRow);
-        nextCells[`${match[1]}${nextRow}`] = value;
-      });
-
-      Object.entries(formats).forEach(([address,value]:any)=>{
-        const match = /^([A-Z]+)(\d+)$/.exec(address);
-        if(!match) return;
-        const currentRow = Number(match[2]);
-        if(direction==="delete" && currentRow===row) return;
-        const nextRow = direction==="insert"
-          ? (currentRow>row ? currentRow+1 : currentRow)
-          : (currentRow>row ? currentRow-1 : currentRow);
-        nextFormats[`${match[1]}${nextRow}`] = value;
-      });
-
-      saveBudgetSheet({
-        ...sheet,
-        cells:nextCells,
-        formats:nextFormats,
-        rowCount:direction==="insert"
-          ? sheet.rowCount+1
-          : Math.max(BUDGET_DEFAULT_ROW_COUNT,sheet.rowCount-1),
-      });
-    };
-
-    const resetBudgetTemplate = () => {
-      if(typeof window!=="undefined" && !window.confirm("Reset the Budget tab to the original template?")) return;
-      saveBudgetSheet({
-        cells:makeDefaultBudgetCells(),
-        formats:{},
-        rowCount:BUDGET_DEFAULT_ROW_COUNT,
-      });
-    };
-
-    const addBudgetRow = () => {
-      saveBudgetSheet({...sheet,rowCount:sheet.rowCount+1});
-    };
-
-    const exportBudgetCsv = () => {
-      const quote = (value:any) => {
-        const text = String(value ?? "");
-        return /[",\n]/.test(text) ? `"${text.replace(/"/g,'""')}"` : text;
-      };
-      const rows = Array.from({length:sheet.rowCount},(_,index)=>index+1).map((row:number)=>
-        BUDGET_COLUMNS.map((col:string)=>quote(cells?.[`${col}${row}`] ?? "")).join(",")
-      );
-      const blob = new Blob([rows.join("\n")],{type:"text/csv;charset=utf-8"});
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${String(group?.groupName || "EMDC Budget").replace(/[^a-z0-9]+/gi,"-")}-budget.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
-    };
-
-    const importBudgetCsv = async (file:any) => {
-      if(!file) return;
-      const source = await file.text();
-      const parseRow = (line:string) => {
-        const values:string[] = [];
-        let current = "";
-        let quoted = false;
-        for(let index=0; index<line.length; index++){
-          const char = line[index];
-          if(char==='"'){
-            if(quoted && line[index+1]==='"'){ current += '"'; index++; }
-            else quoted = !quoted;
-          } else if(char==="," && !quoted){
-            values.push(current); current = "";
-          } else current += char;
-        }
-        values.push(current);
-        return values;
-      };
-      const lines = source.replace(/\r/g,"").split("\n");
-      const nextCells:any = {};
-      lines.forEach((line:string,rowIndex:number)=>{
-        parseRow(line).slice(0,BUDGET_COLUMNS.length).forEach((value:string,colIndex:number)=>{
-          if(value!=="") nextCells[`${BUDGET_COLUMNS[colIndex]}${rowIndex+1}`] = value;
-        });
-      });
-      saveBudgetSheet({
-        ...sheet,
-        cells:nextCells,
-        rowCount:Math.max(BUDGET_DEFAULT_ROW_COUNT,lines.length),
-      });
-      if(budgetImportInputRef.current) budgetImportInputRef.current.value = "";
-    };
-
-    const toolbarButtonStyle:any = {
-      width:32,
-      height:30,
-      padding:0,
-      border:`1px solid ${C.border}`,
-      borderRadius:6,
-      background:C.surface,
-      color:C.textSub,
+    const outputStyle:any = {
+      minHeight:32,
+      padding:"7px 9px",
+      display:"block",
+      border:"1px solid #64748B",
+      background:"#FFFFFF",
       fontSize:12,
       fontWeight:800,
-      cursor:"pointer",
-      display:"inline-flex",
-      alignItems:"center",
-      justifyContent:"center",
+      textAlign:"right",
+      fontVariantNumeric:"tabular-nums",
+      color:C.text,
     };
 
-    const headerCells = new Set(["B2","C2","D2","F2","I2","K2","L2","M2","N2","O2"]);
-    const orangeCells = new Set(["F3","I3","K3"]);
-    const percentHeaderCells = new Set(["L3","M3","N3","O3"]);
-    const redValueCells = new Set(["D4","D5","D6","D7","D8","D9","D14","F4","G4","I4","K4","L4","M4","N4","O4","L5","M5","N5","O5","L6","M6","N6","O6","L7","M7","N7","O7","L8","M8","N8","O8","L9","M9","N9","O9"]);
+    const budgetSplits = [
+      { label:"External Traffic", percent:0.025, note:"2.5% of total Product Value" },
+      { label:"Platform Ads", percent:0.085, note:"8.5% of total Product Value" },
+      { label:"Flash Sale", percent:0.005, note:"0.5% of total Product Value" },
+      { label:"Affiliate", percent:0.005, note:"0.5% of total Product Value" },
+    ];
 
     return (
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:isMobile?"stretch":"center",flexDirection:isMobile?"column":"row"}}>
-          <div>
-            <h3 style={{margin:0,fontSize:16,fontWeight:900,color:C.text}}>Product Introduction / Reactivation Budget</h3>
-            <p style={{margin:"4px 0 0",fontSize:11,color:C.muted,lineHeight:1.45}}>Excel-style editing: drag to select cells, use Arrow keys, Tab, Enter, Ctrl/Cmd+C, X, V, Z and Y, or paste ranges from Excel and Google Sheets. Formulas support SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ABS, ROUND, TODAY, NOW, cell references, percentages, and arithmetic.</p>
-          </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <Btn sm variant="outline" onClick={addBudgetRow}>+ Add Row</Btn>
-            <Btn sm variant="outline" onClick={resetBudgetTemplate}>Reset Template</Btn>
-          </div>
-        </div>
+      <div style={{display:"flex",flexDirection:"column",gap:14,width:"100%",minWidth:0}}>
+        <datalist id={skuListId}>
+          {budgetCatalog.map((item:any)=>(
+            <option key={item.budgetSkuCode} value={item.budgetSkuCode}>
+              {item.budgetProductName}
+            </option>
+          ))}
+        </datalist>
 
-        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",padding:"8px 10px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,overflowX:"auto"}}>
-          <button title="Undo" onClick={undoBudget} disabled={!budgetUndoStack.length} style={{...toolbarButtonStyle,opacity:budgetUndoStack.length?1:.35}}>↶</button>
-          <button title="Redo" onClick={redoBudget} disabled={!budgetRedoStack.length} style={{...toolbarButtonStyle,opacity:budgetRedoStack.length?1:.35}}>↷</button>
-          <span style={{width:1,height:24,background:C.border,margin:"0 2px"}} />
-          <button title="Copy cell" onClick={copyBudgetCell} style={toolbarButtonStyle}>⧉</button>
-          <button title="Paste cell" onClick={pasteBudgetCell} style={toolbarButtonStyle}>▣</button>
-          <button title="Clear cell" onClick={clearBudgetCell} style={{...toolbarButtonStyle,color:"#DC2626"}}>⌫</button>
-          <span style={{width:1,height:24,background:C.border,margin:"0 2px"}} />
-          <button title="Bold" onClick={()=>patchBudgetCellFormat({bold:!selectedFormat.bold})} style={{...toolbarButtonStyle,background:selectedFormat.bold?"#E5E7EB":C.surface}}>B</button>
-          <button title="Italic" onClick={()=>patchBudgetCellFormat({italic:!selectedFormat.italic})} style={{...toolbarButtonStyle,fontStyle:"italic",background:selectedFormat.italic?"#E5E7EB":C.surface}}>I</button>
-          <button title="Underline" onClick={()=>patchBudgetCellFormat({underline:!selectedFormat.underline})} style={{...toolbarButtonStyle,textDecoration:"underline",background:selectedFormat.underline?"#E5E7EB":C.surface}}>U</button>
-          <select
-            title="Text alignment"
-            value={selectedFormat.align || "auto"}
-            onChange={event=>patchBudgetCellFormat({align:event.target.value})}
-            style={{height:30,border:`1px solid ${C.border}`,borderRadius:6,padding:"0 7px",fontSize:11,fontWeight:700,background:C.surface,color:C.textSub}}
-          >
-            <option value="auto">Align</option>
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
-          <select
-            title="Number format"
-            value={selectedFormat.numberFormat || "auto"}
-            onChange={event=>patchBudgetCellFormat({numberFormat:event.target.value})}
-            style={{height:30,border:`1px solid ${C.border}`,borderRadius:6,padding:"0 7px",fontSize:11,fontWeight:700,background:C.surface,color:C.textSub}}
-          >
-            <option value="auto">123</option>
-            <option value="number">Number</option>
-            <option value="currency">₱ Currency</option>
-            <option value="percent">% Percent</option>
-            <option value="text">Plain text</option>
-          </select>
-          <button title="Decrease decimals" onClick={()=>patchBudgetCellFormat({decimals:Math.max(0,Number(selectedFormat.decimals ?? 2)-1)})} style={toolbarButtonStyle}>.0←</button>
-          <button title="Increase decimals" onClick={()=>patchBudgetCellFormat({decimals:Math.min(6,Number(selectedFormat.decimals ?? 0)+1)})} style={toolbarButtonStyle}>.00→</button>
-          <label title="Text color" style={{...toolbarButtonStyle,position:"relative",overflow:"hidden"}}>
-            A
-            <span style={{position:"absolute",left:6,right:6,bottom:4,height:3,background:selectedFormat.color || C.text}} />
-            <input type="color" value={selectedFormat.color || "#111827"} onChange={event=>patchBudgetCellFormat({color:event.target.value})} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}} />
-          </label>
-          <label title="Fill color" style={{...toolbarButtonStyle,position:"relative",overflow:"hidden",background:selectedFormat.background || C.surface}}>
-            ▧
-            <input type="color" value={selectedFormat.background || "#ffffff"} onChange={event=>patchBudgetCellFormat({background:event.target.value})} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}} />
-          </label>
-          <span style={{width:1,height:24,background:C.border,margin:"0 2px"}} />
-          <button title="Insert row below selected row" onClick={()=>shiftBudgetRows("insert")} style={{...toolbarButtonStyle,width:"auto",padding:"0 9px"}}>+ Row</button>
-          <button title="Delete selected row" onClick={()=>shiftBudgetRows("delete")} style={{...toolbarButtonStyle,width:"auto",padding:"0 9px",color:"#DC2626"}}>− Row</button>
-          <Btn xs variant="outline" onClick={exportBudgetCsv}>Export CSV</Btn>
-          <Btn xs variant="outline" onClick={()=>budgetImportInputRef.current?.click()}>Import CSV</Btn>
-          <input ref={budgetImportInputRef} type="file" accept=".csv,text/csv" onChange={event=>importBudgetCsv(event.target.files?.[0])} style={{display:"none"}} />
-        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.55fr) minmax(360px,1fr)",gap:isMobile?16:28,alignItems:"start",width:"100%",minWidth:0}}>
+          <section style={panelStyle}>
+            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:3}}>
+              <div style={{minWidth:760,display:"grid",gridTemplateColumns:"72px minmax(130px,1fr) minmax(170px,1.25fr) minmax(130px,.95fr) minmax(115px,.9fr) minmax(145px,1fr)"}}>
+                <div />
+                {["SKU","Name","SRP","QTY","SRP value"].map((label:string,index:number)=>(
+                  <div key={label} style={{...headerStyle,borderLeft:index===0?"1px solid #4B5563":undefined}}>{label}</div>
+                ))}
 
-        <div style={{display:"grid",gridTemplateColumns:"76px minmax(0,1fr)",gap:8,alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surface}}>
-          <div style={{fontSize:11,fontWeight:900,color:C.textSub}}>{budgetSelectedCell}</div>
-          <input
-            value={selectedRaw}
-            onFocus={()=>selectBudgetCell(budgetSelectedCell)}
-            onChange={(event)=>setBudgetCell(budgetSelectedCell,event.target.value)}
-            onKeyDown={(event:any)=>handleBudgetKeyDown(event,budgetSelectedCell)}
-            placeholder="Enter a value or formula, e.g. =B4*C4"
-            style={{width:"100%",height:34,border:`1px solid ${C.border}`,borderRadius:7,padding:"0 10px",fontSize:12,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",outline:"none"}}
-          />
-        </div>
-
-        <div
-          onMouseUp={()=>setBudgetDraggingSelection(false)}
-          onMouseLeave={()=>setBudgetDraggingSelection(false)}
-          style={{border:`1px solid ${C.borderStrong}`,borderRadius:10,overflow:"auto",background:C.surface,maxHeight:isMobile?560:680,WebkitOverflowScrolling:"touch"}}
-        >
-          <div style={{minWidth:1380}}>
-            <div style={{display:"grid",gridTemplateColumns:"44px repeat(15,minmax(84px,1fr))",position:"sticky",top:0,zIndex:5}}>
-              <div style={{height:32,background:"#F3F4F6",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}} />
-              {BUDGET_COLUMNS.map((col:string)=><div key={col} style={{height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:C.textSub,background:budgetSelectedCell.startsWith(col)?"#DBEAFE":"#F3F4F6",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}}>{col}</div>)}
+                {resolvedRows.map((row:any,index:number)=>(
+                  <React.Fragment key={row.id}>
+                    <div style={rowLabelStyle}>ROW {index+1}</div>
+                    <div style={{...cellStyle,padding:0,borderLeft:"1px solid #4B5563"}}>
+                      <input
+                        list={skuListId}
+                        value={row.sku}
+                        onChange={(event)=>handleBudgetPlannerSkuChange(row,event.target.value)}
+                        placeholder={index===0?"Input SKU":""}
+                        aria-label={`Budget row ${index+1} SKU`}
+                        style={{...tableInputStyle,fontWeight:row.sku?700:500}}
+                      />
+                    </div>
+                    <div style={{...cellStyle,background:"#F7E2D3"}}>
+                      {row.name || <span style={{fontStyle:"italic",color:C.textSub}}>[linked from Storage]</span>}
+                    </div>
+                    <div style={{...cellStyle,background:"#F7E2D3",justifyContent:"flex-end",textAlign:"right",fontVariantNumeric:"tabular-nums"}}>
+                      {row.srp ? formatBudgetMoney(row.srp) : <span style={{fontStyle:"italic",color:C.textSub}}>[linked from Storage]</span>}
+                    </div>
+                    <div style={{...cellStyle,padding:0}}>
+                      <input
+                        value={row.qty}
+                        onChange={(event)=>patchBudgetPlannerRow(row.id,{qty:event.target.value})}
+                        inputMode="decimal"
+                        placeholder={index===0?"Input QTY":""}
+                        aria-label={`Budget row ${index+1} quantity`}
+                        style={{...tableInputStyle,textAlign:"right",fontVariantNumeric:"tabular-nums"}}
+                      />
+                    </div>
+                    <div style={{...cellStyle,justifyContent:"flex-end",textAlign:"right",fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
+                      {row.srpValue ? formatBudgetMoney(row.srpValue) : ""}
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
 
-            {Array.from({length:sheet.rowCount},(_,rowIndex)=>rowIndex+1).map((row:number)=>(
-              <div key={row} style={{display:"grid",gridTemplateColumns:"44px repeat(15,minmax(84px,1fr))"}}>
-                <div style={{minHeight:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.muted,background:budgetSelectedCell.endsWith(String(row))?"#DBEAFE":"#F9FAFB",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}}>{row}</div>
-                {BUDGET_COLUMNS.map((col:string)=>{
-                  const address = `${col}${row}`;
-                  const raw = cells?.[address] ?? "";
-                  const calculated = evaluateBudgetCell(address,cells);
-                  const cellFormat = formats?.[address] || {};
-                  let display = formatBudgetDisplay(address,raw,calculated);
-                  if(cellFormat.numberFormat==="currency" && typeof calculated==="number"){
-                    display = `₱${Number(calculated).toLocaleString("en-US",{minimumFractionDigits:Number(cellFormat.decimals ?? 2),maximumFractionDigits:Number(cellFormat.decimals ?? 2)})}`;
-                  } else if(cellFormat.numberFormat==="percent"){
-                    const numeric = typeof calculated==="number" ? calculated : budgetCellToNumber(calculated);
-                    display = `${(numeric*100).toFixed(Number(cellFormat.decimals ?? 2))}%`;
-                  } else if(cellFormat.numberFormat==="number" && typeof calculated==="number"){
-                    display = Number(calculated).toLocaleString("en-US",{minimumFractionDigits:Number(cellFormat.decimals ?? 0),maximumFractionDigits:Number(cellFormat.decimals ?? 0)});
-                  } else if(cellFormat.numberFormat==="text"){
-                    display = String(raw ?? "");
-                  }
-                  const active = budgetSelectedCell===address;
-                  const selected = isBudgetCellInSelection(address);
-                  const isHeader = headerCells.has(address);
-                  const isOrange = orangeCells.has(address);
-                  const isPercentHeader = percentHeaderCells.has(address);
-                  const isRed = redValueCells.has(address);
-                  const bg = isOrange ? "#F59E0B" : isPercentHeader ? (address==="O3"?"#F4FF00":"#D1D5DB") : isHeader ? "#FFFFFF" : "#FFFFFF";
+            <button type="button" onClick={addBudgetPlannerRow}
+              style={{margin:"10px 0 0 72px",padding:"7px 11px",border:"1px solid #64748B",borderRadius:7,background:"#FFFFFF",color:C.text,fontSize:11,fontWeight:800,cursor:"pointer"}}>
+              + Add Row
+            </button>
 
+            <div style={{width:"min(380px,100%)",margin:"18px 42px 0 auto",display:"grid",gap:18}}>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(140px,1fr)",gap:12,alignItems:"start"}}>
+                <strong style={{paddingTop:7,textAlign:"right",fontSize:13}}>Total Product Value</strong>
+                <output style={outputStyle}>{formatBudgetMoney(totalProductValue)}</output>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(140px,1fr)",gap:12,alignItems:"start"}}>
+                <strong style={{paddingTop:7,textAlign:"right",fontSize:13}}>Total Budget:</strong>
+                <div>
+                  <output style={outputStyle}>{formatBudgetMoney(totalBudget)}</output>
+                  <small style={{marginTop:4,display:"block",color:"#EF0000",fontSize:10,fontStyle:"italic",lineHeight:1.3,textAlign:"center"}}>(12% of total Product Value)</small>
+                </div>
+              </div>
+            </div>
+
+            <h3 style={{margin:"24px 0 16px 72px",fontSize:14,fontWeight:900,color:C.text}}>Budget Split</h3>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) minmax(0,1fr)",columnGap:60,rowGap:24,padding:isMobile?0:"0 42px 0 72px"}}>
+              {budgetSplits.map((item:any)=>(
+                <div key={item.label} style={{display:"grid",gridTemplateColumns:"minmax(115px,.8fr) minmax(135px,1fr)",gap:12,alignItems:"start"}}>
+                  <strong style={{paddingTop:7,textAlign:"right",fontSize:13}}>{item.label}:</strong>
+                  <div>
+                    <output style={outputStyle}>{formatBudgetMoney(totalProductValue * item.percent)}</output>
+                    <small style={{marginTop:4,display:"block",color:"#EF0000",fontSize:10,fontStyle:"italic",lineHeight:1.3,textAlign:"center"}}>({item.note})</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={panelStyle}>
+            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:3}}>
+              <div style={{minWidth:520,display:"grid",gridTemplateColumns:"72px minmax(130px,1fr) minmax(150px,1.1fr) minmax(170px,1.2fr)"}}>
+                <div />
+                {["SKU","Value per SKU","Affiliate Sample QTY"].map((label:string,index:number)=>(
+                  <div key={label} style={{...headerStyle,borderLeft:index===0?"1px solid #4B5563":undefined}}>{label}</div>
+                ))}
+
+                {resolvedRows.map((row:any,index:number)=>{
+                  const valuePerSku = row.srpValue * 0.005;
+                  const sampleQty = row.srp > 0 ? valuePerSku / row.srp : 0;
                   return (
-                    <input
-                      key={address}
-                      data-budget-address={address}
-                      value={active ? String(raw) : display}
-                      onFocus={()=>selectBudgetCell(address)}
-                      onMouseDown={(event:any)=>{
-                        if(event.shiftKey){
-                          selectBudgetCell(address,true);
-                        } else {
-                          selectBudgetCell(address,false);
-                          setBudgetDraggingSelection(true);
-                        }
-                      }}
-                      onMouseEnter={()=>{
-                        if(budgetDraggingSelection){
-                          setBudgetSelectionEnd(address);
-                          setBudgetSelectedCell(address);
-                        }
-                      }}
-                      onPaste={(event:any)=>{
-                        const value =
-                          event.clipboardData?.getData(
-                            "text/plain"
-                          );
-
-                        if(value?.includes("\t") || value?.includes("\n")){
-                          event.preventDefault();
-                          pasteBudgetMatrix(
-                            value,
-                            address
-                          );
-                        }
-                      }}
-                      onKeyDown={(event:any)=>
-                        handleBudgetKeyDown(
-                          event,
-                          address
-                        )
-                      }
-                      onChange={(event)=>setBudgetCell(address,event.target.value)}
-                      style={{
-                        minHeight:34,width:"100%",border:"none",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,
-                        padding:"5px 8px",fontSize:11,
-                        fontWeight:cellFormat.bold?900:(isHeader||isOrange||isPercentHeader||isRed?800:500),
-                        fontStyle:cellFormat.italic?"italic":"normal",
-                        textDecoration:cellFormat.underline?"underline":"none",
-                        color:cellFormat.color || (isRed?"#EF0000":C.text),
-                        background:selected?"#EFF6FF":(cellFormat.background || bg),
-                        outline:active
-                          ? "2px solid #2563EB"
-                          : selected
-                            ? "1px solid #93C5FD"
-                            : "none",
-                        outlineOffset:-2,
-                        textAlign:cellFormat.align && cellFormat.align!=="auto"
-                          ? cellFormat.align
-                          : (/^(B|C|D|F|G|I|K|L|M|N|O)/.test(address)?"right":"left"),
-                        fontVariantNumeric:"tabular-nums",boxSizing:"border-box",
-                      }}
-                    />
+                    <React.Fragment key={`affiliate-${row.id}`}>
+                      <div style={rowLabelStyle}>ROW {index+1}</div>
+                      <div style={{...cellStyle,background:"#F7E2D3",borderLeft:"1px solid #4B5563",fontWeight:700}}>{row.sku}</div>
+                      <div style={{...cellStyle,justifyContent:"flex-end",textAlign:"right",fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
+                        {row.sku && row.srpValue ? formatBudgetMoney(valuePerSku) : ""}
+                      </div>
+                      <div style={{...cellStyle,justifyContent:"flex-end",textAlign:"right",fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
+                        {row.sku && row.srpValue ? formatBudgetQuantity(sampleQty) : ""}
+                      </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        <div style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surfaceAlt,fontSize:11,color:C.muted,lineHeight:1.5}}>
-          <strong style={{color:C.textSub}}>Spreadsheet controls:</strong> click and drag to select a range; Shift + Arrow extends the selection; Ctrl/Cmd+C, X and V copy, cut and paste; Delete clears the selected range; Ctrl/Cmd+Z and Y undo and redo. You can paste rows and columns directly from Excel or Google Sheets. Existing budget data and cloud workspace saving are preserved.
+            <div style={{margin:"10px 0 0 72px",minWidth:448,display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,color:"#EF0000",fontSize:9,fontStyle:"italic",fontWeight:700,textAlign:"center"}}>
+              <span>SKU = SKU from Row</span>
+              <span>Value per SKU = SRP Value × 0.5%</span>
+              <span>Affiliate Sample QTY = Value per SKU ÷ SRP</span>
+            </div>
+          </section>
         </div>
       </div>
     );
   };
+
 
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
