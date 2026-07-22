@@ -303,23 +303,51 @@ export default function ProductInfoPage({
 
   useEffect(() => {
     let cancelled = false;
+    let activeController: AbortController | null =
+      null;
+    let lastRefreshAt = 0;
 
-    const controller =
-      new AbortController();
+    async function load(
+      silent = false
+    ) {
+      const now = Date.now();
 
-    async function load() {
-      setLoading(true);
+      // Prevent duplicate focus/visibility events from firing
+      // several identical requests at the same time.
+      if (
+        silent &&
+        now - lastRefreshAt < 600
+      ) {
+        return;
+      }
+
+      lastRefreshAt = now;
+
+      activeController?.abort();
+      activeController =
+        new AbortController();
+
+      if (!silent) {
+        setLoading(true);
+      }
+
       setErrorMessage("");
 
       try {
         const response = await fetch(
           `/api/product-hub?sku=${encodeURIComponent(
             params.sku
-          )}&public=1`,
+          )}&public=1&_=${now}`,
           {
             method: "GET",
             cache: "no-store",
-            signal: controller.signal,
+            headers: {
+              "Cache-Control":
+                "no-cache, no-store, max-age=0",
+              Pragma: "no-cache",
+            },
+            signal:
+              activeController.signal,
           }
         );
 
@@ -398,17 +426,153 @@ export default function ProductInfoPage({
           }
         }
       } finally {
-        if (!cancelled) {
+        if (
+          !cancelled &&
+          !silent
+        ) {
           setLoading(false);
         }
       }
     }
 
-    void load();
+    const refreshSilently = () => {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        void load(true);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        void load(true);
+      }
+    };
+
+    const handleStorageUpdate = (
+      event: StorageEvent
+    ) => {
+      if (
+        event.key !==
+          "emdc-product-hub-updated" ||
+        !event.newValue
+      ) {
+        return;
+      }
+
+      try {
+        const update = JSON.parse(
+          event.newValue
+        );
+
+        const updatedSku = String(
+          update?.sku || ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const currentSku = String(
+          params.sku || ""
+        )
+          .trim()
+          .toLowerCase();
+
+        if (
+          !updatedSku ||
+          updatedSku === currentSku ||
+          String(update?.slug || "")
+            .trim()
+            .toLowerCase() === currentSku
+        ) {
+          void load(true);
+        }
+      } catch {
+        void load(true);
+      }
+    };
+
+    const channel =
+      typeof BroadcastChannel !==
+      "undefined"
+        ? new BroadcastChannel(
+            "emdc-product-hub-updates"
+          )
+        : null;
+
+    if (channel) {
+      channel.onmessage = (event) => {
+        const updatedSku = String(
+          event?.data?.sku || ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const updatedSlug = String(
+          event?.data?.slug || ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const currentSku = String(
+          params.sku || ""
+        )
+          .trim()
+          .toLowerCase();
+
+        if (
+          !updatedSku ||
+          updatedSku === currentSku ||
+          updatedSlug === currentSku
+        ) {
+          void load(true);
+        }
+      };
+    }
+
+    void load(false);
+
+    window.addEventListener(
+      "focus",
+      refreshSilently
+    );
+    window.addEventListener(
+      "pageshow",
+      refreshSilently
+    );
+    window.addEventListener(
+      "storage",
+      handleStorageUpdate
+    );
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
 
     return () => {
       cancelled = true;
-      controller.abort();
+      activeController?.abort();
+      channel?.close();
+
+      window.removeEventListener(
+        "focus",
+        refreshSilently
+      );
+      window.removeEventListener(
+        "pageshow",
+        refreshSilently
+      );
+      window.removeEventListener(
+        "storage",
+        handleStorageUpdate
+      );
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
     };
   }, [params.sku]);
 
@@ -643,15 +807,9 @@ export default function ProductInfoPage({
               </p>
             )}
 
-            {introduction ? (
+            {!!introduction && (
               <p className="emdc-product-intro">
                 {introduction}
-              </p>
-            ) : (
-              <p className="emdc-product-intro emdc-product-intro-muted">
-                Product details can be
-                added from EMDC Product
-                Hub.
               </p>
             )}
 
