@@ -10320,7 +10320,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
                 {resolvedRows.map((row:any,index:number)=>{
                   const valuePerSku = row.srpValue * 0.005;
-                  const sampleQty = row.srp > 0 ? valuePerSku / row.srp : 0;
+                  const sampleQty = row.srp > 0 ? Math.round(valuePerSku / row.srp) : 0;
                   return (
                     <React.Fragment key={`affiliate-${row.id}`}>
                       <div className="emdc-budget-row-number">{index+1}</div>
