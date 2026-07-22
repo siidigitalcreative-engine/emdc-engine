@@ -1022,7 +1022,9 @@ function ResponsiveCss() {
         );
         line-height: 1.04;
         letter-spacing: -0.04em;
-        overflow-wrap: anywhere;
+        overflow-wrap: normal;
+        word-break: normal;
+        hyphens: none;
       }
 
       .emdc-product-sku {
