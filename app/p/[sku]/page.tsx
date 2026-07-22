@@ -392,18 +392,14 @@ export default function ProductInfoPage({
     [product]
   );
 
-  const savedGalleryImages = Array.from(
-    new Set(
-      lines(
-        productHubData?.gallery ||
-          (productHubData as any)?.galleryImages ||
-          (legacyHub as any)?.gallery ||
-          (legacyHub as any)?.galleryImages
-      )
-        .map(toPreviewImageUrl)
-        .filter(Boolean)
-    )
-  );
+  const savedGalleryImages = lines(
+    productHubData?.gallery ||
+      (productHubData as any)?.galleryImages ||
+      (legacyHub as any)?.gallery ||
+      (legacyHub as any)?.galleryImages
+  )
+    .map(toPreviewImageUrl)
+    .filter(Boolean);
 
   const savedHeroImage = toPreviewImageUrl(
     productHubData?.heroImage ||
@@ -425,9 +421,10 @@ export default function ProductInfoPage({
     savedGalleryImages[0] ||
     skuStorageImage;
 
-  const gallery = savedGalleryImages
-    .filter((url) => url !== hero)
-    .slice(0, 12);
+  // Show every saved Gallery Image on the QR page, including the image
+  // also being used as the Hero. Each line entered in Product Hub becomes
+  // one visible gallery card.
+  const gallery = savedGalleryImages.slice(0, 12);
 
   const introduction = firstText(
     productHubData?.introduction,
