@@ -10107,7 +10107,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     ];
 
     return (
-      <div style={{display:"flex",flexDirection:"column",gap:14,width:"100%",minWidth:0}}>
+      <div className="emdc-budget-modern">
         <datalist id={skuListId}>
           {budgetCatalog.map((item:any)=>(
             <option key={item.budgetSkuCode} value={item.budgetSkuCode}>
@@ -10116,91 +10116,132 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           ))}
         </datalist>
 
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.55fr) minmax(360px,1fr)",gap:isMobile?16:28,alignItems:"start",width:"100%",minWidth:0}}>
-          <section style={panelStyle}>
-            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:3}}>
-              <div style={{minWidth:760,display:"grid",gridTemplateColumns:"72px minmax(130px,1fr) minmax(170px,1.25fr) minmax(130px,.95fr) minmax(115px,.9fr) minmax(145px,1fr)"}}>
-                <div />
-                {["SKU","Name","SRP","QTY","SRP value"].map((label:string,index:number)=>(
-                  <div key={label} style={{...headerStyle,borderLeft:index===0?"1px solid #4B5563":undefined}}>{label}</div>
+        <div className="emdc-budget-heading">
+          <div>
+            <h3>Budget Planner</h3>
+            <p>Plan product quantities, calculate the launch budget, and estimate affiliate samples.</p>
+          </div>
+          <span className="emdc-budget-saved-badge">Auto-saved</span>
+        </div>
+
+        <div className="emdc-budget-summary-grid">
+          <div className="emdc-budget-summary-card">
+            <span>Total Product Value</span>
+            <strong>{formatBudgetMoney(totalProductValue)}</strong>
+          </div>
+          <div className="emdc-budget-summary-card emdc-budget-summary-primary">
+            <span>Total Budget · 12%</span>
+            <strong>{formatBudgetMoney(totalBudget)}</strong>
+          </div>
+          {budgetSplits.map((item:any)=>(
+            <div key={`summary-${item.label}`} className="emdc-budget-summary-card">
+              <span>{item.label}</span>
+              <strong>{formatBudgetMoney(totalProductValue * item.percent)}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div className="emdc-budget-layout">
+          <section className="emdc-budget-card emdc-budget-products-card">
+            <div className="emdc-budget-card-head">
+              <div>
+                <h4>Product Budget</h4>
+                <p>Enter a SKU and quantity. Product name and SRP are linked from SKU Storage.</p>
+              </div>
+              <span>{resolvedRows.filter((row:any)=>row.sku).length} selected</span>
+            </div>
+
+            <div className="emdc-budget-table-shell">
+              <div className="emdc-budget-product-table">
+                <div className="emdc-budget-th emdc-budget-row-head">Row</div>
+                {['SKU','Name','SRP','QTY','SRP Value'].map((label:string)=>(
+                  <div key={label} className="emdc-budget-th">{label}</div>
                 ))}
 
                 {resolvedRows.map((row:any,index:number)=>(
                   <React.Fragment key={row.id}>
-                    <div style={rowLabelStyle}>ROW {index+1}</div>
-                    <div style={{...cellStyle,padding:0,borderLeft:"1px solid #4B5563"}}>
+                    <div className="emdc-budget-row-number">{index+1}</div>
+
+                    <div className="emdc-budget-td emdc-budget-input-td">
                       <input
                         list={skuListId}
                         value={row.sku}
                         onChange={(event)=>handleBudgetPlannerSkuChange(row,event.target.value)}
-                        placeholder={index===0?"Input SKU":""}
+                        placeholder={index===0?'Input SKU':''}
                         aria-label={`Budget row ${index+1} SKU`}
-                        style={{...tableInputStyle,fontWeight:row.sku?700:500}}
+                        className="emdc-budget-table-input emdc-budget-sku-input"
                       />
                     </div>
-                    <div style={{...cellStyle,background:"#F7E2D3"}}>
-                      {row.name || <span style={{fontStyle:"italic",color:C.textSub}}>[linked from Storage]</span>}
+
+                    <div className="emdc-budget-td emdc-budget-linked-td">
+                      {row.name || <span className="emdc-budget-placeholder">Linked from SKU Storage</span>}
                     </div>
-                    <div style={{...cellStyle,background:"#F7E2D3",justifyContent:"flex-end",textAlign:"right",fontVariantNumeric:"tabular-nums"}}>
-                      {row.srp ? formatBudgetMoney(row.srp) : <span style={{fontStyle:"italic",color:C.textSub}}>[linked from Storage]</span>}
+
+                    <div className="emdc-budget-td emdc-budget-linked-td emdc-budget-money-cell">
+                      {row.srp ? formatBudgetMoney(row.srp) : <span className="emdc-budget-placeholder">Linked from SKU Storage</span>}
                     </div>
-                    <div style={{...cellStyle,padding:0}}>
+
+                    <div className="emdc-budget-td emdc-budget-input-td">
                       <input
                         value={row.qty}
                         onChange={(event)=>patchBudgetPlannerRow(row.id,{qty:event.target.value})}
                         inputMode="decimal"
-                        placeholder={index===0?"Input QTY":""}
+                        placeholder={index===0?'Input QTY':''}
                         aria-label={`Budget row ${index+1} quantity`}
-                        style={{...tableInputStyle,textAlign:"right",fontVariantNumeric:"tabular-nums"}}
+                        className="emdc-budget-table-input emdc-budget-qty-input"
                       />
                     </div>
-                    <div style={{...cellStyle,justifyContent:"flex-end",textAlign:"right",fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
-                      {row.srpValue ? formatBudgetMoney(row.srpValue) : ""}
+
+                    <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                      {row.srpValue ? formatBudgetMoney(row.srpValue) : '—'}
                     </div>
                   </React.Fragment>
                 ))}
               </div>
             </div>
 
-            <button type="button" onClick={addBudgetPlannerRow}
-              style={{margin:"10px 0 0 72px",padding:"7px 11px",border:"1px solid #64748B",borderRadius:7,background:"#FFFFFF",color:C.text,fontSize:11,fontWeight:800,cursor:"pointer"}}>
+            <button type="button" onClick={addBudgetPlannerRow} className="emdc-budget-add-row">
               + Add Row
             </button>
 
-            <div style={{width:"min(380px,100%)",margin:"18px 42px 0 auto",display:"grid",gap:18}}>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(140px,1fr)",gap:12,alignItems:"start"}}>
-                <strong style={{paddingTop:7,textAlign:"right",fontSize:13}}>Total Product Value</strong>
-                <output style={outputStyle}>{formatBudgetMoney(totalProductValue)}</output>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(140px,1fr)",gap:12,alignItems:"start"}}>
-                <strong style={{paddingTop:7,textAlign:"right",fontSize:13}}>Total Budget:</strong>
+            <div className="emdc-budget-calculation-section">
+              <div className="emdc-budget-section-title">
                 <div>
-                  <output style={outputStyle}>{formatBudgetMoney(totalBudget)}</output>
-                  <small style={{marginTop:4,display:"block",color:"#EF0000",fontSize:10,fontStyle:"italic",lineHeight:1.3,textAlign:"center"}}>(12% of total Product Value)</small>
+                  <h4>Budget Allocation</h4>
+                  <p>Automatically calculated from the total product value.</p>
                 </div>
+                <span>100% of budget assigned</span>
               </div>
-            </div>
 
-            <h3 style={{margin:"24px 0 16px 72px",fontSize:14,fontWeight:900,color:C.text}}>Budget Split</h3>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) minmax(0,1fr)",columnGap:60,rowGap:24,padding:isMobile?0:"0 42px 0 72px"}}>
-              {budgetSplits.map((item:any)=>(
-                <div key={item.label} style={{display:"grid",gridTemplateColumns:"minmax(115px,.8fr) minmax(135px,1fr)",gap:12,alignItems:"start"}}>
-                  <strong style={{paddingTop:7,textAlign:"right",fontSize:13}}>{item.label}:</strong>
-                  <div>
-                    <output style={outputStyle}>{formatBudgetMoney(totalProductValue * item.percent)}</output>
-                    <small style={{marginTop:4,display:"block",color:"#EF0000",fontSize:10,fontStyle:"italic",lineHeight:1.3,textAlign:"center"}}>({item.note})</small>
+              <div className="emdc-budget-allocation-grid">
+                {budgetSplits.map((item:any)=>(
+                  <div key={item.label} className="emdc-budget-allocation-card">
+                    <div className="emdc-budget-allocation-top">
+                      <strong>{item.label}</strong>
+                      <span>{(item.percent*100).toFixed(1)}%</span>
+                    </div>
+                    <output>{formatBudgetMoney(totalProductValue * item.percent)}</output>
+                    <small>{item.note}</small>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </section>
 
-          <section style={panelStyle}>
-            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:3}}>
-              <div style={{minWidth:520,display:"grid",gridTemplateColumns:"72px minmax(130px,1fr) minmax(150px,1.1fr) minmax(170px,1.2fr)"}}>
-                <div />
-                {["SKU","Value per SKU","Affiliate Sample QTY"].map((label:string,index:number)=>(
-                  <div key={label} style={{...headerStyle,borderLeft:index===0?"1px solid #4B5563":undefined}}>{label}</div>
+          <section className="emdc-budget-card emdc-budget-affiliate-card">
+            <div className="emdc-budget-card-head">
+              <div>
+                <h4>Affiliate Samples</h4>
+                <p>Sample value is based on the 0.5% affiliate allocation per product row.</p>
+              </div>
+              <span>Auto-calculated</span>
+            </div>
+
+            <div className="emdc-budget-table-shell">
+              <div className="emdc-budget-affiliate-table">
+                <div className="emdc-budget-th emdc-budget-row-head">Row</div>
+                {['SKU','Value per SKU','Sample QTY'].map((label:string)=>(
+                  <div key={label} className="emdc-budget-th">{label}</div>
                 ))}
 
                 {resolvedRows.map((row:any,index:number)=>{
@@ -10208,13 +10249,13 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   const sampleQty = row.srp > 0 ? valuePerSku / row.srp : 0;
                   return (
                     <React.Fragment key={`affiliate-${row.id}`}>
-                      <div style={rowLabelStyle}>ROW {index+1}</div>
-                      <div style={{...cellStyle,background:"#F7E2D3",borderLeft:"1px solid #4B5563",fontWeight:700}}>{row.sku}</div>
-                      <div style={{...cellStyle,justifyContent:"flex-end",textAlign:"right",fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
-                        {row.sku && row.srpValue ? formatBudgetMoney(valuePerSku) : ""}
+                      <div className="emdc-budget-row-number">{index+1}</div>
+                      <div className="emdc-budget-td emdc-budget-linked-td emdc-budget-affiliate-sku">{row.sku || '—'}</div>
+                      <div className="emdc-budget-td emdc-budget-money-cell">
+                        {row.sku && row.srpValue ? formatBudgetMoney(valuePerSku) : '—'}
                       </div>
-                      <div style={{...cellStyle,justifyContent:"flex-end",textAlign:"right",fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
-                        {row.sku && row.srpValue ? formatBudgetQuantity(sampleQty) : ""}
+                      <div className="emdc-budget-td emdc-budget-money-cell">
+                        {row.sku && row.srpValue ? formatBudgetQuantity(sampleQty) : '—'}
                       </div>
                     </React.Fragment>
                   );
@@ -10222,17 +10263,441 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </div>
             </div>
 
-            <div style={{margin:"10px 0 0 72px",minWidth:448,display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,color:"#EF0000",fontSize:9,fontStyle:"italic",fontWeight:700,textAlign:"center"}}>
-              <span>SKU = SKU from Row</span>
-              <span>Value per SKU = SRP Value × 0.5%</span>
-              <span>Affiliate Sample QTY = Value per SKU ÷ SRP</span>
+            <div className="emdc-budget-formula-box">
+              <div><strong>SKU</strong><span>Copied from the matching product row</span></div>
+              <div><strong>Value per SKU</strong><span>SRP Value × 0.5%</span></div>
+              <div><strong>Sample QTY</strong><span>Value per SKU ÷ SRP</span></div>
             </div>
           </section>
         </div>
+
+        <style jsx>{`
+          .emdc-budget-modern{
+            width:100%;
+            min-width:0;
+            display:flex;
+            flex-direction:column;
+            gap:16px;
+            color:${C.text};
+          }
+
+          .emdc-budget-heading{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:16px;
+            padding:2px 2px 0;
+          }
+
+          .emdc-budget-heading h3,
+          .emdc-budget-card-head h4,
+          .emdc-budget-section-title h4{
+            margin:0;
+            color:${C.text};
+          }
+
+          .emdc-budget-heading h3{
+            font-size:18px;
+            font-weight:900;
+          }
+
+          .emdc-budget-heading p,
+          .emdc-budget-card-head p,
+          .emdc-budget-section-title p{
+            margin:4px 0 0;
+            color:${C.muted};
+            font-size:12px;
+            line-height:1.45;
+          }
+
+          .emdc-budget-saved-badge,
+          .emdc-budget-card-head > span,
+          .emdc-budget-section-title > span{
+            display:inline-flex;
+            align-items:center;
+            min-height:26px;
+            padding:4px 9px;
+            border:1px solid ${C.border};
+            border-radius:999px;
+            background:${C.surfaceAlt};
+            color:${C.muted};
+            font-size:10px;
+            font-weight:800;
+            white-space:nowrap;
+          }
+
+          .emdc-budget-summary-grid{
+            display:grid;
+            grid-template-columns:repeat(6,minmax(145px,1fr));
+            gap:10px;
+            overflow-x:auto;
+            padding-bottom:2px;
+            -webkit-overflow-scrolling:touch;
+          }
+
+          .emdc-budget-summary-card{
+            min-width:145px;
+            padding:14px;
+            border:1px solid ${C.border};
+            border-radius:12px;
+            background:${C.surface};
+            box-shadow:0 1px 2px rgba(15,23,42,.03);
+          }
+
+          .emdc-budget-summary-card span{
+            display:block;
+            color:${C.muted};
+            font-size:10px;
+            font-weight:800;
+            letter-spacing:.035em;
+            text-transform:uppercase;
+          }
+
+          .emdc-budget-summary-card strong{
+            display:block;
+            margin-top:6px;
+            color:${C.text};
+            font-size:15px;
+            font-weight:900;
+            font-variant-numeric:tabular-nums;
+            white-space:nowrap;
+          }
+
+          .emdc-budget-summary-primary{
+            border-color:#BFDBFE;
+            background:#EFF6FF;
+          }
+
+          .emdc-budget-summary-primary span,
+          .emdc-budget-summary-primary strong{
+            color:#1D4ED8;
+          }
+
+          .emdc-budget-layout{
+            display:grid;
+            grid-template-columns:minmax(0,1.55fr) minmax(340px,.95fr);
+            gap:16px;
+            align-items:start;
+            width:100%;
+            min-width:0;
+          }
+
+          .emdc-budget-card{
+            min-width:0;
+            padding:18px;
+            border:1px solid ${C.border};
+            border-radius:14px;
+            background:${C.surface};
+            box-shadow:0 1px 3px rgba(15,23,42,.04);
+          }
+
+          .emdc-budget-card-head,
+          .emdc-budget-section-title{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:14px;
+          }
+
+          .emdc-budget-card-head{
+            margin-bottom:14px;
+          }
+
+          .emdc-budget-card-head h4,
+          .emdc-budget-section-title h4{
+            font-size:14px;
+            font-weight:900;
+          }
+
+          .emdc-budget-table-shell{
+            width:100%;
+            min-width:0;
+            overflow-x:auto;
+            border:1px solid ${C.border};
+            border-radius:10px;
+            background:${C.surface};
+            -webkit-overflow-scrolling:touch;
+          }
+
+          .emdc-budget-product-table{
+            min-width:780px;
+            display:grid;
+            grid-template-columns:54px minmax(135px,1fr) minmax(190px,1.35fr) minmax(125px,.9fr) minmax(95px,.7fr) minmax(145px,1fr);
+          }
+
+          .emdc-budget-affiliate-table{
+            min-width:500px;
+            display:grid;
+            grid-template-columns:54px minmax(135px,1fr) minmax(150px,1fr) minmax(130px,.85fr);
+          }
+
+          .emdc-budget-th{
+            min-height:40px;
+            padding:10px 9px;
+            display:flex;
+            align-items:center;
+            justify-content:flex-start;
+            border-right:1px solid ${C.border};
+            border-bottom:1px solid ${C.border};
+            background:${C.surfaceAlt};
+            color:${C.muted};
+            font-size:10px;
+            font-weight:900;
+            letter-spacing:.045em;
+            text-transform:uppercase;
+          }
+
+          .emdc-budget-row-head{
+            justify-content:center;
+          }
+
+          .emdc-budget-row-number{
+            min-height:44px;
+            padding:10px 7px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border-right:1px solid ${C.border};
+            border-bottom:1px solid ${C.border};
+            background:#FAFAFA;
+            color:${C.faint};
+            font-size:10px;
+            font-weight:900;
+          }
+
+          .emdc-budget-td{
+            min-width:0;
+            min-height:44px;
+            padding:10px;
+            display:flex;
+            align-items:center;
+            border-right:1px solid ${C.border};
+            border-bottom:1px solid ${C.border};
+            background:${C.surface};
+            color:${C.text};
+            font-size:12px;
+            line-height:1.35;
+            overflow:hidden;
+          }
+
+          .emdc-budget-product-table > :nth-last-child(-n+6),
+          .emdc-budget-affiliate-table > :nth-last-child(-n+4){
+            border-bottom:0;
+          }
+
+          .emdc-budget-product-table > :nth-child(6n),
+          .emdc-budget-affiliate-table > :nth-child(4n){
+            border-right:0;
+          }
+
+          .emdc-budget-input-td{
+            padding:0;
+          }
+
+          .emdc-budget-table-input{
+            width:100%;
+            min-width:0;
+            min-height:43px;
+            padding:10px;
+            border:0;
+            outline:none;
+            background:${C.surface};
+            color:${C.text};
+            font-size:12px;
+            box-sizing:border-box;
+          }
+
+          .emdc-budget-table-input:focus{
+            box-shadow:inset 0 0 0 2px ${C.accent};
+            background:#FFFFFF;
+          }
+
+          .emdc-budget-table-input::placeholder{
+            color:${C.faint};
+            opacity:1;
+          }
+
+          .emdc-budget-sku-input{
+            font-weight:800;
+            text-transform:uppercase;
+          }
+
+          .emdc-budget-qty-input{
+            text-align:right;
+            font-variant-numeric:tabular-nums;
+          }
+
+          .emdc-budget-linked-td{
+            background:#FAFAFA;
+          }
+
+          .emdc-budget-placeholder{
+            color:${C.faint};
+            font-size:11px;
+            font-style:italic;
+          }
+
+          .emdc-budget-money-cell{
+            justify-content:flex-end;
+            text-align:right;
+            font-weight:800;
+            font-variant-numeric:tabular-nums;
+          }
+
+          .emdc-budget-value-cell{
+            background:#F8FAFC;
+          }
+
+          .emdc-budget-affiliate-sku{
+            font-weight:800;
+          }
+
+          .emdc-budget-add-row{
+            height:34px;
+            margin-top:12px;
+            padding:0 13px;
+            border:1px solid ${C.border};
+            border-radius:8px;
+            background:${C.surface};
+            color:${C.textSub};
+            font-size:11px;
+            font-weight:800;
+            cursor:pointer;
+          }
+
+          .emdc-budget-add-row:hover{
+            background:${C.surfaceAlt};
+          }
+
+          .emdc-budget-calculation-section{
+            margin-top:18px;
+            padding-top:18px;
+            border-top:1px solid ${C.border};
+          }
+
+          .emdc-budget-section-title{
+            margin-bottom:12px;
+          }
+
+          .emdc-budget-allocation-grid{
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:10px;
+          }
+
+          .emdc-budget-allocation-card{
+            min-width:0;
+            padding:13px;
+            border:1px solid ${C.border};
+            border-radius:10px;
+            background:${C.surfaceAlt};
+          }
+
+          .emdc-budget-allocation-top{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+          }
+
+          .emdc-budget-allocation-top strong{
+            color:${C.textSub};
+            font-size:11px;
+            font-weight:900;
+          }
+
+          .emdc-budget-allocation-top span{
+            padding:2px 7px;
+            border-radius:999px;
+            background:${C.surface};
+            color:${C.muted};
+            font-size:9px;
+            font-weight:900;
+          }
+
+          .emdc-budget-allocation-card output{
+            display:block;
+            margin-top:10px;
+            color:${C.text};
+            font-size:15px;
+            font-weight:900;
+            font-variant-numeric:tabular-nums;
+          }
+
+          .emdc-budget-allocation-card small{
+            display:block;
+            margin-top:4px;
+            color:${C.faint};
+            font-size:9px;
+            line-height:1.35;
+          }
+
+          .emdc-budget-formula-box{
+            margin-top:14px;
+            display:grid;
+            gap:8px;
+          }
+
+          .emdc-budget-formula-box > div{
+            padding:10px 11px;
+            border:1px solid ${C.border};
+            border-radius:9px;
+            background:${C.surfaceAlt};
+          }
+
+          .emdc-budget-formula-box strong,
+          .emdc-budget-formula-box span{
+            display:block;
+          }
+
+          .emdc-budget-formula-box strong{
+            color:${C.textSub};
+            font-size:10px;
+            font-weight:900;
+          }
+
+          .emdc-budget-formula-box span{
+            margin-top:3px;
+            color:${C.muted};
+            font-size:10px;
+            line-height:1.4;
+          }
+
+          @media(max-width:1180px){
+            .emdc-budget-layout{
+              grid-template-columns:1fr;
+            }
+          }
+
+          @media(max-width:760px){
+            .emdc-budget-heading{
+              flex-direction:column;
+              align-items:stretch;
+            }
+
+            .emdc-budget-summary-grid{
+              grid-template-columns:repeat(6,minmax(155px,1fr));
+            }
+
+            .emdc-budget-card{
+              padding:14px;
+              border-radius:12px;
+            }
+
+            .emdc-budget-card-head,
+            .emdc-budget-section-title{
+              flex-direction:column;
+              align-items:flex-start;
+            }
+
+            .emdc-budget-allocation-grid{
+              grid-template-columns:1fr;
+            }
+          }
+        `}</style>
       </div>
     );
   };
-
 
   const renderAiWorkspace = (tab:string) => {
     const cfg = workspaceConfig[tab];
