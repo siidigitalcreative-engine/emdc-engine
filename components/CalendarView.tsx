@@ -11117,10 +11117,19 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           }
 
           .emdc-budget-summary-title-row{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:8px;
+            display:block;
+          }
+
+          .emdc-budget-summary-primary{
+            position:relative;
+            padding-right:82px;
+          }
+
+          .emdc-budget-summary-primary
+          .emdc-budget-percent-editor-primary{
+            position:absolute;
+            top:14px;
+            right:14px;
           }
 
           .emdc-budget-summary-card strong{
