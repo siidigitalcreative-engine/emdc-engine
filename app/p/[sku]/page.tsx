@@ -214,8 +214,16 @@ const getCategory = (
       ""
   ).trim();
 
+const normalizeDisplayText = (value: unknown) =>
+  String(value || "")
+    // Convert non-breaking spaces copied from Sheets, Docs, or websites
+    // into normal spaces so the browser can wrap between complete words.
+    .replace(/[\u00a0\u2007\u202f]/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
 const getProductName = (item: any) =>
-  String(
+  normalizeDisplayText(
     item?.productName ||
       item?.product ||
       item?.name ||
@@ -1013,18 +1021,23 @@ function ResponsiveCss() {
       }
 
       .emdc-product-title {
+        display: block;
+        width: 100%;
         max-width: 100%;
+        min-width: 0;
         margin: 0;
         font-size: clamp(
           30px,
-          4vw,
-          52px
+          3.2vw,
+          46px
         );
-        line-height: 1.04;
+        line-height: 1.06;
         letter-spacing: -0.04em;
-        overflow-wrap: normal;
-        word-break: normal;
-        hyphens: none;
+        white-space: normal !important;
+        overflow-wrap: normal !important;
+        word-break: normal !important;
+        hyphens: none !important;
+        text-wrap: balance;
       }
 
       .emdc-product-sku {
@@ -1298,6 +1311,27 @@ function ResponsiveCss() {
       @keyframes emdcSpin {
         to {
           transform: rotate(360deg);
+        }
+      }
+
+      @media (
+        min-width: 901px
+      ) and (
+        max-width: 1180px
+      ) {
+        .emdc-product-hero-card {
+          grid-template-columns:
+            minmax(0, 0.85fr)
+            minmax(0, 1.15fr);
+          gap: 22px;
+        }
+
+        .emdc-product-title {
+          font-size: clamp(
+            30px,
+            3.5vw,
+            40px
+          );
         }
       }
 
