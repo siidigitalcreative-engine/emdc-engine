@@ -11122,14 +11122,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
           .emdc-budget-summary-primary{
             position:relative;
-            padding-right:82px;
+            padding-right:70px;
           }
 
           .emdc-budget-summary-primary
           .emdc-budget-percent-editor-primary{
             position:absolute;
-            top:14px;
-            right:14px;
+            top:13px;
+            right:13px;
           }
 
           .emdc-budget-summary-card strong{
@@ -11154,9 +11154,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           }
 
           .emdc-budget-percent-editor{
-            min-width:58px;
-            height:26px;
-            padding:0 7px;
+            min-width:50px;
+            height:24px;
+            padding:0 5px;
             display:inline-flex;
             align-items:center;
             justify-content:flex-end;
@@ -11170,7 +11170,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           }
 
           .emdc-budget-percent-editor input{
-            width:34px;
+            width:30px;
             min-width:0;
             padding:0;
             border:0;
