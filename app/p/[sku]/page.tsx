@@ -610,8 +610,21 @@ export default function ProductInfoPage({
               )}
             </div>
 
-            <h1 className="emdc-product-title">
-              {getProductName(product)}
+            <h1
+              className="emdc-product-title"
+              aria-label={getProductName(product)}
+            >
+              {getProductName(product)
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((word, index) => (
+                  <span
+                    key={`${word}-${index}`}
+                    className="emdc-product-title-word"
+                  >
+                    {word}
+                  </span>
+                ))}
             </h1>
 
             <p className="emdc-product-sku">
@@ -1021,23 +1034,34 @@ function ResponsiveCss() {
       }
 
       .emdc-product-title {
-        display: block;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 0.22em;
+        row-gap: 0;
         width: 100%;
         max-width: 100%;
         min-width: 0;
         margin: 0;
+        padding: 0;
         font-size: clamp(
           30px,
-          3.2vw,
-          46px
+          3vw,
+          44px
         );
-        line-height: 1.06;
+        line-height: 1.08;
         letter-spacing: -0.04em;
-        white-space: normal !important;
-        overflow-wrap: normal !important;
-        word-break: normal !important;
-        hyphens: none !important;
-        text-wrap: balance;
+        white-space: normal;
+        overflow: visible;
+      }
+
+      .emdc-product-title-word {
+        flex: 0 0 auto;
+        max-width: 100%;
+        white-space: nowrap;
+        word-break: keep-all;
+        overflow-wrap: normal;
+        hyphens: none;
       }
 
       .emdc-product-sku {
@@ -1328,9 +1352,9 @@ function ResponsiveCss() {
 
         .emdc-product-title {
           font-size: clamp(
-            30px,
-            3.5vw,
-            40px
+            28px,
+            3.2vw,
+            38px
           );
         }
       }
@@ -1391,11 +1415,11 @@ function ResponsiveCss() {
 
         .emdc-product-title {
           font-size: clamp(
-            27px,
-            8vw,
-            38px
+            24px,
+            7.2vw,
+            34px
           );
-          line-height: 1.08;
+          line-height: 1.1;
           letter-spacing: -0.035em;
         }
 
@@ -1457,9 +1481,9 @@ function ResponsiveCss() {
 
         .emdc-product-title {
           font-size: clamp(
-            25px,
-            8.4vw,
-            34px
+            23px,
+            7vw,
+            31px
           );
         }
 
