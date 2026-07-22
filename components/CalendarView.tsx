@@ -21238,6 +21238,51 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
     if (typeof window === "undefined") return path;
     return `${window.location.origin}${path}`;
   };
+
+  const skuHubPrefetchRef = useRef<Set<string>>(
+    new Set()
+  );
+
+  const prefetchSkuPublicPage = (s:any) => {
+    if(typeof document==="undefined"){
+      return;
+    }
+
+    const path = getSkuPublicPath(s);
+
+    if(
+      !path ||
+      skuHubPrefetchRef.current.has(path)
+    ){
+      return;
+    }
+
+    skuHubPrefetchRef.current.add(path);
+
+    // Warm the public product document before the user clicks Hub.
+    // This affects only browser loading performance and does not read,
+    // modify, or save SKU/checklist data.
+    const link =
+      document.createElement("link");
+
+    link.rel = "prefetch";
+    link.href = path;
+    link.as = "document";
+
+    document.head.appendChild(link);
+
+    // Also start a low-priority same-origin request. Browsers that do not
+    // honor document prefetch can still reuse the warmed response/cache.
+    void fetch(path,{
+      method:"GET",
+      credentials:"same-origin",
+      cache:"force-cache",
+    }).catch(()=>{});
+
+    window.setTimeout(()=>{
+      link.remove();
+    },30_000);
+  };
   const copySkuHubLink = async (s:any) => {
     const url = getSkuPublicUrl(s);
     try { await navigator.clipboard.writeText(url); alert("Product Hub link copied."); }
@@ -22321,7 +22366,17 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                                   </div>
                                 ))}
                                 <div style={{ minHeight:48,padding:"7px 8px",borderLeft:`1px solid ${C.border}`,display:"flex",gap:5,justifyContent:"flex-end",alignItems:"center",background:C.surface,whiteSpace:"nowrap",overflow:"hidden" }}>
-                                  <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",fontSize:11,fontWeight:800,color:C.textSub,padding:"4px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surfaceAlt }}>Hub</a>
+                                  <a
+                                    href={getSkuPublicPath(s)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onPointerEnter={()=>prefetchSkuPublicPage(s)}
+                                    onFocus={()=>prefetchSkuPublicPage(s)}
+                                    onTouchStart={()=>prefetchSkuPublicPage(s)}
+                                    style={{ textDecoration:"none",fontSize:11,fontWeight:800,color:C.textSub,padding:"4px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surfaceAlt }}
+                                  >
+                                    Hub
+                                  </a>
                                   <a href={getSkuEditHubPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",fontSize:11,fontWeight:800,color:C.textSub,padding:"4px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surfaceAlt }}>Edit Hub</a>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>downloadSkuQr(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>QR</button>
                                   <button className="emdc-date-display-v3" type="button" onClick={()=>copySkuHubLink(s)} style={{ background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,padding:"4px 7px",borderRadius:6 }}>Copy</button>
@@ -22364,7 +22419,17 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                             </div>
                             <div style={{ display:"flex",gap:6,marginLeft:10,flexShrink:0,alignItems:"center",overflowX:"auto",maxWidth:"50vw" }}>
                               {skuTableEditMode&&<span title="Drag rows on desktop using the 6-dot handle" style={{ width:28,height:28,borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.faint,flexShrink:0 }}>&#8942;&#8942;</span>}
-                              <a href={getSkuPublicPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Hub</a>
+                              <a
+                                href={getSkuPublicPath(s)}
+                                target="_blank"
+                                rel="noreferrer"
+                                onPointerEnter={()=>prefetchSkuPublicPage(s)}
+                                onFocus={()=>prefetchSkuPublicPage(s)}
+                                onTouchStart={()=>prefetchSkuPublicPage(s)}
+                                style={{ textDecoration:"none",padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}
+                              >
+                                Hub
+                              </a>
                               <a href={getSkuEditHubPath(s)} target="_blank" rel="noreferrer" style={{ textDecoration:"none",padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Edit Hub</a>
                               <button onClick={()=>downloadSkuQr(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>QR</button>
                               <button onClick={()=>copySkuHubLink(s)} style={{ padding:"5px 9px",borderRadius:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,cursor:"pointer",fontSize:11,color:C.textSub,fontWeight:800,whiteSpace:"nowrap" }}>Copy</button>
