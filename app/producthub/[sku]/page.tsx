@@ -64,6 +64,130 @@ function linesToText(value: unknown) {
   return textToLines(value).join("\n");
 }
 
+function getGoogleDriveFileId(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  const patterns = [
+    /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+    /drive\.google\.com\/open\?id=([^&#]+)/i,
+    /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&#]+)/i,
+    /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&#]+)/i,
+    /[?&]id=([^&#]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
+      }
+    }
+  }
+
+  return "";
+}
+
+function toPreviewImageUrl(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  if (text.startsWith("data:image/")) {
+    return text;
+  }
+
+  const driveId = getGoogleDriveFileId(text);
+  if (driveId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+      driveId
+    )}&sz=w1600`;
+  }
+
+  return /^https?:\/\//i.test(text) ? text : "";
+}
+
+function uniqueImageLinks(value: unknown) {
+  const seen = new Set<string>();
+
+  return textToLines(value)
+    .map((original) => ({
+      original,
+      preview: toPreviewImageUrl(original),
+    }))
+    .filter((item) => {
+      if (!item.preview || seen.has(item.preview)) return false;
+      seen.add(item.preview);
+      return true;
+    });
+}
+
+function ImagePreview({
+  src,
+  alt,
+  height = 220,
+}: {
+  src: string;
+  alt: string;
+  height?: number;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src || failed) {
+    return (
+      <div
+        style={{
+          minHeight: height,
+          border: "1px dashed #CBD5E1",
+          borderRadius: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#F8FAFC",
+          color: "#94A3B8",
+          fontSize: 12,
+          fontWeight: 800,
+          textAlign: "center",
+          padding: 14,
+        }}
+      >
+        {src ? "Image preview unavailable. Check the link sharing permission." : "Paste an image or Google Drive link to preview."}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: height,
+        border: "1px solid #E5E7EB",
+        borderRadius: 12,
+        overflow: "hidden",
+        background: "#F8FAFC",
+      }}
+    >
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(true)}
+        style={{
+          display: "block",
+          width: "100%",
+          height,
+          objectFit: "contain",
+        }}
+      />
+    </div>
+  );
+}
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
   border: "1px solid #E5E7EB",
@@ -126,6 +250,24 @@ export default function ProductHubEditorPage({ params }: { params: { sku: string
 
   const publicSku = hub.slug?.trim() || decodedSku;
   const publicUrl = `/p/${encodeURIComponent(publicSku)}`;
+
+  const galleryImages = useMemo(
+    () => uniqueImageLinks(hub.gallery),
+    [hub.gallery]
+  );
+
+  const skuImagePreview = toPreviewImageUrl(
+    skuItem?.imageLink ||
+      skuItem?.imageUrl ||
+      skuItem?.extraFields?.["Image Link"] ||
+      skuItem?.extraFields?.["Image URL"] ||
+      ""
+  );
+
+  const heroPreview =
+    toPreviewImageUrl(hub.heroImage) ||
+    galleryImages[0]?.preview ||
+    skuImagePreview;
 
   const update = (key: keyof HubData, value: any) => {
     setHub((prev) => ({ ...prev, [key]: value }));
@@ -244,8 +386,88 @@ export default function ProductHubEditorPage({ params }: { params: { sku: string
                 Product Hub Enabled
               </label>
               <TextField label="Hub Slug / URL SKU" value={hub.slug} onChange={(v: string) => update("slug", v)} placeholder={decodedSku} />
-              <TextField label="Hero Image URL" value={hub.heroImage} onChange={(v: string) => update("heroImage", v)} placeholder={skuItem?.imageLink || "https://..."} />
-              <TextArea label="Gallery Images" value={hub.gallery} onChange={(v: string) => update("gallery", v)} placeholder="One image URL per line" rows={5} />
+              <TextField
+                label="Hero Image URL"
+                value={hub.heroImage}
+                onChange={(v: string) => update("heroImage", v)}
+                placeholder={skuItem?.imageLink || "Direct image URL or Google Drive sharing link"}
+              />
+
+              <div style={{ display: "grid", gap: 7 }}>
+                <span style={labelStyle}>Hero Image Preview</span>
+                <ImagePreview
+                  src={heroPreview}
+                  alt={`${skuItem?.productName || decodedSku} hero preview`}
+                  height={240}
+                />
+                {!hub.heroImage?.trim() && galleryImages[0]?.preview ? (
+                  <span style={{ fontSize: 11, color: "#64748B" }}>
+                    Using the first Gallery Image as the Hero preview because Hero Image URL is empty.
+                  </span>
+                ) : null}
+              </div>
+
+              <TextArea
+                label="Gallery Images"
+                value={hub.gallery}
+                onChange={(v: string) => update("gallery", v)}
+                placeholder={"One direct image URL or Google Drive sharing link per line"}
+                rows={7}
+              />
+
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                  <span style={labelStyle}>Gallery Image Previews</span>
+                  <span style={{ fontSize: 11, color: "#64748B", fontWeight: 700 }}>
+                    {galleryImages.length} image{galleryImages.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+
+                {galleryImages.length ? (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                      gap: 9,
+                    }}
+                  >
+                    {galleryImages.map((item, index) => (
+                      <div key={`${item.preview}-${index}`} style={{ display: "grid", gap: 5 }}>
+                        <ImagePreview
+                          src={item.preview}
+                          alt={`Gallery preview ${index + 1}`}
+                          height={120}
+                        />
+                        <span
+                          title={item.original}
+                          style={{
+                            fontSize: 10,
+                            color: "#64748B",
+                            overflow: "hidden",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          Image {index + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      border: "1px dashed #CBD5E1",
+                      borderRadius: 12,
+                      padding: 14,
+                      color: "#94A3B8",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Add multiple image links above, one per line.
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 
