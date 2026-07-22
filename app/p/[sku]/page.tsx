@@ -635,16 +635,53 @@ export default function ProductInfoPage({
           </div>
         </section>
 
+        {!!(
+          features.length ||
+          specs.length ||
+          careText ||
+          warrantyText
+        ) && (
+          <section className="emdc-product-info-grid">
+            {!!features.length && (
+              <InfoCard
+                title="Features"
+                items={features}
+              />
+            )}
+
+            {!!specs.length && (
+              <InfoCard
+                title="Specifications"
+                items={specs}
+              />
+            )}
+
+            {!!careText && (
+              <TextCard
+                title="Care & Use"
+                text={careText}
+              />
+            )}
+
+            {!!warrantyText && (
+              <TextCard
+                title="Warranty / Notes"
+                text={warrantyText}
+              />
+            )}
+          </section>
+        )}
+
         {!!gallery.length && (
           <section className="emdc-product-gallery-card">
-            <h2 className="emdc-product-h2">
+            <h2 className="emdc-product-gallery-title">
               Gallery
             </h2>
 
             <div className="emdc-product-gallery-grid">
               {gallery.map(
                 (url, index) => (
-                  <div
+                  <figure
                     key={`${url}-${index}`}
                     className="emdc-product-gallery-thumb-wrap"
                   >
@@ -659,42 +696,12 @@ export default function ProductInfoPage({
                       loading="lazy"
                       decoding="async"
                     />
-                  </div>
+                  </figure>
                 )
               )}
             </div>
           </section>
         )}
-
-        <section className="emdc-product-info-grid">
-          {!!features.length && (
-            <InfoCard
-              title="Features"
-              items={features}
-            />
-          )}
-
-          {!!specs.length && (
-            <InfoCard
-              title="Specifications"
-              items={specs}
-            />
-          )}
-
-          {!!careText && (
-            <TextCard
-              title="Care & Use"
-              text={careText}
-            />
-          )}
-
-          {!!warrantyText && (
-            <TextCard
-              title="Warranty / Notes"
-              text={warrantyText}
-            />
-          )}
-        </section>
 
         {!!related.length && (
           <section className="emdc-product-related-card">
@@ -1013,10 +1020,15 @@ function ResponsiveCss() {
         font-weight: 900;
       }
 
-      .emdc-product-gallery-card,
       .emdc-product-related-card {
         margin-top: 24px;
         padding: 20px;
+      }
+
+      .emdc-product-gallery-card {
+        margin-top: 24px;
+        padding: 0;
+        overflow: hidden;
       }
 
       .emdc-product-h2 {
@@ -1025,28 +1037,34 @@ function ResponsiveCss() {
         line-height: 1.2;
       }
 
+      .emdc-product-gallery-title {
+        margin: 0;
+        padding: 20px 20px 14px;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+
       .emdc-product-gallery-grid {
         display: grid;
-        grid-template-columns:
-          repeat(
-            auto-fit,
-            minmax(150px, 1fr)
-          );
-        gap: 12px;
+        grid-template-columns: 1fr;
+        gap: 0;
+        width: 100%;
       }
 
       .emdc-product-gallery-thumb-wrap {
+        width: 100%;
+        margin: 0;
         overflow: hidden;
-        border-radius: 14px;
         background: #f6f7f9;
-        aspect-ratio: 1;
+        border-top: 1px solid #e5e7eb;
       }
 
       .emdc-product-gallery-thumb {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
         display: block;
+        width: 100%;
+        height: auto;
+        max-height: none;
+        object-fit: contain;
       }
 
       .emdc-product-info-grid {
@@ -1227,6 +1245,14 @@ function ResponsiveCss() {
 
         .emdc-product-info-grid {
           grid-template-columns: 1fr;
+        }
+
+        .emdc-product-gallery-card {
+          border-radius: 16px;
+        }
+
+        .emdc-product-gallery-title {
+          padding: 16px 14px 12px;
         }
 
         .emdc-product-related-grid {
