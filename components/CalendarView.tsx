@@ -5842,6 +5842,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [activeDept,setActiveDept]   = useState("all");
   const [activeGroupTab,setActiveGroupTabState] = useState(safeChecklistInnerTab(initialGroupTab));
   const [budgetSelectedCell,setBudgetSelectedCell] = useState("D14");
+  const [budgetSelectionAnchor,setBudgetSelectionAnchor] = useState("D14");
+  const [budgetSelectionEnd,setBudgetSelectionEnd] = useState("D14");
+  const [budgetDraggingSelection,setBudgetDraggingSelection] = useState(false);
   const [budgetUndoStack,setBudgetUndoStack] = useState<any[]>([]);
   const [budgetRedoStack,setBudgetRedoStack] = useState<any[]>([]);
   const [budgetClipboard,setBudgetClipboard] = useState<any>(null);
@@ -9801,6 +9804,29 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         const range = expandRange(start,end);
         return String(range.length ? range.reduce((sum:number,item:string)=>sum+getNumeric(item),0)/range.length : 0);
       });
+      expr = expr.replace(/MIN\(([A-Z]+\d+):([A-Z]+\d+)\)/g,(_:string,start:string,end:string)=>{
+        const values = expandRange(start,end).map((item:string)=>getNumeric(item));
+        return String(values.length ? Math.min(...values) : 0);
+      });
+      expr = expr.replace(/MAX\(([A-Z]+\d+):([A-Z]+\d+)\)/g,(_:string,start:string,end:string)=>{
+        const values = expandRange(start,end).map((item:string)=>getNumeric(item));
+        return String(values.length ? Math.max(...values) : 0);
+      });
+      expr = expr.replace(/COUNT\(([A-Z]+\d+):([A-Z]+\d+)\)/g,(_:string,start:string,end:string)=>{
+        const values = expandRange(start,end).map((item:string)=>evaluateBudgetCell(item,cells,nextStack));
+        return String(values.filter((value:any)=>value!=="" && Number.isFinite(Number(value))).length);
+      });
+      expr = expr.replace(/COUNTA\(([A-Z]+\d+):([A-Z]+\d+)\)/g,(_:string,start:string,end:string)=>{
+        const values = expandRange(start,end).map((item:string)=>evaluateBudgetCell(item,cells,nextStack));
+        return String(values.filter((value:any)=>String(value ?? "").trim()!=="").length);
+      });
+      expr = expr.replace(/ABS\(([^)]+)\)/g,(_:string,inner:string)=>{
+        const safeInner = inner.replace(/([A-Z]+\d+)/g,(cell:string)=>String(getNumeric(cell))).replace(/(\d+(?:\.\d+)?)%/g,"($1/100)");
+        if(!/^[0-9+\-*/().\s]+$/.test(safeInner)) return "0";
+        return String(Math.abs(Number(Function(`"use strict";return (${safeInner})`)())));
+      });
+      expr = expr.replace(/TODAY\(\)/g,String(Math.floor(Date.now()/86400000)+25569));
+      expr = expr.replace(/NOW\(\)/g,String(Date.now()/86400000+25569));
       expr = expr.replace(/ROUND\(([^,]+),\s*(\d+)\)/g,(_:string,inner:string,digits:string)=>{
         const safeInner = inner.replace(/([A-Z]+\d+)/g,(cell:string)=>String(getNumeric(cell))).replace(/(\d+(?:\.\d+)?)%/g,"($1/100)");
         if(!/^[0-9+\-*/().\s]+$/.test(safeInner)) return "0";
@@ -9838,6 +9864,61 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const formats = sheet.formats || {};
     const selectedRaw = String(cells?.[budgetSelectedCell] ?? "");
     const selectedFormat = formats?.[budgetSelectedCell] || {};
+
+    const parseBudgetAddress = (address:string) => {
+      const match = /^([A-Z]+)(\d+)$/.exec(String(address || "").toUpperCase());
+      if(!match) return { col:0,row:1 };
+      return {
+        col:Math.max(0,match[1].charCodeAt(0)-65),
+        row:Math.max(1,Number(match[2])),
+      };
+    };
+
+    const makeBudgetAddress = (col:number,row:number) =>
+      `${BUDGET_COLUMNS[Math.max(0,Math.min(BUDGET_COLUMNS.length-1,col))]}${Math.max(1,Math.min(sheet.rowCount,row))}`;
+
+    const getBudgetSelectionBounds = () => {
+      const start = parseBudgetAddress(budgetSelectionAnchor || budgetSelectedCell);
+      const end = parseBudgetAddress(budgetSelectionEnd || budgetSelectedCell);
+      return {
+        minCol:Math.min(start.col,end.col),
+        maxCol:Math.max(start.col,end.col),
+        minRow:Math.min(start.row,end.row),
+        maxRow:Math.max(start.row,end.row),
+      };
+    };
+
+    const getBudgetSelectionAddresses = () => {
+      const bounds = getBudgetSelectionBounds();
+      const addresses:string[] = [];
+      for(let row=bounds.minRow; row<=bounds.maxRow; row++){
+        for(let col=bounds.minCol; col<=bounds.maxCol; col++){
+          addresses.push(makeBudgetAddress(col,row));
+        }
+      }
+      return addresses;
+    };
+
+    const isBudgetCellInSelection = (address:string) => {
+      const point = parseBudgetAddress(address);
+      const bounds = getBudgetSelectionBounds();
+      return (
+        point.col>=bounds.minCol &&
+        point.col<=bounds.maxCol &&
+        point.row>=bounds.minRow &&
+        point.row<=bounds.maxRow
+      );
+    };
+
+    const selectBudgetCell = (address:string, extend=false) => {
+      setBudgetSelectedCell(address);
+      if(extend){
+        setBudgetSelectionEnd(address);
+      } else {
+        setBudgetSelectionAnchor(address);
+        setBudgetSelectionEnd(address);
+      }
+    };
 
     const pushBudgetHistory = (currentSheet:any) => {
       setBudgetUndoStack((previous:any[])=>[
@@ -9900,39 +9981,302 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     };
 
     const copyBudgetCell = async () => {
-      const payload = {
-        value:String(cells?.[budgetSelectedCell] ?? ""),
-        format:{...(formats?.[budgetSelectedCell] || {})},
+      const bounds = getBudgetSelectionBounds();
+      const rows:string[][] = [];
+
+      for(let row=bounds.minRow; row<=bounds.maxRow; row++){
+        const values:string[] = [];
+        for(let col=bounds.minCol; col<=bounds.maxCol; col++){
+          const address = makeBudgetAddress(col,row);
+          values.push(String(cells?.[address] ?? ""));
+        }
+        rows.push(values);
+      }
+
+      const textPayload = rows
+        .map((row:string[])=>row.join("\t"))
+        .join("\n");
+
+      setBudgetClipboard({
+        matrix:rows,
+        formats:getBudgetSelectionAddresses().reduce(
+          (acc:any,address:string)=>{
+            if(formats?.[address]){
+              acc[address] = {
+                ...formats[address],
+              };
+            }
+            return acc;
+          },
+          {}
+        ),
+      });
+
+      try {
+        await navigator.clipboard?.writeText(
+          textPayload
+        );
+      } catch {}
+    };
+
+    const pasteBudgetMatrix = (
+      sourceText:string,
+      startAddress=budgetSelectedCell
+    ) => {
+      const rows = String(sourceText || "")
+        .replace(/\r/g,"")
+        .split("\n")
+        .map((line:string)=>line.split("\t"));
+
+      const startPoint =
+        parseBudgetAddress(startAddress);
+
+      const nextCells = {
+        ...cells,
       };
-      setBudgetClipboard(payload);
-      try { await navigator.clipboard?.writeText(payload.value); } catch {}
+
+      rows.forEach(
+        (rowValues:string[],rowOffset:number)=>{
+          rowValues.forEach(
+            (value:string,colOffset:number)=>{
+              const col =
+                startPoint.col + colOffset;
+              const row =
+                startPoint.row + rowOffset;
+
+              if(
+                col<BUDGET_COLUMNS.length &&
+                row<=sheet.rowCount
+              ){
+                nextCells[
+                  makeBudgetAddress(col,row)
+                ] = value;
+              }
+            }
+          );
+        }
+      );
+
+      saveBudgetSheet({
+        ...sheet,
+        cells:nextCells,
+      });
+
+      const endAddress = makeBudgetAddress(
+        Math.min(
+          BUDGET_COLUMNS.length-1,
+          startPoint.col +
+            Math.max(
+              0,
+              (rows[0]?.length || 1)-1
+            )
+        ),
+        Math.min(
+          sheet.rowCount,
+          startPoint.row +
+            Math.max(0,rows.length-1)
+        )
+      );
+
+      setBudgetSelectionAnchor(
+        startAddress
+      );
+      setBudgetSelectionEnd(
+        endAddress
+      );
     };
 
     const pasteBudgetCell = async () => {
-      let payload = budgetClipboard;
-      if(!payload){
-        try {
-          const value = await navigator.clipboard?.readText();
-          payload = {value,format:{}};
-        } catch {}
+      let clipboardText = "";
+
+      try {
+        clipboardText =
+          await navigator.clipboard?.readText();
+      } catch {}
+
+      if(clipboardText){
+        pasteBudgetMatrix(
+          clipboardText
+        );
+        return;
       }
-      if(!payload) return;
-      saveBudgetSheet({
-        ...sheet,
-        cells:{...cells,[budgetSelectedCell]:String(payload.value ?? "")},
-        formats:{
-          ...formats,
-          [budgetSelectedCell]:{...(payload.format || {})},
-        },
-      });
+
+      const matrix =
+        budgetClipboard?.matrix;
+
+      if(Array.isArray(matrix)){
+        pasteBudgetMatrix(
+          matrix
+            .map((row:any[])=>row.join("\t"))
+            .join("\n")
+        );
+      }
     };
 
     const clearBudgetCell = () => {
-      const nextCells = {...cells};
-      const nextFormats = {...formats};
-      delete nextCells[budgetSelectedCell];
-      delete nextFormats[budgetSelectedCell];
-      saveBudgetSheet({...sheet,cells:nextCells,formats:nextFormats});
+      const nextCells = {
+        ...cells,
+      };
+      const nextFormats = {
+        ...formats,
+      };
+
+      getBudgetSelectionAddresses().forEach(
+        (address:string)=>{
+          delete nextCells[address];
+          delete nextFormats[address];
+        }
+      );
+
+      saveBudgetSheet({
+        ...sheet,
+        cells:nextCells,
+        formats:nextFormats,
+      });
+    };
+
+    const moveBudgetSelection = (
+      colDelta:number,
+      rowDelta:number,
+      extend=false
+    ) => {
+      const current =
+        parseBudgetAddress(
+          budgetSelectedCell
+        );
+
+      const nextAddress =
+        makeBudgetAddress(
+          current.col + colDelta,
+          current.row + rowDelta
+        );
+
+      selectBudgetCell(
+        nextAddress,
+        extend
+      );
+
+      window.setTimeout(()=>{
+        document
+          .querySelector(
+            `[data-budget-address="${nextAddress}"]`
+          )
+          ?.scrollIntoView({
+            block:"nearest",
+            inline:"nearest",
+          });
+      },0);
+    };
+
+    const handleBudgetKeyDown = (
+      event:any,
+      address:string
+    ) => {
+      const key =
+        String(event.key || "");
+      const command =
+        event.ctrlKey ||
+        event.metaKey;
+
+      if(command && key.toLowerCase()==="c"){
+        event.preventDefault();
+        void copyBudgetCell();
+        return;
+      }
+
+      if(command && key.toLowerCase()==="v"){
+        event.preventDefault();
+        void pasteBudgetCell();
+        return;
+      }
+
+      if(command && key.toLowerCase()==="x"){
+        event.preventDefault();
+        void (async()=>{
+          await copyBudgetCell();
+          clearBudgetCell();
+        })();
+        return;
+      }
+
+      if(command && key.toLowerCase()==="z"){
+        event.preventDefault();
+        if(event.shiftKey){
+          redoBudget();
+        } else {
+          undoBudget();
+        }
+        return;
+      }
+
+      if(command && key.toLowerCase()==="y"){
+        event.preventDefault();
+        redoBudget();
+        return;
+      }
+
+      if(
+        key==="Delete" ||
+        key==="Backspace"
+      ){
+        if(
+          document.activeElement?.getAttribute(
+            "data-budget-address"
+          )===address &&
+          String(
+            (document.activeElement as HTMLInputElement)
+              ?.value || ""
+          )===String(
+            cells?.[address] ?? ""
+          )
+        ){
+          event.preventDefault();
+          clearBudgetCell();
+        }
+        return;
+      }
+
+      const navigation:any = {
+        ArrowLeft:[-1,0],
+        ArrowRight:[1,0],
+        ArrowUp:[0,-1],
+        ArrowDown:[0,1],
+      };
+
+      if(navigation[key]){
+        event.preventDefault();
+        moveBudgetSelection(
+          navigation[key][0],
+          navigation[key][1],
+          event.shiftKey
+        );
+        return;
+      }
+
+      if(key==="Tab"){
+        event.preventDefault();
+        moveBudgetSelection(
+          event.shiftKey ? -1 : 1,
+          0,
+          false
+        );
+        return;
+      }
+
+      if(key==="Enter"){
+        event.preventDefault();
+        moveBudgetSelection(
+          0,
+          event.shiftKey ? -1 : 1,
+          false
+        );
+        return;
+      }
+
+      if(key==="Escape"){
+        event.preventDefault();
+        selectBudgetCell(address);
+      }
     };
 
     const selectedBudgetRow = Math.max(
@@ -10067,7 +10411,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:isMobile?"stretch":"center",flexDirection:isMobile?"column":"row"}}>
           <div>
             <h3 style={{margin:0,fontSize:16,fontWeight:900,color:C.text}}>Product Introduction / Reactivation Budget</h3>
-            <p style={{margin:"4px 0 0",fontSize:11,color:C.muted,lineHeight:1.45}}>Edit values or enter formulas beginning with =. Supported formulas include SUM, AVERAGE, ROUND, cell references, percentages, and arithmetic.</p>
+            <p style={{margin:"4px 0 0",fontSize:11,color:C.muted,lineHeight:1.45}}>Excel-style editing: drag to select cells, use Arrow keys, Tab, Enter, Ctrl/Cmd+C, X, V, Z and Y, or paste ranges from Excel and Google Sheets. Formulas support SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ABS, ROUND, TODAY, NOW, cell references, percentages, and arithmetic.</p>
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <Btn sm variant="outline" onClick={addBudgetRow}>+ Add Row</Btn>
@@ -10132,13 +10476,19 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           <div style={{fontSize:11,fontWeight:900,color:C.textSub}}>{budgetSelectedCell}</div>
           <input
             value={selectedRaw}
+            onFocus={()=>selectBudgetCell(budgetSelectedCell)}
             onChange={(event)=>setBudgetCell(budgetSelectedCell,event.target.value)}
+            onKeyDown={(event:any)=>handleBudgetKeyDown(event,budgetSelectedCell)}
             placeholder="Enter a value or formula, e.g. =B4*C4"
             style={{width:"100%",height:34,border:`1px solid ${C.border}`,borderRadius:7,padding:"0 10px",fontSize:12,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",outline:"none"}}
           />
         </div>
 
-        <div style={{border:`1px solid ${C.borderStrong}`,borderRadius:10,overflow:"auto",background:C.surface,maxHeight:isMobile?560:680,WebkitOverflowScrolling:"touch"}}>
+        <div
+          onMouseUp={()=>setBudgetDraggingSelection(false)}
+          onMouseLeave={()=>setBudgetDraggingSelection(false)}
+          style={{border:`1px solid ${C.borderStrong}`,borderRadius:10,overflow:"auto",background:C.surface,maxHeight:isMobile?560:680,WebkitOverflowScrolling:"touch"}}
+        >
           <div style={{minWidth:1380}}>
             <div style={{display:"grid",gridTemplateColumns:"44px repeat(15,minmax(84px,1fr))",position:"sticky",top:0,zIndex:5}}>
               <div style={{height:32,background:"#F3F4F6",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}} />
@@ -10164,7 +10514,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   } else if(cellFormat.numberFormat==="text"){
                     display = String(raw ?? "");
                   }
-                  const selected = budgetSelectedCell===address;
+                  const active = budgetSelectedCell===address;
+                  const selected = isBudgetCellInSelection(address);
                   const isHeader = headerCells.has(address);
                   const isOrange = orangeCells.has(address);
                   const isPercentHeader = percentHeaderCells.has(address);
@@ -10174,9 +10525,43 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   return (
                     <input
                       key={address}
-                      value={selected ? String(raw) : display}
-                      onFocus={()=>setBudgetSelectedCell(address)}
-                      onClick={()=>setBudgetSelectedCell(address)}
+                      data-budget-address={address}
+                      value={active ? String(raw) : display}
+                      onFocus={()=>selectBudgetCell(address)}
+                      onMouseDown={(event:any)=>{
+                        if(event.shiftKey){
+                          selectBudgetCell(address,true);
+                        } else {
+                          selectBudgetCell(address,false);
+                          setBudgetDraggingSelection(true);
+                        }
+                      }}
+                      onMouseEnter={()=>{
+                        if(budgetDraggingSelection){
+                          setBudgetSelectionEnd(address);
+                          setBudgetSelectedCell(address);
+                        }
+                      }}
+                      onPaste={(event:any)=>{
+                        const value =
+                          event.clipboardData?.getData(
+                            "text/plain"
+                          );
+
+                        if(value?.includes("\t") || value?.includes("\n")){
+                          event.preventDefault();
+                          pasteBudgetMatrix(
+                            value,
+                            address
+                          );
+                        }
+                      }}
+                      onKeyDown={(event:any)=>
+                        handleBudgetKeyDown(
+                          event,
+                          address
+                        )
+                      }
                       onChange={(event)=>setBudgetCell(address,event.target.value)}
                       style={{
                         minHeight:34,width:"100%",border:"none",borderRight:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,
@@ -10186,7 +10571,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                         textDecoration:cellFormat.underline?"underline":"none",
                         color:cellFormat.color || (isRed?"#EF0000":C.text),
                         background:selected?"#EFF6FF":(cellFormat.background || bg),
-                        outline:selected?"2px solid #2563EB":"none",outlineOffset:-2,
+                        outline:active
+                          ? "2px solid #2563EB"
+                          : selected
+                            ? "1px solid #93C5FD"
+                            : "none",
+                        outlineOffset:-2,
                         textAlign:cellFormat.align && cellFormat.align!=="auto"
                           ? cellFormat.align
                           : (/^(B|C|D|F|G|I|K|L|M|N|O)/.test(address)?"right":"left"),
@@ -10201,7 +10591,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         </div>
 
         <div style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surfaceAlt,fontSize:11,color:C.muted,lineHeight:1.5}}>
-          <strong style={{color:C.textSub}}>Template formulas:</strong> SRP Value = Quantity × SRP; total value = SUM of SKU values; Ads Spend = 8.5%; External Traffic Push = 2.5%; Promotions = 1%; six-month platform budgets divide the allocation by 6; daily budgets divide the monthly amount by 30.
+          <strong style={{color:C.textSub}}>Spreadsheet controls:</strong> click and drag to select a range; Shift + Arrow extends the selection; Ctrl/Cmd+C, X and V copy, cut and paste; Delete clears the selected range; Ctrl/Cmd+Z and Y undo and redo. You can paste rows and columns directly from Excel or Google Sheets. Existing budget data and cloud workspace saving are preserved.
         </div>
       </div>
     );
@@ -17147,9 +17537,45 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   gap:3,
                                 }}
                               >
-                                <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
-                                  Select mapped products
-                                </span>
+                                <div
+                                  style={{
+                                    display:"flex",
+                                    alignItems:"center",
+                                    gap:7,
+                                    flexWrap:"wrap",
+                                  }}
+                                >
+                                  <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                                    Select mapped products
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      display:"inline-flex",
+                                      alignItems:"center",
+                                      justifyContent:"center",
+                                      minHeight:21,
+                                      padding:"2px 8px",
+                                      borderRadius:999,
+                                      background:selectedCampaignProductKeys.length
+                                        ? C.accent
+                                        : C.surface,
+                                      border:`1px solid ${
+                                        selectedCampaignProductKeys.length
+                                          ? C.accent
+                                          : C.border
+                                      }`,
+                                      color:selectedCampaignProductKeys.length
+                                        ? "#FFFFFF"
+                                        : C.faint,
+                                      fontSize:10,
+                                      fontWeight:900,
+                                    }}
+                                  >
+                                    {selectedCampaignProductKeys.length} selected
+                                  </span>
+                                </div>
+
                                 <span
                                   style={{
                                     fontSize:10,
@@ -17290,6 +17716,161 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 )}
                               </div>
                             </div>
+
+                            {!!selectedCampaignProductKeys.length&&(
+                              <div
+                                style={{
+                                  padding:"8px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  background:"#F8FAFC",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display:"flex",
+                                    alignItems:"center",
+                                    justifyContent:"space-between",
+                                    gap:8,
+                                    marginBottom:6,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize:10,
+                                      fontWeight:900,
+                                      color:C.textSub,
+                                      textTransform:"uppercase",
+                                      letterSpacing:".05em",
+                                    }}
+                                  >
+                                    Selected products
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    onClick={()=>
+                                      setSelectedCampaignProductKeys([])
+                                    }
+                                    style={{
+                                      border:0,
+                                      background:"transparent",
+                                      color:"#DC2626",
+                                      fontSize:10,
+                                      fontWeight:800,
+                                      cursor:"pointer",
+                                      padding:0,
+                                    }}
+                                  >
+                                    Clear all
+                                  </button>
+                                </div>
+
+                                <div
+                                  style={{
+                                    display:"flex",
+                                    gap:5,
+                                    flexWrap:"wrap",
+                                    maxHeight:92,
+                                    overflowY:"auto",
+                                  }}
+                                >
+                                  {selectedCampaignProductKeys.map(
+                                    (key:string)=>{
+                                      const selectedProduct =
+                                        getCampaignProductByOptionKey(
+                                          key
+                                        );
+
+                                      if(!selectedProduct){
+                                        return null;
+                                      }
+
+                                      const selectedName =
+                                        selectedProduct.product ||
+                                        selectedProduct.productName ||
+                                        selectedProduct.skuCode ||
+                                        selectedProduct.sku ||
+                                        "Selected product";
+
+                                      const selectedSku =
+                                        selectedProduct.skuCode ||
+                                        selectedProduct.sku ||
+                                        "";
+
+                                      return (
+                                        <span
+                                          key={key}
+                                          title={[
+                                            selectedName,
+                                            selectedSku,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" · ")}
+                                          style={{
+                                            display:"inline-flex",
+                                            alignItems:"center",
+                                            gap:5,
+                                            maxWidth:isMobile
+                                              ? "100%"
+                                              : 290,
+                                            padding:"4px 5px 4px 8px",
+                                            border:`1px solid ${C.border}`,
+                                            borderRadius:999,
+                                            background:C.surface,
+                                            color:C.textSub,
+                                            fontSize:10,
+                                            lineHeight:1.2,
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              minWidth:0,
+                                              overflow:"hidden",
+                                              textOverflow:"ellipsis",
+                                              whiteSpace:"nowrap",
+                                            }}
+                                          >
+                                            {selectedName}
+                                            {selectedSku
+                                              ? ` · ${selectedSku}`
+                                              : ""}
+                                          </span>
+
+                                          <button
+                                            type="button"
+                                            onClick={()=>
+                                              toggleSelectedCampaignProductKey(
+                                                key
+                                              )
+                                            }
+                                            aria-label={`Remove ${selectedName}`}
+                                            title="Remove selection"
+                                            style={{
+                                              width:18,
+                                              height:18,
+                                              flex:"0 0 auto",
+                                              display:"inline-flex",
+                                              alignItems:"center",
+                                              justifyContent:"center",
+                                              border:0,
+                                              borderRadius:"50%",
+                                              background:"#FEF2F2",
+                                              color:"#DC2626",
+                                              cursor:"pointer",
+                                              fontSize:11,
+                                              lineHeight:1,
+                                              padding:0,
+                                            }}
+                                          >
+                                            ×
+                                          </button>
+                                        </span>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
                             <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
                               {filteredCampaignProductRows.map((row:any,idx:number)=>{
@@ -17637,6 +18218,151 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 </button>
                               )}
                             </div>
+                          </div>
+
+                          <div
+                            style={{
+                              padding:"8px 10px",
+                              borderBottom:`1px solid ${C.border}`,
+                              background:selectedCampaignProductKeys.length
+                                ? "#F8FAFC"
+                                : C.surface,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                justifyContent:"space-between",
+                                gap:8,
+                                marginBottom:selectedCampaignProductKeys.length?6:0,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize:10.5,
+                                  fontWeight:900,
+                                  color:C.textSub,
+                                }}
+                              >
+                                {selectedCampaignProductKeys.length} selected SKU{selectedCampaignProductKeys.length===1?"":"s"}
+                              </span>
+
+                              {!!selectedCampaignProductKeys.length&&(
+                                <button
+                                  type="button"
+                                  onClick={()=>
+                                    setSelectedCampaignProductKeys([])
+                                  }
+                                  style={{
+                                    border:0,
+                                    background:"transparent",
+                                    color:"#DC2626",
+                                    fontSize:10,
+                                    fontWeight:800,
+                                    cursor:"pointer",
+                                    padding:0,
+                                  }}
+                                >
+                                  Clear all
+                                </button>
+                              )}
+                            </div>
+
+                            {!!selectedCampaignProductKeys.length&&(
+                              <div
+                                style={{
+                                  display:"flex",
+                                  gap:5,
+                                  flexWrap:"wrap",
+                                  maxHeight:90,
+                                  overflowY:"auto",
+                                }}
+                              >
+                                {selectedCampaignProductKeys.map(
+                                  (key:string)=>{
+                                    const selectedProduct =
+                                      getCampaignProductByOptionKey(
+                                        key
+                                      );
+
+                                    if(!selectedProduct){
+                                      return null;
+                                    }
+
+                                    const productName =
+                                      selectedProduct.product ||
+                                      selectedProduct.productName ||
+                                      "Selected product";
+
+                                    const sku =
+                                      selectedProduct.skuCode ||
+                                      selectedProduct.sku ||
+                                      "";
+
+                                    return (
+                                      <span
+                                        key={key}
+                                        style={{
+                                          display:"inline-flex",
+                                          alignItems:"center",
+                                          gap:5,
+                                          maxWidth:isMobile?"100%":320,
+                                          padding:"4px 5px 4px 8px",
+                                          border:`1px solid ${C.border}`,
+                                          borderRadius:999,
+                                          background:C.surface,
+                                          color:C.textSub,
+                                          fontSize:10,
+                                        }}
+                                        title={`${productName}${sku?` · ${sku}`:""}`}
+                                      >
+                                        <span
+                                          style={{
+                                            minWidth:0,
+                                            overflow:"hidden",
+                                            textOverflow:"ellipsis",
+                                            whiteSpace:"nowrap",
+                                          }}
+                                        >
+                                          {productName}
+                                          {sku?` · ${sku}`:""}
+                                        </span>
+
+                                        <button
+                                          type="button"
+                                          onClick={()=>
+                                            toggleSelectedCampaignProductKey(
+                                              key
+                                            )
+                                          }
+                                          aria-label={`Remove ${productName}`}
+                                          title="Remove selection"
+                                          style={{
+                                            width:18,
+                                            height:18,
+                                            flex:"0 0 auto",
+                                            display:"inline-flex",
+                                            alignItems:"center",
+                                            justifyContent:"center",
+                                            border:0,
+                                            borderRadius:"50%",
+                                            background:"#FEF2F2",
+                                            color:"#DC2626",
+                                            cursor:"pointer",
+                                            fontSize:11,
+                                            lineHeight:1,
+                                            padding:0,
+                                          }}
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           <div style={{ maxHeight:isMobile?260:170,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
