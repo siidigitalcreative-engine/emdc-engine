@@ -293,7 +293,7 @@ export default function ProductInfoPage({
           )}&public=1`,
           {
             method: "GET",
-            cache: "force-cache",
+            cache: "no-store",
             signal: controller.signal,
           }
         );
@@ -392,22 +392,42 @@ export default function ProductInfoPage({
     [product]
   );
 
-  const hero = getFirstImageUrl(
-    product,
-    productHubData || legacyHub
-  );
-
-  const gallery = Array.from(
+  const savedGalleryImages = Array.from(
     new Set(
       lines(
         productHubData?.gallery ||
-          (productHubData as any)?.galleryImages
+          (productHubData as any)?.galleryImages ||
+          (legacyHub as any)?.gallery ||
+          (legacyHub as any)?.galleryImages
       )
         .map(toPreviewImageUrl)
         .filter(Boolean)
-        .filter((url) => url !== hero)
     )
-  ).slice(0, 12);
+  );
+
+  const savedHeroImage = toPreviewImageUrl(
+    productHubData?.heroImage ||
+      legacyHub.heroImage ||
+      ""
+  );
+
+  const skuStorageImage = getFirstImageUrl(
+    product,
+    null
+  );
+
+  // Image priority:
+  // 1. Product Hub Hero Image
+  // 2. First Product Hub Gallery Image
+  // 3. SKU Storage main image
+  const hero =
+    savedHeroImage ||
+    savedGalleryImages[0] ||
+    skuStorageImage;
+
+  const gallery = savedGalleryImages
+    .filter((url) => url !== hero)
+    .slice(0, 12);
 
   const introduction = firstText(
     productHubData?.introduction,
