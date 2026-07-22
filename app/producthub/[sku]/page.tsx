@@ -238,7 +238,6 @@ export default function ProductHubEditorPage({ params }: { params: { sku: string
 
   const heroPreview =
     toPreviewImageUrl(hub.heroImage) ||
-    galleryEntries[0]?.preview ||
     skuMainImage;
 
   const update = (key: keyof HubData, value: any) => {
@@ -377,7 +376,7 @@ export default function ProductHubEditorPage({ params }: { params: { sku: string
                   height={240}
                 />
                 <span style={{ fontSize: 11, color: "#64748B" }}>
-                  Priority: Hero Image URL → first Gallery Image → SKU Storage image.
+                  Priority: Hero Image URL → SKU Storage image. Gallery Images remain additional images below.
                 </span>
               </div>
 
