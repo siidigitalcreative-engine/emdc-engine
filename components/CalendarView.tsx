@@ -10425,6 +10425,99 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           ))}
         </div>
 
+        <section className="emdc-budget-card emdc-budget-platform-card">
+          <div className="emdc-budget-card-head">
+            <div>
+              <h4>Platform Ads</h4>
+              <p>
+                Allocate the {formatBudgetPercent(platformAdsBudgetPercent)}% Platform Ads budget across Lazada, Shopee, and TikTok.
+              </p>
+            </div>
+            <span className={isPlatformAdsFullySplit ? "is-complete" : "is-warning"}>
+              {formatBudgetPercent(platformAdsSplitTotal)}% split assigned
+            </span>
+          </div>
+
+          <div className="emdc-budget-table-shell">
+            <div className="emdc-budget-platform-table">
+              {["Store","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
+                <div key={label} className="emdc-budget-th">{label}</div>
+              ))}
+
+              {resolvedPlatformAdsRows.map((row:any)=>(
+                <React.Fragment key={`platform-${row.id}`}>
+                  <div className="emdc-budget-td emdc-budget-platform-store">
+                    {row.store}
+                  </div>
+
+                  <div className="emdc-budget-td emdc-budget-input-td">
+                    <label className="emdc-budget-platform-input-wrap">
+                      <input
+                        value={row.split}
+                        onChange={(event)=>
+                          patchPlatformAdsRow(row.id,{
+                            split:cleanPlatformAdsSplit(event.target.value),
+                          })
+                        }
+                        inputMode="decimal"
+                        aria-label={`${row.store} Platform Ads split percentage`}
+                        placeholder="0"
+                      />
+                      <span>%</span>
+                    </label>
+                  </div>
+
+                  <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                    {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
+                  </div>
+
+                  <div className="emdc-budget-td emdc-budget-input-td">
+                    <input
+                      value={row.duration}
+                      onChange={(event)=>
+                        patchPlatformAdsRow(row.id,{
+                          duration:cleanPlatformAdsDuration(event.target.value),
+                        })
+                      }
+                      inputMode="numeric"
+                      aria-label={`${row.store} Platform Ads duration in days`}
+                      placeholder="0"
+                      className="emdc-budget-table-input emdc-budget-duration-input"
+                    />
+                  </div>
+
+                  <div className="emdc-budget-td emdc-budget-money-cell">
+                    {row.durationDays > 0 && row.budget > 0
+                      ? formatBudgetMoney(row.dailyBudget)
+                      : "—"}
+                  </div>
+                </React.Fragment>
+              ))}
+
+              <div className="emdc-budget-td emdc-budget-platform-total-label">
+                Total
+              </div>
+              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                {formatBudgetPercent(platformAdsSplitTotal)}%
+              </div>
+              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                {formatBudgetMoney(platformAdsBudgetTotal)}
+              </div>
+              <div className="emdc-budget-td emdc-budget-platform-total-cell">
+                —
+              </div>
+              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                {formatBudgetMoney(platformAdsDailyBudgetTotal)}
+              </div>
+            </div>
+          </div>
+
+          <div className="emdc-budget-platform-formulas">
+            <span>Budget = Platform Ads Value × Split %</span>
+            <span>Daily Budget = Budget ÷ Duration</span>
+          </div>
+        </section>
+
         <div className="emdc-budget-layout">
           <section className="emdc-budget-card emdc-budget-products-card">
             <div className="emdc-budget-card-head">
@@ -10565,99 +10658,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             </div>
           </section>
         </div>
-
-        <section className="emdc-budget-card emdc-budget-platform-card">
-          <div className="emdc-budget-card-head">
-            <div>
-              <h4>Platform Ads</h4>
-              <p>
-                Allocate the {formatBudgetPercent(platformAdsBudgetPercent)}% Platform Ads budget across Lazada, Shopee, and TikTok.
-              </p>
-            </div>
-            <span className={isPlatformAdsFullySplit ? "is-complete" : "is-warning"}>
-              {formatBudgetPercent(platformAdsSplitTotal)}% split assigned
-            </span>
-          </div>
-
-          <div className="emdc-budget-table-shell">
-            <div className="emdc-budget-platform-table">
-              {["Store","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
-                <div key={label} className="emdc-budget-th">{label}</div>
-              ))}
-
-              {resolvedPlatformAdsRows.map((row:any)=>(
-                <React.Fragment key={`platform-${row.id}`}>
-                  <div className="emdc-budget-td emdc-budget-platform-store">
-                    {row.store}
-                  </div>
-
-                  <div className="emdc-budget-td emdc-budget-input-td">
-                    <label className="emdc-budget-platform-input-wrap">
-                      <input
-                        value={row.split}
-                        onChange={(event)=>
-                          patchPlatformAdsRow(row.id,{
-                            split:cleanPlatformAdsSplit(event.target.value),
-                          })
-                        }
-                        inputMode="decimal"
-                        aria-label={`${row.store} Platform Ads split percentage`}
-                        placeholder="0"
-                      />
-                      <span>%</span>
-                    </label>
-                  </div>
-
-                  <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
-                    {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
-                  </div>
-
-                  <div className="emdc-budget-td emdc-budget-input-td">
-                    <input
-                      value={row.duration}
-                      onChange={(event)=>
-                        patchPlatformAdsRow(row.id,{
-                          duration:cleanPlatformAdsDuration(event.target.value),
-                        })
-                      }
-                      inputMode="numeric"
-                      aria-label={`${row.store} Platform Ads duration in days`}
-                      placeholder="0"
-                      className="emdc-budget-table-input emdc-budget-duration-input"
-                    />
-                  </div>
-
-                  <div className="emdc-budget-td emdc-budget-money-cell">
-                    {row.durationDays > 0 && row.budget > 0
-                      ? formatBudgetMoney(row.dailyBudget)
-                      : "—"}
-                  </div>
-                </React.Fragment>
-              ))}
-
-              <div className="emdc-budget-td emdc-budget-platform-total-label">
-                Total
-              </div>
-              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                {formatBudgetPercent(platformAdsSplitTotal)}%
-              </div>
-              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                {formatBudgetMoney(platformAdsBudgetTotal)}
-              </div>
-              <div className="emdc-budget-td emdc-budget-platform-total-cell">
-                —
-              </div>
-              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                {formatBudgetMoney(platformAdsDailyBudgetTotal)}
-              </div>
-            </div>
-          </div>
-
-          <div className="emdc-budget-platform-formulas">
-            <span>Budget = Platform Ads Value × Split %</span>
-            <span>Daily Budget = Budget ÷ Duration</span>
-          </div>
-        </section>
 
         <style jsx>{`
           .emdc-budget-modern{
