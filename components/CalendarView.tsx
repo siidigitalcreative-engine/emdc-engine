@@ -9872,6 +9872,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       ? plannerData.rows
       : [];
     const hasSavedPlanner = Array.isArray(plannerData?.rows);
+
+    const defaultBudgetPercentages:any = {
+      totalBudget:"12",
+      externalTraffic:"2.5",
+      platformAds:"8.5",
+      flashSale:"0.5",
+      affiliate:"0.5",
+    };
+
+    const savedBudgetPercentages =
+      plannerData?.percentages &&
+      typeof plannerData.percentages === "object" &&
+      !Array.isArray(plannerData.percentages)
+        ? plannerData.percentages
+        : {};
+
+    const budgetPercentages:any = {
+      ...defaultBudgetPercentages,
+      ...savedBudgetPercentages,
+    };
+
     const legacyCells = rawData?.sheet?.cells && typeof rawData.sheet.cells === "object"
       ? rawData.sheet.cells
       : {};
@@ -9968,17 +9989,41 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       });
     }
 
+    const serializeBudgetPlannerRows = (rows:any[]) =>
+      rows.map((row:any,index:number)=>({
+        id:String(row?.id || `budget-row-${index+1}`),
+        sku:String(row?.sku || ""),
+        qty:String(row?.qty ?? ""),
+        nameSnapshot:String(row?.nameSnapshot || ""),
+        srpSnapshot:budgetCellToNumber(row?.srpSnapshot),
+      }));
+
     const saveBudgetPlannerRows = (rows:any[]) => {
       updateAiWorkspace("budget",{
         planner:{
-          version:2,
-          rows:rows.map((row:any,index:number)=>({
-            id:String(row?.id || `budget-row-${index+1}`),
-            sku:String(row?.sku || ""),
-            qty:String(row?.qty ?? ""),
-            nameSnapshot:String(row?.nameSnapshot || ""),
-            srpSnapshot:budgetCellToNumber(row?.srpSnapshot),
-          })),
+          ...plannerData,
+          version:3,
+          rows:serializeBudgetPlannerRows(rows),
+          percentages:{...budgetPercentages},
+          updatedAt:new Date().toISOString(),
+        },
+      });
+    };
+
+    const saveBudgetPercentage = (key:string, value:any) => {
+      const cleanValue = String(value ?? "")
+        .replace(/[^0-9.]/g,"")
+        .replace(/(\..*)\./g,"$1");
+
+      updateAiWorkspace("budget",{
+        planner:{
+          ...plannerData,
+          version:3,
+          rows:serializeBudgetPlannerRows(plannerRows),
+          percentages:{
+            ...budgetPercentages,
+            [key]:cleanValue,
+          },
           updatedAt:new Date().toISOString(),
         },
       });
@@ -10029,10 +10074,23 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
     });
 
+    const getBudgetPercentageValue = (key:string) => {
+      const value = budgetCellToNumber(
+        budgetPercentages?.[key] ??
+        defaultBudgetPercentages?.[key] ??
+        0
+      );
+      return Number.isFinite(value) ? Math.max(0,value) : 0;
+    };
+
     const totalProductValue = resolvedRows.reduce((sum:number,row:any)=>sum + row.srpValue,0);
-    const totalBudget = totalProductValue * 0.12;
+    const totalBudgetPercent = getBudgetPercentageValue("totalBudget");
+    const totalBudgetRate = totalBudgetPercent / 100;
+    const totalBudget = totalProductValue * totalBudgetRate;
+
     const formatBudgetMoney = (value:any) => `₱${Number(value || 0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
     const formatBudgetQuantity = (value:any) => Number(value || 0).toLocaleString("en-PH",{minimumFractionDigits:0,maximumFractionDigits:2});
+    const formatBudgetPercent = (value:any) => Number(value || 0).toLocaleString("en-PH",{minimumFractionDigits:0,maximumFractionDigits:2});
     const panelStyle:any = {
       minWidth:0,
       padding:isMobile?14:22,
@@ -10104,11 +10162,48 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     };
 
     const budgetSplits = [
-      { label:"External Traffic", percent:0.025, note:"2.5% of total Product Value" },
-      { label:"Platform Ads", percent:0.085, note:"8.5% of total Product Value" },
-      { label:"Flash Sale", percent:0.005, note:"0.5% of total Product Value" },
-      { label:"Affiliate", percent:0.005, note:"0.5% of total Product Value" },
-    ];
+      {
+        key:"externalTraffic",
+        label:"External Traffic",
+        percentValue:getBudgetPercentageValue("externalTraffic"),
+      },
+      {
+        key:"platformAds",
+        label:"Platform Ads",
+        percentValue:getBudgetPercentageValue("platformAds"),
+      },
+      {
+        key:"flashSale",
+        label:"Flash Sale",
+        percentValue:getBudgetPercentageValue("flashSale"),
+      },
+      {
+        key:"affiliate",
+        label:"Affiliate",
+        percentValue:getBudgetPercentageValue("affiliate"),
+      },
+    ].map((item:any)=>({
+      ...item,
+      percent:item.percentValue / 100,
+      note:`${formatBudgetPercent(item.percentValue)}% of total Product Value`,
+    }));
+
+    const allocationPercentTotal = budgetSplits.reduce(
+      (sum:number,item:any)=>sum + item.percentValue,
+      0
+    );
+
+    const assignedBudgetPercent = totalBudgetPercent > 0
+      ? (allocationPercentTotal / totalBudgetPercent) * 100
+      : allocationPercentTotal > 0
+        ? 0
+        : 100;
+
+    const isBudgetFullyAssigned =
+      Math.abs(allocationPercentTotal - totalBudgetPercent) < 0.0001;
+
+    const affiliateBudgetPercent = getBudgetPercentageValue("affiliate");
+    const affiliateBudgetRate = affiliateBudgetPercent / 100;
 
     const activeBudgetPickerRow = plannerRows.find(
       (row:any)=>row.id===budgetSkuPickerRowId
@@ -10203,7 +10298,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <strong>{formatBudgetMoney(totalProductValue)}</strong>
           </div>
           <div className="emdc-budget-summary-card emdc-budget-summary-primary">
-            <span>Total Budget · 12%</span>
+            <div className="emdc-budget-summary-title-row">
+              <span>Total Budget</span>
+              <label className="emdc-budget-percent-editor emdc-budget-percent-editor-primary">
+                <input
+                  value={String(budgetPercentages.totalBudget ?? "")}
+                  onChange={(event)=>saveBudgetPercentage("totalBudget",event.target.value)}
+                  inputMode="decimal"
+                  aria-label="Total Budget percentage"
+                />
+                <b>%</b>
+              </label>
+            </div>
             <strong>{formatBudgetMoney(totalBudget)}</strong>
           </div>
           {budgetSplits.map((item:any)=>(
@@ -10284,7 +10390,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   <h4>Budget Allocation</h4>
                   <p>Automatically calculated from the total product value.</p>
                 </div>
-                <span>100% of budget assigned</span>
+                <span className={isBudgetFullyAssigned ? "is-complete" : "is-warning"}>
+                  {formatBudgetPercent(assignedBudgetPercent)}% of budget assigned
+                </span>
               </div>
 
               <div className="emdc-budget-allocation-grid">
@@ -10292,7 +10400,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                   <div key={item.label} className="emdc-budget-allocation-card">
                     <div className="emdc-budget-allocation-top">
                       <strong>{item.label}</strong>
-                      <span>{(item.percent*100).toFixed(1)}%</span>
+                      <label className="emdc-budget-percent-editor">
+                        <input
+                          value={String(budgetPercentages[item.key] ?? "")}
+                          onChange={(event)=>saveBudgetPercentage(item.key,event.target.value)}
+                          inputMode="decimal"
+                          aria-label={`${item.label} percentage`}
+                        />
+                        <b>%</b>
+                      </label>
                     </div>
                     <output>{formatBudgetMoney(totalProductValue * item.percent)}</output>
                     <small>{item.note}</small>
@@ -10306,7 +10422,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <div className="emdc-budget-card-head">
               <div>
                 <h4>Affiliate Samples</h4>
-                <p>Sample value is based on the 0.5% affiliate allocation per product row.</p>
+                <p>Sample value is based on the {formatBudgetPercent(affiliateBudgetPercent)}% affiliate allocation per product row.</p>
               </div>
               <span>Auto-calculated</span>
             </div>
@@ -10319,7 +10435,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 ))}
 
                 {resolvedRows.map((row:any,index:number)=>{
-                  const valuePerSku = row.srpValue * 0.005;
+                  const valuePerSku = row.srpValue * affiliateBudgetRate;
                   const sampleQty = row.srp > 0 ? Math.round(valuePerSku / row.srp) : 0;
                   return (
                     <React.Fragment key={`affiliate-${row.id}`}>
@@ -10339,7 +10455,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
             <div className="emdc-budget-formula-box">
               <div><strong>SKU</strong><span>Copied from the matching product row</span></div>
-              <div><strong>Value per SKU</strong><span>SRP Value × 0.5%</span></div>
+              <div><strong>Value per SKU</strong><span>SRP Value × {formatBudgetPercent(affiliateBudgetPercent)}%</span></div>
               <div><strong>Sample QTY</strong><span>Value per SKU ÷ SRP</span></div>
             </div>
           </section>
@@ -10418,13 +10534,21 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             box-shadow:0 1px 2px rgba(15,23,42,.03);
           }
 
-          .emdc-budget-summary-card span{
+          .emdc-budget-summary-card > span,
+          .emdc-budget-summary-title-row > span{
             display:block;
             color:${C.muted};
             font-size:10px;
             font-weight:800;
             letter-spacing:.035em;
             text-transform:uppercase;
+          }
+
+          .emdc-budget-summary-title-row{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
           }
 
           .emdc-budget-summary-card strong{
@@ -10442,8 +10566,57 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             background:#EFF6FF;
           }
 
-          .emdc-budget-summary-primary span,
+          .emdc-budget-summary-primary > span,
+          .emdc-budget-summary-primary .emdc-budget-summary-title-row > span,
           .emdc-budget-summary-primary strong{
+            color:#1D4ED8;
+          }
+
+          .emdc-budget-percent-editor{
+            min-width:58px;
+            height:26px;
+            padding:0 7px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:flex-end;
+            gap:3px;
+            border:1px solid ${C.border};
+            border-radius:999px;
+            background:${C.surface};
+            color:${C.textSub};
+            box-sizing:border-box;
+            cursor:text;
+          }
+
+          .emdc-budget-percent-editor input{
+            width:34px;
+            min-width:0;
+            padding:0;
+            border:0;
+            outline:none;
+            background:transparent;
+            color:inherit;
+            font-size:10px;
+            font-weight:900;
+            line-height:1;
+            text-align:right;
+            font-variant-numeric:tabular-nums;
+          }
+
+          .emdc-budget-percent-editor b{
+            font-size:10px;
+            font-weight:900;
+            line-height:1;
+          }
+
+          .emdc-budget-percent-editor:focus-within{
+            border-color:${C.accent};
+            box-shadow:0 0 0 3px rgba(17,24,39,.06);
+          }
+
+          .emdc-budget-percent-editor-primary{
+            border-color:#93C5FD;
+            background:#FFFFFF;
             color:#1D4ED8;
           }
 
@@ -10784,13 +10957,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             font-weight:900;
           }
 
-          .emdc-budget-allocation-top span{
-            padding:2px 7px;
-            border-radius:999px;
-            background:${C.surface};
+          .emdc-budget-section-title > span.is-warning{
+            border-color:#FDE68A;
+            background:#FFFBEB;
+            color:#B45309;
+          }
+
+          .emdc-budget-section-title > span.is-complete{
+            border-color:${C.border};
+            background:${C.surfaceAlt};
             color:${C.muted};
-            font-size:9px;
-            font-weight:900;
           }
 
           .emdc-budget-allocation-card output{
