@@ -9919,6 +9919,57 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       };
     });
 
+    const defaultExternalTrafficAdsRows:any[] = [
+      { id:"fbMeta", channel:"FB Meta", split:"", duration:"" },
+      { id:"shopeeMeta", channel:"Shopee Meta", split:"", duration:"" },
+    ];
+
+    const savedExternalTrafficAdsRows =
+      Array.isArray(plannerData?.externalTrafficAds?.rows)
+        ? plannerData.externalTrafficAds.rows
+        : [];
+
+    const externalTrafficAdsRows = defaultExternalTrafficAdsRows.map((defaultRow:any)=>{
+      const savedRow = savedExternalTrafficAdsRows.find(
+        (row:any)=>String(row?.id || "").toLowerCase()===defaultRow.id.toLowerCase()
+      );
+
+      return {
+        ...defaultRow,
+        ...(savedRow || {}),
+        id:defaultRow.id,
+        channel:defaultRow.channel,
+        split:String(savedRow?.split ?? defaultRow.split),
+        duration:String(savedRow?.duration ?? defaultRow.duration),
+      };
+    });
+
+    const defaultTikTokAdsRows:any[] = [
+      { id:"awareness", objective:"Awareness", split:"", duration:"" },
+      { id:"engagement", objective:"Engagement", split:"", duration:"" },
+      { id:"salesGmvMax", objective:"Sales GMV Max", split:"", duration:"" },
+    ];
+
+    const savedTikTokAdsRows =
+      Array.isArray(plannerData?.tiktokAds?.rows)
+        ? plannerData.tiktokAds.rows
+        : [];
+
+    const tiktokAdsRows = defaultTikTokAdsRows.map((defaultRow:any)=>{
+      const savedRow = savedTikTokAdsRows.find(
+        (row:any)=>String(row?.id || "").toLowerCase()===defaultRow.id.toLowerCase()
+      );
+
+      return {
+        ...defaultRow,
+        ...(savedRow || {}),
+        id:defaultRow.id,
+        objective:defaultRow.objective,
+        split:String(savedRow?.split ?? defaultRow.split),
+        duration:String(savedRow?.duration ?? defaultRow.duration),
+      };
+    });
+
     const legacyCells = rawData?.sheet?.cells && typeof rawData.sheet.cells === "object"
       ? rawData.sheet.cells
       : {};
@@ -10028,7 +10079,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       updateAiWorkspace("budget",{
         planner:{
           ...plannerData,
-          version:4,
+          version:5,
           rows:serializeBudgetPlannerRows(rows),
           percentages:{...budgetPercentages},
           updatedAt:new Date().toISOString(),
@@ -10044,7 +10095,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       updateAiWorkspace("budget",{
         planner:{
           ...plannerData,
-          version:4,
+          version:5,
           rows:serializeBudgetPlannerRows(plannerRows),
           percentages:{
             ...budgetPercentages,
@@ -10059,7 +10110,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       updateAiWorkspace("budget",{
         planner:{
           ...plannerData,
-          version:4,
+          version:5,
           rows:serializeBudgetPlannerRows(plannerRows),
           percentages:{...budgetPercentages},
           platformAds:{
@@ -10080,6 +10131,70 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const patchPlatformAdsRow = (rowId:string, patch:any) => {
       savePlatformAdsRows(
         platformAdsRows.map((row:any)=>
+          row.id===rowId
+            ? {...row,...patch}
+            : row
+        )
+      );
+    };
+
+    const saveExternalTrafficAdsRows = (rows:any[]) => {
+      updateAiWorkspace("budget",{
+        planner:{
+          ...plannerData,
+          version:5,
+          rows:serializeBudgetPlannerRows(plannerRows),
+          percentages:{...budgetPercentages},
+          externalTrafficAds:{
+            ...(plannerData?.externalTrafficAds || {}),
+            rows:rows.map((row:any)=>({
+              id:String(row?.id || ""),
+              channel:String(row?.channel || ""),
+              split:String(row?.split ?? ""),
+              duration:String(row?.duration ?? ""),
+            })),
+            updatedAt:new Date().toISOString(),
+          },
+          updatedAt:new Date().toISOString(),
+        },
+      });
+    };
+
+    const patchExternalTrafficAdsRow = (rowId:string, patch:any) => {
+      saveExternalTrafficAdsRows(
+        externalTrafficAdsRows.map((row:any)=>
+          row.id===rowId
+            ? {...row,...patch}
+            : row
+        )
+      );
+    };
+
+    const saveTikTokAdsRows = (rows:any[]) => {
+      updateAiWorkspace("budget",{
+        planner:{
+          ...plannerData,
+          version:5,
+          rows:serializeBudgetPlannerRows(plannerRows),
+          percentages:{...budgetPercentages},
+          tiktokAds:{
+            ...(plannerData?.tiktokAds || {}),
+            rows:rows.map((row:any)=>({
+              id:String(row?.id || ""),
+              objective:String(row?.objective || ""),
+              split:String(row?.split ?? ""),
+              duration:String(row?.duration ?? ""),
+            })),
+            updatedAt:new Date().toISOString(),
+          },
+          updatedAt:new Date().toISOString(),
+        },
+      });
+    };
+
+    const patchTikTokAdsRow = (rowId:string, patch:any) => {
+      saveTikTokAdsRows(
+        tiktokAdsRows.map((row:any)=>
           row.id===rowId
             ? {...row,...patch}
             : row
@@ -10310,6 +10425,81 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const isPlatformAdsFullySplit =
       Math.abs(platformAdsSplitTotal - 100) < 0.0001;
 
+    const externalTrafficBudgetPercent = getBudgetPercentageValue("externalTraffic");
+    const externalTrafficBudgetRate = externalTrafficBudgetPercent / 100;
+    const externalTrafficTotalBudget = totalProductValue * externalTrafficBudgetRate;
+
+    const resolvedExternalTrafficAdsRows = externalTrafficAdsRows.map((row:any)=>{
+      const splitPercent = budgetCellToNumber(row.split);
+      const splitRate = splitPercent / 100;
+      const durationDays = Math.max(0,Math.floor(budgetCellToNumber(row.duration)));
+      const budget = externalTrafficTotalBudget * splitRate;
+      const dailyBudget = durationDays > 0 ? budget / durationDays : 0;
+
+      return {
+        ...row,
+        splitPercent,
+        durationDays,
+        budget,
+        dailyBudget,
+      };
+    });
+
+    const externalTrafficSplitTotal = resolvedExternalTrafficAdsRows.reduce(
+      (sum:number,row:any)=>sum + row.splitPercent,
+      0
+    );
+
+    const externalTrafficBudgetTotal = resolvedExternalTrafficAdsRows.reduce(
+      (sum:number,row:any)=>sum + row.budget,
+      0
+    );
+
+    const externalTrafficDailyBudgetTotal = resolvedExternalTrafficAdsRows.reduce(
+      (sum:number,row:any)=>sum + row.dailyBudget,
+      0
+    );
+
+    const isExternalTrafficFullySplit =
+      Math.abs(externalTrafficSplitTotal - 100) < 0.0001;
+
+    const tiktokPlatformAdsBudget =
+      resolvedPlatformAdsRows.find((row:any)=>row.id==="tiktok")?.budget || 0;
+
+    const resolvedTikTokAdsRows = tiktokAdsRows.map((row:any)=>{
+      const splitPercent = budgetCellToNumber(row.split);
+      const splitRate = splitPercent / 100;
+      const durationDays = Math.max(0,Math.floor(budgetCellToNumber(row.duration)));
+      const budget = tiktokPlatformAdsBudget * splitRate;
+      const dailyBudget = durationDays > 0 ? budget / durationDays : 0;
+
+      return {
+        ...row,
+        splitPercent,
+        durationDays,
+        budget,
+        dailyBudget,
+      };
+    });
+
+    const tiktokAdsSplitTotal = resolvedTikTokAdsRows.reduce(
+      (sum:number,row:any)=>sum + row.splitPercent,
+      0
+    );
+
+    const tiktokAdsBudgetTotal = resolvedTikTokAdsRows.reduce(
+      (sum:number,row:any)=>sum + row.budget,
+      0
+    );
+
+    const tiktokAdsDailyBudgetTotal = resolvedTikTokAdsRows.reduce(
+      (sum:number,row:any)=>sum + row.dailyBudget,
+      0
+    );
+
+    const isTikTokAdsFullySplit =
+      Math.abs(tiktokAdsSplitTotal - 100) < 0.0001;
+
     const activeBudgetPickerRow = plannerRows.find(
       (row:any)=>row.id===budgetSkuPickerRowId
     ) || null;
@@ -10517,6 +10707,194 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             <span>Daily Budget = Budget ÷ Duration</span>
           </div>
         </section>
+
+        <div className="emdc-budget-ad-breakdown-grid">
+          <section className="emdc-budget-card emdc-budget-breakdown-card">
+            <div className="emdc-budget-card-head">
+              <div>
+                <h4>External Traffic (Shopee)</h4>
+                <p>
+                  Allocate the {formatBudgetPercent(externalTrafficBudgetPercent)}% External Traffic budget across FB Meta and Shopee Meta.
+                </p>
+              </div>
+              <span className={isExternalTrafficFullySplit ? "is-complete" : "is-warning"}>
+                {formatBudgetPercent(externalTrafficSplitTotal)}% split assigned
+              </span>
+            </div>
+
+            <div className="emdc-budget-table-shell">
+              <div className="emdc-budget-breakdown-table">
+                {["Channel","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
+                  <div key={label} className="emdc-budget-th">{label}</div>
+                ))}
+
+                {resolvedExternalTrafficAdsRows.map((row:any)=>(
+                  <React.Fragment key={`external-traffic-${row.id}`}>
+                    <div className="emdc-budget-td emdc-budget-platform-store">
+                      {row.channel}
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-input-td">
+                      <label className="emdc-budget-platform-input-wrap">
+                        <input
+                          value={row.split}
+                          onChange={(event)=>
+                            patchExternalTrafficAdsRow(row.id,{
+                              split:cleanPlatformAdsSplit(event.target.value),
+                            })
+                          }
+                          inputMode="decimal"
+                          aria-label={`${row.channel} External Traffic split percentage`}
+                          placeholder="0"
+                        />
+                        <span>%</span>
+                      </label>
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                      {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-input-td">
+                      <input
+                        value={row.duration}
+                        onChange={(event)=>
+                          patchExternalTrafficAdsRow(row.id,{
+                            duration:cleanPlatformAdsDuration(event.target.value),
+                          })
+                        }
+                        inputMode="numeric"
+                        aria-label={`${row.channel} External Traffic duration in days`}
+                        placeholder="0"
+                        className="emdc-budget-table-input emdc-budget-duration-input"
+                      />
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-money-cell">
+                      {row.durationDays > 0 && row.budget > 0
+                        ? formatBudgetMoney(row.dailyBudget)
+                        : "—"}
+                    </div>
+                  </React.Fragment>
+                ))}
+
+                <div className="emdc-budget-td emdc-budget-platform-total-label">
+                  Total
+                </div>
+                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                  {formatBudgetPercent(externalTrafficSplitTotal)}%
+                </div>
+                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                  {formatBudgetMoney(externalTrafficBudgetTotal)}
+                </div>
+                <div className="emdc-budget-td emdc-budget-platform-total-cell">
+                  —
+                </div>
+                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                  {formatBudgetMoney(externalTrafficDailyBudgetTotal)}
+                </div>
+              </div>
+            </div>
+
+            <div className="emdc-budget-platform-formulas">
+              <span>Budget = External Traffic Value × Split %</span>
+              <span>Daily Budget = Budget ÷ Duration</span>
+            </div>
+          </section>
+
+          <section className="emdc-budget-card emdc-budget-breakdown-card">
+            <div className="emdc-budget-card-head">
+              <div>
+                <h4>TikTok Ads</h4>
+                <p>
+                  Break down the TikTok Platform Ads value across Awareness, Engagement, and Sales GMV Max.
+                </p>
+              </div>
+              <span className={isTikTokAdsFullySplit ? "is-complete" : "is-warning"}>
+                {formatBudgetPercent(tiktokAdsSplitTotal)}% split assigned
+              </span>
+            </div>
+
+            <div className="emdc-budget-table-shell">
+              <div className="emdc-budget-breakdown-table">
+                {["Objective","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
+                  <div key={label} className="emdc-budget-th">{label}</div>
+                ))}
+
+                {resolvedTikTokAdsRows.map((row:any)=>(
+                  <React.Fragment key={`tiktok-ads-${row.id}`}>
+                    <div className="emdc-budget-td emdc-budget-platform-store">
+                      {row.objective}
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-input-td">
+                      <label className="emdc-budget-platform-input-wrap">
+                        <input
+                          value={row.split}
+                          onChange={(event)=>
+                            patchTikTokAdsRow(row.id,{
+                              split:cleanPlatformAdsSplit(event.target.value),
+                            })
+                          }
+                          inputMode="decimal"
+                          aria-label={`${row.objective} TikTok Ads split percentage`}
+                          placeholder="0"
+                        />
+                        <span>%</span>
+                      </label>
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                      {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-input-td">
+                      <input
+                        value={row.duration}
+                        onChange={(event)=>
+                          patchTikTokAdsRow(row.id,{
+                            duration:cleanPlatformAdsDuration(event.target.value),
+                          })
+                        }
+                        inputMode="numeric"
+                        aria-label={`${row.objective} TikTok Ads duration in days`}
+                        placeholder="0"
+                        className="emdc-budget-table-input emdc-budget-duration-input"
+                      />
+                    </div>
+
+                    <div className="emdc-budget-td emdc-budget-money-cell">
+                      {row.durationDays > 0 && row.budget > 0
+                        ? formatBudgetMoney(row.dailyBudget)
+                        : "—"}
+                    </div>
+                  </React.Fragment>
+                ))}
+
+                <div className="emdc-budget-td emdc-budget-platform-total-label">
+                  Total
+                </div>
+                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                  {formatBudgetPercent(tiktokAdsSplitTotal)}%
+                </div>
+                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                  {formatBudgetMoney(tiktokAdsBudgetTotal)}
+                </div>
+                <div className="emdc-budget-td emdc-budget-platform-total-cell">
+                  —
+                </div>
+                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                  {formatBudgetMoney(tiktokAdsDailyBudgetTotal)}
+                </div>
+              </div>
+            </div>
+
+            <div className="emdc-budget-platform-formulas">
+              <span>Budget = TikTok Platform Ads Value × Split %</span>
+              <span>Daily Budget = Budget ÷ Duration</span>
+            </div>
+          </section>
+        </div>
 
         <div className="emdc-budget-layout">
           <section className="emdc-budget-card emdc-budget-products-card">
@@ -10880,7 +11258,20 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             width:100%;
           }
 
-          .emdc-budget-platform-table{
+          .emdc-budget-ad-breakdown-grid{
+            width:100%;
+            min-width:0;
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:16px;
+          }
+
+          .emdc-budget-breakdown-card{
+            min-width:0;
+          }
+
+          .emdc-budget-platform-table,
+          .emdc-budget-breakdown-table{
             min-width:760px;
             display:grid;
             grid-template-columns:
@@ -11297,6 +11688,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             color:${C.muted};
             font-size:10px;
             line-height:1.4;
+          }
+
+          @media(max-width:1280px){
+            .emdc-budget-ad-breakdown-grid{
+              grid-template-columns:1fr;
+            }
           }
 
           @media(max-width:1180px){
