@@ -90,6 +90,50 @@ const firstText = (...values: unknown[]) => {
   return "";
 };
 
+const getGoogleDriveFileId = (value: unknown) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  const patterns = [
+    /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+    /drive\.google\.com\/open\?id=([^&#]+)/i,
+    /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&#]+)/i,
+    /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&#]+)/i,
+    /[?&]id=([^&#]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
+      }
+    }
+  }
+
+  return "";
+};
+
+const toPreviewImageUrl = (value: unknown) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  if (text.startsWith("data:image/")) {
+    return text;
+  }
+
+  const driveId = getGoogleDriveFileId(text);
+  if (driveId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+      driveId
+    )}&sz=w1600`;
+  }
+
+  return /^https?:\/\//i.test(text) ? text : "";
+};
+
 const getFirstImageUrl = (
   item: any,
   hub?: any
@@ -132,7 +176,7 @@ const getFirstImageUrl = (
       /^https?:\/\//i.test(text) ||
       text.startsWith("data:image/")
     ) {
-      return text;
+      return toPreviewImageUrl(text);
     }
   }
 
@@ -151,7 +195,7 @@ const getFirstImageUrl = (
         /^https?:\/\//i.test(text) ||
         text.startsWith("data:image/")
       ) {
-        return text;
+        return toPreviewImageUrl(text);
       }
     }
   }
@@ -353,13 +397,17 @@ export default function ProductInfoPage({
     productHubData || legacyHub
   );
 
-  const gallery = lines(
-    productHubData?.gallery ||
-      (productHubData as any)
-        ?.galleryImages
-  )
-    .filter((url) => url !== hero)
-    .slice(0, 6);
+  const gallery = Array.from(
+    new Set(
+      lines(
+        productHubData?.gallery ||
+          (productHubData as any)?.galleryImages
+      )
+        .map(toPreviewImageUrl)
+        .filter(Boolean)
+        .filter((url) => url !== hero)
+    )
+  ).slice(0, 12);
 
   const introduction = firstText(
     productHubData?.introduction,
