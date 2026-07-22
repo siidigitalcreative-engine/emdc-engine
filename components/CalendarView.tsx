@@ -10615,427 +10615,423 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           ))}
         </div>
 
+                <section className="emdc-budget-card emdc-budget-products-card">
+                    <div className="emdc-budget-card-head">
+                      <div>
+                        <h4>Product Budget</h4>
+                        <p>Enter a SKU and quantity. Product name and SRP are linked from SKU Storage.</p>
+                      </div>
+                      <span>{resolvedRows.filter((row:any)=>row.sku).length} selected</span>
+                    </div>
+
+                    <div className="emdc-budget-table-shell">
+                      <div className="emdc-budget-product-table">
+                        <div className="emdc-budget-th emdc-budget-row-head">Row</div>
+                        {['SKU','Name','SRP','QTY','SRP Value'].map((label:string)=>(
+                          <div key={label} className="emdc-budget-th">{label}</div>
+                        ))}
+
+                        {resolvedRows.map((row:any,index:number)=>(
+                          <React.Fragment key={row.id}>
+                            <div className="emdc-budget-row-number">{index+1}</div>
+
+                            <div className="emdc-budget-td emdc-budget-input-td">
+                              <button
+                                type="button"
+                                onClick={()=>setBudgetSkuPickerRowId(row.id)}
+                                aria-label={`Select SKU for Budget row ${index+1}`}
+                                className={`emdc-budget-sku-picker-button${row.sku ? " has-value" : ""}`}
+                              >
+                                <span>{row.sku || (index===0 ? "Select SKU" : "Choose SKU")}</span>
+                                <span aria-hidden="true" className="emdc-budget-sku-picker-arrow">▾</span>
+                              </button>
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-linked-td">
+                              {row.name || <span className="emdc-budget-placeholder">Linked from SKU Storage</span>}
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-linked-td emdc-budget-money-cell">
+                              {row.srp ? formatBudgetMoney(row.srp) : <span className="emdc-budget-placeholder">Linked from SKU Storage</span>}
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-input-td">
+                              <input
+                                value={row.qty}
+                                onChange={(event)=>patchBudgetPlannerRow(row.id,{qty:event.target.value})}
+                                inputMode="decimal"
+                                placeholder={index===0?'Input QTY':''}
+                                aria-label={`Budget row ${index+1} quantity`}
+                                className="emdc-budget-table-input emdc-budget-qty-input"
+                              />
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                              {row.srpValue ? formatBudgetMoney(row.srpValue) : '—'}
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button type="button" onClick={addBudgetPlannerRow} className="emdc-budget-add-row">
+                      + Add Row
+                    </button>
+
+                    <div className="emdc-budget-calculation-section">
+                      <div className="emdc-budget-section-title">
+                        <div>
+                          <h4>Budget Allocation</h4>
+                          <p>Automatically calculated from the total product value.</p>
+                        </div>
+                        <span className={isBudgetFullyAssigned ? "is-complete" : "is-warning"}>
+                          {formatBudgetPercent(assignedBudgetPercent)}% of budget assigned
+                        </span>
+                      </div>
+
+                      <div className="emdc-budget-allocation-grid">
+                        {budgetSplits.map((item:any)=>(
+                          <div key={item.label} className="emdc-budget-allocation-card">
+                            <div className="emdc-budget-allocation-top">
+                              <strong>{item.label}</strong>
+                              <label className="emdc-budget-percent-editor">
+                                <input
+                                  value={String(budgetPercentages[item.key] ?? "")}
+                                  onChange={(event)=>saveBudgetPercentage(item.key,event.target.value)}
+                                  inputMode="decimal"
+                                  aria-label={`${item.label} percentage`}
+                                />
+                                <b>%</b>
+                              </label>
+                            </div>
+                            <output>{formatBudgetMoney(totalProductValue * item.percent)}</output>
+                            <small>{item.note}</small>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+        <section className="emdc-budget-card emdc-budget-breakdown-card">
+                    <div className="emdc-budget-card-head">
+                      <div>
+                        <h4>External Traffic Ads</h4>
+                        <p>
+                          Allocate the {formatBudgetPercent(externalTrafficBudgetPercent)}% External Traffic budget across FB Meta and Shopee Meta.
+                        </p>
+                      </div>
+                      <span className={isExternalTrafficFullySplit ? "is-complete" : "is-warning"}>
+                        {formatBudgetPercent(externalTrafficSplitTotal)}% split assigned
+                      </span>
+                    </div>
+
+                    <div className="emdc-budget-table-shell">
+                      <div className="emdc-budget-breakdown-table">
+                        {["Channel","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
+                          <div key={label} className="emdc-budget-th">{label}</div>
+                        ))}
+
+                        {resolvedExternalTrafficAdsRows.map((row:any)=>(
+                          <React.Fragment key={`external-traffic-${row.id}`}>
+                            <div className="emdc-budget-td emdc-budget-platform-store">
+                              {row.channel}
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-input-td">
+                              <label className="emdc-budget-platform-input-wrap">
+                                <input
+                                  value={row.split}
+                                  onChange={(event)=>
+                                    patchExternalTrafficAdsRow(row.id,{
+                                      split:cleanPlatformAdsSplit(event.target.value),
+                                    })
+                                  }
+                                  inputMode="decimal"
+                                  aria-label={`${row.channel} External Traffic split percentage`}
+                                  placeholder="0"
+                                />
+                                <span>%</span>
+                              </label>
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                              {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-input-td">
+                              <input
+                                value={row.duration}
+                                onChange={(event)=>
+                                  patchExternalTrafficAdsRow(row.id,{
+                                    duration:cleanPlatformAdsDuration(event.target.value),
+                                  })
+                                }
+                                inputMode="numeric"
+                                aria-label={`${row.channel} External Traffic duration in days`}
+                                placeholder="0"
+                                className="emdc-budget-table-input emdc-budget-duration-input"
+                              />
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-money-cell">
+                              {row.durationDays > 0 && row.budget > 0
+                                ? formatBudgetMoney(row.dailyBudget)
+                                : "—"}
+                            </div>
+                          </React.Fragment>
+                        ))}
+
+                        <div className="emdc-budget-td emdc-budget-platform-total-label">
+                          Total
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                          {formatBudgetPercent(externalTrafficSplitTotal)}%
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                          {formatBudgetMoney(externalTrafficBudgetTotal)}
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-platform-total-cell">
+                          —
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                          {formatBudgetMoney(externalTrafficDailyBudgetTotal)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="emdc-budget-platform-formulas">
+                      <span>Budget = External Traffic Value × Split %</span>
+                      <span>Daily Budget = Budget ÷ Duration</span>
+                    </div>
+                  </section>
+
+        <section className="emdc-budget-card emdc-budget-affiliate-card">
+                    <div className="emdc-budget-card-head">
+                      <div>
+                        <h4>Affiliate Samples</h4>
+                        <p>Sample value is based on the {formatBudgetPercent(affiliateBudgetPercent)}% affiliate allocation per product row.</p>
+                      </div>
+                      <span>Auto-calculated</span>
+                    </div>
+
+                    <div className="emdc-budget-table-shell">
+                      <div className="emdc-budget-affiliate-table">
+                        <div className="emdc-budget-th emdc-budget-row-head">Row</div>
+                        {['SKU','Value per SKU','Sample QTY'].map((label:string)=>(
+                          <div key={label} className="emdc-budget-th">{label}</div>
+                        ))}
+
+                        {resolvedRows.map((row:any,index:number)=>{
+                          const valuePerSku = row.srpValue * affiliateBudgetRate;
+                          const sampleQty = row.srp > 0 ? Math.round(valuePerSku / row.srp) : 0;
+                          return (
+                            <React.Fragment key={`affiliate-${row.id}`}>
+                              <div className="emdc-budget-row-number">{index+1}</div>
+                              <div className="emdc-budget-td emdc-budget-linked-td emdc-budget-affiliate-sku">{row.sku || '—'}</div>
+                              <div className="emdc-budget-td emdc-budget-money-cell">
+                                {row.sku && row.srpValue ? formatBudgetMoney(valuePerSku) : '—'}
+                              </div>
+                              <div className="emdc-budget-td emdc-budget-money-cell">
+                                {row.sku && row.srpValue ? formatBudgetQuantity(sampleQty) : '—'}
+                              </div>
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="emdc-budget-formula-box">
+                      <div><strong>SKU</strong><span>Copied from the matching product row</span></div>
+                      <div><strong>Value per SKU</strong><span>SRP Value × {formatBudgetPercent(affiliateBudgetPercent)}%</span></div>
+                      <div><strong>Sample QTY</strong><span>Value per SKU ÷ SRP</span></div>
+                    </div>
+                  </section>
+
         <section className="emdc-budget-card emdc-budget-platform-card">
-          <div className="emdc-budget-card-head">
-            <div>
-              <h4>Platform Ads</h4>
-              <p>
-                Allocate the {formatBudgetPercent(platformAdsBudgetPercent)}% Platform Ads budget across Lazada, Shopee, and TikTok.
-              </p>
-            </div>
-            <span className={isPlatformAdsFullySplit ? "is-complete" : "is-warning"}>
-              {formatBudgetPercent(platformAdsSplitTotal)}% split assigned
-            </span>
-          </div>
-
-          <div className="emdc-budget-table-shell">
-            <div className="emdc-budget-platform-table">
-              {["Store","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
-                <div key={label} className="emdc-budget-th">{label}</div>
-              ))}
-
-              {resolvedPlatformAdsRows.map((row:any)=>(
-                <React.Fragment key={`platform-${row.id}`}>
-                  <div className="emdc-budget-td emdc-budget-platform-store">
-                    {row.store}
+                  <div className="emdc-budget-card-head">
+                    <div>
+                      <h4>Platform Ads</h4>
+                      <p>
+                        Allocate the {formatBudgetPercent(platformAdsBudgetPercent)}% Platform Ads budget across Lazada, Shopee, and TikTok.
+                      </p>
+                    </div>
+                    <span className={isPlatformAdsFullySplit ? "is-complete" : "is-warning"}>
+                      {formatBudgetPercent(platformAdsSplitTotal)}% split assigned
+                    </span>
                   </div>
 
-                  <div className="emdc-budget-td emdc-budget-input-td">
-                    <label className="emdc-budget-platform-input-wrap">
-                      <input
-                        value={row.split}
-                        onChange={(event)=>
-                          patchPlatformAdsRow(row.id,{
-                            split:cleanPlatformAdsSplit(event.target.value),
-                          })
-                        }
-                        inputMode="decimal"
-                        aria-label={`${row.store} Platform Ads split percentage`}
-                        placeholder="0"
-                      />
-                      <span>%</span>
-                    </label>
-                  </div>
+                  <div className="emdc-budget-table-shell">
+                    <div className="emdc-budget-platform-table">
+                      {["Store","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
+                        <div key={label} className="emdc-budget-th">{label}</div>
+                      ))}
 
-                  <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
-                    {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
-                  </div>
+                      {resolvedPlatformAdsRows.map((row:any)=>(
+                        <React.Fragment key={`platform-${row.id}`}>
+                          <div className="emdc-budget-td emdc-budget-platform-store">
+                            {row.store}
+                          </div>
 
-                  <div className="emdc-budget-td emdc-budget-input-td">
-                    <input
-                      value={row.duration}
-                      onChange={(event)=>
-                        patchPlatformAdsRow(row.id,{
-                          duration:cleanPlatformAdsDuration(event.target.value),
-                        })
-                      }
-                      inputMode="numeric"
-                      aria-label={`${row.store} Platform Ads duration in days`}
-                      placeholder="0"
-                      className="emdc-budget-table-input emdc-budget-duration-input"
-                    />
-                  </div>
+                          <div className="emdc-budget-td emdc-budget-input-td">
+                            <label className="emdc-budget-platform-input-wrap">
+                              <input
+                                value={row.split}
+                                onChange={(event)=>
+                                  patchPlatformAdsRow(row.id,{
+                                    split:cleanPlatformAdsSplit(event.target.value),
+                                  })
+                                }
+                                inputMode="decimal"
+                                aria-label={`${row.store} Platform Ads split percentage`}
+                                placeholder="0"
+                              />
+                              <span>%</span>
+                            </label>
+                          </div>
 
-                  <div className="emdc-budget-td emdc-budget-money-cell">
-                    {row.durationDays > 0 && row.budget > 0
-                      ? formatBudgetMoney(row.dailyBudget)
-                      : "—"}
-                  </div>
-                </React.Fragment>
-              ))}
+                          <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                            {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
+                          </div>
 
-              <div className="emdc-budget-td emdc-budget-platform-total-label">
-                Total
-              </div>
-              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                {formatBudgetPercent(platformAdsSplitTotal)}%
-              </div>
-              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                {formatBudgetMoney(platformAdsBudgetTotal)}
-              </div>
-              <div className="emdc-budget-td emdc-budget-platform-total-cell">
-                —
-              </div>
-              <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                {formatBudgetMoney(platformAdsDailyBudgetTotal)}
-              </div>
-            </div>
-          </div>
+                          <div className="emdc-budget-td emdc-budget-input-td">
+                            <input
+                              value={row.duration}
+                              onChange={(event)=>
+                                patchPlatformAdsRow(row.id,{
+                                  duration:cleanPlatformAdsDuration(event.target.value),
+                                })
+                              }
+                              inputMode="numeric"
+                              aria-label={`${row.store} Platform Ads duration in days`}
+                              placeholder="0"
+                              className="emdc-budget-table-input emdc-budget-duration-input"
+                            />
+                          </div>
 
-          <div className="emdc-budget-platform-formulas">
-            <span>Budget = Platform Ads Value × Split %</span>
-            <span>Daily Budget = Budget ÷ Duration</span>
-          </div>
-        </section>
+                          <div className="emdc-budget-td emdc-budget-money-cell">
+                            {row.durationDays > 0 && row.budget > 0
+                              ? formatBudgetMoney(row.dailyBudget)
+                              : "—"}
+                          </div>
+                        </React.Fragment>
+                      ))}
 
-        <div className="emdc-budget-ad-breakdown-grid">
-          <section className="emdc-budget-card emdc-budget-breakdown-card">
-            <div className="emdc-budget-card-head">
-              <div>
-                <h4>External Traffic (Shopee)</h4>
-                <p>
-                  Allocate the {formatBudgetPercent(externalTrafficBudgetPercent)}% External Traffic budget across FB Meta and Shopee Meta.
-                </p>
-              </div>
-              <span className={isExternalTrafficFullySplit ? "is-complete" : "is-warning"}>
-                {formatBudgetPercent(externalTrafficSplitTotal)}% split assigned
-              </span>
-            </div>
-
-            <div className="emdc-budget-table-shell">
-              <div className="emdc-budget-breakdown-table">
-                {["Channel","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
-                  <div key={label} className="emdc-budget-th">{label}</div>
-                ))}
-
-                {resolvedExternalTrafficAdsRows.map((row:any)=>(
-                  <React.Fragment key={`external-traffic-${row.id}`}>
-                    <div className="emdc-budget-td emdc-budget-platform-store">
-                      {row.channel}
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-input-td">
-                      <label className="emdc-budget-platform-input-wrap">
-                        <input
-                          value={row.split}
-                          onChange={(event)=>
-                            patchExternalTrafficAdsRow(row.id,{
-                              split:cleanPlatformAdsSplit(event.target.value),
-                            })
-                          }
-                          inputMode="decimal"
-                          aria-label={`${row.channel} External Traffic split percentage`}
-                          placeholder="0"
-                        />
-                        <span>%</span>
-                      </label>
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
-                      {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-input-td">
-                      <input
-                        value={row.duration}
-                        onChange={(event)=>
-                          patchExternalTrafficAdsRow(row.id,{
-                            duration:cleanPlatformAdsDuration(event.target.value),
-                          })
-                        }
-                        inputMode="numeric"
-                        aria-label={`${row.channel} External Traffic duration in days`}
-                        placeholder="0"
-                        className="emdc-budget-table-input emdc-budget-duration-input"
-                      />
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-money-cell">
-                      {row.durationDays > 0 && row.budget > 0
-                        ? formatBudgetMoney(row.dailyBudget)
-                        : "—"}
-                    </div>
-                  </React.Fragment>
-                ))}
-
-                <div className="emdc-budget-td emdc-budget-platform-total-label">
-                  Total
-                </div>
-                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                  {formatBudgetPercent(externalTrafficSplitTotal)}%
-                </div>
-                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                  {formatBudgetMoney(externalTrafficBudgetTotal)}
-                </div>
-                <div className="emdc-budget-td emdc-budget-platform-total-cell">
-                  —
-                </div>
-                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                  {formatBudgetMoney(externalTrafficDailyBudgetTotal)}
-                </div>
-              </div>
-            </div>
-
-            <div className="emdc-budget-platform-formulas">
-              <span>Budget = External Traffic Value × Split %</span>
-              <span>Daily Budget = Budget ÷ Duration</span>
-            </div>
-          </section>
-
-          <section className="emdc-budget-card emdc-budget-breakdown-card">
-            <div className="emdc-budget-card-head">
-              <div>
-                <h4>TikTok Ads</h4>
-                <p>
-                  Break down the TikTok Platform Ads value across Awareness, Engagement, and Sales GMV Max.
-                </p>
-              </div>
-              <span className={isTikTokAdsFullySplit ? "is-complete" : "is-warning"}>
-                {formatBudgetPercent(tiktokAdsSplitTotal)}% split assigned
-              </span>
-            </div>
-
-            <div className="emdc-budget-table-shell">
-              <div className="emdc-budget-breakdown-table">
-                {["Objective","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
-                  <div key={label} className="emdc-budget-th">{label}</div>
-                ))}
-
-                {resolvedTikTokAdsRows.map((row:any)=>(
-                  <React.Fragment key={`tiktok-ads-${row.id}`}>
-                    <div className="emdc-budget-td emdc-budget-platform-store">
-                      {row.objective}
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-input-td">
-                      <label className="emdc-budget-platform-input-wrap">
-                        <input
-                          value={row.split}
-                          onChange={(event)=>
-                            patchTikTokAdsRow(row.id,{
-                              split:cleanPlatformAdsSplit(event.target.value),
-                            })
-                          }
-                          inputMode="decimal"
-                          aria-label={`${row.objective} TikTok Ads split percentage`}
-                          placeholder="0"
-                        />
-                        <span>%</span>
-                      </label>
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
-                      {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-input-td">
-                      <input
-                        value={row.duration}
-                        onChange={(event)=>
-                          patchTikTokAdsRow(row.id,{
-                            duration:cleanPlatformAdsDuration(event.target.value),
-                          })
-                        }
-                        inputMode="numeric"
-                        aria-label={`${row.objective} TikTok Ads duration in days`}
-                        placeholder="0"
-                        className="emdc-budget-table-input emdc-budget-duration-input"
-                      />
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-money-cell">
-                      {row.durationDays > 0 && row.budget > 0
-                        ? formatBudgetMoney(row.dailyBudget)
-                        : "—"}
-                    </div>
-                  </React.Fragment>
-                ))}
-
-                <div className="emdc-budget-td emdc-budget-platform-total-label">
-                  Total
-                </div>
-                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                  {formatBudgetPercent(tiktokAdsSplitTotal)}%
-                </div>
-                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                  {formatBudgetMoney(tiktokAdsBudgetTotal)}
-                </div>
-                <div className="emdc-budget-td emdc-budget-platform-total-cell">
-                  —
-                </div>
-                <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
-                  {formatBudgetMoney(tiktokAdsDailyBudgetTotal)}
-                </div>
-              </div>
-            </div>
-
-            <div className="emdc-budget-platform-formulas">
-              <span>Budget = TikTok Platform Ads Value × Split %</span>
-              <span>Daily Budget = Budget ÷ Duration</span>
-            </div>
-          </section>
-        </div>
-
-        <div className="emdc-budget-layout">
-          <section className="emdc-budget-card emdc-budget-products-card">
-            <div className="emdc-budget-card-head">
-              <div>
-                <h4>Product Budget</h4>
-                <p>Enter a SKU and quantity. Product name and SRP are linked from SKU Storage.</p>
-              </div>
-              <span>{resolvedRows.filter((row:any)=>row.sku).length} selected</span>
-            </div>
-
-            <div className="emdc-budget-table-shell">
-              <div className="emdc-budget-product-table">
-                <div className="emdc-budget-th emdc-budget-row-head">Row</div>
-                {['SKU','Name','SRP','QTY','SRP Value'].map((label:string)=>(
-                  <div key={label} className="emdc-budget-th">{label}</div>
-                ))}
-
-                {resolvedRows.map((row:any,index:number)=>(
-                  <React.Fragment key={row.id}>
-                    <div className="emdc-budget-row-number">{index+1}</div>
-
-                    <div className="emdc-budget-td emdc-budget-input-td">
-                      <button
-                        type="button"
-                        onClick={()=>setBudgetSkuPickerRowId(row.id)}
-                        aria-label={`Select SKU for Budget row ${index+1}`}
-                        className={`emdc-budget-sku-picker-button${row.sku ? " has-value" : ""}`}
-                      >
-                        <span>{row.sku || (index===0 ? "Select SKU" : "Choose SKU")}</span>
-                        <span aria-hidden="true" className="emdc-budget-sku-picker-arrow">▾</span>
-                      </button>
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-linked-td">
-                      {row.name || <span className="emdc-budget-placeholder">Linked from SKU Storage</span>}
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-linked-td emdc-budget-money-cell">
-                      {row.srp ? formatBudgetMoney(row.srp) : <span className="emdc-budget-placeholder">Linked from SKU Storage</span>}
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-input-td">
-                      <input
-                        value={row.qty}
-                        onChange={(event)=>patchBudgetPlannerRow(row.id,{qty:event.target.value})}
-                        inputMode="decimal"
-                        placeholder={index===0?'Input QTY':''}
-                        aria-label={`Budget row ${index+1} quantity`}
-                        className="emdc-budget-table-input emdc-budget-qty-input"
-                      />
-                    </div>
-
-                    <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
-                      {row.srpValue ? formatBudgetMoney(row.srpValue) : '—'}
-                    </div>
-                  </React.Fragment>
-                ))}
-              </div>
-            </div>
-
-            <button type="button" onClick={addBudgetPlannerRow} className="emdc-budget-add-row">
-              + Add Row
-            </button>
-
-            <div className="emdc-budget-calculation-section">
-              <div className="emdc-budget-section-title">
-                <div>
-                  <h4>Budget Allocation</h4>
-                  <p>Automatically calculated from the total product value.</p>
-                </div>
-                <span className={isBudgetFullyAssigned ? "is-complete" : "is-warning"}>
-                  {formatBudgetPercent(assignedBudgetPercent)}% of budget assigned
-                </span>
-              </div>
-
-              <div className="emdc-budget-allocation-grid">
-                {budgetSplits.map((item:any)=>(
-                  <div key={item.label} className="emdc-budget-allocation-card">
-                    <div className="emdc-budget-allocation-top">
-                      <strong>{item.label}</strong>
-                      <label className="emdc-budget-percent-editor">
-                        <input
-                          value={String(budgetPercentages[item.key] ?? "")}
-                          onChange={(event)=>saveBudgetPercentage(item.key,event.target.value)}
-                          inputMode="decimal"
-                          aria-label={`${item.label} percentage`}
-                        />
-                        <b>%</b>
-                      </label>
-                    </div>
-                    <output>{formatBudgetMoney(totalProductValue * item.percent)}</output>
-                    <small>{item.note}</small>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="emdc-budget-card emdc-budget-affiliate-card">
-            <div className="emdc-budget-card-head">
-              <div>
-                <h4>Affiliate Samples</h4>
-                <p>Sample value is based on the {formatBudgetPercent(affiliateBudgetPercent)}% affiliate allocation per product row.</p>
-              </div>
-              <span>Auto-calculated</span>
-            </div>
-
-            <div className="emdc-budget-table-shell">
-              <div className="emdc-budget-affiliate-table">
-                <div className="emdc-budget-th emdc-budget-row-head">Row</div>
-                {['SKU','Value per SKU','Sample QTY'].map((label:string)=>(
-                  <div key={label} className="emdc-budget-th">{label}</div>
-                ))}
-
-                {resolvedRows.map((row:any,index:number)=>{
-                  const valuePerSku = row.srpValue * affiliateBudgetRate;
-                  const sampleQty = row.srp > 0 ? Math.round(valuePerSku / row.srp) : 0;
-                  return (
-                    <React.Fragment key={`affiliate-${row.id}`}>
-                      <div className="emdc-budget-row-number">{index+1}</div>
-                      <div className="emdc-budget-td emdc-budget-linked-td emdc-budget-affiliate-sku">{row.sku || '—'}</div>
-                      <div className="emdc-budget-td emdc-budget-money-cell">
-                        {row.sku && row.srpValue ? formatBudgetMoney(valuePerSku) : '—'}
+                      <div className="emdc-budget-td emdc-budget-platform-total-label">
+                        Total
                       </div>
-                      <div className="emdc-budget-td emdc-budget-money-cell">
-                        {row.sku && row.srpValue ? formatBudgetQuantity(sampleQty) : '—'}
+                      <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                        {formatBudgetPercent(platformAdsSplitTotal)}%
                       </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            </div>
+                      <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                        {formatBudgetMoney(platformAdsBudgetTotal)}
+                      </div>
+                      <div className="emdc-budget-td emdc-budget-platform-total-cell">
+                        —
+                      </div>
+                      <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                        {formatBudgetMoney(platformAdsDailyBudgetTotal)}
+                      </div>
+                    </div>
+                  </div>
 
-            <div className="emdc-budget-formula-box">
-              <div><strong>SKU</strong><span>Copied from the matching product row</span></div>
-              <div><strong>Value per SKU</strong><span>SRP Value × {formatBudgetPercent(affiliateBudgetPercent)}%</span></div>
-              <div><strong>Sample QTY</strong><span>Value per SKU ÷ SRP</span></div>
-            </div>
-          </section>
-        </div>
+                  <div className="emdc-budget-platform-formulas">
+                    <span>Budget = Platform Ads Value × Split %</span>
+                    <span>Daily Budget = Budget ÷ Duration</span>
+                  </div>
+                </section>
+
+        <section className="emdc-budget-card emdc-budget-breakdown-card">
+                    <div className="emdc-budget-card-head">
+                      <div>
+                        <h4>TikTok Platform Ads</h4>
+                        <p>
+                          Break down the TikTok Platform Ads value across Awareness, Engagement, and Sales GMV Max.
+                        </p>
+                      </div>
+                      <span className={isTikTokAdsFullySplit ? "is-complete" : "is-warning"}>
+                        {formatBudgetPercent(tiktokAdsSplitTotal)}% split assigned
+                      </span>
+                    </div>
+
+                    <div className="emdc-budget-table-shell">
+                      <div className="emdc-budget-breakdown-table">
+                        {["Objective","Split %","Budget","Duration (No. of Days)","Daily Budget"].map((label:string)=>(
+                          <div key={label} className="emdc-budget-th">{label}</div>
+                        ))}
+
+                        {resolvedTikTokAdsRows.map((row:any)=>(
+                          <React.Fragment key={`tiktok-ads-${row.id}`}>
+                            <div className="emdc-budget-td emdc-budget-platform-store">
+                              {row.objective}
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-input-td">
+                              <label className="emdc-budget-platform-input-wrap">
+                                <input
+                                  value={row.split}
+                                  onChange={(event)=>
+                                    patchTikTokAdsRow(row.id,{
+                                      split:cleanPlatformAdsSplit(event.target.value),
+                                    })
+                                  }
+                                  inputMode="decimal"
+                                  aria-label={`${row.objective} TikTok Ads split percentage`}
+                                  placeholder="0"
+                                />
+                                <span>%</span>
+                              </label>
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-value-cell">
+                              {row.splitPercent > 0 ? formatBudgetMoney(row.budget) : "—"}
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-input-td">
+                              <input
+                                value={row.duration}
+                                onChange={(event)=>
+                                  patchTikTokAdsRow(row.id,{
+                                    duration:cleanPlatformAdsDuration(event.target.value),
+                                  })
+                                }
+                                inputMode="numeric"
+                                aria-label={`${row.objective} TikTok Ads duration in days`}
+                                placeholder="0"
+                                className="emdc-budget-table-input emdc-budget-duration-input"
+                              />
+                            </div>
+
+                            <div className="emdc-budget-td emdc-budget-money-cell">
+                              {row.durationDays > 0 && row.budget > 0
+                                ? formatBudgetMoney(row.dailyBudget)
+                                : "—"}
+                            </div>
+                          </React.Fragment>
+                        ))}
+
+                        <div className="emdc-budget-td emdc-budget-platform-total-label">
+                          Total
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                          {formatBudgetPercent(tiktokAdsSplitTotal)}%
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                          {formatBudgetMoney(tiktokAdsBudgetTotal)}
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-platform-total-cell">
+                          —
+                        </div>
+                        <div className="emdc-budget-td emdc-budget-money-cell emdc-budget-platform-total-cell">
+                          {formatBudgetMoney(tiktokAdsDailyBudgetTotal)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="emdc-budget-platform-formulas">
+                      <span>Budget = TikTok Platform Ads Value × Split %</span>
+                      <span>Daily Budget = Budget ÷ Duration</span>
+                    </div>
+                  </section>
 
         <style jsx>{`
           .emdc-budget-modern{
