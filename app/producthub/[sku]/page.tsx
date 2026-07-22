@@ -72,6 +72,152 @@ function linesToText(value: unknown) {
   return textToLines(value).join("\n");
 }
 
+function getGoogleDriveFileId(
+  value: unknown
+) {
+  const text = String(value || "").trim();
+
+  if (!text) return "";
+
+  const patterns = [
+    /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+    /drive\.google\.com\/open\?id=([^&#]+)/i,
+    /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&#]+)/i,
+    /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&#]+)/i,
+    /[?&]id=([^&#]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+
+    if (match?.[1]) {
+      try {
+        return decodeURIComponent(
+          match[1]
+        );
+      } catch {
+        return match[1];
+      }
+    }
+  }
+
+  return "";
+}
+
+function toPreviewImageUrl(
+  value: unknown
+) {
+  const text = String(value || "").trim();
+
+  if (!text) return "";
+
+  if (text.startsWith("data:image/")) {
+    return text;
+  }
+
+  const driveId =
+    getGoogleDriveFileId(text);
+
+  if (driveId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+      driveId
+    )}&sz=w1600`;
+  }
+
+  return /^https?:\/\//i.test(text)
+    ? text
+    : "";
+}
+
+function ImagePreview({
+  source,
+  label,
+}: {
+  source: string;
+  label: string;
+}) {
+  const [failed, setFailed] =
+    useState(false);
+
+  const previewUrl =
+    toPreviewImageUrl(source);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [previewUrl]);
+
+  if (!previewUrl) {
+    return null;
+  }
+
+  return (
+    <figure
+      style={{
+        width: "100%",
+        margin: 0,
+        overflow: "hidden",
+        border:
+          "1px solid #E5E7EB",
+        borderRadius: 12,
+        background: "#F8FAFC",
+      }}
+    >
+      <figcaption
+        style={{
+          padding: "9px 11px",
+          borderBottom:
+            "1px solid #E5E7EB",
+          color: "#6B7280",
+          fontSize: 11,
+          fontWeight: 800,
+        }}
+      >
+        {label}
+      </figcaption>
+
+      {!failed ? (
+        <img
+          src={previewUrl}
+          alt={label}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() =>
+            setFailed(true)
+          }
+          style={{
+            display: "block",
+            width: "100%",
+            height: 190,
+            objectFit: "contain",
+            background: "#FFFFFF",
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            minHeight: 110,
+            padding: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent:
+              "center",
+            textAlign: "center",
+            color: "#9CA3AF",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          Preview unavailable. For
+          Google Drive files, set
+          sharing to “Anyone with the
+          link can view.”
+        </div>
+      )}
+    </figure>
+  );
+}
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
   border: "1px solid #E5E7EB",
@@ -232,6 +378,22 @@ export default function ProductHubEditorPage({
       ? `?v=${savedAt}`
       : ""
   }`;
+
+  const heroPreviewSource =
+    String(
+      hub.heroImage || ""
+    ).trim();
+
+  const galleryPreviewSources =
+    textToLines(hub.gallery)
+      .filter((source) =>
+        Boolean(
+          toPreviewImageUrl(
+            source
+          )
+        )
+      )
+      .slice(0, 20);
 
   const update = (
     key: keyof HubData,
@@ -793,6 +955,15 @@ export default function ProductHubEditorPage({
                 }
               />
 
+              {!!heroPreviewSource && (
+                <ImagePreview
+                  source={
+                    heroPreviewSource
+                  }
+                  label="Hero Image Preview"
+                />
+              )}
+
               <TextArea
                 label="Gallery Images"
                 value={hub.gallery}
@@ -807,6 +978,32 @@ export default function ProductHubEditorPage({
                 placeholder="One image URL per line"
                 rows={5}
               />
+
+              {!!galleryPreviewSources.length && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  {galleryPreviewSources.map(
+                    (
+                      source,
+                      index
+                    ) => (
+                      <ImagePreview
+                        key={`${source}-${index}`}
+                        source={source}
+                        label={`Gallery Image ${
+                          index + 1
+                        }`}
+                      />
+                    )
+                  )}
+                </div>
+              )}
             </div>
           </section>
 
