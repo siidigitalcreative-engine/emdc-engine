@@ -554,14 +554,78 @@ export default function ProductHubEditorPage({
   }, [decodedSku]);
 
   const save = async () => {
+    if (saving) return;
+
     setSaving(true);
     setStatus(
       "Saving Product Hub..."
     );
 
+    // Freeze the exact form values being submitted. This is important
+    // when a link or field was deleted: empty and shortened values must
+    // overwrite the previously saved data rather than be merged back in.
+    const submittedHub: HubData = {
+      ...hub,
+      gallery: String(
+        hub.gallery || ""
+      ),
+      heroImage: String(
+        hub.heroImage || ""
+      ),
+      introduction: String(
+        hub.introduction || ""
+      ),
+      features: String(
+        hub.features || ""
+      ),
+      specifications: String(
+        hub.specifications || ""
+      ),
+      care: String(
+        hub.care || ""
+      ),
+      warranty: String(
+        hub.warranty || ""
+      ),
+      shopee: String(
+        hub.shopee || ""
+      ),
+      lazada: String(
+        hub.lazada || ""
+      ),
+      tiktok: String(
+        hub.tiktok || ""
+      ),
+      website: String(
+        hub.website || ""
+      ),
+      manual: String(
+        hub.manual || ""
+      ),
+      video: String(
+        hub.video || ""
+      ),
+      metaTitle: String(
+        hub.metaTitle || ""
+      ),
+      metaDescription: String(
+        hub.metaDescription || ""
+      ),
+      keywords: String(
+        hub.keywords || ""
+      ),
+      relatedSkus:
+        textToLines(
+          hub.relatedSkus
+        ),
+    };
+
     try {
+      const updateTime =
+        Date.now();
+
       const res = await fetch(
-        "/api/product-hub",
+        `/api/product-hub?_=${updateTime}`,
         {
           method: "POST",
           cache: "no-store",
@@ -570,15 +634,16 @@ export default function ProductHubEditorPage({
               "application/json",
             "Cache-Control":
               "no-cache, no-store, max-age=0",
+            Pragma: "no-cache",
           },
           body: JSON.stringify({
             sku: decodedSku,
             data: {
-              ...hub,
-              relatedSkus:
-                textToLines(
-                  hub.relatedSkus
-                ),
+              ...submittedHub,
+              updatedAt:
+                new Date(
+                  updateTime
+                ).toISOString(),
             },
           }),
         }
@@ -599,51 +664,23 @@ export default function ProductHubEditorPage({
         );
       }
 
-      // Read the record back immediately so the editor confirms
-      // the exact data that is now available to the public page.
-      const confirmedRes =
-        await fetch(
-          `/api/product-hub?sku=${encodeURIComponent(
-            decodedSku
-          )}&_=${Date.now()}`,
-          {
-            cache: "no-store",
-            headers: {
-              "Cache-Control":
-                "no-cache, no-store, max-age=0",
-              Pragma: "no-cache",
-            },
-          }
-        );
-
-      const confirmedJson =
-        await confirmedRes
-          .json()
-          .catch(() => null);
-
-      if (
-        confirmedRes.ok &&
-        confirmedJson?.ok &&
-        confirmedJson?.data
-      ) {
-        setHub({
-          ...emptyHub,
-          ...confirmedJson.data,
-          relatedSkus:
-            linesToText(
-              confirmedJson.data
-                .relatedSkus
-            ),
-        });
-      }
-
-      const updateTime =
-        Date.now();
+      // Do not immediately fetch the record again here. Some storage
+      // providers can briefly return the previous value after a write,
+      // which caused deleted gallery links to reappear in the form.
+      setHub({
+        ...submittedHub,
+        relatedSkus:
+          linesToText(
+            submittedHub
+              .relatedSkus
+          ),
+      });
 
       const updateMessage = {
         sku: decodedSku,
         slug:
-          hub.slug?.trim() ||
+          submittedHub.slug
+            ?.trim() ||
           decodedSku,
         updatedAt: updateTime,
       };
@@ -656,7 +693,6 @@ export default function ProductHubEditorPage({
         ).toLocaleTimeString()}`
       );
 
-      // Notify an already-open public product page in another tab.
       try {
         localStorage.setItem(
           "emdc-product-hub-updated",
