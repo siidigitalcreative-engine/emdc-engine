@@ -1757,13 +1757,18 @@ const Empty = ({ icon="", title, sub, action }) => (
 );
 
 // ─── SKU PICKER ──────────────────────────────────────────────────────────────
-const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU storage...", multiSelect=false, selectedIds=[] }) => {
+const SKUPicker = ({ skuStorage, brands, onSelect, placeholder="Search SKU storage...", multiSelect=false, selectedIds=[], autoOpen=false }) => {
   const { isMobile } = useBreakpoint();
   const [query,setQuery] = useState("");
   const [open,setOpen]   = useState(false);
   const [brandFilter,setBrandFilter] = useState("all");
   const [categoryFilter,setCategoryFilter] = useState("all");
   const ref = useRef(null);
+
+  useEffect(()=>{
+    if(!autoOpen) return;
+    setOpen(true);
+  },[autoOpen]);
 
   const selectedSet = useMemo(()=>new Set(selectedIds || []),[selectedIds]);
 
@@ -5849,6 +5854,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [budgetRedoStack,setBudgetRedoStack] = useState<any[]>([]);
   const [budgetClipboard,setBudgetClipboard] = useState<any>(null);
   const budgetImportInputRef = useRef<any>(null);
+  const [budgetSkuPickerRowId,setBudgetSkuPickerRowId] = useState<string|null>(null);
   const setActiveGroupTab = (nextTab:any) => {
     const safeTab = safeChecklistInnerTab(nextTab);
     setActiveGroupTabState(safeTab);
@@ -10027,8 +10033,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const totalBudget = totalProductValue * 0.12;
     const formatBudgetMoney = (value:any) => `₱${Number(value || 0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
     const formatBudgetQuantity = (value:any) => Number(value || 0).toLocaleString("en-PH",{minimumFractionDigits:0,maximumFractionDigits:2});
-    const skuListId = `emdc-budget-sku-list-${String(group?.id || "group").replace(/[^a-z0-9_-]/gi,"-")}`;
-
     const panelStyle:any = {
       minWidth:0,
       padding:isMobile?14:22,
@@ -10106,15 +10110,84 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       { label:"Affiliate", percent:0.005, note:"0.5% of total Product Value" },
     ];
 
+    const activeBudgetPickerRow = plannerRows.find(
+      (row:any)=>row.id===budgetSkuPickerRowId
+    ) || null;
+
+    const budgetPickerCatalog = budgetCatalog.map((item:any,index:number)=>({
+      ...item,
+      id:String(
+        item?.id ||
+        `budget-picker-${normalizeBudgetSku(item?.budgetSkuCode || index)}`
+      ),
+      sku:String(item?.budgetSkuCode || ""),
+      productName:String(item?.budgetProductName || ""),
+      inventory:Number.isFinite(Number(item?.inventory))
+        ? Number(item.inventory)
+        : Number.isFinite(Number(item?.stock))
+          ? Number(item.stock)
+          : "",
+    }));
+
+    const activeBudgetPickerItem = activeBudgetPickerRow
+      ? budgetPickerCatalog.find(
+          (item:any)=>
+            normalizeBudgetSku(item?.sku)===
+            normalizeBudgetSku(activeBudgetPickerRow?.sku)
+        )
+      : null;
+
+    const selectBudgetSkuFromPicker = (item:any) => {
+      if(!activeBudgetPickerRow) return;
+      handleBudgetPlannerSkuChange(
+        activeBudgetPickerRow,
+        String(item?.sku || item?.budgetSkuCode || "")
+      );
+      setBudgetSkuPickerRowId(null);
+    };
+
+    const clearActiveBudgetSku = () => {
+      if(!activeBudgetPickerRow) return;
+      handleBudgetPlannerSkuChange(activeBudgetPickerRow,"");
+      setBudgetSkuPickerRowId(null);
+    };
+
     return (
       <div className="emdc-budget-modern">
-        <datalist id={skuListId}>
-          {budgetCatalog.map((item:any)=>(
-            <option key={item.budgetSkuCode} value={item.budgetSkuCode}>
-              {item.budgetProductName}
-            </option>
-          ))}
-        </datalist>
+        <Modal
+          open={!!budgetSkuPickerRowId}
+          onClose={()=>setBudgetSkuPickerRowId(null)}
+          title="Select SKU from Storage"
+          width={560}
+        >
+          <div className="emdc-budget-sku-picker-modal">
+            <p className="emdc-budget-sku-picker-help">
+              Search and select one SKU for this Budget row. This uses the same SKU selector as the rest of EMDC.
+            </p>
+
+            <SKUPicker
+              skuStorage={budgetPickerCatalog}
+              brands={brands || []}
+              onSelect={selectBudgetSkuFromPicker}
+              placeholder="Search SKU, product, brand, or collection..."
+              multiSelect={false}
+              selectedIds={activeBudgetPickerItem ? [activeBudgetPickerItem.id] : []}
+              autoOpen
+            />
+
+            {activeBudgetPickerRow?.sku&&(
+              <div className="emdc-budget-current-sku">
+                <div>
+                  <span>Current SKU</span>
+                  <strong>{activeBudgetPickerRow.sku}</strong>
+                </div>
+                <button type="button" onClick={clearActiveBudgetSku}>
+                  Clear SKU
+                </button>
+              </div>
+            )}
+          </div>
+        </Modal>
 
         <div className="emdc-budget-heading">
           <div>
@@ -10163,14 +10236,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                     <div className="emdc-budget-row-number">{index+1}</div>
 
                     <div className="emdc-budget-td emdc-budget-input-td">
-                      <input
-                        list={skuListId}
-                        value={row.sku}
-                        onChange={(event)=>handleBudgetPlannerSkuChange(row,event.target.value)}
-                        placeholder={index===0?'Input SKU':''}
-                        aria-label={`Budget row ${index+1} SKU`}
-                        className="emdc-budget-table-input emdc-budget-sku-input"
-                      />
+                      <button
+                        type="button"
+                        onClick={()=>setBudgetSkuPickerRowId(row.id)}
+                        aria-label={`Select SKU for Budget row ${index+1}`}
+                        className={`emdc-budget-sku-picker-button${row.sku ? " has-value" : ""}`}
+                      >
+                        <span>{row.sku || (index===0 ? "Select SKU" : "Choose SKU")}</span>
+                        <span aria-hidden="true" className="emdc-budget-sku-picker-arrow">▾</span>
+                      </button>
                     </div>
 
                     <div className="emdc-budget-td emdc-budget-linked-td">
@@ -10507,6 +10581,115 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             box-sizing:border-box;
           }
 
+          .emdc-budget-sku-picker-button{
+            width:100%;
+            min-width:0;
+            min-height:43px;
+            padding:9px 10px;
+            border:0;
+            outline:none;
+            background:${C.surface};
+            color:${C.faint};
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+            text-align:left;
+            cursor:pointer;
+            font-size:12px;
+            font-weight:700;
+            box-sizing:border-box;
+          }
+
+          .emdc-budget-sku-picker-button:hover{
+            background:${C.surfaceAlt};
+          }
+
+          .emdc-budget-sku-picker-button:focus-visible{
+            box-shadow:inset 0 0 0 2px ${C.accent};
+          }
+
+          .emdc-budget-sku-picker-button.has-value{
+            color:${C.text};
+            font-weight:900;
+          }
+
+          .emdc-budget-sku-picker-button > span:first-child{
+            min-width:0;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+          }
+
+          .emdc-budget-sku-picker-arrow{
+            flex-shrink:0;
+            color:${C.muted};
+            font-size:10px;
+          }
+
+          .emdc-budget-sku-picker-modal{
+            width:100%;
+            min-width:0;
+            display:flex;
+            flex-direction:column;
+            gap:12px;
+          }
+
+          .emdc-budget-sku-picker-help{
+            margin:0;
+            color:${C.muted};
+            font-size:12px;
+            line-height:1.5;
+          }
+
+          .emdc-budget-current-sku{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            padding:11px 12px;
+            border:1px solid ${C.border};
+            border-radius:10px;
+            background:${C.surfaceAlt};
+          }
+
+          .emdc-budget-current-sku > div{
+            min-width:0;
+            display:flex;
+            flex-direction:column;
+            gap:3px;
+          }
+
+          .emdc-budget-current-sku span{
+            color:${C.muted};
+            font-size:10px;
+            font-weight:800;
+            letter-spacing:.04em;
+            text-transform:uppercase;
+          }
+
+          .emdc-budget-current-sku strong{
+            color:${C.text};
+            font-size:12px;
+            font-weight:900;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+          }
+
+          .emdc-budget-current-sku button{
+            height:32px;
+            flex-shrink:0;
+            padding:0 11px;
+            border:1px solid #FECACA;
+            border-radius:8px;
+            background:#FEF2F2;
+            color:#DC2626;
+            font-size:11px;
+            font-weight:800;
+            cursor:pointer;
+          }
+
           .emdc-budget-table-input:focus{
             box-shadow:inset 0 0 0 2px ${C.accent};
             background:#FFFFFF;
@@ -10515,11 +10698,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           .emdc-budget-table-input::placeholder{
             color:${C.faint};
             opacity:1;
-          }
-
-          .emdc-budget-sku-input{
-            font-weight:800;
-            text-transform:uppercase;
           }
 
           .emdc-budget-qty-input{
