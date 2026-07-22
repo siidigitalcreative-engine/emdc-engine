@@ -414,11 +414,10 @@ export default function ProductInfoPage({
 
   // Image priority:
   // 1. Product Hub Hero Image
-  // 2. First Product Hub Gallery Image
-  // 3. SKU Storage main image
+  // 2. SKU Storage main image
+  // Gallery Images are always treated as additional images below.
   const hero =
     savedHeroImage ||
-    savedGalleryImages[0] ||
     skuStorageImage;
 
   // Show every saved Gallery Image on the QR page, including the image
