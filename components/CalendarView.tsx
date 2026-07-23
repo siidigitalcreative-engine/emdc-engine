@@ -13969,6 +13969,9 @@ ${slidesHtml}
                                         "Checklist"
                                       ).trim()
                                     }`
+                                  ).replace(
+                                    /^\[Product Introduction\]\s*VIBER Message:/i,
+                                    "[New Arrival] VIBER Message:"
                                   ),
                                   body:String(
                                     overviewDigitalData
@@ -16546,6 +16549,22 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         ).trim()
       }`;
 
+      const normalizeViberAnnouncementSubject = (
+        value:any
+      ) => {
+        const subject = String(
+          value ||
+          defaultViberAnnouncementSubject
+        ).trim();
+
+        return checklistAnnouncementType==="Product Introduction"
+          ? subject.replace(
+              /^\[Product Introduction\]\s*VIBER Message:/i,
+              "[New Arrival] VIBER Message:"
+            )
+          : subject;
+      };
+
       const syncedAssetAnnouncementEditor = {
         ...(assetAnnouncementEditor || {}),
         client:{
@@ -16565,9 +16584,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ),
         },
         viber:{
-          subject:String(
-            assetAnnouncementEditor?.viber?.subject ||
-            defaultViberAnnouncementSubject
+          subject:normalizeViberAnnouncementSubject(
+            assetAnnouncementEditor?.viber?.subject
           ),
           body:String(
             assetAnnouncementEditor?.client?.body || ""
@@ -16615,9 +16633,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 ),
               },
               viber:{
-                subject:String(
-                  digitalData.assetAnnouncementDrafts?.viber?.subject ||
-                  defaultViberAnnouncementSubject
+                subject:normalizeViberAnnouncementSubject(
+                  digitalData.assetAnnouncementDrafts?.viber?.subject
                 ),
                 body:String(
                   digitalData.assetAnnouncementDrafts?.client?.body ||
@@ -19986,9 +20003,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         ),
                       },
                       viber:{
-                        subject:String(
-                          assetAnnouncementEditor?.viber?.subject ||
-                          defaultViberAnnouncementSubject
+                        subject:normalizeViberAnnouncementSubject(
+                          assetAnnouncementEditor?.viber?.subject
                         ),
                         body:String(
                           assetAnnouncementEditor?.client?.body || ""
@@ -20055,7 +20071,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <Field label="Subject">
                   <TI
                     value={
-                      assetAnnouncementEditor?.[assetAnnouncementTab]?.subject || ""
+                      assetAnnouncementTab==="viber"
+                        ? normalizeViberAnnouncementSubject(
+                            assetAnnouncementEditor?.viber?.subject
+                          )
+                        : assetAnnouncementEditor?.[assetAnnouncementTab]?.subject || ""
                     }
                     onChange={(value:any)=>{
                       setAssetAnnouncementEditor((current:any)=>{
