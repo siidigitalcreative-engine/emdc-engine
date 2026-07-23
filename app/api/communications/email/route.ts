@@ -90,6 +90,46 @@ function resolveImageUrl(
     : "";
 }
 
+function getYoutubeVideoId(
+  value: unknown
+) {
+  const source = String(value || "").trim();
+
+  if (!source) return "";
+
+  const patterns = [
+    /youtu\.be\/([a-zA-Z0-9_-]{6,})/i,
+    /youtube\.com\/watch\?(?:[^#]*&)?v=([a-zA-Z0-9_-]{6,})/i,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{6,})/i,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/i,
+    /youtube\.com\/live\/([a-zA-Z0-9_-]{6,})/i,
+    /[?&]v=([a-zA-Z0-9_-]{6,})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return "";
+}
+
+function getAutomaticYoutubeThumbnail(
+  youtubeUrl: unknown
+) {
+  const videoId =
+    getYoutubeVideoId(youtubeUrl);
+
+  return videoId
+    ? `https://i.ytimg.com/vi/${encodeURIComponent(
+        videoId
+      )}/hqdefault.jpg`
+    : "";
+}
+
 function wrapBase64(
   value: string
 ) {
@@ -97,7 +137,10 @@ function wrapBase64(
 }
 
 function plainTextToHtml(
-  value: string
+  value: string,
+  options?: {
+    hideYoutubeLine?: boolean;
+  }
 ) {
   const lines = String(value || "")
     .replace(/\r\n?/g, "\n")
@@ -158,6 +201,10 @@ function plainTextToHtml(
       );
 
     if (youtubeMatch?.[1]) {
+      if (options?.hideYoutubeLine) {
+        return;
+      }
+
       const url = escapeHtml(youtubeMatch[1]);
 
       parts.push(
@@ -196,10 +243,14 @@ function buildHtmlEmail({
   subject,
   body,
   imageSource,
+  youtubeUrl,
+  youtubeThumbnailSource,
 }: {
   subject: string;
   body: string;
   imageSource?: string;
+  youtubeUrl?: string;
+  youtubeThumbnailSource?: string;
 }) {
   const imageHtml = imageSource
     ? `<div style="margin:0 0 22px;text-align:center;">
@@ -211,13 +262,51 @@ function buildHtmlEmail({
       </div>`
     : "";
 
+  const youtubeHtml =
+    youtubeUrl && youtubeThumbnailSource
+      ? `<div style="margin:26px 0 0;padding-top:22px;border-top:1px solid #E5E7EB;">
+          <h3 style="margin:0 0 12px;font-size:17px;line-height:1.35;color:#111827;">
+            Watch the Product Video
+          </h3>
+
+          <a
+            href="${escapeHtml(youtubeUrl)}"
+            style="display:block;text-decoration:none;"
+          >
+            <img
+              src="${escapeHtml(youtubeThumbnailSource)}"
+              alt="Watch the product video on YouTube"
+              style="display:block;width:100%;max-width:680px;aspect-ratio:16/9;object-fit:cover;margin:0 auto;border:0;border-radius:10px;"
+            />
+          </a>
+
+          <div style="margin-top:14px;text-align:center;">
+            <a
+              href="${escapeHtml(youtubeUrl)}"
+              style="display:inline-block;padding:11px 20px;border-radius:8px;background:#FF0000;color:#FFFFFF;font-size:14px;font-weight:700;line-height:1.2;text-decoration:none;"
+            >
+              Watch on YouTube
+            </a>
+          </div>
+        </div>`
+      : youtubeUrl
+        ? `<div style="margin:24px 0 0;padding-top:20px;border-top:1px solid #E5E7EB;">
+            <a href="${escapeHtml(youtubeUrl)}" style="display:inline-block;padding:11px 20px;border-radius:8px;background:#FF0000;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;">
+              Watch on YouTube
+            </a>
+          </div>`
+        : "";
+
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#F3F4F6;">
     <div style="width:100%;padding:24px 12px;box-sizing:border-box;">
       <div style="max-width:720px;margin:0 auto;padding:28px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;box-sizing:border-box;">
         ${imageHtml}
-        ${plainTextToHtml(body)}
+        ${plainTextToHtml(body, {
+          hideYoutubeLine: Boolean(youtubeUrl),
+        })}
+        ${youtubeHtml}
       </div>
     </div>
   </body>
@@ -375,6 +464,18 @@ export async function POST(
         requestBody?.imageUrl
       );
 
+    const youtubeUrl = String(
+      requestBody?.youtubeUrl || ""
+    ).trim();
+
+    const requestedYoutubeThumbnailUrl =
+      resolveImageUrl(
+        requestBody?.youtubeThumbnailUrl
+      ) ||
+      getAutomaticYoutubeThumbnail(
+        youtubeUrl
+      );
+
     const sender = String(
       process.env.GMAIL_SENDER_EMAIL ||
         "me"
@@ -398,12 +499,22 @@ export async function POST(
     const accessToken =
       await getAccessToken();
 
-    const inlineImage =
+    const [
+      inlineImage,
+      inlineYoutubeThumbnail,
+    ] = await Promise.all([
       requestedImageUrl
-        ? await fetchInlineImage(
+        ? fetchInlineImage(
             requestedImageUrl
           )
-        : null;
+        : Promise.resolve(null),
+      youtubeUrl &&
+      requestedYoutubeThumbnailUrl
+        ? fetchInlineImage(
+            requestedYoutubeThumbnailUrl
+          )
+        : Promise.resolve(null),
+    ]);
 
     const alternativeBoundary =
       `emdc-alt-${Date.now()}-${Math.random()
@@ -418,12 +529,20 @@ export async function POST(
     const imageContentId =
       "emdc-email-image";
 
+    const youtubeThumbnailContentId =
+      "emdc-youtube-thumbnail";
+
     const htmlBody = buildHtmlEmail({
       subject,
       body: messageBody,
       imageSource: inlineImage
         ? `cid:${imageContentId}`
         : requestedImageUrl,
+      youtubeUrl,
+      youtubeThumbnailSource:
+        inlineYoutubeThumbnail
+          ? `cid:${youtubeThumbnailContentId}`
+          : requestedYoutubeThumbnailUrl,
     });
 
     const messageHeaders = [
@@ -448,9 +567,43 @@ export async function POST(
       `--${alternativeBoundary}--`,
     ].join("\r\n");
 
+    const inlineAttachments = [
+      inlineImage
+        ? {
+            ...inlineImage,
+            contentId: imageContentId,
+          }
+        : null,
+      inlineYoutubeThumbnail
+        ? {
+            ...inlineYoutubeThumbnail,
+            contentId:
+              youtubeThumbnailContentId,
+          }
+        : null,
+    ].filter(Boolean) as Array<{
+      contentType: string;
+      filename: string;
+      base64: string;
+      contentId: string;
+    }>;
+
     let mimeBody = "";
 
-    if (inlineImage) {
+    if (inlineAttachments.length) {
+      const attachmentParts =
+        inlineAttachments.flatMap(
+          (attachment) => [
+            `--${relatedBoundary}`,
+            `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
+            "Content-Transfer-Encoding: base64",
+            `Content-ID: <${attachment.contentId}>`,
+            `Content-Disposition: inline; filename="${attachment.filename}"`,
+            "",
+            attachment.base64,
+          ]
+        );
+
       mimeBody = [
         ...messageHeaders,
         `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
@@ -459,13 +612,7 @@ export async function POST(
         `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`,
         "",
         alternativeParts,
-        `--${relatedBoundary}`,
-        `Content-Type: ${inlineImage.contentType}; name="${inlineImage.filename}"`,
-        "Content-Transfer-Encoding: base64",
-        `Content-ID: <${imageContentId}>`,
-        `Content-Disposition: inline; filename="${inlineImage.filename}"`,
-        "",
-        inlineImage.base64,
+        ...attachmentParts,
         `--${relatedBoundary}--`,
       ].join("\r\n");
     } else {
@@ -530,6 +677,14 @@ export async function POST(
         Boolean(inlineImage),
       imageUrlUsed:
         Boolean(requestedImageUrl),
+      youtubeThumbnailEmbedded:
+        Boolean(inlineYoutubeThumbnail),
+      youtubeThumbnailUrlUsed:
+        Boolean(
+          requestedYoutubeThumbnailUrl
+        ),
+      youtubeUrlUsed:
+        Boolean(youtubeUrl),
     });
   } catch (error: any) {
     return NextResponse.json(
