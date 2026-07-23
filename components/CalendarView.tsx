@@ -17084,35 +17084,27 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             clientTemplates[checklistAnnouncementType] ||
             clientTemplates["Product Introduction"];
 
-          const savedYoutubeBenefitHook = (()=>{
-            const savedTitle = String(
-              digitalData?.youtubeTitle || ""
-            ).trim();
+          const readyMessageProductContext = [
+            checklistName,
+            externalProductName,
+            productRows
+              .map((row:any)=>[
+                row?.product,
+                row?.productName,
+                row?.collection,
+                row?.category,
+              ]
+                .filter(Boolean)
+                .join(" ")
+              )
+              .join(" "),
+          ]
+            .join(" ")
+            .toLowerCase();
 
-            const colonIndex =
-              savedTitle.indexOf(":");
-
-            return colonIndex >= 0
-              ? savedTitle
-                  .slice(colonIndex + 1)
-                  .replace(/^[\s:–—-]+|[\s:–—-]+$/g,"")
-                  .trim()
-              : "";
-          })();
-
-          const externalHeadline = (()=>{
-            if(
-              (
-                checklistAnnouncementType==="Product Introduction" ||
-                checklistAnnouncementType==="Product Reactivation"
-              ) &&
-              savedYoutubeBenefitHook
-            ){
-              return savedYoutubeBenefitHook;
-            }
-
+          const buildReadyMessageHeadline = () => {
             if(checklistAnnouncementType==="Product Reactivation"){
-              return "A Refined Favorite Returns";
+              return `${externalProductName} Is Available Again`;
             }
 
             if(checklistAnnouncementType==="Campaign"){
@@ -17120,19 +17112,78 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             }
 
             if(checklistAnnouncementType==="Special Campaign"){
-              return `${checklistName}: A Special Opportunity`;
+              return `${checklistName}: Now Available`;
             }
 
-            return "Refined Details for Better Everyday Living";
-          })();
+            if(
+              /bathroom|soap dish|lotion dispenser|toilet brush|bath tumbler/.test(
+                readyMessageProductContext
+              )
+            ){
+              return "Refined Bathroom Essentials for Everyday Use";
+            }
+
+            if(
+              /food container|storage container|lunch box|lunchbox|meal prep/.test(
+                readyMessageProductContext
+              )
+            ){
+              return "Smarter Food Storage for Everyday Meals";
+            }
+
+            if(
+              /glassware|goblet|rock glass|highball|pitcher|decanter|drinking glass/.test(
+                readyMessageProductContext
+              )
+            ){
+              return "Better Drinkware for Everyday Moments";
+            }
+
+            if(
+              /mop|cleaning|floor care|spin bucket/.test(
+                readyMessageProductContext
+              )
+            ){
+              return "A More Efficient Way to Clean";
+            }
+
+            if(
+              /foam roller|massage roller|recovery|fitness|exercise/.test(
+                readyMessageProductContext
+              )
+            ){
+              return "Better Support for Everyday Recovery";
+            }
+
+            if(
+              /hydration|water bottle|tumbler|flask/.test(
+                readyMessageProductContext
+              )
+            ){
+              return "Better Hydration for Everyday Routines";
+            }
+
+            if(
+              /pedal bin|waste bin|trash bin|garbage bin/.test(
+                readyMessageProductContext
+              )
+            ){
+              return "Cleaner Disposal for Everyday Spaces";
+            }
+
+            return "Designed for Better Everyday Use";
+          };
+
+          const externalHeadline =
+            buildReadyMessageHeadline();
 
           const externalIntroLine = (()=>{
             if(checklistAnnouncementType==="Product Reactivation"){
-              return `The ${externalProductName} is available again—ready to support your next product push.`;
+              return `${externalProductName} is available again and ready for your next product push.`;
             }
 
             if(checklistAnnouncementType==="Product Introduction"){
-              return `Meet the ${externalProductName}—now available for ordering.`;
+              return `${externalProductName} is now available for ordering.`;
             }
 
             return template.intro;
@@ -17314,7 +17365,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 'Return strict JSON only in this shape: {"subject":"","body":""}.',
                 "Do not use markdown code fences.",
                 audience === "client"
-                  ? "Use a polished, premium partner-facing tone. Keep the announcement-style subject line, but do not repeat the subject as the body headline. After Dear Partner, begin with a concise benefit-led headline in title case, ideally 4 to 8 words. Follow it with a short supporting introduction that names the product or collection and its availability. Then include the product overview, a Why You'll Love It section, and a clear ordering or coordination instruction. Place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not use an all-caps body headline. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
+                  ? "Use a polished, premium partner-facing tone. Keep the announcement-style subject line, but do not repeat the subject as the body headline. After Dear Partner, begin with a clear, product-specific benefit headline in title case, ideally 4 to 9 words. The headline must be immediately understandable and practical. Avoid vague or overly poetic phrases such as Curated Harmony, Polished Spaces, Elevated Living, Timeless Elegance, or similar abstract wording. Strong headline styles include Refined Bathroom Essentials for Everyday Use, Smarter Food Storage for Everyday Meals, Better Drinkware for Everyday Moments, and A More Efficient Way to Clean. Follow it with a short supporting introduction that names the product or collection and its availability. Then include the product overview, a Why You'll Love It section, and a clear ordering or coordination instruction. Place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not use an all-caps body headline. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
                   : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
                 audience === "internal"
                   ? "Only include assets that have valid links."
