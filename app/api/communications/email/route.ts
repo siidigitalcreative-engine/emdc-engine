@@ -117,17 +117,22 @@ function getYoutubeVideoId(
   return "";
 }
 
-function getAutomaticYoutubeThumbnail(
+function getAutomaticYoutubeThumbnailCandidates(
   youtubeUrl: unknown
 ) {
   const videoId =
     getYoutubeVideoId(youtubeUrl);
 
-  return videoId
-    ? `https://i.ytimg.com/vi/${encodeURIComponent(
-        videoId
-      )}/hqdefault.jpg`
-    : "";
+  if (!videoId) return [];
+
+  const encodedVideoId =
+    encodeURIComponent(videoId);
+
+  return [
+    `https://i.ytimg.com/vi/${encodedVideoId}/maxresdefault.jpg`,
+    `https://i.ytimg.com/vi/${encodedVideoId}/sddefault.jpg`,
+    `https://i.ytimg.com/vi/${encodedVideoId}/hqdefault.jpg`,
+  ];
 }
 
 function wrapBase64(
@@ -398,6 +403,29 @@ async function fetchInlineImage(
   }
 }
 
+async function fetchFirstAvailableInlineImage(
+  urls: string[]
+) {
+  for (const url of urls) {
+    const image =
+      await fetchInlineImage(url);
+
+    if (image) {
+      return {
+        image,
+        url,
+      };
+    }
+  }
+
+  return {
+    image: null,
+    url:
+      urls[urls.length - 1] ||
+      "",
+  };
+}
+
 async function getAccessToken() {
   const clientId =
     process.env.GMAIL_CLIENT_ID;
@@ -491,13 +519,17 @@ export async function POST(
       requestBody?.youtubeUrl || ""
     ).trim();
 
-    const requestedYoutubeThumbnailUrl =
+    const customYoutubeThumbnailUrl =
       resolveImageUrl(
         requestBody?.youtubeThumbnailUrl
-      ) ||
-      getAutomaticYoutubeThumbnail(
-        youtubeUrl
       );
+
+    const youtubeThumbnailCandidates =
+      customYoutubeThumbnailUrl
+        ? [customYoutubeThumbnailUrl]
+        : getAutomaticYoutubeThumbnailCandidates(
+            youtubeUrl
+          );
 
     const sender = String(
       process.env.GMAIL_SENDER_EMAIL ||
@@ -524,7 +556,7 @@ export async function POST(
 
     const [
       inlineImage,
-      inlineYoutubeThumbnail,
+      youtubeThumbnailResult,
     ] = await Promise.all([
       requestedImageUrl
         ? fetchInlineImage(
@@ -532,12 +564,21 @@ export async function POST(
           )
         : Promise.resolve(null),
       youtubeUrl &&
-      requestedYoutubeThumbnailUrl
-        ? fetchInlineImage(
-            requestedYoutubeThumbnailUrl
+      youtubeThumbnailCandidates.length
+        ? fetchFirstAvailableInlineImage(
+            youtubeThumbnailCandidates
           )
-        : Promise.resolve(null),
+        : Promise.resolve({
+            image: null,
+            url: "",
+          }),
     ]);
+
+    const inlineYoutubeThumbnail =
+      youtubeThumbnailResult.image;
+
+    const resolvedYoutubeThumbnailUrl =
+      youtubeThumbnailResult.url;
 
     const alternativeBoundary =
       `emdc-alt-${Date.now()}-${Math.random()
@@ -565,7 +606,7 @@ export async function POST(
       youtubeThumbnailSource:
         inlineYoutubeThumbnail
           ? `cid:${youtubeThumbnailContentId}`
-          : requestedYoutubeThumbnailUrl,
+          : resolvedYoutubeThumbnailUrl,
     });
 
     const messageHeaders = [
@@ -704,8 +745,20 @@ export async function POST(
         Boolean(inlineYoutubeThumbnail),
       youtubeThumbnailUrlUsed:
         Boolean(
-          requestedYoutubeThumbnailUrl
+          resolvedYoutubeThumbnailUrl
         ),
+      youtubeThumbnailResolution:
+        resolvedYoutubeThumbnailUrl.includes(
+          "maxresdefault"
+        )
+          ? "maxres"
+          : resolvedYoutubeThumbnailUrl.includes(
+                "sddefault"
+              )
+            ? "standard"
+            : resolvedYoutubeThumbnailUrl
+              ? "high"
+              : "none",
       youtubeUrlUsed:
         Boolean(youtubeUrl),
     });
