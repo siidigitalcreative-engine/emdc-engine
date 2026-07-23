@@ -790,4 +790,3 @@ export async function GET(
     );
   }
 }
-.
