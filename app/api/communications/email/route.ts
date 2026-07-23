@@ -271,6 +271,7 @@ function plainTextToHtml(
   options?: {
     hideYoutubeLine?: boolean;
     insertHtmlBeforeWhy?: string;
+    insertHtmlAfterChecklistSummary?: string;
     boldPhrases?: string[];
     emailAudience?: "client" | "internal" | "viber";
   }
@@ -285,6 +286,7 @@ function plainTextToHtml(
   let pendingGreeting = "";
   let bodyHeadlineRendered = false;
   let insertedBeforeWhy = false;
+  let insertedAfterChecklistSummary = false;
   let internalSummaryStarted = false;
 
   const isInternalEmail =
@@ -419,6 +421,17 @@ function plainTextToHtml(
       )
     ) {
       flushBullets();
+
+      if (
+        isInternalEmail &&
+        options?.insertHtmlAfterChecklistSummary &&
+        !insertedAfterChecklistSummary
+      ) {
+        parts.push(
+          options.insertHtmlAfterChecklistSummary
+        );
+        insertedAfterChecklistSummary = true;
+      }
 
       parts.push(
         `<div style="margin:30px 0 14px;padding-top:22px;border-top:1px solid #E2E8F0;">
@@ -584,6 +597,16 @@ function plainTextToHtml(
     );
   }
 
+  if (
+    isInternalEmail &&
+    options?.insertHtmlAfterChecklistSummary &&
+    !insertedAfterChecklistSummary
+  ) {
+    parts.push(
+      options.insertHtmlAfterChecklistSummary
+    );
+  }
+
   return parts.join("");
 }
 
@@ -702,15 +725,27 @@ function buildHtmlEmail({
         </div>`
       : "";
 
-  const headerImageHtml = headerImageSource
-    ? `<div style="margin:0 0 28px;text-align:center;">
-        <img
-          src="${escapeHtml(headerImageSource)}"
-          alt="Email header"
-          style="display:block;width:100%;max-width:860px;height:auto;aspect-ratio:4/1;object-fit:cover;margin:0 auto;border:0;border-radius:10px;"
-        />
-      </div>`
-    : "";
+  const headerImageHtml =
+    headerImageSource && !isInternalEmail
+      ? `<div style="margin:0 0 28px;text-align:center;">
+          <img
+            src="${escapeHtml(headerImageSource)}"
+            alt="Email header"
+            style="display:block;width:100%;max-width:860px;height:auto;aspect-ratio:4/1;object-fit:cover;margin:0 auto;border:0;border-radius:10px;"
+          />
+        </div>`
+      : "";
+
+  const internalSummaryImageHtml =
+    headerImageSource && isInternalEmail
+      ? `<div style="margin:22px 0 28px;text-align:center;">
+          <img
+            src="${escapeHtml(headerImageSource)}"
+            alt="${escapeHtml(subject)}"
+            style="display:block;width:100%;max-width:680px;height:auto;margin:0 auto;border:0;border-radius:10px;object-fit:contain;"
+          />
+        </div>`
+      : "";
 
   const imageHtml =
     imageSource && !isInternalEmail
@@ -803,6 +838,8 @@ function buildHtmlEmail({
           hideYoutubeLine: Boolean(youtubeUrl),
           insertHtmlBeforeWhy:
             imageHtml,
+          insertHtmlAfterChecklistSummary:
+            internalSummaryImageHtml,
           boldPhrases,
           emailAudience,
         })}
