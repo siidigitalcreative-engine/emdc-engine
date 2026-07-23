@@ -16603,6 +16603,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         headerImageUrl:String(
           digitalData.assetAnnouncementHeaderImageUrl || ""
         ),
+        internalEmailImageUrl:String(
+          digitalData.assetAnnouncementInternalEmailImageUrl || ""
+        ),
         imageUrl:String(digitalData.assetAnnouncementImageUrl || ""),
         viberEmailImageUrl:String(
           digitalData.assetAnnouncementViberEmailImageUrl || ""
@@ -16754,6 +16757,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const announcementHeaderImagePreviewUrl =
         getAnnouncementImagePreviewUrl(
           assetAnnouncementData.headerImageUrl
+        );
+
+      const announcementInternalEmailImagePreviewUrl =
+        getAnnouncementImagePreviewUrl(
+          assetAnnouncementData.internalEmailImageUrl
         );
 
       const announcementImagePreviewUrl =
@@ -17317,14 +17325,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             "Dear Partner,",
             "",
             externalHeadline,
-            "",
-            externalIntroLine,
           ];
 
           if(externalOverview){
             externalBodyLines.push(
               "",
               externalOverview
+            );
+          } else if(externalIntroLine){
+            externalBodyLines.push(
+              "",
+              externalIntroLine
             );
           }
 
@@ -17568,7 +17579,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 "Do not use markdown code fences.",
                 audience === "client" ||
                 audience === "viber"
-                  ? "Use a polished, premium partner-facing tone. The Viber version must use the exact same message-body structure and wording style as Client Email. Keep the announcement-style subject line, but do not repeat the subject as the body headline. After Dear Partner, begin with a clear, product-specific benefit headline in title case, ideally 4 to 9 words. The headline must be immediately understandable and practical. Avoid vague or overly poetic phrases such as Curated Harmony, Polished Spaces, Elevated Living, Timeless Elegance, or similar abstract wording. Strong headline styles include Refined Bathroom Essentials for Everyday Use, Smarter Food Storage for Everyday Meals, Better Drinkware for Everyday Moments, and A More Efficient Way to Clean. Follow it with a short supporting introduction that names the product or collection and its availability. Then include the product overview, a Why You'll Love It section, and a clear ordering or coordination instruction. Place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not use an all-caps body headline. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
+                  ? "Use a polished, premium partner-facing tone. The Viber version must use the exact same message-body structure and wording style as Client Email. Keep the announcement-style subject line, but do not repeat the subject as the body headline. After Dear Partner, begin with a clear, product-specific benefit headline in title case, ideally 4 to 9 words. The headline must be immediately understandable and practical. Avoid vague or overly poetic phrases such as Curated Harmony, Polished Spaces, Elevated Living, Timeless Elegance, or similar abstract wording. Strong headline styles include Refined Bathroom Essentials for Everyday Use, Smarter Food Storage for Everyday Meals, Better Drinkware for Everyday Moments, and A More Efficient Way to Clean. Use only one concise opening paragraph after the headline. Combine availability and the product overview naturally in that paragraph when needed. Do not repeat the checklist or product title in two consecutive sentences, and do not add a separate sentence that only says the product is now available if the next paragraph already introduces it. Then include a Why You'll Love It section and a clear ordering or coordination instruction. Place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not use an all-caps body headline. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
                   : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
                 audience === "internal"
                   ? "Only include assets that have valid links."
@@ -17764,7 +17775,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               headerImageUrl:
                 audience==="viber"
                   ? ""
-                  : assetAnnouncementData.headerImageUrl,
+                  : audience==="internal"
+                    ? assetAnnouncementData.internalEmailImageUrl
+                    : assetAnnouncementData.headerImageUrl,
               imageUrl:
                 audience==="viber"
                   ? ""
@@ -20357,6 +20370,70 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         {announcementYoutubeUrl
                           ? "The YouTube link was detected from Digital Creative Asset Links. Leave this field blank to use YouTube’s standard thumbnail automatically."
                           : "Add the YouTube link under Digital Creative Asset Links first. You may also paste a custom Google Drive or direct thumbnail URL here."}
+                      </div>
+                    </div>
+                  </Field>
+                )}
+
+                {assetAnnouncementTab==="internal"&&(
+                  <Field label="Internal Email Image URL">
+                    <div
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:8,
+                      }}
+                    >
+                      <TI
+                        value={
+                          assetAnnouncementData.internalEmailImageUrl
+                        }
+                        onChange={(value:any)=>
+                          patchAssetAnnouncement({
+                            assetAnnouncementInternalEmailImageUrl:
+                              value,
+                          })
+                        }
+                        placeholder="Paste a Google Drive image link or direct image URL"
+                      />
+
+                      {!!announcementInternalEmailImagePreviewUrl&&(
+                        <div
+                          style={{
+                            width:"100%",
+                            maxHeight:320,
+                            overflow:"hidden",
+                            border:`1px solid ${C.border}`,
+                            borderRadius:10,
+                            background:C.surfaceAlt,
+                          }}
+                        >
+                          <img
+                            src={
+                              announcementInternalEmailImagePreviewUrl
+                            }
+                            alt="Internal email image preview"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            style={{
+                              display:"block",
+                              width:"100%",
+                              maxHeight:320,
+                              objectFit:"contain",
+                              background:"#FFFFFF",
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          color:C.faint,
+                          fontSize:10.5,
+                          lineHeight:1.45,
+                        }}
+                      >
+                        This image appears at the very top of the Internal Team email. For Google Drive, set the file to “Anyone with the link can view.”
                       </div>
                     </div>
                   </Field>
