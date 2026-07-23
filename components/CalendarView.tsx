@@ -17076,23 +17076,66 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             clientTemplates[checklistAnnouncementType] ||
             clientTemplates["Product Introduction"];
 
+          const savedYoutubeBenefitHook = (()=>{
+            const savedTitle = String(
+              digitalData?.youtubeTitle || ""
+            ).trim();
+
+            const colonIndex =
+              savedTitle.indexOf(":");
+
+            return colonIndex >= 0
+              ? savedTitle
+                  .slice(colonIndex + 1)
+                  .replace(/^[\s:–—-]+|[\s:–—-]+$/g,"")
+                  .trim()
+              : "";
+          })();
+
           const externalHeadline = (()=>{
+            if(
+              (
+                checklistAnnouncementType==="Product Introduction" ||
+                checklistAnnouncementType==="Product Reactivation"
+              ) &&
+              savedYoutubeBenefitHook
+            ){
+              return savedYoutubeBenefitHook;
+            }
+
             if(checklistAnnouncementType==="Product Reactivation"){
-              return `${externalProductName.toUpperCase()} — AVAILABLE AGAIN!`;
+              return "A Refined Favorite Returns";
             }
+
             if(checklistAnnouncementType==="Campaign"){
-              return `${checklistName.toUpperCase()} — NOW LIVE!`;
+              return `${checklistName} Is Now Live`;
             }
+
             if(checklistAnnouncementType==="Special Campaign"){
-              return `${checklistName.toUpperCase()} — SPECIAL CAMPAIGN!`;
+              return `${checklistName}: A Special Opportunity`;
             }
-            return `${externalProductName.toUpperCase()} — NOW AVAILABLE!`;
+
+            return "Refined Details for Better Everyday Living";
+          })();
+
+          const externalIntroLine = (()=>{
+            if(checklistAnnouncementType==="Product Reactivation"){
+              return `The ${externalProductName} is available again—ready to support your next product push.`;
+            }
+
+            if(checklistAnnouncementType==="Product Introduction"){
+              return `Meet the ${externalProductName}—now available for ordering.`;
+            }
+
+            return template.intro;
           })();
 
           const externalBodyLines = [
             "Dear Partner,",
             "",
             externalHeadline,
+            "",
+            externalIntroLine,
           ];
 
           if(externalOverview){
@@ -17115,7 +17158,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             "",
             checklistAnnouncementType==="Product Introduction" ||
             checklistAnnouncementType==="Product Reactivation"
-              ? "Reply ORDER to confirm. Should you require any additional information, please feel free to reach out."
+              ? `Ready to offer ${externalProductName} to your customers? Reply ORDER to confirm, or contact us for product details and assistance.`
               : template.action,
             "",
             `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`
@@ -17263,7 +17306,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 'Return strict JSON only in this shape: {"subject":"","body":""}.',
                 "Do not use markdown code fences.",
                 audience === "client"
-                  ? "Use a professional partner-facing tone similar to a polished New Arrival email. Include a headline, product overview, Why You'll Love It section, ordering or coordination instruction, and place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
+                  ? "Use a polished, premium partner-facing tone. Keep the announcement-style subject line, but do not repeat the subject as the body headline. After Dear Partner, begin with a concise benefit-led headline in title case, ideally 4 to 8 words. Follow it with a short supporting introduction that names the product or collection and its availability. Then include the product overview, a Why You'll Love It section, and a clear ordering or coordination instruction. Place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not use an all-caps body headline. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
                   : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
                 audience === "internal"
                   ? "Only include assets that have valid links."
