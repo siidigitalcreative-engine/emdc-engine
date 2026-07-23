@@ -17766,6 +17766,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
               action,
+              emailAudience:audience,
               to:assetAnnouncementData.to,
               cc:assetAnnouncementData.cc,
               subject:email.subject,
@@ -17779,9 +17780,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     ? assetAnnouncementData.internalEmailImageUrl
                     : assetAnnouncementData.headerImageUrl,
               imageUrl:
-                audience==="viber"
-                  ? ""
-                  : assetAnnouncementData.imageUrl,
+                audience==="client"
+                  ? assetAnnouncementData.imageUrl
+                  : "",
               footerImageUrl:
                 audience==="viber"
                   ? assetAnnouncementData.viberEmailImageUrl
