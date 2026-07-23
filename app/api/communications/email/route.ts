@@ -462,6 +462,7 @@ function buildHtmlEmail({
   body,
   headerImageSource,
   imageSource,
+  footerImageSource,
   youtubeUrl,
   youtubeThumbnailSource,
   checklistTitle,
@@ -470,6 +471,7 @@ function buildHtmlEmail({
   body: string;
   headerImageSource?: string;
   imageSource?: string;
+  footerImageSource?: string;
   youtubeUrl?: string;
   youtubeThumbnailSource?: string;
   checklistTitle?: string;
@@ -506,6 +508,16 @@ function buildHtmlEmail({
     ? `<div style="margin:0 0 22px;text-align:center;">
         <img
           src="${escapeHtml(imageSource)}"
+          alt="${escapeHtml(subject)}"
+          style="display:block;width:100%;max-width:680px;height:auto;margin:0 auto;border:0;border-radius:10px;"
+        />
+      </div>`
+    : "";
+
+  const footerImageHtml = footerImageSource
+    ? `<div style="margin:24px 0 0;text-align:center;">
+        <img
+          src="${escapeHtml(footerImageSource)}"
           alt="${escapeHtml(subject)}"
           style="display:block;width:100%;max-width:680px;height:auto;margin:0 auto;border:0;border-radius:10px;"
         />
@@ -583,6 +595,7 @@ function buildHtmlEmail({
           boldPhrases,
         })}
         ${youtubeHtml}
+        ${footerImageHtml}
       </div>
     </div>
   </body>
@@ -846,6 +859,15 @@ export async function POST(
       requestedImageCandidates[0] ||
       "";
 
+    const requestedFooterImageCandidates =
+      resolveImageCandidates(
+        requestBody?.footerImageUrl
+      );
+
+    const requestedFooterImageUrl =
+      requestedFooterImageCandidates[0] ||
+      "";
+
     const youtubeUrl = String(
       requestBody?.youtubeUrl || ""
     ).trim();
@@ -888,6 +910,7 @@ export async function POST(
     const [
       headerImageResult,
       productImageResult,
+      footerImageResult,
       youtubeThumbnailResult,
     ] = await Promise.all([
       requestedHeaderImageCandidates.length
@@ -901,6 +924,14 @@ export async function POST(
       requestedImageCandidates.length
         ? fetchFirstAvailableInlineImage(
             requestedImageCandidates
+          )
+        : Promise.resolve({
+            image: null,
+            url: "",
+          }),
+      requestedFooterImageCandidates.length
+        ? fetchFirstAvailableInlineImage(
+            requestedFooterImageCandidates
           )
         : Promise.resolve({
             image: null,
@@ -928,6 +959,28 @@ export async function POST(
 
     const resolvedImageUrl =
       productImageResult.url;
+
+    const inlineFooterImage =
+      footerImageResult.image;
+
+    const resolvedFooterImageUrl =
+      footerImageResult.url;
+
+    if (
+      requestedFooterImageCandidates.length &&
+      !inlineFooterImage
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "The Viber Email Image could not be embedded. In Google Drive, set General access to “Anyone with the link” as Viewer, then try again.",
+          code:
+            "FOOTER_IMAGE_NOT_PUBLIC",
+        },
+        { status: 400 }
+      );
+    }
 
     if (
       requestedHeaderImageCandidates.length &&
@@ -967,6 +1020,9 @@ export async function POST(
     const imageContentId =
       "emdc-email-image";
 
+    const footerImageContentId =
+      "emdc-email-footer-image";
+
     const youtubeThumbnailContentId =
       "emdc-youtube-thumbnail";
 
@@ -980,6 +1036,10 @@ export async function POST(
       imageSource: inlineImage
         ? `cid:${imageContentId}`
         : resolvedImageUrl,
+      footerImageSource:
+        inlineFooterImage
+          ? `cid:${footerImageContentId}`
+          : "",
       youtubeUrl,
       youtubeThumbnailSource:
         inlineYoutubeThumbnail
@@ -1022,6 +1082,13 @@ export async function POST(
         ? {
             ...inlineImage,
             contentId: imageContentId,
+          }
+        : null,
+      inlineFooterImage
+        ? {
+            ...inlineFooterImage,
+            contentId:
+              footerImageContentId,
           }
         : null,
       inlineYoutubeThumbnail
@@ -1133,6 +1200,12 @@ export async function POST(
         Boolean(inlineImage),
       imageUrlUsed:
         Boolean(requestedImageUrl),
+      footerImageEmbedded:
+        Boolean(inlineFooterImage),
+      footerImageUrlUsed:
+        Boolean(requestedFooterImageUrl),
+      footerImageFetchUrl:
+        resolvedFooterImageUrl,
       youtubeThumbnailEmbedded:
         Boolean(inlineYoutubeThumbnail),
       youtubeThumbnailUrlUsed:
