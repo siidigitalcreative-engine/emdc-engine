@@ -5,27 +5,61 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OUTPUT_SIZE = 2048;
-
-/*
- * The uploaded reference uses a compact one-module white margin.
- * Keep the background pure white and every active module pure black.
- */
 const QUIET_ZONE_MODULES = 1;
+
 const DARK = "#000000";
 const LIGHT = "#FFFFFF";
 
-/*
- * Reference proportions measured from the uploaded sample:
- * - roughly 89% of each QR module is filled
- * - a narrow white gap remains between neighboring modules
- */
 const DOT_INSET = 0.055;
 const DOT_SIZE = 1 - DOT_INSET * 2;
 
 type QrMatrix = {
   size: number;
-  get: (row: number, column: number) => boolean;
+  get: (
+    row: number,
+    column: number
+  ) => boolean;
 };
+
+type SharpCorner =
+  | "top-left"
+  | "top-right"
+  | "bottom-right"
+  | "bottom-left";
+
+type CornerRadii = {
+  topLeft: number;
+  topRight: number;
+  bottomRight: number;
+  bottomLeft: number;
+};
+
+type AlignmentPattern = {
+  row: number;
+  column: number;
+};
+
+function isDark(
+  matrix: QrMatrix,
+  row: number,
+  column: number
+) {
+  if (
+    row < 0 ||
+    column < 0 ||
+    row >= matrix.size ||
+    column >= matrix.size
+  ) {
+    return false;
+  }
+
+  return Boolean(
+    matrix.get(
+      row,
+      column
+    )
+  );
+}
 
 function isFinderCell(
   row: number,
@@ -50,33 +84,246 @@ function isFinderCell(
     column >= 0 &&
     column <= 6;
 
-  return topLeft || topRight || bottomLeft;
+  return (
+    topLeft ||
+    topRight ||
+    bottomLeft
+  );
 }
 
-function isDark(
+function isAlignmentPatternCenter(
   matrix: QrMatrix,
   row: number,
   column: number
 ) {
   if (
-    row < 0 ||
-    column < 0 ||
-    row >= matrix.size ||
-    column >= matrix.size
+    row < 2 ||
+    column < 2 ||
+    row > matrix.size - 3 ||
+    column > matrix.size - 3
   ) {
     return false;
   }
 
-  return Boolean(
-    matrix.get(row, column)
+  /*
+   * Standard alignment pattern:
+   *
+   * 11111
+   * 10001
+   * 10101
+   * 10001
+   * 11111
+   */
+  for (
+    let rowOffset = -2;
+    rowOffset <= 2;
+    rowOffset += 1
+  ) {
+    for (
+      let columnOffset = -2;
+      columnOffset <= 2;
+      columnOffset += 1
+    ) {
+      const distance =
+        Math.max(
+          Math.abs(rowOffset),
+          Math.abs(columnOffset)
+        );
+
+      const expectedDark =
+        distance === 2 ||
+        (
+          rowOffset === 0 &&
+          columnOffset === 0
+        );
+
+      if (
+        isDark(
+          matrix,
+          row + rowOffset,
+          column + columnOffset
+        ) !== expectedDark
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function findBottomRightAlignmentPattern(
+  matrix: QrMatrix
+): AlignmentPattern | null {
+  /*
+   * Search from the bottom-right inward.
+   * This returns the final QR alignment marker and avoids the
+   * three standard finder regions.
+   */
+  for (
+    let row = matrix.size - 3;
+    row >= 8;
+    row -= 1
+  ) {
+    for (
+      let column = matrix.size - 3;
+      column >= 8;
+      column -= 1
+    ) {
+      if (
+        isAlignmentPatternCenter(
+          matrix,
+          row,
+          column
+        )
+      ) {
+        return {
+          row,
+          column,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function isAlignmentCell(
+  row: number,
+  column: number,
+  alignment: AlignmentPattern | null
+) {
+  if (!alignment) return false;
+
+  return (
+    row >= alignment.row - 2 &&
+    row <= alignment.row + 2 &&
+    column >= alignment.column - 2 &&
+    column <= alignment.column + 2
   );
+}
+
+function getCornerRadii(
+  sharpCorner: SharpCorner,
+  largeRadius: number,
+  smallRadius: number
+): CornerRadii {
+  return {
+    topLeft:
+      sharpCorner === "top-left"
+        ? smallRadius
+        : largeRadius,
+
+    topRight:
+      sharpCorner === "top-right"
+        ? smallRadius
+        : largeRadius,
+
+    bottomRight:
+      sharpCorner === "bottom-right"
+        ? smallRadius
+        : largeRadius,
+
+    bottomLeft:
+      sharpCorner === "bottom-left"
+        ? smallRadius
+        : largeRadius,
+  };
+}
+
+function rotateSharpCornerCounterClockwise(
+  corner: SharpCorner
+): SharpCorner {
+  switch (corner) {
+    case "top-left":
+      return "bottom-left";
+
+    case "top-right":
+      return "top-left";
+
+    case "bottom-right":
+      return "top-right";
+
+    case "bottom-left":
+      return "bottom-right";
+  }
+}
+
+function drawAsymmetricRoundedRect(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radii: CornerRadii,
+  fill: string
+) {
+  const maximumRadius =
+    Math.min(
+      width,
+      height
+    ) / 2;
+
+  const topLeft =
+    Math.min(
+      radii.topLeft,
+      maximumRadius
+    );
+
+  const topRight =
+    Math.min(
+      radii.topRight,
+      maximumRadius
+    );
+
+  const bottomRight =
+    Math.min(
+      radii.bottomRight,
+      maximumRadius
+    );
+
+  const bottomLeft =
+    Math.min(
+      radii.bottomLeft,
+      maximumRadius
+    );
+
+  return [
+    `<path`,
+    ` d="`,
+    `M ${x + topLeft} ${y}`,
+    `H ${x + width - topRight}`,
+    topRight
+      ? `A ${topRight} ${topRight} 0 0 1 ${x + width} ${y + topRight}`
+      : `L ${x + width} ${y}`,
+
+    `V ${y + height - bottomRight}`,
+    bottomRight
+      ? `A ${bottomRight} ${bottomRight} 0 0 1 ${x + width - bottomRight} ${y + height}`
+      : `L ${x + width} ${y + height}`,
+
+    `H ${x + bottomLeft}`,
+    bottomLeft
+      ? `A ${bottomLeft} ${bottomLeft} 0 0 1 ${x} ${y + height - bottomLeft}`
+      : `L ${x} ${y + height}`,
+
+    `V ${y + topLeft}`,
+    topLeft
+      ? `A ${topLeft} ${topLeft} 0 0 1 ${x + topLeft} ${y}`
+      : `L ${x} ${y}`,
+
+    `Z`,
+    `"`,
+    ` fill="${fill}"`,
+    `/>`,
+  ].join("");
 }
 
 function drawCircleModule(
   x: number,
   y: number
 ) {
-  const radius = DOT_SIZE / 2;
+  const radius =
+    DOT_SIZE / 2;
 
   return `<circle cx="${x + radius}" cy="${y + radius}" r="${radius}" fill="${DARK}"/>`;
 }
@@ -85,19 +332,20 @@ function drawTopRoundedModule(
   x: number,
   y: number
 ) {
-  const width = DOT_SIZE;
-  const height = DOT_SIZE;
-  const radius = width / 2;
+  const radius =
+    DOT_SIZE / 2;
 
   return [
     `<path`,
-    ` d="M ${x} ${y + height}`,
-    ` L ${x} ${y + radius}`,
-    ` A ${radius} ${radius} 0 0 1 ${x + radius} ${y}`,
-    ` L ${x + width - radius} ${y}`,
-    ` A ${radius} ${radius} 0 0 1 ${x + width} ${y + radius}`,
-    ` L ${x + width} ${y + height}`,
-    ` Z"`,
+    ` d="`,
+    `M ${x} ${y + DOT_SIZE}`,
+    `V ${y + radius}`,
+    `A ${radius} ${radius} 0 0 1 ${x + radius} ${y}`,
+    `H ${x + DOT_SIZE - radius}`,
+    `A ${radius} ${radius} 0 0 1 ${x + DOT_SIZE} ${y + radius}`,
+    `V ${y + DOT_SIZE}`,
+    `Z`,
+    `"`,
     ` fill="${DARK}"`,
     `/>`,
   ].join("");
@@ -107,59 +355,60 @@ function drawBottomRoundedModule(
   x: number,
   y: number
 ) {
-  const width = DOT_SIZE;
-  const height = DOT_SIZE;
-  const radius = width / 2;
+  const radius =
+    DOT_SIZE / 2;
 
   return [
     `<path`,
-    ` d="M ${x} ${y}`,
-    ` L ${x + width} ${y}`,
-    ` L ${x + width} ${y + height - radius}`,
-    ` A ${radius} ${radius} 0 0 1 ${x + width - radius} ${y + height}`,
-    ` L ${x + radius} ${y + height}`,
-    ` A ${radius} ${radius} 0 0 1 ${x} ${y + height - radius}`,
-    ` Z"`,
+    ` d="`,
+    `M ${x} ${y}`,
+    `H ${x + DOT_SIZE}`,
+    `V ${y + DOT_SIZE - radius}`,
+    `A ${radius} ${radius} 0 0 1 ${x + DOT_SIZE - radius} ${y + DOT_SIZE}`,
+    `H ${x + radius}`,
+    `A ${radius} ${radius} 0 0 1 ${x} ${y + DOT_SIZE - radius}`,
+    `Z`,
+    `"`,
     ` fill="${DARK}"`,
     `/>`,
   ].join("");
 }
 
-/*
- * This recreates the "classy-rounded" behavior visible in the reference:
- *
- * - isolated and horizontally grouped modules remain circular
- * - the first module in a vertical run has a rounded top and flat bottom
- * - the last module in a vertical run has a flat top and rounded bottom
- * - middle modules in longer vertical runs remain circular
- */
-function drawClassyRoundedModule(
+function drawReferenceModule(
   matrix: QrMatrix,
   row: number,
   column: number,
   x: number,
   y: number
 ) {
-  const up = isDark(
-    matrix,
-    row - 1,
-    column
-  );
+  const above =
+    isDark(
+      matrix,
+      row - 1,
+      column
+    );
 
-  const down = isDark(
-    matrix,
-    row + 1,
-    column
-  );
+  const below =
+    isDark(
+      matrix,
+      row + 1,
+      column
+    );
 
-  if (!up && down) {
+  if (
+    !above &&
+    below
+  ) {
     return drawTopRoundedModule(
       x,
       y
     );
   }
 
-  if (up && !down) {
+  if (
+    above &&
+    !below
+  ) {
     return drawBottomRoundedModule(
       x,
       y
@@ -172,80 +421,163 @@ function drawClassyRoundedModule(
   );
 }
 
-/*
- * Extra-rounded finder style matching the uploaded reference:
- * - heavily rounded outer square
- * - rounded white inner square
- * - rounded black center square
- *
- * The small overshoot recreates the slightly oversized finder markers.
- */
-function drawExtraRoundedFinder(
-  baseX: number,
-  baseY: number
+function drawFinderMarker(
+  x: number,
+  y: number,
+  sharpCorner: SharpCorner
 ) {
-  const outerOffset = 0.17;
-  const outerX =
-    baseX - outerOffset;
-  const outerY =
-    baseY - outerOffset;
+  /*
+   * Measurements are based on the uploaded reference:
+   *
+   * Outer silhouette: 7.34 modules
+   * White cutout:     5.22 modules
+   * Center mark:      3.16 modules
+   *
+   * The corner facing the QR center is intentionally much less
+   * rounded, creating the characteristic leaf/drop silhouette.
+   */
+  const outerOffset = -0.17;
   const outerSize = 7.34;
-  const outerRadius = 2.22;
 
-  const innerX =
-    baseX + 0.89;
-  const innerY =
-    baseY + 0.89;
+  const innerOffset = 0.89;
   const innerSize = 5.22;
-  const innerRadius = 1.48;
 
-  const centerX =
-    baseX + 2.08;
-  const centerY =
-    baseY + 2.08;
+  const centerOffset = 2.08;
   const centerSize = 3.16;
-  const centerRadius = 0.72;
+
+  const centerSharpCorner =
+    rotateSharpCornerCounterClockwise(
+      sharpCorner
+    );
 
   return [
-    `<rect`,
-    ` x="${outerX}"`,
-    ` y="${outerY}"`,
-    ` width="${outerSize}"`,
-    ` height="${outerSize}"`,
-    ` rx="${outerRadius}"`,
-    ` fill="${DARK}"`,
-    `/>`,
+    drawAsymmetricRoundedRect(
+      x + outerOffset,
+      y + outerOffset,
+      outerSize,
+      outerSize,
+      getCornerRadii(
+        sharpCorner,
+        2.32,
+        0.68
+      ),
+      DARK
+    ),
 
-    `<rect`,
-    ` x="${innerX}"`,
-    ` y="${innerY}"`,
-    ` width="${innerSize}"`,
-    ` height="${innerSize}"`,
-    ` rx="${innerRadius}"`,
-    ` fill="${LIGHT}"`,
-    `/>`,
+    drawAsymmetricRoundedRect(
+      x + innerOffset,
+      y + innerOffset,
+      innerSize,
+      innerSize,
+      getCornerRadii(
+        sharpCorner,
+        1.50,
+        0
+      ),
+      LIGHT
+    ),
 
-    `<rect`,
-    ` x="${centerX}"`,
-    ` y="${centerY}"`,
-    ` width="${centerSize}"`,
-    ` height="${centerSize}"`,
-    ` rx="${centerRadius}"`,
-    ` fill="${DARK}"`,
-    `/>`,
+    drawAsymmetricRoundedRect(
+      x + centerOffset,
+      y + centerOffset,
+      centerSize,
+      centerSize,
+      getCornerRadii(
+        centerSharpCorner,
+        0.82,
+        0.16
+      ),
+      DARK
+    ),
   ].join("");
 }
 
-function buildReferenceStyleQrSvg(
+function drawAlignmentMarker(
+  centerX: number,
+  centerY: number
+) {
+  /*
+   * The fourth reference corner is the bottom-right alignment
+   * marker, rendered as the same leaf shape at its correct
+   * 5 × 5 alignment-pattern scale.
+   *
+   * Its sharp corner faces the center of the QR: top-left.
+   */
+  const x =
+    centerX - 2;
+
+  const y =
+    centerY - 2;
+
+  const sharpCorner:
+    SharpCorner =
+      "top-left";
+
+  const centerSharpCorner =
+    rotateSharpCornerCounterClockwise(
+      sharpCorner
+    );
+
+  return [
+    drawAsymmetricRoundedRect(
+      x - 0.14,
+      y - 0.14,
+      5.28,
+      5.28,
+      getCornerRadii(
+        sharpCorner,
+        1.64,
+        0.46
+      ),
+      DARK
+    ),
+
+    drawAsymmetricRoundedRect(
+      x + 0.76,
+      y + 0.76,
+      3.48,
+      3.48,
+      getCornerRadii(
+        sharpCorner,
+        1.08,
+        0
+      ),
+      LIGHT
+    ),
+
+    drawAsymmetricRoundedRect(
+      centerX - 0.53,
+      centerY - 0.53,
+      1.06,
+      1.06,
+      getCornerRadii(
+        centerSharpCorner,
+        0.31,
+        0.06
+      ),
+      DARK
+    ),
+  ].join("");
+}
+
+function buildReferenceQrSvg(
   text: string
 ) {
-  const qr = QRCode.create(text, {
-    errorCorrectionLevel: "H",
-  });
+  const qr = QRCode.create(
+    text,
+    {
+      errorCorrectionLevel:
+        "H",
+    }
+  );
 
   const matrix: QrMatrix = {
     size: qr.modules.size,
-    get: (row, column) =>
+
+    get: (
+      row,
+      column
+    ) =>
       Boolean(
         qr.modules.get(
           row,
@@ -253,6 +585,11 @@ function buildReferenceStyleQrSvg(
         )
       ),
   };
+
+  const alignment =
+    findBottomRightAlignmentPattern(
+      matrix
+    );
 
   const canvasModules =
     matrix.size +
@@ -286,6 +623,11 @@ function buildReferenceStyleQrSvg(
           row,
           column,
           matrix.size
+        ) ||
+        isAlignmentCell(
+          row,
+          column,
+          alignment
         )
       ) {
         continue;
@@ -302,7 +644,7 @@ function buildReferenceStyleQrSvg(
         DOT_INSET;
 
       elements.push(
-        drawClassyRoundedModule(
+        drawReferenceModule(
           matrix,
           row,
           column,
@@ -313,33 +655,57 @@ function buildReferenceStyleQrSvg(
     }
   }
 
-  const finderTopLeft =
+  const topLeft =
     QUIET_ZONE_MODULES;
 
-  const finderTopRight =
+  const topRight =
     QUIET_ZONE_MODULES +
     matrix.size -
     7;
 
-  const finderBottomLeft =
+  const bottomLeft =
     QUIET_ZONE_MODULES +
     matrix.size -
     7;
 
+  /*
+   * The less-rounded corner of each finder faces inward:
+   *
+   * TL → bottom-right
+   * TR → bottom-left
+   * BL → top-right
+   */
   elements.push(
-    drawExtraRoundedFinder(
-      finderTopLeft,
-      finderTopLeft
+    drawFinderMarker(
+      topLeft,
+      topLeft,
+      "bottom-right"
     ),
-    drawExtraRoundedFinder(
-      finderTopRight,
-      finderTopLeft
+
+    drawFinderMarker(
+      topRight,
+      topLeft,
+      "bottom-left"
     ),
-    drawExtraRoundedFinder(
-      finderTopLeft,
-      finderBottomLeft
+
+    drawFinderMarker(
+      topLeft,
+      bottomLeft,
+      "top-right"
     )
   );
+
+  if (alignment) {
+    elements.push(
+      drawAlignmentMarker(
+        QUIET_ZONE_MODULES +
+          alignment.column,
+
+        QUIET_ZONE_MODULES +
+          alignment.row
+      )
+    );
+  }
 
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
@@ -364,7 +730,8 @@ export async function GET(
     new URL(req.url);
 
   /*
-   * Preserve both existing formats:
+   * Preserve both existing endpoint formats:
+   *
    * /api/qr?text=https://...
    * /api/qr?url=https://...
    */
@@ -379,13 +746,15 @@ export async function GET(
         error:
           "Missing text. Use /api/qr?text=PRODUCT_URL or /api/qr?url=PRODUCT_URL",
       },
-      { status: 400 }
+      {
+        status: 400,
+      }
     );
   }
 
   try {
     const svg =
-      buildReferenceStyleQrSvg(
+      buildReferenceQrSvg(
         text.trim()
       );
 
@@ -395,8 +764,10 @@ export async function GET(
         headers: {
           "Content-Type":
             "image/svg+xml; charset=utf-8",
+
           "Cache-Control":
             "public, max-age=3600",
+
           "X-Content-Type-Options":
             "nosniff",
         },
@@ -404,7 +775,7 @@ export async function GET(
     );
   } catch (error) {
     console.error(
-      "[EMDC] Reference-style QR generation failed:",
+      "[EMDC] Exact reference QR generation failed:",
       error
     );
 
@@ -413,7 +784,9 @@ export async function GET(
         error:
           "Unable to generate QR",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
