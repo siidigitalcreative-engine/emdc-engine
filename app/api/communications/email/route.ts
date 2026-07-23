@@ -272,6 +272,7 @@ function plainTextToHtml(
     hideYoutubeLine?: boolean;
     insertHtmlBeforeWhy?: string;
     boldPhrases?: string[];
+    emailAudience?: "client" | "internal" | "viber";
   }
 ) {
   const lines = String(value || "")
@@ -284,6 +285,10 @@ function plainTextToHtml(
   let pendingGreeting = "";
   let bodyHeadlineRendered = false;
   let insertedBeforeWhy = false;
+  let internalSummaryStarted = false;
+
+  const isInternalEmail =
+    options?.emailAudience === "internal";
 
   const flushBullets = () => {
     if (!bullets.length) return;
@@ -313,6 +318,20 @@ function plainTextToHtml(
 
     if (!line) {
       flushBullets();
+      return;
+    }
+
+    if (
+      isInternalEmail &&
+      /^hi\s+team\s*,?$/i.test(line)
+    ) {
+      flushBullets();
+
+      parts.push(
+        `<p style="margin:0 0 18px;color:#334155;font-size:15px;line-height:1.6;">${escapeHtml(
+          line
+        )}</p>`
+      );
       return;
     }
 
@@ -364,19 +383,32 @@ function plainTextToHtml(
       const value =
         checklistSummaryMatch[2];
 
+      if (
+        isInternalEmail &&
+        !internalSummaryStarted
+      ) {
+        parts.push(
+          `<h2 style="margin:26px 0 12px;color:#111827;font-size:19px;line-height:1.3;font-weight:750;">Checklist Summary</h2>`
+        );
+        internalSummaryStarted = true;
+      }
+
       parts.push(
-        `<p style="margin:0 0 12px;line-height:1.55;color:#374151;">
-          <strong style="font-weight:700;color:#111827;">${escapeHtml(
-            label
-          )}:</strong>${
-            value
-              ? ` ${formatInlineText(
-                  value,
-                  options?.boldPhrases
-                )}`
-              : ""
-          }
-        </p>`
+        `<div style="display:table;width:100%;margin:0 0 8px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;box-sizing:border-box;">
+          <div style="display:table-row;">
+            <div style="display:table-cell;width:155px;padding:11px 12px;color:#475569;font-size:13px;font-weight:700;vertical-align:top;">
+              ${escapeHtml(label)}
+            </div>
+            <div style="display:table-cell;padding:11px 12px;color:#111827;font-size:14px;line-height:1.45;vertical-align:top;">
+              ${value
+                ? formatInlineText(
+                    value,
+                    options?.boldPhrases
+                  )
+                : "—"}
+            </div>
+          </div>
+        </div>`
       );
       return;
     }
@@ -389,7 +421,10 @@ function plainTextToHtml(
       flushBullets();
 
       parts.push(
-        `<h3 style="margin:22px 0 14px;font-size:17px;line-height:1.3;color:#111827;font-weight:700;">Uploaded Assets</h3>`
+        `<div style="margin:30px 0 14px;padding-top:22px;border-top:1px solid #E2E8F0;">
+          <h2 style="margin:0;color:#111827;font-size:20px;line-height:1.3;font-weight:750;">Uploaded Assets</h2>
+          <p style="margin:5px 0 0;color:#64748B;font-size:13px;line-height:1.45;">Open each link to review the completed asset.</p>
+        </div>`
       );
       return;
     }
@@ -404,12 +439,13 @@ function plainTextToHtml(
         escapeHtml(line);
 
       parts.push(
-        `<p style="margin:0 0 16px;line-height:1.45;overflow-wrap:anywhere;">
+        `<div style="margin:0 0 16px;padding:10px 12px;border:1px solid #DBEAFE;border-radius:8px;background:#EFF6FF;line-height:1.4;overflow-wrap:anywhere;">
           <a
             href="${safeUrl}"
-            style="color:#1D4ED8;text-decoration:underline;font-size:13px;"
-          >${safeUrl}</a>
-        </p>`
+            style="color:#1D4ED8;text-decoration:none;font-size:13px;font-weight:600;"
+          >Open Asset</a>
+          <div style="margin-top:4px;color:#64748B;font-size:11px;line-height:1.4;overflow-wrap:anywhere;">${safeUrl}</div>
+        </div>`
       );
       return;
     }
@@ -426,12 +462,12 @@ function plainTextToHtml(
       flushBullets();
 
       parts.push(
-        `<p style="margin:18px 0 6px;line-height:1.45;color:#111827;">
-          <strong style="font-weight:700;">${formatInlineText(
+        `<div style="margin:18px 0 6px;color:#111827;font-size:15px;line-height:1.4;">
+          <strong style="font-weight:750;">${formatInlineText(
             line,
             options?.boldPhrases
           )}</strong>
-        </p>`
+        </div>`
       );
       return;
     }
@@ -502,6 +538,24 @@ function plainTextToHtml(
       return;
     }
 
+    if (
+      isInternalEmail &&
+      /^(please\s+review|next\s+step|for\s+review|action\s+required)/i.test(
+        line
+      )
+    ) {
+      parts.push(
+        `<div style="margin:24px 0 0;padding:14px 16px;border-left:4px solid #1D4ED8;border-radius:8px;background:#EFF6FF;color:#1E3A8A;font-size:14px;line-height:1.55;">
+          <strong style="display:block;margin-bottom:4px;color:#1E3A8A;">Next Step</strong>
+          ${formatInlineText(
+            line,
+            options?.boldPhrases
+          )}
+        </div>`
+      );
+      return;
+    }
+
     parts.push(
       `<p style="margin:0 0 14px;line-height:1.65;color:#374151;">${formatInlineText(
         line,
@@ -548,6 +602,39 @@ function getEmailProductTitleFromSubject(
     .trim();
 }
 
+function getInternalEmailHeading(
+  subject: string
+) {
+  const cleanSubject =
+    String(subject || "").trim();
+
+  const bracketMatch =
+    cleanSubject.match(
+      /^\[([^\]]+)\]\s*(.*)$/
+    );
+
+  if (bracketMatch) {
+    return {
+      eyebrow:"INTERNAL TEAM",
+      title:String(
+        bracketMatch[1] || "Assets Ready"
+      ).trim(),
+      subtitle:String(
+        bracketMatch[2] || ""
+      ).trim(),
+    };
+  }
+
+  return {
+    eyebrow:"INTERNAL TEAM",
+    title:"Checklist Assets Ready",
+    subtitle:
+      getEmailProductTitleFromSubject(
+        cleanSubject
+      ),
+  };
+}
+
 function buildHtmlEmail({
   subject,
   body,
@@ -557,6 +644,7 @@ function buildHtmlEmail({
   youtubeUrl,
   youtubeThumbnailSource,
   checklistTitle,
+  emailAudience,
 }: {
   subject: string;
   body: string;
@@ -566,6 +654,7 @@ function buildHtmlEmail({
   youtubeUrl?: string;
   youtubeThumbnailSource?: string;
   checklistTitle?: string;
+  emailAudience?: "client" | "internal" | "viber";
 }) {
   const productTitleFromSubject =
     getEmailProductTitleFromSubject(
@@ -585,6 +674,34 @@ function buildHtmlEmail({
     )
   );
 
+  const isInternalEmail =
+    emailAudience === "internal";
+
+  const internalHeading =
+    getInternalEmailHeading(subject);
+
+  const internalHeadingHtml =
+    isInternalEmail
+      ? `<div style="margin:0 0 26px;">
+          <div style="margin:0 0 8px;color:#64748B;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">
+            ${escapeHtml(internalHeading.eyebrow)}
+          </div>
+
+          <h1 style="margin:0;color:#111827;font-size:28px;line-height:1.2;font-weight:750;">
+            ${escapeHtml(internalHeading.title)}
+          </h1>
+
+          ${
+            internalHeading.subtitle
+              ? `<p style="margin:8px 0 0;color:#475569;font-size:15px;line-height:1.5;">${formatInlineText(
+                  internalHeading.subtitle,
+                  boldPhrases
+                )}</p>`
+              : ""
+          }
+        </div>`
+      : "";
+
   const headerImageHtml = headerImageSource
     ? `<div style="margin:0 0 28px;text-align:center;">
         <img
@@ -595,8 +712,9 @@ function buildHtmlEmail({
       </div>`
     : "";
 
-  const imageHtml = imageSource
-    ? `<div style="margin:0 0 22px;text-align:center;">
+  const imageHtml =
+    imageSource && !isInternalEmail
+      ? `<div style="margin:0 0 22px;text-align:center;">
         <img
           src="${escapeHtml(imageSource)}"
           alt="${escapeHtml(subject)}"
@@ -605,8 +723,9 @@ function buildHtmlEmail({
       </div>`
     : "";
 
-  const footerImageHtml = footerImageSource
-    ? `<div style="margin:24px 0 0;text-align:center;">
+  const footerImageHtml =
+    footerImageSource && !isInternalEmail
+      ? `<div style="margin:24px 0 0;text-align:center;">
         <img
           src="${escapeHtml(footerImageSource)}"
           alt="${escapeHtml(subject)}"
@@ -679,11 +798,13 @@ function buildHtmlEmail({
         style="width:100%;max-width:860px;margin:0 auto;padding:36px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;box-sizing:border-box;"
       >
         ${headerImageHtml}
+        ${internalHeadingHtml}
         ${plainTextToHtml(body, {
           hideYoutubeLine: Boolean(youtubeUrl),
           insertHtmlBeforeWhy:
             imageHtml,
           boldPhrases,
+          emailAudience,
         })}
         ${youtubeHtml}
         ${footerImageHtml}
@@ -920,6 +1041,13 @@ export async function POST(
       requestBody?.cc
     );
 
+    const emailAudience =
+      requestBody?.emailAudience === "internal"
+        ? "internal"
+        : requestBody?.emailAudience === "viber"
+          ? "viber"
+          : "client";
+
     const subject = String(
       requestBody?.subject || ""
     ).trim();
@@ -942,18 +1070,22 @@ export async function POST(
       "";
 
     const requestedImageCandidates =
-      resolveImageCandidates(
-        requestBody?.imageUrl
-      );
+      emailAudience === "client"
+        ? resolveImageCandidates(
+            requestBody?.imageUrl
+          )
+        : [];
 
     const requestedImageUrl =
       requestedImageCandidates[0] ||
       "";
 
     const requestedFooterImageCandidates =
-      resolveImageCandidates(
-        requestBody?.footerImageUrl
-      );
+      emailAudience === "viber"
+        ? resolveImageCandidates(
+            requestBody?.footerImageUrl
+          )
+        : [];
 
     const requestedFooterImageUrl =
       requestedFooterImageCandidates[0] ||
@@ -1137,6 +1269,7 @@ export async function POST(
           ? `cid:${youtubeThumbnailContentId}`
           : resolvedYoutubeThumbnailUrl,
       checklistTitle,
+      emailAudience,
     });
 
     const messageHeaders = [
@@ -1317,6 +1450,9 @@ export async function POST(
               : "none",
       youtubeUrlUsed:
         Boolean(youtubeUrl),
+      emailAudience,
+      secondaryImageSuppressed:
+        emailAudience === "internal",
     });
   } catch (error: any) {
     return NextResponse.json(
