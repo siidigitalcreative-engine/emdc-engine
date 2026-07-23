@@ -18035,29 +18035,64 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         String(value || "")
           .replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
 
-      const buildYoutubeTitle = () => {
-        let hookTitle = youtubeChecklistTitle;
+      const youtubePrimaryProductName = String(
+        youtubeProductSource?.[0]?.product ||
+        youtubeProductSource?.[0]?.collection ||
+        youtubeChecklistTitle ||
+        "Product Collection"
+      ).trim();
 
-        if(youtubePrimaryBrand){
-          hookTitle = hookTitle
-            .replace(
-              new RegExp(
-                `^${escapeYoutubeRegex(youtubePrimaryBrand)}(?:\\s+|\\s*[-:|]\\s*)`,
-                "i"
-              ),
-              ""
-            )
-            .trim();
+      const stripLeadingBrand = (value:any) => {
+        const clean = String(value || "")
+          .replace(/\s+/g," ")
+          .trim();
+
+        if(!youtubePrimaryBrand){
+          return clean;
         }
 
-        return [
+        return clean
+          .replace(
+            new RegExp(
+              `^${escapeYoutubeRegex(youtubePrimaryBrand)}(?:\\s+|\\s*[-:|]\\s*)`,
+              "i"
+            ),
+            ""
+          )
+          .trim();
+      };
+
+      const youtubeBaseProductTitle =
+        stripLeadingBrand(
+          youtubePrimaryProductName
+        ) ||
+        stripLeadingBrand(
+          youtubeChecklistTitle
+        ) ||
+        "Product Collection";
+
+      const buildYoutubeTitle = (
+        hookTitle?:string
+      ) => {
+        const cleanHook = String(
+          hookTitle || ""
+        )
+          .replace(/^[\s:–—-]+|[\s:–—-]+$/g,"")
+          .replace(/\s+/g," ")
+          .trim();
+
+        const base = [
           youtubeBrandUpper,
-          hookTitle || youtubeChecklistTitle,
+          youtubeBaseProductTitle,
         ]
           .filter(Boolean)
           .join(" ")
           .replace(/\s+/g," ")
           .trim();
+
+        return cleanHook
+          ? `${base}: ${cleanHook}`
+          : base;
       };
 
       const youtubeEcommerceWorkspace = {
@@ -18160,16 +18195,32 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const normalizeGeneratedYoutubeTitle = (
         value:any
       ) => {
-        const exactTitle =
-          buildYoutubeTitle();
-
-        if(exactTitle){
-          return exactTitle;
-        }
-
-        return String(value || "")
+        const raw = String(value || "")
           .replace(/\s+/g," ")
           .trim();
+
+        if(!raw){
+          return buildYoutubeTitle();
+        }
+
+        const colonIndex = raw.indexOf(":");
+        const generatedHook =
+          colonIndex >= 0
+            ? raw.slice(colonIndex + 1).trim()
+            : raw
+                .replace(
+                  new RegExp(
+                    `^${escapeYoutubeRegex(youtubeBrandUpper)}\\s+${escapeYoutubeRegex(youtubeBaseProductTitle)}\\s*`,
+                    "i"
+                  ),
+                  ""
+                )
+                .replace(/^[\s:–—-]+/,"")
+                .trim();
+
+        return buildYoutubeTitle(
+          generatedHook
+        );
       };
 
       const readYoutubeCopyDraft = () => {
@@ -18304,9 +18355,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   `Create one YouTube title and one YouTube description for a ${checklistAnnouncementType} checklist.`,
                   'Return strict JSON only in this shape: {"title":"","description":""}.',
                   "Do not use markdown code fences.",
-                  `The exact YouTube title must be: ${buildYoutubeTitle()}`,
+                  `The YouTube title must follow this exact format: ${buildYoutubeTitle("BENEFIT-DRIVEN HOOK TITLE")}`,
                   "The brand name at the beginning of the title must be written in ALL CAPS.",
-                  "The checklist title is the Hook Title. Preserve its wording after the brand name.",
+                  `Use this product or collection name exactly in the title: ${youtubeBaseProductTitle}`,
+                  "After the colon, create a concise benefit-driven Hook Title.",
+                  "The Hook Title must communicate a clear emotional or practical benefit, not repeat the product name.",
+                  "Keep the Hook Title punchy, premium, and memorable, ideally 4 to 8 words.",
+                  "Good Hook Title examples: Beauty and Symmetry in Every Sip; Recovery That Travels With You.",
                   "Write the description in polished, sophisticated, natural English.",
                   "Follow this structure:",
                   "1. Opening paragraph that elevates the product or collection and explains its everyday and entertaining value.",
@@ -18324,10 +18379,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     checklistAnnouncementType,
                   checklistTitle:
                     youtubeChecklistTitle,
-                  hookTitle:
+                  checklistTitle:
                     youtubeChecklistTitle,
-                  requiredTitle:
-                    buildYoutubeTitle(),
+                  productOrCollectionName:
+                    youtubeBaseProductTitle,
+                  requiredTitleFormat:
+                    buildYoutubeTitle(
+                      "BENEFIT-DRIVEN HOOK TITLE"
+                    ),
+                  hookTitleGuidance:
+                    "Create a short benefit-driven phrase, such as Beauty and Symmetry in Every Sip or Recovery That Travels With You.",
                   brand:
                     youtubePrimaryBrand,
                   products:
@@ -18336,7 +18397,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     youtubeEcommerceSource,
                   referenceFormat:{
                     title:
-                      "ALL-CAPS BRAND + Checklist Hook Title",
+                      "ALL-CAPS BRAND + Product/Collection Name: Benefit-Driven Hook Title",
                     descriptionSections:[
                       "Premium opening paragraph",
                       "Problem-solving and use occasions",
@@ -18551,7 +18612,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       lineHeight:1.5,
                     }}
                   >
-                    Uses the checklist title as the Hook Title and reads product details from selected SKUs and the E-commerce output.
+                    Generates a benefit-driven Hook Title and reads product details from selected SKUs and the E-commerce output.
                   </p>
                 </div>
 
@@ -18641,75 +18702,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   gap:12,
                 }}
               >
-                <div
-                  style={{
-                    padding:"10px 12px",
-                    display:"grid",
-                    gridTemplateColumns:
-                      isMobile
-                        ? "1fr"
-                        : "repeat(2,minmax(0,1fr))",
-                    gap:8,
-                    border:`1px solid ${C.border}`,
-                    borderRadius:9,
-                    background:C.surfaceAlt,
-                  }}
-                >
-                  <div>
-                    <span
-                      style={{
-                        display:"block",
-                        color:C.faint,
-                        fontSize:9.5,
-                        fontWeight:900,
-                        textTransform:"uppercase",
-                        letterSpacing:".05em",
-                      }}
-                    >
-                      Brand Rule
-                    </span>
-
-                    <strong
-                      style={{
-                        display:"block",
-                        marginTop:3,
-                        color:C.text,
-                        fontSize:11.5,
-                      }}
-                    >
-                      {youtubeBrandUpper ||
-                        "Brand from SKU Storage"}{" "}
-                      in all caps
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span
-                      style={{
-                        display:"block",
-                        color:C.faint,
-                        fontSize:9.5,
-                        fontWeight:900,
-                        textTransform:"uppercase",
-                        letterSpacing:".05em",
-                      }}
-                    >
-                      Hook Title
-                    </span>
-
-                    <strong
-                      style={{
-                        display:"block",
-                        marginTop:3,
-                        color:C.text,
-                        fontSize:11.5,
-                        overflowWrap:"anywhere",
-                      }}
-                    >
-                      {youtubeChecklistTitle}
-                    </strong>
-                  </div>
-                </div>
 
                 <Field label="YouTube Title">
                   <input
