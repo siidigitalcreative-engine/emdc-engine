@@ -16604,6 +16604,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           digitalData.assetAnnouncementHeaderImageUrl || ""
         ),
         imageUrl:String(digitalData.assetAnnouncementImageUrl || ""),
+        viberEmailImageUrl:String(
+          digitalData.assetAnnouncementViberEmailImageUrl || ""
+        ),
         youtubeThumbnailUrl:String(
           digitalData.assetAnnouncementYoutubeThumbnailUrl || ""
         ),
@@ -16756,6 +16759,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const announcementImagePreviewUrl =
         getAnnouncementImagePreviewUrl(
           assetAnnouncementData.imageUrl
+        );
+
+      const announcementViberEmailImagePreviewUrl =
+        getAnnouncementImagePreviewUrl(
+          assetAnnouncementData.viberEmailImageUrl
         );
 
       const getAnnouncementYoutubeVideoId = (
@@ -17761,6 +17769,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 audience==="viber"
                   ? ""
                   : assetAnnouncementData.imageUrl,
+              footerImageUrl:
+                audience==="viber"
+                  ? assetAnnouncementData.viberEmailImageUrl
+                  : "",
               youtubeUrl:
                 audience==="viber"
                   ? ""
@@ -20345,6 +20357,70 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         {announcementYoutubeUrl
                           ? "The YouTube link was detected from Digital Creative Asset Links. Leave this field blank to use YouTube’s standard thumbnail automatically."
                           : "Add the YouTube link under Digital Creative Asset Links first. You may also paste a custom Google Drive or direct thumbnail URL here."}
+                      </div>
+                    </div>
+                  </Field>
+                )}
+
+                {assetAnnouncementTab==="viber"&&(
+                  <Field label="Viber Email Image URL">
+                    <div
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:8,
+                      }}
+                    >
+                      <TI
+                        value={
+                          assetAnnouncementData.viberEmailImageUrl
+                        }
+                        onChange={(value:any)=>
+                          patchAssetAnnouncement({
+                            assetAnnouncementViberEmailImageUrl:
+                              value,
+                          })
+                        }
+                        placeholder="Paste a Google Drive image link or direct image URL"
+                      />
+
+                      {!!announcementViberEmailImagePreviewUrl&&(
+                        <div
+                          style={{
+                            width:"100%",
+                            maxHeight:320,
+                            overflow:"hidden",
+                            border:`1px solid ${C.border}`,
+                            borderRadius:10,
+                            background:C.surfaceAlt,
+                          }}
+                        >
+                          <img
+                            src={
+                              announcementViberEmailImagePreviewUrl
+                            }
+                            alt="Viber email image preview"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            style={{
+                              display:"block",
+                              width:"100%",
+                              maxHeight:320,
+                              objectFit:"contain",
+                              background:"#FFFFFF",
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          color:C.faint,
+                          fontSize:10.5,
+                          lineHeight:1.45,
+                        }}
+                      >
+                        This image is included only in the Viber notification email and appears below the Watch on YouTube line. For Google Drive, set the file to “Anyone with the link can view.”
                       </div>
                     </div>
                   </Field>
