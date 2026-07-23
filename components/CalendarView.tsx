@@ -17454,6 +17454,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 announcementYoutubeUrl,
               youtubeThumbnailUrl:
                 assetAnnouncementData.youtubeThumbnailUrl,
+              checklistTitle:
+                checklistName,
             }),
           });
           const json = await response.json().catch(()=>null);
