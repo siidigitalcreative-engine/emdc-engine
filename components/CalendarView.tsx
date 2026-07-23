@@ -412,6 +412,417 @@ const GlobalStyles = () => {
   return null;
 };
 
+
+// ─── LIGHTWEIGHT LIVE UNREAD BADGES ─────────────────────────────────────────
+// Full notification/chat content remains lazy-loaded by their own components.
+// This controller only fetches small unread counts and paints the red badges
+// over the existing Notification and Team Chat buttons.
+const EMDC_BADGE_SYSTEM_ENTITY_TYPES = new Set([
+  "auth",
+  "system",
+  "profile",
+  "user",
+]);
+
+const EMDC_BADGE_SYSTEM_ACTIONS = new Set([
+  "signed in",
+  "signed out",
+  "changed display name",
+  "requested password reset",
+  "changed password",
+]);
+
+const normalizeUnreadEmail = (value:any) =>
+  String(value || "").trim().toLowerCase();
+
+const isUnreadWorkActivity = (row:any) => {
+  const entityType = String(row?.entity_type || "").toLowerCase();
+  const action = String(row?.action || "").toLowerCase();
+
+  return (
+    !EMDC_BADGE_SYSTEM_ENTITY_TYPES.has(entityType) &&
+    !EMDC_BADGE_SYSTEM_ACTIONS.has(action)
+  );
+};
+
+const getButtonCoreText = (button:HTMLButtonElement|null) =>
+  Array.from(button?.childNodes || [])
+    .map((node:any)=>String(node?.textContent || ""))
+    .join("")
+    .trim();
+
+const LiveUnreadBadgeController = () => {
+  const [notificationUnread,setNotificationUnread] = useState(0);
+  const [chatUnread,setChatUnread] = useState(0);
+  const [notificationRect,setNotificationRect] = useState<any>(null);
+  const [chatRect,setChatRect] = useState<any>(null);
+  const [chatOpen,setChatOpen] = useState(false);
+
+  const notificationButtonRef = useRef<HTMLButtonElement|null>(null);
+  const chatButtonRef = useRef<HTMLButtonElement|null>(null);
+  const refreshChatUnreadRef = useRef<()=>void>(()=>{});
+  const lastNotificationReadAtRef = useRef<string>("");
+
+  useEffect(()=>{
+    if(typeof window === "undefined") return;
+
+    let frame = 0;
+
+    const findTargets = () => {
+      notificationButtonRef.current =
+        document.querySelector<HTMLButtonElement>('button[title="Notifications"]');
+
+      const buttons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>("button")
+      );
+
+      chatButtonRef.current =
+        buttons.find((button:HTMLButtonElement)=>{
+          const text = getButtonCoreText(button);
+          const style = window.getComputedStyle(button);
+          const width = Number.parseFloat(style.width || "0");
+
+          return (
+            (text === "💬" || text === "×") &&
+            style.position === "fixed" &&
+            width >= 48
+          );
+        }) || null;
+    };
+
+    const syncPositions = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(()=>{
+        findTargets();
+
+        const notificationButton = notificationButtonRef.current;
+        const chatButton = chatButtonRef.current;
+
+        const nextNotificationRect = notificationButton
+          ? notificationButton.getBoundingClientRect()
+          : null;
+
+        const nextChatRect = chatButton
+          ? chatButton.getBoundingClientRect()
+          : null;
+
+        const compactRect = (rect:any) => rect
+          ? {
+              left:Math.round(rect.left),
+              top:Math.round(rect.top),
+              right:Math.round(rect.right),
+              bottom:Math.round(rect.bottom),
+              width:Math.round(rect.width),
+              height:Math.round(rect.height),
+            }
+          : null;
+
+        const sameRect = (left:any,right:any) =>
+          (!left && !right) ||
+          (!!left && !!right &&
+            left.left===right.left &&
+            left.top===right.top &&
+            left.right===right.right &&
+            left.bottom===right.bottom &&
+            left.width===right.width &&
+            left.height===right.height);
+
+        const compactNotificationRect = compactRect(nextNotificationRect);
+        const compactChatRect = compactRect(nextChatRect);
+
+        setNotificationRect((current:any)=>
+          sameRect(current,compactNotificationRect)
+            ? current
+            : compactNotificationRect
+        );
+
+        setChatRect((current:any)=>
+          sameRect(current,compactChatRect)
+            ? current
+            : compactChatRect
+        );
+
+        const nextChatOpen = chatButton
+          ? getButtonCoreText(chatButton) !== "💬"
+          : false;
+
+        setChatOpen((current:boolean)=>
+          current===nextChatOpen ? current : nextChatOpen
+        );
+      });
+    };
+
+    const observer = new MutationObserver(syncPositions);
+    observer.observe(document.body,{
+      childList:true,
+      subtree:true,
+      characterData:true,
+    });
+
+    syncPositions();
+    window.addEventListener("resize",syncPositions);
+    window.addEventListener("orientationchange",syncPositions);
+    window.addEventListener("scroll",syncPositions,true);
+
+    return ()=>{
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize",syncPositions);
+      window.removeEventListener("orientationchange",syncPositions);
+      window.removeEventListener("scroll",syncPositions,true);
+    };
+  },[]);
+
+  useEffect(()=>{
+    const button = notificationButtonRef.current;
+    if(!button) return;
+
+    const clearLocalBadge = () => setNotificationUnread(0);
+    button.addEventListener("click",clearLocalBadge);
+
+    return ()=>button.removeEventListener("click",clearLocalBadge);
+  },[notificationRect?.left,notificationRect?.top]);
+
+  useEffect(()=>{
+    let active = true;
+    let fallbackTimer:any = null;
+    const supabase = createClient();
+    let activityChannel:any = null;
+    let readChannel:any = null;
+
+    const loadUnreadNotificationCount = async () => {
+      try {
+        const { data:{ user } } = await supabase.auth.getUser();
+        if(!active || !user) return;
+
+        const { data:readRow } = await supabase
+          .from("notification_reads")
+          .select("last_read_at")
+          .eq("user_id",user.id)
+          .maybeSingle();
+
+        const lastReadAt = String(readRow?.last_read_at || "");
+        lastNotificationReadAtRef.current = lastReadAt;
+
+        let query:any = supabase
+          .from("activity_logs")
+          .select("id,entity_type,action,created_at")
+          .order("created_at",{ ascending:false })
+          .limit(100);
+
+        if(lastReadAt){
+          query = query.gt("created_at",lastReadAt);
+        }
+
+        const { data:activityRows } = await query;
+        if(!active) return;
+
+        const count = (Array.isArray(activityRows) ? activityRows : [])
+          .filter(isUnreadWorkActivity)
+          .length;
+
+        setNotificationUnread(count);
+
+        if(!activityChannel){
+          activityChannel = supabase
+            .channel(`emdc-notification-badge-${user.id}`)
+            .on(
+              "postgres_changes",
+              {
+                event:"INSERT",
+                schema:"public",
+                table:"activity_logs",
+              },
+              (payload:any)=>{
+                const row = payload?.new || {};
+                if(!isUnreadWorkActivity(row)) return;
+
+                const createdAt = Date.parse(String(row?.created_at || ""));
+                const readAt = Date.parse(lastNotificationReadAtRef.current || "");
+
+                if(
+                  Number.isFinite(createdAt) &&
+                  Number.isFinite(readAt) &&
+                  createdAt <= readAt
+                ){
+                  return;
+                }
+
+                setNotificationUnread((current:number)=>current + 1);
+              }
+            )
+            .subscribe();
+        }
+
+        if(!readChannel){
+          readChannel = supabase
+            .channel(`emdc-notification-read-badge-${user.id}`)
+            .on(
+              "postgres_changes",
+              {
+                event:"*",
+                schema:"public",
+                table:"notification_reads",
+                filter:`user_id=eq.${user.id}`,
+              },
+              (payload:any)=>{
+                const nextReadAt = String(
+                  payload?.new?.last_read_at ||
+                  payload?.old?.last_read_at ||
+                  ""
+                );
+
+                if(nextReadAt){
+                  lastNotificationReadAtRef.current = nextReadAt;
+                  setNotificationUnread(0);
+                }
+              }
+            )
+            .subscribe();
+        }
+      } catch {
+        // Badge checks must never interrupt the main application.
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if(document.visibilityState === "visible"){
+        void loadUnreadNotificationCount();
+      }
+    };
+
+    void loadUnreadNotificationCount();
+
+    // Realtime is the primary path. This slower refresh is only a fallback
+    // when a browser/network misses a Realtime event.
+    fallbackTimer = window.setInterval(refreshWhenVisible,30000);
+    window.addEventListener("focus",refreshWhenVisible);
+    document.addEventListener("visibilitychange",refreshWhenVisible);
+
+    return ()=>{
+      active = false;
+      if(fallbackTimer) window.clearInterval(fallbackTimer);
+      window.removeEventListener("focus",refreshWhenVisible);
+      document.removeEventListener("visibilitychange",refreshWhenVisible);
+      if(activityChannel) void supabase.removeChannel(activityChannel);
+      if(readChannel) void supabase.removeChannel(readChannel);
+    };
+  },[]);
+
+  useEffect(()=>{
+    let active = true;
+    let timer:any = null;
+    const supabase = createClient();
+
+    const loadChatUnreadCount = async () => {
+      try {
+        const { data:{ user } } = await supabase.auth.getUser();
+        const email = normalizeUnreadEmail(user?.email);
+        if(!active || !email) return;
+
+        const response = await fetch(
+          `/api/team-chat/unread?requesterEmail=${encodeURIComponent(email)}&t=${Date.now()}`,
+          {
+            method:"GET",
+            cache:"no-store",
+            headers:{
+              "Cache-Control":"no-cache, no-store, max-age=0",
+              Pragma:"no-cache",
+            },
+          }
+        );
+
+        const json = await response.json().catch(()=>null);
+        if(!active || !response.ok || !json?.ok) return;
+
+        setChatUnread(Math.max(0,Number(json.unreadCount || 0)));
+      } catch {
+        // The current count remains visible if a lightweight check fails.
+      }
+    };
+
+    refreshChatUnreadRef.current = () => {
+      if(document.visibilityState === "visible"){
+        void loadChatUnreadCount();
+      }
+    };
+
+    const refreshWhenVisible = () => refreshChatUnreadRef.current();
+
+    void loadChatUnreadCount();
+    timer = window.setInterval(refreshWhenVisible,10000);
+    window.addEventListener("focus",refreshWhenVisible);
+    window.addEventListener("emdc-chat-updated",refreshWhenVisible as any);
+    document.addEventListener("visibilitychange",refreshWhenVisible);
+
+    return ()=>{
+      active = false;
+      if(timer) window.clearInterval(timer);
+      window.removeEventListener("focus",refreshWhenVisible);
+      window.removeEventListener("emdc-chat-updated",refreshWhenVisible as any);
+      document.removeEventListener("visibilitychange",refreshWhenVisible);
+    };
+  },[]);
+
+  useEffect(()=>{
+    if(!chatRect) return;
+
+    // Refresh shortly after the chat opens/closes so read receipts clear the
+    // badge without waiting for the next scheduled lightweight check.
+    const timer = window.setTimeout(
+      ()=>refreshChatUnreadRef.current(),
+      chatOpen ? 1200 : 350
+    );
+
+    return ()=>window.clearTimeout(timer);
+  },[chatOpen,chatRect?.left,chatRect?.top]);
+
+  const badgeStyle = (rect:any,kind:"notification"|"chat"):any => ({
+    position:"fixed",
+    left:Math.round(rect.right - (kind === "chat" ? 10 : 6)),
+    top:Math.round(rect.top - (kind === "chat" ? 7 : 6)),
+    zIndex:kind === "chat" ? 10001 : 9600,
+    minWidth:kind === "chat" ? 19 : 17,
+    height:kind === "chat" ? 19 : 17,
+    padding:"0 4px",
+    borderRadius:999,
+    background:"#DC2626",
+    color:"#FFFFFF",
+    border:"2px solid #FFFFFF",
+    boxShadow:"0 2px 7px rgba(127,29,29,.28)",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"center",
+    pointerEvents:"none",
+    fontSize:kind === "chat" ? 9 : 8.5,
+    fontWeight:900,
+    lineHeight:1,
+    fontFamily:"Inter,system-ui,sans-serif",
+  });
+
+  return (
+    <>
+      {!!notificationRect && notificationUnread > 0 && (
+        <span
+          aria-hidden="true"
+          style={badgeStyle(notificationRect,"notification")}
+        >
+          {notificationUnread > 99 ? "99+" : notificationUnread}
+        </span>
+      )}
+
+      {!!chatRect && !chatOpen && chatUnread > 0 && (
+        <span
+          aria-hidden="true"
+          style={badgeStyle(chatRect,"chat")}
+        >
+          {chatUnread > 99 ? "99+" : chatUnread}
+        </span>
+      )}
+    </>
+  );
+};
+
 // ─── DATA ────────────────────────────────────────────────────────────────────
 const DEPTS = {
   ecommerce:{ label:"E-commerce",      color:"#111827" },
@@ -29301,6 +29712,7 @@ export default function App({
   return (
     <>
       <GlobalStyles />
+      <LiveUnreadBadgeController />
       <div style={{ minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.text,width:"100%",maxWidth:"100%",overflowX:"hidden" }}>
       {!cloudHydrated&&(
         <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(249,250,251,.96)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,pointerEvents:"auto" }}>
