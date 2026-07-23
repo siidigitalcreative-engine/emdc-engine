@@ -50,33 +50,91 @@ function escapeRegExp(
 
 function formatInlineText(
   value: unknown,
-  boldPhrase?: string
+  boldPhrases?: string | string[]
 ) {
-  const escapedValue =
+  let formatted =
     escapeHtml(value);
 
-  const cleanPhrase =
-    String(boldPhrase || "").trim();
-
-  if (!cleanPhrase) {
-    return escapedValue;
-  }
-
-  const escapedPhrase =
-    escapeHtml(cleanPhrase);
-
-  if (!escapedPhrase) {
-    return escapedValue;
-  }
-
-  return escapedValue.replace(
-    new RegExp(
-      escapeRegExp(escapedPhrase),
-      "gi"
-    ),
-    (match) =>
-      `<strong style="font-weight:700;color:#111827;">${match}</strong>`
+  const phrases = Array.from(
+    new Set(
+      [
+        ...(
+          Array.isArray(boldPhrases)
+            ? boldPhrases
+            : [boldPhrases]
+        ),
+        "ORDER",
+      ]
+        .map((item) =>
+          String(item || "").trim()
+        )
+        .filter(Boolean)
+    )
+  ).sort(
+    (left, right) =>
+      right.length - left.length
   );
+
+  phrases.forEach((phrase) => {
+    const escapedPhrase =
+      escapeHtml(phrase);
+
+    if (!escapedPhrase) return;
+
+    const pattern =
+      phrase.toUpperCase() === "ORDER"
+        ? /\bORDER\b/gi
+        : new RegExp(
+            escapeRegExp(
+              escapedPhrase
+            ),
+            "gi"
+          );
+
+    formatted = formatted.replace(
+      pattern,
+      (match) =>
+        `<strong style="font-weight:700;color:#111827;">${match}</strong>`
+    );
+  });
+
+  return formatted;
+}
+
+function formatFeatureBullet(
+  value: unknown,
+  boldPhrases?: string | string[]
+) {
+  const source = String(value || "").trim();
+  const colonIndex = source.indexOf(":");
+
+  if (colonIndex <= 0) {
+    return formatInlineText(
+      source,
+      boldPhrases
+    );
+  }
+
+  const label = source
+    .slice(0, colonIndex + 1)
+    .trim();
+
+  const description = source
+    .slice(colonIndex + 1)
+    .trim();
+
+  return [
+    `<strong style="font-weight:700;color:#111827;">${formatInlineText(
+      label,
+      boldPhrases
+    )}</strong>`,
+    description
+      ? ` ${formatInlineText(
+          description,
+          boldPhrases
+        )}`
+      : "",
+  ].join("");
 }
 
 function getGoogleDriveFileId(
@@ -213,7 +271,7 @@ function plainTextToHtml(
   options?: {
     hideYoutubeLine?: boolean;
     insertHtmlBeforeWhy?: string;
-    boldPhrase?: string;
+    boldPhrases?: string[];
   }
 ) {
   const lines = String(value || "")
@@ -234,9 +292,9 @@ function plainTextToHtml(
       `<ul style="margin:8px 0 18px;padding-left:22px;">${bullets
         .map(
           (item) =>
-            `<li style="margin:0 0 7px;line-height:1.55;">${formatInlineText(
+            `<li style="margin:0 0 7px;line-height:1.55;">${formatFeatureBullet(
               item,
-              options?.boldPhrase
+              options?.boldPhrases
             )}</li>`
         )
         .join("")}</ul>`
@@ -270,7 +328,7 @@ function plainTextToHtml(
       parts.push(
         `<h2 style="margin:0 0 18px;font-size:24px;line-height:1.25;color:#111827;font-weight:700;">${formatInlineText(
           line,
-          options?.boldPhrase
+          options?.boldPhrases
         )}</h2>`
       );
 
@@ -278,7 +336,7 @@ function plainTextToHtml(
         parts.push(
           `<p style="margin:0 0 18px;line-height:1.6;color:#374151;">${formatInlineText(
             pendingGreeting,
-            options?.boldPhrase
+            options?.boldPhrases
           )}</p>`
         );
         pendingGreeting = "";
@@ -347,7 +405,7 @@ function plainTextToHtml(
       parts.push(
         `<h2 style="margin:18px 0 12px;font-size:20px;line-height:1.35;color:#111827;">${formatInlineText(
           line,
-          options?.boldPhrase
+          options?.boldPhrases
         )}</h2>`
       );
       return;
@@ -356,7 +414,7 @@ function plainTextToHtml(
     parts.push(
       `<p style="margin:0 0 14px;line-height:1.65;color:#374151;">${formatInlineText(
         line,
-        options?.boldPhrase
+        options?.boldPhrases
       )}</p>`
     );
   });
@@ -367,7 +425,7 @@ function plainTextToHtml(
     parts.push(
       `<p style="margin:0 0 18px;line-height:1.6;color:#374151;">${formatInlineText(
         pendingGreeting,
-        options?.boldPhrase
+        options?.boldPhrases
       )}</p>`
     );
   }
@@ -382,6 +440,21 @@ function plainTextToHtml(
   }
 
   return parts.join("");
+}
+
+function getEmailProductTitleFromSubject(
+  subject: string
+) {
+  return String(subject || "")
+    .replace(
+      /^\s*\[[^\]]+\]\s*/i,
+      ""
+    )
+    .replace(
+      /\s+[—–-]\s+(?:now available|available again|now live|special campaign)\s*$/i,
+      ""
+    )
+    .trim();
 }
 
 function buildHtmlEmail({
@@ -401,6 +474,24 @@ function buildHtmlEmail({
   youtubeThumbnailSource?: string;
   checklistTitle?: string;
 }) {
+  const productTitleFromSubject =
+    getEmailProductTitleFromSubject(
+      subject
+    );
+
+  const boldPhrases = Array.from(
+    new Set(
+      [
+        checklistTitle,
+        productTitleFromSubject,
+      ]
+        .map((item) =>
+          String(item || "").trim()
+        )
+        .filter(Boolean)
+    )
+  );
+
   const headerImageHtml = headerImageSource
     ? `<div style="margin:0 0 28px;text-align:center;">
         <img
@@ -489,8 +580,7 @@ function buildHtmlEmail({
           hideYoutubeLine: Boolean(youtubeUrl),
           insertHtmlBeforeWhy:
             imageHtml,
-          boldPhrase:
-            checklistTitle,
+          boldPhrases,
         })}
         ${youtubeHtml}
       </div>
