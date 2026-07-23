@@ -13946,12 +13946,32 @@ ${slidesHtml}
                                       ?.assetAnnouncementDrafts
                                       ?.viber
                                       ?.subject ||
-                                    ""
+                                    `${
+                                      checklistAnnouncementType==="Product Introduction"
+                                        ? "[New Arrival]"
+                                        : checklistAnnouncementType==="Product Reactivation"
+                                          ? "[Product Reactivation]"
+                                          : checklistAnnouncementType==="Campaign"
+                                            ? "[Campaign]"
+                                            : checklistAnnouncementType==="Special Campaign"
+                                              ? "[Special Campaign]"
+                                              : `[${checklistAnnouncementType}]`
+                                    } VIBER Message: ${
+                                      String(
+                                        group.groupName ||
+                                        group.name ||
+                                        "Checklist"
+                                      ).trim()
+                                    }`
                                   ),
                                   body:String(
                                     overviewDigitalData
                                       ?.assetAnnouncementDrafts
-                                      ?.viber
+                                      ?.client
+                                      ?.body ||
+                                    overviewDigitalData
+                                      ?.assetAnnouncementDrafts
+                                      ?.email
                                       ?.body ||
                                     ""
                                   ),
@@ -16502,6 +16522,53 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         return "Product Introduction";
       })();
 
+      const defaultViberAnnouncementSubject = `${
+        checklistAnnouncementType==="Product Introduction"
+          ? "[New Arrival]"
+          : checklistAnnouncementType==="Product Reactivation"
+            ? "[Product Reactivation]"
+            : checklistAnnouncementType==="Campaign"
+              ? "[Campaign]"
+              : checklistAnnouncementType==="Special Campaign"
+                ? "[Special Campaign]"
+                : `[${checklistAnnouncementType}]`
+      } VIBER Message: ${
+        String(
+          group.groupName ||
+          group.name ||
+          "Checklist"
+        ).trim()
+      }`;
+
+      const syncedAssetAnnouncementEditor = {
+        ...(assetAnnouncementEditor || {}),
+        client:{
+          subject:String(
+            assetAnnouncementEditor?.client?.subject || ""
+          ),
+          body:String(
+            assetAnnouncementEditor?.client?.body || ""
+          ),
+        },
+        internal:{
+          subject:String(
+            assetAnnouncementEditor?.internal?.subject || ""
+          ),
+          body:String(
+            assetAnnouncementEditor?.internal?.body || ""
+          ),
+        },
+        viber:{
+          subject:String(
+            assetAnnouncementEditor?.viber?.subject ||
+            defaultViberAnnouncementSubject
+          ),
+          body:String(
+            assetAnnouncementEditor?.client?.body || ""
+          ),
+        },
+      };
+
       const assetAnnouncementData = {
         checklistType:checklistAnnouncementType,
         audience:assetAnnouncementTab,
@@ -16517,7 +16584,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           digitalData.assetAnnouncementYoutubeThumbnailUrl || ""
         ),
         drafts:assetAnnouncementOpen
-          ? assetAnnouncementEditor
+          ? syncedAssetAnnouncementEditor
           : {
               client:{
                 subject:String(
@@ -16544,10 +16611,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               viber:{
                 subject:String(
                   digitalData.assetAnnouncementDrafts?.viber?.subject ||
-                  `[${checklistAnnouncementType}] VIBER Message: ${group.groupName || "Checklist"}`
+                  defaultViberAnnouncementSubject
                 ),
                 body:String(
-                  digitalData.assetAnnouncementDrafts?.viber?.body ||
+                  digitalData.assetAnnouncementDrafts?.client?.body ||
+                  digitalData.assetAnnouncementDrafts?.email?.body ||
                   ""
                 ),
               },
@@ -17262,71 +17330,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         }
 
         if(audience==="viber"){
-          const viberTemplate =
-            clientTemplates[checklistAnnouncementType] ||
-            clientTemplates["Product Introduction"];
-
-          const viberHeadline = (()=>{
-            if(checklistAnnouncementType==="Product Reactivation"){
-              return `${externalProductName.toUpperCase()} — AVAILABLE AGAIN!`;
-            }
-
-            if(checklistAnnouncementType==="Campaign"){
-              return `${checklistName.toUpperCase()} — NOW LIVE!`;
-            }
-
-            if(checklistAnnouncementType==="Special Campaign"){
-              return `${checklistName.toUpperCase()} — SPECIAL CAMPAIGN!`;
-            }
-
-            return `${externalProductName.toUpperCase()} — NOW AVAILABLE!`;
-          })();
-
-          const viberBodyLines = [
-            viberHeadline,
-          ];
-
-          if(externalOverview){
-            viberBodyLines.push(
-              "",
-              externalOverview
+          const clientDraft =
+            buildReadyChecklistAnnouncement(
+              "client",
+              assets
             );
-          } else if(viberTemplate.intro){
-            viberBodyLines.push(
-              "",
-              viberTemplate.intro
-            );
-          }
-
-          if(externalFeatures){
-            viberBodyLines.push(
-              "",
-              "Why You'll Love It",
-              "",
-              externalFeatures
-            );
-          }
-
-          viberBodyLines.push(
-            "",
-            checklistAnnouncementType==="Product Introduction" ||
-            checklistAnnouncementType==="Product Reactivation"
-              ? "Reply ORDER to confirm. For product details and assistance, message us directly."
-              : viberTemplate.action,
-            "",
-            `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`
-          );
 
           return {
-            subject:`[${checklistAnnouncementType}] VIBER Message: ${externalProductName}`,
-            body:normalizeWhyYouLoveItBullets(
-              viberBodyLines
-                .filter((line,index,rows)=>
-                  line !== "" ||
-                  (index > 0 && rows[index-1] !== "")
-                )
-                .join("\n")
-            ),
+            subject:`${
+              checklistAnnouncementType==="Product Introduction"
+                ? "[New Arrival]"
+                : checklistAnnouncementType==="Product Reactivation"
+                  ? "[Product Reactivation]"
+                  : checklistAnnouncementType==="Campaign"
+                    ? "[Campaign]"
+                    : checklistAnnouncementType==="Special Campaign"
+                      ? "[Special Campaign]"
+                      : `[${checklistAnnouncementType}]`
+            } VIBER Message: ${externalProductName}`,
+            body:clientDraft.body,
           };
         }
 
@@ -17366,20 +17388,60 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       ) => {
         try {
           const readyDraft = buildReadyChecklistAnnouncement(audience);
+          const currentClient = {
+            subject:String(
+              assetAnnouncementEditor?.client?.subject || ""
+            ),
+            body:String(
+              assetAnnouncementEditor?.client?.body || ""
+            ),
+          };
+
+          const currentViber = {
+            subject:String(
+              assetAnnouncementEditor?.viber?.subject ||
+              defaultViberAnnouncementSubject
+            ),
+            body:String(
+              assetAnnouncementEditor?.client?.body || ""
+            ),
+          };
+
           const nextDrafts = {
-            client:{
-              subject:String(assetAnnouncementEditor?.client?.subject || ""),
-              body:String(assetAnnouncementEditor?.client?.body || ""),
-            },
-            internal:{
-              subject:String(assetAnnouncementEditor?.internal?.subject || ""),
-              body:String(assetAnnouncementEditor?.internal?.body || ""),
-            },
-            viber:{
-              subject:String(assetAnnouncementEditor?.viber?.subject || ""),
-              body:String(assetAnnouncementEditor?.viber?.body || ""),
-            },
-            [audience]:readyDraft,
+            client:
+              audience==="client"
+                ? readyDraft
+                : audience==="viber"
+                  ? {
+                      ...currentClient,
+                      body:readyDraft.body,
+                    }
+                  : currentClient,
+            internal:
+              audience==="internal"
+                ? readyDraft
+                : {
+                    subject:String(
+                      assetAnnouncementEditor?.internal?.subject || ""
+                    ),
+                    body:String(
+                      assetAnnouncementEditor?.internal?.body || ""
+                    ),
+                  },
+            viber:
+              audience==="viber"
+                ? {
+                    subject:
+                      readyDraft.subject ||
+                      currentViber.subject,
+                    body:readyDraft.body,
+                  }
+                : audience==="client"
+                  ? {
+                      ...currentViber,
+                      body:readyDraft.body,
+                    }
+                  : currentViber,
           };
 
           // Directly control the visible Subject and Body.
@@ -17466,19 +17528,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               maxOutputTokens:2200,
               instruction:[
                 `Create one polished ${
-                  audience === "client"
-                    ? "external client email"
-                    : audience === "viber"
-                      ? "Viber broadcast announcement"
-                      : "internal team email"
+                  audience === "client" ||
+                  audience === "viber"
+                    ? "external client-facing announcement message"
+                    : "internal team email"
                 } for a ${checklistAnnouncementType} checklist.`,
                 'Return strict JSON only in this shape: {"subject":"","body":""}.',
                 "Do not use markdown code fences.",
-                audience === "client"
-                  ? "Use a polished, premium partner-facing tone. Keep the announcement-style subject line, but do not repeat the subject as the body headline. After Dear Partner, begin with a clear, product-specific benefit headline in title case, ideally 4 to 9 words. The headline must be immediately understandable and practical. Avoid vague or overly poetic phrases such as Curated Harmony, Polished Spaces, Elevated Living, Timeless Elegance, or similar abstract wording. Strong headline styles include Refined Bathroom Essentials for Everyday Use, Smarter Food Storage for Everyday Meals, Better Drinkware for Everyday Moments, and A More Efficient Way to Clean. Follow it with a short supporting introduction that names the product or collection and its availability. Then include the product overview, a Why You'll Love It section, and a clear ordering or coordination instruction. Place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not use an all-caps body headline. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
-                  : audience === "viber"
-                    ? "Create concise plain-text copy that the team can paste directly into a Viber broadcast. Do not include an email greeting, recipient fields, or internal instructions. Start with the product or checklist title and availability in uppercase. Add one short product overview, then a Why You'll Love It section. Place every feature on its own line and begin it with the bullet character •. End with a clear Reply ORDER instruction and place Watch on YouTube as the final line. Keep it easy to scan on a phone. Do not include Google Drive, banner, feed, story, signage, or other internal asset links."
-                    : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
+                audience === "client" ||
+                audience === "viber"
+                  ? "Use a polished, premium partner-facing tone. The Viber version must use the exact same message-body structure and wording style as Client Email. Keep the announcement-style subject line, but do not repeat the subject as the body headline. After Dear Partner, begin with a clear, product-specific benefit headline in title case, ideally 4 to 9 words. The headline must be immediately understandable and practical. Avoid vague or overly poetic phrases such as Curated Harmony, Polished Spaces, Elevated Living, Timeless Elegance, or similar abstract wording. Strong headline styles include Refined Bathroom Essentials for Everyday Use, Smarter Food Storage for Everyday Meals, Better Drinkware for Everyday Moments, and A More Efficient Way to Clean. Follow it with a short supporting introduction that names the product or collection and its availability. Then include the product overview, a Why You'll Love It section, and a clear ordering or coordination instruction. Place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not use an all-caps body headline. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
+                  : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
                 audience === "internal"
                   ? "Only include assets that have valid links."
                   : "For client and Viber messages, include only the YouTube link and place it at the very end.",
@@ -17511,27 +17571,74 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             );
           }
 
+          const normalizedGeneratedBody =
+            audience==="client" ||
+            audience==="viber"
+              ? normalizeWhyYouLoveItBullets(
+                  draft.body
+                )
+              : draft.body;
+
+          const currentClient = {
+            subject:String(
+              assetAnnouncementEditor?.client?.subject || ""
+            ),
+            body:String(
+              assetAnnouncementEditor?.client?.body || ""
+            ),
+          };
+
+          const currentViber = {
+            subject:String(
+              assetAnnouncementEditor?.viber?.subject ||
+              defaultViberAnnouncementSubject
+            ),
+            body:String(
+              assetAnnouncementEditor?.client?.body || ""
+            ),
+          };
+
           const nextDrafts = {
-            client:{
-              subject:String(assetAnnouncementEditor?.client?.subject || ""),
-              body:String(assetAnnouncementEditor?.client?.body || ""),
-            },
-            internal:{
-              subject:String(assetAnnouncementEditor?.internal?.subject || ""),
-              body:String(assetAnnouncementEditor?.internal?.body || ""),
-            },
-            viber:{
-              subject:String(assetAnnouncementEditor?.viber?.subject || ""),
-              body:String(assetAnnouncementEditor?.viber?.body || ""),
-            },
-            [audience]:{
-              ...draft,
-              body:audience==="client" || audience==="viber"
-                ? normalizeWhyYouLoveItBullets(
-                    draft.body
-                  )
-                : draft.body,
-            },
+            client:
+              audience==="client"
+                ? {
+                    ...draft,
+                    body:normalizedGeneratedBody,
+                  }
+                : audience==="viber"
+                  ? {
+                      ...currentClient,
+                      body:normalizedGeneratedBody,
+                    }
+                  : currentClient,
+            internal:
+              audience==="internal"
+                ? {
+                    ...draft,
+                    body:normalizedGeneratedBody,
+                  }
+                : {
+                    subject:String(
+                      assetAnnouncementEditor?.internal?.subject || ""
+                    ),
+                    body:String(
+                      assetAnnouncementEditor?.internal?.body || ""
+                    ),
+                  },
+            viber:
+              audience==="viber"
+                ? {
+                    subject:
+                      currentViber.subject ||
+                      defaultViberAnnouncementSubject,
+                    body:normalizedGeneratedBody,
+                  }
+                : audience==="client"
+                  ? {
+                      ...currentViber,
+                      body:normalizedGeneratedBody,
+                    }
+                  : currentViber,
           };
 
           setAssetAnnouncementEditor(nextDrafts);
@@ -17561,8 +17668,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const openGmailAnnouncement = () => {
-        if(assetAnnouncementTab==="viber") return;
-
         const audience = assetAnnouncementTab;
         let email = assetAnnouncementEditor?.[audience] || { subject:"", body:"" };
 
@@ -17585,13 +17690,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const submitAnnouncementEmail = async (action:"draft"|"send") => {
-        if(assetAnnouncementTab==="viber"){
-          setAssetAnnouncementError(
-            "Use Copy Viber Message, then paste it directly into Viber Broadcast."
-          );
-          return;
-        }
-
         const audience = assetAnnouncementTab;
         let email = assetAnnouncementEditor?.[audience] || { subject:"", body:"" };
 
@@ -17633,13 +17731,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 email.body
               ),
               headerImageUrl:
-                assetAnnouncementData.headerImageUrl,
+                audience==="viber"
+                  ? ""
+                  : assetAnnouncementData.headerImageUrl,
               imageUrl:
-                assetAnnouncementData.imageUrl,
+                audience==="viber"
+                  ? ""
+                  : assetAnnouncementData.imageUrl,
               youtubeUrl:
-                announcementYoutubeUrl,
+                audience==="viber"
+                  ? ""
+                  : announcementYoutubeUrl,
               youtubeThumbnailUrl:
-                assetAnnouncementData.youtubeThumbnailUrl,
+                audience==="viber"
+                  ? ""
+                  : assetAnnouncementData.youtubeThumbnailUrl,
               checklistTitle:
                 String(
                   group.groupName ||
@@ -19863,9 +19969,35 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                 <button
                   onClick={()=>{
+                    const nextDrafts = {
+                      ...(assetAnnouncementEditor || {}),
+                      client:{
+                        subject:String(
+                          assetAnnouncementEditor?.client?.subject || ""
+                        ),
+                        body:String(
+                          assetAnnouncementEditor?.client?.body || ""
+                        ),
+                      },
+                      viber:{
+                        subject:String(
+                          assetAnnouncementEditor?.viber?.subject ||
+                          defaultViberAnnouncementSubject
+                        ),
+                        body:String(
+                          assetAnnouncementEditor?.client?.body || ""
+                        ),
+                      },
+                    };
+
+                    setAssetAnnouncementEditor(
+                      nextDrafts
+                    );
                     setAssetAnnouncementTab("viber");
                     patchAssetAnnouncement({
                       assetAnnouncementAudience:"viber",
+                      assetAnnouncementDrafts:
+                        nextDrafts,
                     });
                   }}
                   style={{
@@ -19885,61 +20017,57 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
 
               <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                {assetAnnouncementTab!=="viber"&&(
-                  <>
-                    <div style={{
-                      display:"grid",
-                      gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",
-                      gap:10,
-                    }}>
-                      <Field label="To">
-                        <TI
-                          value={assetAnnouncementData.to}
-                          onChange={(value:any)=>patchAssetAnnouncement({
-                            assetAnnouncementTo:value,
-                          })}
-                          placeholder={
-                            assetAnnouncementTab==="client"
-                              ? "client@example.com, partner@example.com"
-                              : "sales@company.com, marketing@company.com"
-                          }
-                        />
-                      </Field>
-                      <Field label="CC">
-                        <TI
-                          value={assetAnnouncementData.cc}
-                          onChange={(value:any)=>patchAssetAnnouncement({
-                            assetAnnouncementCc:value,
-                          })}
-                          placeholder="Optional CC recipients"
-                        />
-                      </Field>
-                    </div>
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",
+                  gap:10,
+                }}>
+                  <Field label="To">
+                    <TI
+                      value={assetAnnouncementData.to}
+                      onChange={(value:any)=>patchAssetAnnouncement({
+                        assetAnnouncementTo:value,
+                      })}
+                      placeholder={
+                        assetAnnouncementTab==="client"
+                          ? "client@example.com, partner@example.com"
+                          : "sales@company.com, marketing@company.com"
+                      }
+                    />
+                  </Field>
+                  <Field label="CC">
+                    <TI
+                      value={assetAnnouncementData.cc}
+                      onChange={(value:any)=>patchAssetAnnouncement({
+                        assetAnnouncementCc:value,
+                      })}
+                      placeholder="Optional CC recipients"
+                    />
+                  </Field>
+                </div>
 
-                    <Field label="Subject">
-                      <TI
-                        value={
-                          assetAnnouncementEditor?.[assetAnnouncementTab]?.subject || ""
-                        }
-                        onChange={(value:any)=>{
-                          setAssetAnnouncementEditor((current:any)=>{
-                            const nextDrafts = {
-                              ...(current || {}),
-                              [assetAnnouncementTab]:{
-                                ...(current?.[assetAnnouncementTab] || {}),
-                                subject:value,
-                              },
-                            };
-                            patchAssetAnnouncement({
-                              assetAnnouncementDrafts:nextDrafts,
-                            });
-                            return nextDrafts;
-                          });
-                        }}
-                      />
-                    </Field>
-                  </>
-                )}
+                <Field label="Subject">
+                  <TI
+                    value={
+                      assetAnnouncementEditor?.[assetAnnouncementTab]?.subject || ""
+                    }
+                    onChange={(value:any)=>{
+                      setAssetAnnouncementEditor((current:any)=>{
+                        const nextDrafts = {
+                          ...(current || {}),
+                          [assetAnnouncementTab]:{
+                            ...(current?.[assetAnnouncementTab] || {}),
+                            subject:value,
+                          },
+                        };
+                        patchAssetAnnouncement({
+                          assetAnnouncementDrafts:nextDrafts,
+                        });
+                        return nextDrafts;
+                      });
+                    }}
+                  />
+                </Field>
 
                 {assetAnnouncementTab==="viber"&&(
                   <div style={{
@@ -19951,7 +20079,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     fontSize:11.5,
                     lineHeight:1.5,
                   }}>
-                    Copy the message below and paste it directly into your Viber broadcast announcement.
+                    This message mirrors Client Email. Send it to the responsible team member, then copy and paste the message directly into the Viber broadcast.
                   </div>
                 )}
 
@@ -20205,18 +20333,41 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 }>
                   <textarea
                     value={
-                      assetAnnouncementEditor?.[assetAnnouncementTab]?.body || ""
+                      assetAnnouncementTab==="viber"
+                        ? assetAnnouncementEditor?.client?.body || ""
+                        : assetAnnouncementEditor?.[assetAnnouncementTab]?.body || ""
                     }
                     onChange={(event:any)=>{
                       const value = event.target.value;
                       setAssetAnnouncementEditor((current:any)=>{
+                        const shouldSyncClientAndViber =
+                          assetAnnouncementTab==="client" ||
+                          assetAnnouncementTab==="viber";
+
                         const nextDrafts = {
                           ...(current || {}),
                           [assetAnnouncementTab]:{
                             ...(current?.[assetAnnouncementTab] || {}),
                             body:value,
                           },
+                          ...(shouldSyncClientAndViber
+                            ? {
+                                client:{
+                                  ...(current?.client || {}),
+                                  body:value,
+                                },
+                                viber:{
+                                  ...(current?.viber || {}),
+                                  subject:String(
+                                    current?.viber?.subject ||
+                                    defaultViberAnnouncementSubject
+                                  ),
+                                  body:value,
+                                },
+                              }
+                            : {}),
                         };
+
                         patchAssetAnnouncement({
                           assetAnnouncementDrafts:nextDrafts,
                         });
@@ -20271,48 +20422,48 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         : "Copy"}
                   </Btn>
 
-                  {assetAnnouncementTab!=="viber"&&(
-                    <>
-                      <Btn variant="outline" onClick={openGmailAnnouncement}>
-                        Open Gmail
-                      </Btn>
+                  <Btn variant="outline" onClick={openGmailAnnouncement}>
+                    Open Gmail
+                  </Btn>
 
-                      <Btn
-                        variant="outline"
-                        disabled={!!assetAnnouncementEmailBusy}
-                        onClick={()=>submitAnnouncementEmail("draft")}
-                      >
-                        {assetAnnouncementEmailBusy==="draft"
-                          ? "Creating..."
-                          : "Create Gmail Draft"}
-                      </Btn>
+                  <Btn
+                    variant="outline"
+                    disabled={!!assetAnnouncementEmailBusy}
+                    onClick={()=>submitAnnouncementEmail("draft")}
+                  >
+                    {assetAnnouncementEmailBusy==="draft"
+                      ? "Creating..."
+                      : assetAnnouncementTab==="viber"
+                        ? "Create Viber Gmail Draft"
+                        : "Create Gmail Draft"}
+                  </Btn>
 
-                      {assetAnnouncementTab==="internal"&&(
-                        <Btn
-                          variant="outline"
-                          disabled={assetAnnouncementEmailBusy==="internal"}
-                          onClick={postAnnouncementToTeamFeed}
-                        >
-                          {assetAnnouncementEmailBusy==="internal"
-                            ? "Posting..."
-                            : actionDone("announcement-team-post")
-                              ? "✓ Posted to Team Feed"
-                              : "Post to Team Feed"}
-                        </Btn>
-                      )}
-
-                      <Btn
-                        disabled={!!assetAnnouncementEmailBusy}
-                        onClick={()=>submitAnnouncementEmail("send")}
-                      >
-                        {assetAnnouncementEmailBusy==="send"
-                          ? "Sending..."
-                          : actionDone("announcement-email-sent")
-                            ? "✓ Sent"
-                            : "Send Email"}
-                      </Btn>
-                    </>
+                  {assetAnnouncementTab==="internal"&&(
+                    <Btn
+                      variant="outline"
+                      disabled={assetAnnouncementEmailBusy==="internal"}
+                      onClick={postAnnouncementToTeamFeed}
+                    >
+                      {assetAnnouncementEmailBusy==="internal"
+                        ? "Posting..."
+                        : actionDone("announcement-team-post")
+                          ? "✓ Posted to Team Feed"
+                          : "Post to Team Feed"}
+                    </Btn>
                   )}
+
+                  <Btn
+                    disabled={!!assetAnnouncementEmailBusy}
+                    onClick={()=>submitAnnouncementEmail("send")}
+                  >
+                    {assetAnnouncementEmailBusy==="send"
+                      ? "Sending..."
+                      : actionDone("announcement-email-sent")
+                        ? "✓ Sent"
+                        : assetAnnouncementTab==="viber"
+                          ? "Send Viber Email"
+                          : "Send Email"}
+                  </Btn>
                 </div>
               </div>
             </div>
