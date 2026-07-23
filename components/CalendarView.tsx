@@ -16495,6 +16495,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         to:String(digitalData.assetAnnouncementTo || ""),
         cc:String(digitalData.assetAnnouncementCc || ""),
         imageUrl:String(digitalData.assetAnnouncementImageUrl || ""),
+        youtubeThumbnailUrl:String(
+          digitalData.assetAnnouncementYoutubeThumbnailUrl || ""
+        ),
         drafts:assetAnnouncementOpen
           ? assetAnnouncementEditor
           : {
@@ -16630,6 +16633,72 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         getAnnouncementImagePreviewUrl(
           assetAnnouncementData.imageUrl
         );
+
+      const getAnnouncementYoutubeVideoId = (
+        value:any
+      ) => {
+        const source = String(value || "").trim();
+
+        if(!source) return "";
+
+        const patterns = [
+          /youtu\.be\/([a-zA-Z0-9_-]{6,})/i,
+          /youtube\.com\/watch\?(?:[^#]*&)?v=([a-zA-Z0-9_-]{6,})/i,
+          /youtube\.com\/shorts\/([a-zA-Z0-9_-]{6,})/i,
+          /youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/i,
+          /youtube\.com\/live\/([a-zA-Z0-9_-]{6,})/i,
+          /[?&]v=([a-zA-Z0-9_-]{6,})/i,
+        ];
+
+        for(const pattern of patterns){
+          const match = source.match(pattern);
+          if(match?.[1]) return match[1];
+        }
+
+        return "";
+      };
+
+      const announcementYoutubeAsset =
+        productIntroDigitalAssetRows.find(
+          (asset:any)=>{
+            const name = String(
+              asset?.name || ""
+            ).toLowerCase();
+
+            const link = String(
+              asset?.link || ""
+            ).toLowerCase();
+
+            return (
+              name.includes("youtube") ||
+              link.includes("youtube.com") ||
+              link.includes("youtu.be")
+            );
+          }
+        );
+
+      const announcementYoutubeUrl =
+        String(
+          announcementYoutubeAsset?.link || ""
+        ).trim();
+
+      const announcementYoutubeVideoId =
+        getAnnouncementYoutubeVideoId(
+          announcementYoutubeUrl
+        );
+
+      const automaticYoutubeThumbnailUrl =
+        announcementYoutubeVideoId
+          ? `https://i.ytimg.com/vi/${encodeURIComponent(
+              announcementYoutubeVideoId
+            )}/hqdefault.jpg`
+          : "";
+
+      const announcementYoutubeThumbnailPreviewUrl =
+        getAnnouncementImagePreviewUrl(
+          assetAnnouncementData.youtubeThumbnailUrl
+        ) ||
+        automaticYoutubeThumbnailUrl;
 
       const readCurrentAnnouncementAssets = () => {
         const digitalWorkspace =
@@ -17331,6 +17400,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               ),
               imageUrl:
                 assetAnnouncementData.imageUrl,
+              youtubeUrl:
+                announcementYoutubeUrl,
+              youtubeThumbnailUrl:
+                assetAnnouncementData.youtubeThumbnailUrl,
             }),
           });
           const json = await response.json().catch(()=>null);
@@ -19651,6 +19724,110 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         }}
                       >
                         For Google Drive, set the file to “Anyone with the link can view.” The image is embedded by Create Gmail Draft and Send Email. Open Gmail can only prefill plain text.
+                      </div>
+                    </div>
+                  </Field>
+                )}
+
+                {assetAnnouncementTab==="client"&&(
+                  <Field label="YouTube Thumbnail URL (Optional)">
+                    <div
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:8,
+                      }}
+                    >
+                      <TI
+                        value={
+                          assetAnnouncementData.youtubeThumbnailUrl
+                        }
+                        onChange={(value:any)=>
+                          patchAssetAnnouncement({
+                            assetAnnouncementYoutubeThumbnailUrl:
+                              value,
+                          })
+                        }
+                        placeholder="Leave blank to use the YouTube video's automatic thumbnail"
+                      />
+
+                      {!!announcementYoutubeThumbnailPreviewUrl&&(
+                        <a
+                          href={
+                            announcementYoutubeUrl || undefined
+                          }
+                          target={
+                            announcementYoutubeUrl
+                              ? "_blank"
+                              : undefined
+                          }
+                          rel={
+                            announcementYoutubeUrl
+                              ? "noreferrer"
+                              : undefined
+                          }
+                          style={{
+                            position:"relative",
+                            display:"block",
+                            width:"100%",
+                            maxWidth:680,
+                            overflow:"hidden",
+                            border:`1px solid ${C.border}`,
+                            borderRadius:10,
+                            background:"#000000",
+                            textDecoration:"none",
+                          }}
+                        >
+                          <img
+                            src={
+                              announcementYoutubeThumbnailPreviewUrl
+                            }
+                            alt="YouTube thumbnail preview"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            style={{
+                              display:"block",
+                              width:"100%",
+                              aspectRatio:"16 / 9",
+                              objectFit:"cover",
+                            }}
+                          />
+
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              position:"absolute",
+                              left:"50%",
+                              top:"50%",
+                              transform:"translate(-50%,-50%)",
+                              width:56,
+                              height:40,
+                              borderRadius:10,
+                              background:"#FF0000",
+                              color:"#FFFFFF",
+                              display:"flex",
+                              alignItems:"center",
+                              justifyContent:"center",
+                              boxShadow:"0 8px 24px rgba(0,0,0,.3)",
+                              fontSize:20,
+                              fontWeight:900,
+                            }}
+                          >
+                            ▶
+                          </span>
+                        </a>
+                      )}
+
+                      <div
+                        style={{
+                          color:C.faint,
+                          fontSize:10.5,
+                          lineHeight:1.45,
+                        }}
+                      >
+                        {announcementYoutubeUrl
+                          ? "The YouTube link was detected from Digital Creative Asset Links. Leave this field blank to use YouTube’s standard thumbnail automatically."
+                          : "Add the YouTube link under Digital Creative Asset Links first. You may also paste a custom Google Drive or direct thumbnail URL here."}
                       </div>
                     </div>
                   </Field>
