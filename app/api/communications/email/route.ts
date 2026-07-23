@@ -39,6 +39,46 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#039;");
 }
 
+function escapeRegExp(
+  value: string
+) {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+}
+
+function formatInlineText(
+  value: unknown,
+  boldPhrase?: string
+) {
+  const escapedValue =
+    escapeHtml(value);
+
+  const cleanPhrase =
+    String(boldPhrase || "").trim();
+
+  if (!cleanPhrase) {
+    return escapedValue;
+  }
+
+  const escapedPhrase =
+    escapeHtml(cleanPhrase);
+
+  if (!escapedPhrase) {
+    return escapedValue;
+  }
+
+  return escapedValue.replace(
+    new RegExp(
+      escapeRegExp(escapedPhrase),
+      "gi"
+    ),
+    (match) =>
+      `<strong style="font-weight:700;color:#111827;">${match}</strong>`
+  );
+}
+
 function getGoogleDriveFileId(
   value: unknown
 ) {
@@ -145,6 +185,8 @@ function plainTextToHtml(
   value: string,
   options?: {
     hideYoutubeLine?: boolean;
+    insertHtmlBeforeWhy?: string;
+    boldPhrase?: string;
   }
 ) {
   const lines = String(value || "")
@@ -155,6 +197,7 @@ function plainTextToHtml(
   let bullets: string[] = [];
   let greetingSeen = false;
   let bodyHeadlineRendered = false;
+  let insertedBeforeWhy = false;
 
   const flushBullets = () => {
     if (!bullets.length) return;
@@ -163,8 +206,9 @@ function plainTextToHtml(
       `<ul style="margin:8px 0 18px;padding-left:22px;">${bullets
         .map(
           (item) =>
-            `<li style="margin:0 0 7px;line-height:1.55;">${escapeHtml(
-              item
+            `<li style="margin:0 0 7px;line-height:1.55;">${formatInlineText(
+              item,
+              options?.boldPhrase
             )}</li>`
         )
         .join("")}</ul>`
@@ -186,8 +230,9 @@ function plainTextToHtml(
       greetingSeen = true;
 
       parts.push(
-        `<p style="margin:0 0 18px;line-height:1.6;color:#374151;">${escapeHtml(
-          line
+        `<p style="margin:0 0 18px;line-height:1.6;color:#374151;">${formatInlineText(
+          line,
+          options?.boldPhrase
         )}</p>`
       );
       return;
@@ -201,8 +246,9 @@ function plainTextToHtml(
       bodyHeadlineRendered = true;
 
       parts.push(
-        `<h2 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#111827;font-weight:700;">${escapeHtml(
-          line
+        `<h2 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#111827;font-weight:700;">${formatInlineText(
+          line,
+          options?.boldPhrase
         )}</h2>`
       );
       return;
@@ -223,6 +269,18 @@ function plainTextToHtml(
         line
       )
     ) {
+      flushBullets();
+
+      if (
+        options?.insertHtmlBeforeWhy &&
+        !insertedBeforeWhy
+      ) {
+        parts.push(
+          options.insertHtmlBeforeWhy
+        );
+        insertedBeforeWhy = true;
+      }
+
       parts.push(
         `<h3 style="margin:22px 0 8px;font-size:17px;line-height:1.3;color:#111827;">Why You’ll Love It</h3>`
       );
@@ -254,21 +312,32 @@ function plainTextToHtml(
 
     if (looksLikeHeadline) {
       parts.push(
-        `<h2 style="margin:18px 0 12px;font-size:20px;line-height:1.35;color:#111827;">${escapeHtml(
-          line
+        `<h2 style="margin:18px 0 12px;font-size:20px;line-height:1.35;color:#111827;">${formatInlineText(
+          line,
+          options?.boldPhrase
         )}</h2>`
       );
       return;
     }
 
     parts.push(
-      `<p style="margin:0 0 14px;line-height:1.65;color:#374151;">${escapeHtml(
-        line
+      `<p style="margin:0 0 14px;line-height:1.65;color:#374151;">${formatInlineText(
+        line,
+        options?.boldPhrase
       )}</p>`
     );
   });
 
   flushBullets();
+
+  if (
+    options?.insertHtmlBeforeWhy &&
+    !insertedBeforeWhy
+  ) {
+    parts.push(
+      options.insertHtmlBeforeWhy
+    );
+  }
 
   return parts.join("");
 }
@@ -279,12 +348,14 @@ function buildHtmlEmail({
   imageSource,
   youtubeUrl,
   youtubeThumbnailSource,
+  checklistTitle,
 }: {
   subject: string;
   body: string;
   imageSource?: string;
   youtubeUrl?: string;
   youtubeThumbnailSource?: string;
+  checklistTitle?: string;
 }) {
   const imageHtml = imageSource
     ? `<div style="margin:0 0 22px;text-align:center;">
@@ -359,9 +430,12 @@ function buildHtmlEmail({
         class="emdc-email-card"
         style="width:100%;max-width:860px;margin:0 auto;padding:36px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;box-sizing:border-box;"
       >
-        ${imageHtml}
         ${plainTextToHtml(body, {
           hideYoutubeLine: Boolean(youtubeUrl),
+          insertHtmlBeforeWhy:
+            imageHtml,
+          boldPhrase:
+            checklistTitle,
         })}
         ${youtubeHtml}
       </div>
@@ -539,6 +613,10 @@ export async function POST(
       requestBody?.body || ""
     ).trim();
 
+    const checklistTitle = String(
+      requestBody?.checklistTitle || ""
+    ).trim();
+
     const requestedImageUrl =
       resolveImageUrl(
         requestBody?.imageUrl
@@ -636,6 +714,7 @@ export async function POST(
         inlineYoutubeThumbnail
           ? `cid:${youtubeThumbnailContentId}`
           : resolvedYoutubeThumbnailUrl,
+      checklistTitle,
     });
 
     const messageHeaders = [
