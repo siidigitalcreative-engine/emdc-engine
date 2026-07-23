@@ -18059,13 +18059,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         })
       );
 
-      const youtubePrimaryProductName = String(
-        youtubeProductSource?.[0]?.product ||
-        youtubeProductSource?.[0]?.collection ||
-        youtubeChecklistTitle ||
-        "Product Collection"
-      ).trim();
-
       const stripLeadingBrand = (value:any) => {
         const clean = String(value || "")
           .replace(/\s+/g," ")
@@ -18087,9 +18080,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const youtubeBaseProductTitle =
-        stripLeadingBrand(
-          youtubePrimaryProductName
-        ) ||
         stripLeadingBrand(
           youtubeChecklistTitle
         ) ||
@@ -18458,7 +18448,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     "Do not use markdown code fences.",
                     `The YouTube title must follow this exact format: ${buildYoutubeTitle("BENEFIT-DRIVEN HOOK TITLE")}`,
                     "The brand name at the beginning of the title must be written in ALL CAPS.",
-                    `Use this product or collection name exactly in the title: ${youtubeBaseProductTitle}`,
+                    `Use this checklist title exactly as the title base after the ALL-CAPS brand: ${youtubeBaseProductTitle}`,
                     "After the colon, create a concise benefit-driven Hook Title.",
                     "The Hook Title must communicate a clear emotional or practical benefit, not repeat the product name.",
                     "Keep the Hook Title punchy, premium, and memorable, ideally 4 to 8 words.",
@@ -18486,7 +18476,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       checklistAnnouncementType,
                     checklistTitle:
                       youtubeChecklistTitle,
-                    productOrCollectionName:
+                    checklistTitleBase:
                       youtubeBaseProductTitle,
                     requiredTitleFormat:
                       buildYoutubeTitle(
@@ -18509,7 +18499,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       youtubeEcommerceSource,
                     referenceFormat:{
                       title:
-                        "ALL-CAPS BRAND + Product/Collection Name: Benefit-Driven Hook Title",
+                        "ALL-CAPS BRAND + Checklist Title: Benefit-Driven Hook Title",
                       descriptionSections:[
                         "Premium opening paragraph",
                         "Problem-solving and use occasions",
