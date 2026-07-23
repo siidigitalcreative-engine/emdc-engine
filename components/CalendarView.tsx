@@ -14199,473 +14199,6 @@ ${slidesHtml}
 
 
 
-      const youtubeChecklistRaw = [
-        String(group?.launchType || ""),
-        String(launchTypes?.[group?.launchType]?.label || ""),
-      ].join(" ").toLowerCase();
-
-      const youtubeGeneratorEligible =
-        youtubeChecklistRaw.includes("introduction") ||
-        youtubeChecklistRaw.includes("reactivation");
-
-      const youtubeChecklistTitle = String(
-        group?.groupName ||
-        group?.name ||
-        "Product Collection"
-      ).trim();
-
-      const youtubeBrandNames = Array.from(
-        new Set(
-          productRows
-            .map((row:any)=>String(row?.brand || "").trim())
-            .filter(Boolean)
-        )
-      );
-
-      const youtubePrimaryBrand = String(
-        youtubeBrandNames[0] || ""
-      ).trim();
-
-      const youtubeBrandUpper =
-        youtubePrimaryBrand.toUpperCase();
-
-      const escapeYoutubeRegex = (value:any) =>
-        String(value || "")
-          .replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-
-      const buildYoutubeTitle = () => {
-        let hookTitle = youtubeChecklistTitle;
-
-        if(youtubePrimaryBrand){
-          hookTitle = hookTitle
-            .replace(
-              new RegExp(
-                `^${escapeYoutubeRegex(youtubePrimaryBrand)}(?:\\s+|\\s*[-:|]\\s*)`,
-                "i"
-              ),
-              ""
-            )
-            .trim();
-        }
-
-        return [
-          youtubeBrandUpper,
-          hookTitle || youtubeChecklistTitle,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .replace(/\s+/g," ")
-          .trim();
-      };
-
-      const youtubeEcommerceWorkspace = {
-        ...(
-          backupWorkspace?.ecommerce &&
-          typeof backupWorkspace.ecommerce === "object"
-            ? backupWorkspace.ecommerce
-            : {}
-        ),
-        ...(
-          persistedWorkspace?.ecommerce &&
-          typeof persistedWorkspace.ecommerce === "object"
-            ? persistedWorkspace.ecommerce
-            : {}
-        ),
-        ...(
-          ((group.aiWorkspace || {}) as any).ecommerce &&
-          typeof ((group.aiWorkspace || {}) as any).ecommerce === "object"
-            ? ((group.aiWorkspace || {}) as any).ecommerce
-            : {}
-        ),
-      } as any;
-
-      const youtubeSavedEcommerceOutputs = Array.isArray(
-        youtubeEcommerceWorkspace?.savedOutputs
-      )
-        ? youtubeEcommerceWorkspace.savedOutputs
-        : [];
-
-      const youtubeLatestSavedEcommerceOutput =
-        youtubeSavedEcommerceOutputs.length
-          ? [...youtubeSavedEcommerceOutputs]
-              .filter((item:any)=>
-                String(
-                  item?.text ||
-                  item?.generatedText ||
-                  ""
-                ).trim()
-              )
-              .sort((left:any,right:any)=>{
-                const leftTime = new Date(
-                  left?.updatedAt ||
-                  left?.createdAt ||
-                  0
-                ).getTime();
-
-                const rightTime = new Date(
-                  right?.updatedAt ||
-                  right?.createdAt ||
-                  0
-                ).getTime();
-
-                return rightTime - leftTime;
-              })[0]
-          : null;
-
-      const youtubeEcommerceSource = String(
-        youtubeEcommerceWorkspace?.generatedText ||
-        youtubeLatestSavedEcommerceOutput?.text ||
-        youtubeLatestSavedEcommerceOutput?.generatedText ||
-        ""
-      ).trim();
-
-      const youtubeProductSource = productRows.map(
-        (row:any,index:number)=>({
-          no:index+1,
-          brand:String(row?.brand || ""),
-          collection:String(
-            row?.collection ||
-            row?.category ||
-            ""
-          ),
-          product:String(
-            row?.product ||
-            row?.productName ||
-            row?.name ||
-            ""
-          ),
-          sku:String(
-            row?.skuCode ||
-            row?.sku ||
-            row?.value ||
-            ""
-          ),
-        })
-      );
-
-      const youtubeFieldKey = String(
-        group?.id ||
-        "checklist"
-      )
-        .replace(/[^a-z0-9_-]/gi,"-");
-
-      const youtubeTitleFieldId =
-        `emdc-youtube-title-${youtubeFieldKey}`;
-
-      const youtubeDescriptionFieldId =
-        `emdc-youtube-description-${youtubeFieldKey}`;
-
-      const normalizeGeneratedYoutubeTitle = (
-        value:any
-      ) => {
-        const exactTitle =
-          buildYoutubeTitle();
-
-        if(exactTitle){
-          return exactTitle;
-        }
-
-        return String(value || "")
-          .replace(/\s+/g," ")
-          .trim();
-      };
-
-      const readYoutubeCopyDraft = () => {
-        const titleInput =
-          typeof document !== "undefined"
-            ? document.getElementById(
-                youtubeTitleFieldId
-              ) as HTMLInputElement | null
-            : null;
-
-        const descriptionInput =
-          typeof document !== "undefined"
-            ? document.getElementById(
-                youtubeDescriptionFieldId
-              ) as HTMLTextAreaElement | null
-            : null;
-
-        return {
-          title:normalizeGeneratedYoutubeTitle(
-            titleInput?.value ||
-            digitalData?.youtubeTitle ||
-            buildYoutubeTitle()
-          ),
-          description:String(
-            descriptionInput?.value ||
-            digitalData?.youtubeDescription ||
-            ""
-          ).trim(),
-        };
-      };
-
-      const saveYoutubeCopy = (
-        copy?:{
-          title?:string;
-          description?:string;
-        }
-      ) => {
-        const draft =
-          copy ||
-          readYoutubeCopyDraft();
-
-        const nextCopy = {
-          title:normalizeGeneratedYoutubeTitle(
-            draft?.title
-          ),
-          description:String(
-            draft?.description ||
-            ""
-          ).trim(),
-        };
-
-        updateAiWorkspace("digital",{
-          youtubeTitle:nextCopy.title,
-          youtubeDescription:
-            nextCopy.description,
-          youtubeCopySavedAt:
-            new Date().toISOString(),
-        });
-
-        return nextCopy;
-      };
-
-      const parseYoutubeCopyJson = (
-        source:any
-      ) => {
-        const raw = String(source || "")
-          .trim()
-          .replace(/^```(?:json)?\s*/i,"")
-          .replace(/\s*```$/,"");
-
-        try {
-          const parsed = JSON.parse(raw);
-
-          return {
-            title:String(
-              parsed?.title || ""
-            ).trim(),
-            description:String(
-              parsed?.description || ""
-            ).trim(),
-          };
-        } catch {
-          return {
-            title:"",
-            description:raw,
-          };
-        }
-      };
-
-      const generateYoutubeCopy = async () => {
-        if(aiBusy.youtubeCopy) return;
-
-        if(
-          !youtubeProductSource.length &&
-          !youtubeEcommerceSource
-        ){
-          setAiError((current:any)=>({
-            ...current,
-            youtubeCopy:
-              "Add products or generate the E-commerce output first."
-          }));
-          return;
-        }
-
-        setAiBusy((current:any)=>({
-          ...current,
-          youtubeCopy:true,
-        }));
-
-        setAiError((current:any)=>({
-          ...current,
-          youtubeCopy:"",
-        }));
-
-        try {
-          const response = await fetch(
-            "/api/ai/generate-text",
-            {
-              method:"POST",
-              headers:{
-                "Content-Type":
-                  "application/json",
-              },
-              body:JSON.stringify({
-                task:
-                  "youtube_product_copy",
-                taskLabel:
-                  `${checklistAnnouncementType} YouTube Title and Description`,
-                tone:"premium",
-                maxOutputTokens:1800,
-                instruction:[
-                  `Create one YouTube title and one YouTube description for a ${checklistAnnouncementType} checklist.`,
-                  'Return strict JSON only in this shape: {"title":"","description":""}.',
-                  "Do not use markdown code fences.",
-                  `The exact YouTube title must be: ${buildYoutubeTitle()}`,
-                  "The brand name at the beginning of the title must be written in ALL CAPS.",
-                  "The checklist title is the Hook Title. Preserve its wording after the brand name.",
-                  "Write the description in polished, sophisticated, natural English.",
-                  "Follow this structure:",
-                  "1. Opening paragraph that elevates the product or collection and explains its everyday and entertaining value.",
-                  "2. A second paragraph that explains the problems it helps solve and gives realistic use occasions.",
-                  "3. One short emotional brand paragraph.",
-                  "4. A heading exactly written as: ✨ Key Features",
-                  "5. A concise hyphen bullet list of only supported key features.",
-                  `6. End with: Stay refined. Stay ${youtubePrimaryBrand || "the brand"}.`,
-                  "Do not invent materials, specifications, benefits, use cases, features, variants, or claims that are not supported by the supplied product rows or E-commerce output.",
-                  "Do not include prices, links, hashtags, timestamps, calls to subscribe, or marketplace ordering instructions.",
-                  "Keep the description useful for YouTube and easy to read.",
-                ].join("\n"),
-                input:JSON.stringify({
-                  checklistType:
-                    checklistAnnouncementType,
-                  checklistTitle:
-                    youtubeChecklistTitle,
-                  hookTitle:
-                    youtubeChecklistTitle,
-                  requiredTitle:
-                    buildYoutubeTitle(),
-                  brand:
-                    youtubePrimaryBrand,
-                  products:
-                    youtubeProductSource,
-                  ecommerceOutput:
-                    youtubeEcommerceSource,
-                  referenceFormat:{
-                    title:
-                      "ALL-CAPS BRAND + Checklist Hook Title",
-                    descriptionSections:[
-                      "Premium opening paragraph",
-                      "Problem-solving and use occasions",
-                      "Emotional brand statement",
-                      "✨ Key Features",
-                      "Hyphen feature bullets",
-                      "Stay refined. Stay Brand.",
-                    ],
-                  },
-                },null,2),
-              }),
-            }
-          );
-
-          const json =
-            await response
-              .json()
-              .catch(()=>null);
-
-          if(!response.ok){
-            throw new Error(
-              json?.error ||
-              json?.message ||
-              "Unable to generate YouTube copy."
-            );
-          }
-
-          const generated =
-            parseYoutubeCopyJson(
-              json?.text || ""
-            );
-
-          if(!generated.description){
-            throw new Error(
-              "AI returned an empty YouTube description. Please generate again."
-            );
-          }
-
-          updateAiWorkspace("digital",{
-            youtubeTitle:
-              normalizeGeneratedYoutubeTitle(
-                generated.title
-              ),
-            youtubeDescription:
-              generated.description,
-            youtubeCopyGeneratedAt:
-              new Date().toISOString(),
-          });
-
-          markActionDone(
-            "generate-youtube-copy"
-          );
-        } catch(error:any) {
-          setAiError((current:any)=>({
-            ...current,
-            youtubeCopy:
-              error?.message ||
-              "Unable to generate YouTube copy."
-          }));
-        } finally {
-          setAiBusy((current:any)=>({
-            ...current,
-            youtubeCopy:false,
-          }));
-        }
-      };
-
-      const copyYoutubeField = async (
-        type:"title"|"description"|"all"
-      ) => {
-        const draft =
-          readYoutubeCopyDraft();
-
-        const value =
-          type === "title"
-            ? draft.title
-            : type === "description"
-              ? draft.description
-              : [
-                  "YouTube Title",
-                  draft.title,
-                  "",
-                  "YouTube Description",
-                  draft.description,
-                ].join("\n");
-
-        if(!value.trim()) return;
-
-        try {
-          await navigator.clipboard.writeText(
-            value
-          );
-          markActionDone(
-            `copy-youtube-${type}`
-          );
-        } catch {}
-      };
-
-      const addYoutubeCopyToOverview = () => {
-        const saved =
-          saveYoutubeCopy();
-
-        if(
-          !saved.title &&
-          !saved.description
-        ) return;
-
-        addToOverview(
-          "Digital Creative",
-          `${checklistAnnouncementType} YouTube Copy`,
-          [
-            "YouTube Title",
-            saved.title,
-            "",
-            "YouTube Description",
-            saved.description,
-          ].join("\n"),
-          "YouTube Copy",
-          {
-            tab:"digital",
-            type:"youtubeCopy",
-            checklistType:
-              checklistAnnouncementType,
-          }
-        );
-
-        markActionDone(
-          "overview-youtube-copy"
-        );
-      };
-
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -18467,6 +18000,473 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         }
       };
 
+
+      const youtubeChecklistRaw = [
+        String(group?.launchType || ""),
+        String(launchTypes?.[group?.launchType]?.label || ""),
+      ].join(" ").toLowerCase();
+
+      const youtubeGeneratorEligible =
+        youtubeChecklistRaw.includes("introduction") ||
+        youtubeChecklistRaw.includes("reactivation");
+
+      const youtubeChecklistTitle = String(
+        group?.groupName ||
+        group?.name ||
+        "Product Collection"
+      ).trim();
+
+      const youtubeBrandNames = Array.from(
+        new Set(
+          productRows
+            .map((row:any)=>String(row?.brand || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      const youtubePrimaryBrand = String(
+        youtubeBrandNames[0] || ""
+      ).trim();
+
+      const youtubeBrandUpper =
+        youtubePrimaryBrand.toUpperCase();
+
+      const escapeYoutubeRegex = (value:any) =>
+        String(value || "")
+          .replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+
+      const buildYoutubeTitle = () => {
+        let hookTitle = youtubeChecklistTitle;
+
+        if(youtubePrimaryBrand){
+          hookTitle = hookTitle
+            .replace(
+              new RegExp(
+                `^${escapeYoutubeRegex(youtubePrimaryBrand)}(?:\\s+|\\s*[-:|]\\s*)`,
+                "i"
+              ),
+              ""
+            )
+            .trim();
+        }
+
+        return [
+          youtubeBrandUpper,
+          hookTitle || youtubeChecklistTitle,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .replace(/\s+/g," ")
+          .trim();
+      };
+
+      const youtubeEcommerceWorkspace = {
+        ...(
+          backupWorkspace?.ecommerce &&
+          typeof backupWorkspace.ecommerce === "object"
+            ? backupWorkspace.ecommerce
+            : {}
+        ),
+        ...(
+          persistedWorkspace?.ecommerce &&
+          typeof persistedWorkspace.ecommerce === "object"
+            ? persistedWorkspace.ecommerce
+            : {}
+        ),
+        ...(
+          ((group.aiWorkspace || {}) as any).ecommerce &&
+          typeof ((group.aiWorkspace || {}) as any).ecommerce === "object"
+            ? ((group.aiWorkspace || {}) as any).ecommerce
+            : {}
+        ),
+      } as any;
+
+      const youtubeSavedEcommerceOutputs = Array.isArray(
+        youtubeEcommerceWorkspace?.savedOutputs
+      )
+        ? youtubeEcommerceWorkspace.savedOutputs
+        : [];
+
+      const youtubeLatestSavedEcommerceOutput =
+        youtubeSavedEcommerceOutputs.length
+          ? [...youtubeSavedEcommerceOutputs]
+              .filter((item:any)=>
+                String(
+                  item?.text ||
+                  item?.generatedText ||
+                  ""
+                ).trim()
+              )
+              .sort((left:any,right:any)=>{
+                const leftTime = new Date(
+                  left?.updatedAt ||
+                  left?.createdAt ||
+                  0
+                ).getTime();
+
+                const rightTime = new Date(
+                  right?.updatedAt ||
+                  right?.createdAt ||
+                  0
+                ).getTime();
+
+                return rightTime - leftTime;
+              })[0]
+          : null;
+
+      const youtubeEcommerceSource = String(
+        youtubeEcommerceWorkspace?.generatedText ||
+        youtubeLatestSavedEcommerceOutput?.text ||
+        youtubeLatestSavedEcommerceOutput?.generatedText ||
+        ""
+      ).trim();
+
+      const youtubeProductSource = productRows.map(
+        (row:any,index:number)=>({
+          no:index+1,
+          brand:String(row?.brand || ""),
+          collection:String(
+            row?.collection ||
+            row?.category ||
+            ""
+          ),
+          product:String(
+            row?.product ||
+            row?.productName ||
+            row?.name ||
+            ""
+          ),
+          sku:String(
+            row?.skuCode ||
+            row?.sku ||
+            row?.value ||
+            ""
+          ),
+        })
+      );
+
+      const youtubeFieldKey = String(
+        group?.id ||
+        "checklist"
+      )
+        .replace(/[^a-z0-9_-]/gi,"-");
+
+      const youtubeTitleFieldId =
+        `emdc-youtube-title-${youtubeFieldKey}`;
+
+      const youtubeDescriptionFieldId =
+        `emdc-youtube-description-${youtubeFieldKey}`;
+
+      const normalizeGeneratedYoutubeTitle = (
+        value:any
+      ) => {
+        const exactTitle =
+          buildYoutubeTitle();
+
+        if(exactTitle){
+          return exactTitle;
+        }
+
+        return String(value || "")
+          .replace(/\s+/g," ")
+          .trim();
+      };
+
+      const readYoutubeCopyDraft = () => {
+        const titleInput =
+          typeof document !== "undefined"
+            ? document.getElementById(
+                youtubeTitleFieldId
+              ) as HTMLInputElement | null
+            : null;
+
+        const descriptionInput =
+          typeof document !== "undefined"
+            ? document.getElementById(
+                youtubeDescriptionFieldId
+              ) as HTMLTextAreaElement | null
+            : null;
+
+        return {
+          title:normalizeGeneratedYoutubeTitle(
+            titleInput?.value ||
+            digitalData?.youtubeTitle ||
+            buildYoutubeTitle()
+          ),
+          description:String(
+            descriptionInput?.value ||
+            digitalData?.youtubeDescription ||
+            ""
+          ).trim(),
+        };
+      };
+
+      const saveYoutubeCopy = (
+        copy?:{
+          title?:string;
+          description?:string;
+        }
+      ) => {
+        const draft =
+          copy ||
+          readYoutubeCopyDraft();
+
+        const nextCopy = {
+          title:normalizeGeneratedYoutubeTitle(
+            draft?.title
+          ),
+          description:String(
+            draft?.description ||
+            ""
+          ).trim(),
+        };
+
+        updateAiWorkspace("digital",{
+          youtubeTitle:nextCopy.title,
+          youtubeDescription:
+            nextCopy.description,
+          youtubeCopySavedAt:
+            new Date().toISOString(),
+        });
+
+        return nextCopy;
+      };
+
+      const parseYoutubeCopyJson = (
+        source:any
+      ) => {
+        const raw = String(source || "")
+          .trim()
+          .replace(/^```(?:json)?\s*/i,"")
+          .replace(/\s*```$/,"");
+
+        try {
+          const parsed = JSON.parse(raw);
+
+          return {
+            title:String(
+              parsed?.title || ""
+            ).trim(),
+            description:String(
+              parsed?.description || ""
+            ).trim(),
+          };
+        } catch {
+          return {
+            title:"",
+            description:raw,
+          };
+        }
+      };
+
+      const generateYoutubeCopy = async () => {
+        if(aiBusy.youtubeCopy) return;
+
+        if(
+          !youtubeProductSource.length &&
+          !youtubeEcommerceSource
+        ){
+          setAiError((current:any)=>({
+            ...current,
+            youtubeCopy:
+              "Add products or generate the E-commerce output first."
+          }));
+          return;
+        }
+
+        setAiBusy((current:any)=>({
+          ...current,
+          youtubeCopy:true,
+        }));
+
+        setAiError((current:any)=>({
+          ...current,
+          youtubeCopy:"",
+        }));
+
+        try {
+          const response = await fetch(
+            "/api/ai/generate-text",
+            {
+              method:"POST",
+              headers:{
+                "Content-Type":
+                  "application/json",
+              },
+              body:JSON.stringify({
+                task:
+                  "youtube_product_copy",
+                taskLabel:
+                  `${checklistAnnouncementType} YouTube Title and Description`,
+                tone:"premium",
+                maxOutputTokens:1800,
+                instruction:[
+                  `Create one YouTube title and one YouTube description for a ${checklistAnnouncementType} checklist.`,
+                  'Return strict JSON only in this shape: {"title":"","description":""}.',
+                  "Do not use markdown code fences.",
+                  `The exact YouTube title must be: ${buildYoutubeTitle()}`,
+                  "The brand name at the beginning of the title must be written in ALL CAPS.",
+                  "The checklist title is the Hook Title. Preserve its wording after the brand name.",
+                  "Write the description in polished, sophisticated, natural English.",
+                  "Follow this structure:",
+                  "1. Opening paragraph that elevates the product or collection and explains its everyday and entertaining value.",
+                  "2. A second paragraph that explains the problems it helps solve and gives realistic use occasions.",
+                  "3. One short emotional brand paragraph.",
+                  "4. A heading exactly written as: ✨ Key Features",
+                  "5. A concise hyphen bullet list of only supported key features.",
+                  `6. End with: Stay refined. Stay ${youtubePrimaryBrand || "the brand"}.`,
+                  "Do not invent materials, specifications, benefits, use cases, features, variants, or claims that are not supported by the supplied product rows or E-commerce output.",
+                  "Do not include prices, links, hashtags, timestamps, calls to subscribe, or marketplace ordering instructions.",
+                  "Keep the description useful for YouTube and easy to read.",
+                ].join("\n"),
+                input:JSON.stringify({
+                  checklistType:
+                    checklistAnnouncementType,
+                  checklistTitle:
+                    youtubeChecklistTitle,
+                  hookTitle:
+                    youtubeChecklistTitle,
+                  requiredTitle:
+                    buildYoutubeTitle(),
+                  brand:
+                    youtubePrimaryBrand,
+                  products:
+                    youtubeProductSource,
+                  ecommerceOutput:
+                    youtubeEcommerceSource,
+                  referenceFormat:{
+                    title:
+                      "ALL-CAPS BRAND + Checklist Hook Title",
+                    descriptionSections:[
+                      "Premium opening paragraph",
+                      "Problem-solving and use occasions",
+                      "Emotional brand statement",
+                      "✨ Key Features",
+                      "Hyphen feature bullets",
+                      "Stay refined. Stay Brand.",
+                    ],
+                  },
+                },null,2),
+              }),
+            }
+          );
+
+          const json =
+            await response
+              .json()
+              .catch(()=>null);
+
+          if(!response.ok){
+            throw new Error(
+              json?.error ||
+              json?.message ||
+              "Unable to generate YouTube copy."
+            );
+          }
+
+          const generated =
+            parseYoutubeCopyJson(
+              json?.text || ""
+            );
+
+          if(!generated.description){
+            throw new Error(
+              "AI returned an empty YouTube description. Please generate again."
+            );
+          }
+
+          updateAiWorkspace("digital",{
+            youtubeTitle:
+              normalizeGeneratedYoutubeTitle(
+                generated.title
+              ),
+            youtubeDescription:
+              generated.description,
+            youtubeCopyGeneratedAt:
+              new Date().toISOString(),
+          });
+
+          markActionDone(
+            "generate-youtube-copy"
+          );
+        } catch(error:any) {
+          setAiError((current:any)=>({
+            ...current,
+            youtubeCopy:
+              error?.message ||
+              "Unable to generate YouTube copy."
+          }));
+        } finally {
+          setAiBusy((current:any)=>({
+            ...current,
+            youtubeCopy:false,
+          }));
+        }
+      };
+
+      const copyYoutubeField = async (
+        type:"title"|"description"|"all"
+      ) => {
+        const draft =
+          readYoutubeCopyDraft();
+
+        const value =
+          type === "title"
+            ? draft.title
+            : type === "description"
+              ? draft.description
+              : [
+                  "YouTube Title",
+                  draft.title,
+                  "",
+                  "YouTube Description",
+                  draft.description,
+                ].join("\n");
+
+        if(!value.trim()) return;
+
+        try {
+          await navigator.clipboard.writeText(
+            value
+          );
+          markActionDone(
+            `copy-youtube-${type}`
+          );
+        } catch {}
+      };
+
+      const addYoutubeCopyToOverview = () => {
+        const saved =
+          saveYoutubeCopy();
+
+        if(
+          !saved.title &&
+          !saved.description
+        ) return;
+
+        addToOverview(
+          "Digital Creative",
+          `${checklistAnnouncementType} YouTube Copy`,
+          [
+            "YouTube Title",
+            saved.title,
+            "",
+            "YouTube Description",
+            saved.description,
+          ].join("\n"),
+          "YouTube Copy",
+          {
+            tab:"digital",
+            type:"youtubeCopy",
+            checklistType:
+              checklistAnnouncementType,
+          }
+        );
+
+        markActionDone(
+          "overview-youtube-copy"
+        );
+      };
 
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
