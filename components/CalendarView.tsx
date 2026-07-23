@@ -14199,6 +14199,473 @@ ${slidesHtml}
 
 
 
+      const youtubeChecklistRaw = [
+        String(group?.launchType || ""),
+        String(launchTypes?.[group?.launchType]?.label || ""),
+      ].join(" ").toLowerCase();
+
+      const youtubeGeneratorEligible =
+        youtubeChecklistRaw.includes("introduction") ||
+        youtubeChecklistRaw.includes("reactivation");
+
+      const youtubeChecklistTitle = String(
+        group?.groupName ||
+        group?.name ||
+        "Product Collection"
+      ).trim();
+
+      const youtubeBrandNames = Array.from(
+        new Set(
+          productRows
+            .map((row:any)=>String(row?.brand || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      const youtubePrimaryBrand = String(
+        youtubeBrandNames[0] || ""
+      ).trim();
+
+      const youtubeBrandUpper =
+        youtubePrimaryBrand.toUpperCase();
+
+      const escapeYoutubeRegex = (value:any) =>
+        String(value || "")
+          .replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+
+      const buildYoutubeTitle = () => {
+        let hookTitle = youtubeChecklistTitle;
+
+        if(youtubePrimaryBrand){
+          hookTitle = hookTitle
+            .replace(
+              new RegExp(
+                `^${escapeYoutubeRegex(youtubePrimaryBrand)}(?:\\s+|\\s*[-:|]\\s*)`,
+                "i"
+              ),
+              ""
+            )
+            .trim();
+        }
+
+        return [
+          youtubeBrandUpper,
+          hookTitle || youtubeChecklistTitle,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .replace(/\s+/g," ")
+          .trim();
+      };
+
+      const youtubeEcommerceWorkspace = {
+        ...(
+          backupWorkspace?.ecommerce &&
+          typeof backupWorkspace.ecommerce === "object"
+            ? backupWorkspace.ecommerce
+            : {}
+        ),
+        ...(
+          persistedWorkspace?.ecommerce &&
+          typeof persistedWorkspace.ecommerce === "object"
+            ? persistedWorkspace.ecommerce
+            : {}
+        ),
+        ...(
+          ((group.aiWorkspace || {}) as any).ecommerce &&
+          typeof ((group.aiWorkspace || {}) as any).ecommerce === "object"
+            ? ((group.aiWorkspace || {}) as any).ecommerce
+            : {}
+        ),
+      } as any;
+
+      const youtubeSavedEcommerceOutputs = Array.isArray(
+        youtubeEcommerceWorkspace?.savedOutputs
+      )
+        ? youtubeEcommerceWorkspace.savedOutputs
+        : [];
+
+      const youtubeLatestSavedEcommerceOutput =
+        youtubeSavedEcommerceOutputs.length
+          ? [...youtubeSavedEcommerceOutputs]
+              .filter((item:any)=>
+                String(
+                  item?.text ||
+                  item?.generatedText ||
+                  ""
+                ).trim()
+              )
+              .sort((left:any,right:any)=>{
+                const leftTime = new Date(
+                  left?.updatedAt ||
+                  left?.createdAt ||
+                  0
+                ).getTime();
+
+                const rightTime = new Date(
+                  right?.updatedAt ||
+                  right?.createdAt ||
+                  0
+                ).getTime();
+
+                return rightTime - leftTime;
+              })[0]
+          : null;
+
+      const youtubeEcommerceSource = String(
+        youtubeEcommerceWorkspace?.generatedText ||
+        youtubeLatestSavedEcommerceOutput?.text ||
+        youtubeLatestSavedEcommerceOutput?.generatedText ||
+        ""
+      ).trim();
+
+      const youtubeProductSource = productRows.map(
+        (row:any,index:number)=>({
+          no:index+1,
+          brand:String(row?.brand || ""),
+          collection:String(
+            row?.collection ||
+            row?.category ||
+            ""
+          ),
+          product:String(
+            row?.product ||
+            row?.productName ||
+            row?.name ||
+            ""
+          ),
+          sku:String(
+            row?.skuCode ||
+            row?.sku ||
+            row?.value ||
+            ""
+          ),
+        })
+      );
+
+      const youtubeFieldKey = String(
+        group?.id ||
+        "checklist"
+      )
+        .replace(/[^a-z0-9_-]/gi,"-");
+
+      const youtubeTitleFieldId =
+        `emdc-youtube-title-${youtubeFieldKey}`;
+
+      const youtubeDescriptionFieldId =
+        `emdc-youtube-description-${youtubeFieldKey}`;
+
+      const normalizeGeneratedYoutubeTitle = (
+        value:any
+      ) => {
+        const exactTitle =
+          buildYoutubeTitle();
+
+        if(exactTitle){
+          return exactTitle;
+        }
+
+        return String(value || "")
+          .replace(/\s+/g," ")
+          .trim();
+      };
+
+      const readYoutubeCopyDraft = () => {
+        const titleInput =
+          typeof document !== "undefined"
+            ? document.getElementById(
+                youtubeTitleFieldId
+              ) as HTMLInputElement | null
+            : null;
+
+        const descriptionInput =
+          typeof document !== "undefined"
+            ? document.getElementById(
+                youtubeDescriptionFieldId
+              ) as HTMLTextAreaElement | null
+            : null;
+
+        return {
+          title:normalizeGeneratedYoutubeTitle(
+            titleInput?.value ||
+            digitalData?.youtubeTitle ||
+            buildYoutubeTitle()
+          ),
+          description:String(
+            descriptionInput?.value ||
+            digitalData?.youtubeDescription ||
+            ""
+          ).trim(),
+        };
+      };
+
+      const saveYoutubeCopy = (
+        copy?:{
+          title?:string;
+          description?:string;
+        }
+      ) => {
+        const draft =
+          copy ||
+          readYoutubeCopyDraft();
+
+        const nextCopy = {
+          title:normalizeGeneratedYoutubeTitle(
+            draft?.title
+          ),
+          description:String(
+            draft?.description ||
+            ""
+          ).trim(),
+        };
+
+        updateAiWorkspace("digital",{
+          youtubeTitle:nextCopy.title,
+          youtubeDescription:
+            nextCopy.description,
+          youtubeCopySavedAt:
+            new Date().toISOString(),
+        });
+
+        return nextCopy;
+      };
+
+      const parseYoutubeCopyJson = (
+        source:any
+      ) => {
+        const raw = String(source || "")
+          .trim()
+          .replace(/^```(?:json)?\s*/i,"")
+          .replace(/\s*```$/,"");
+
+        try {
+          const parsed = JSON.parse(raw);
+
+          return {
+            title:String(
+              parsed?.title || ""
+            ).trim(),
+            description:String(
+              parsed?.description || ""
+            ).trim(),
+          };
+        } catch {
+          return {
+            title:"",
+            description:raw,
+          };
+        }
+      };
+
+      const generateYoutubeCopy = async () => {
+        if(aiBusy.youtubeCopy) return;
+
+        if(
+          !youtubeProductSource.length &&
+          !youtubeEcommerceSource
+        ){
+          setAiError((current:any)=>({
+            ...current,
+            youtubeCopy:
+              "Add products or generate the E-commerce output first."
+          }));
+          return;
+        }
+
+        setAiBusy((current:any)=>({
+          ...current,
+          youtubeCopy:true,
+        }));
+
+        setAiError((current:any)=>({
+          ...current,
+          youtubeCopy:"",
+        }));
+
+        try {
+          const response = await fetch(
+            "/api/ai/generate-text",
+            {
+              method:"POST",
+              headers:{
+                "Content-Type":
+                  "application/json",
+              },
+              body:JSON.stringify({
+                task:
+                  "youtube_product_copy",
+                taskLabel:
+                  `${checklistAnnouncementType} YouTube Title and Description`,
+                tone:"premium",
+                maxOutputTokens:1800,
+                instruction:[
+                  `Create one YouTube title and one YouTube description for a ${checklistAnnouncementType} checklist.`,
+                  'Return strict JSON only in this shape: {"title":"","description":""}.',
+                  "Do not use markdown code fences.",
+                  `The exact YouTube title must be: ${buildYoutubeTitle()}`,
+                  "The brand name at the beginning of the title must be written in ALL CAPS.",
+                  "The checklist title is the Hook Title. Preserve its wording after the brand name.",
+                  "Write the description in polished, sophisticated, natural English.",
+                  "Follow this structure:",
+                  "1. Opening paragraph that elevates the product or collection and explains its everyday and entertaining value.",
+                  "2. A second paragraph that explains the problems it helps solve and gives realistic use occasions.",
+                  "3. One short emotional brand paragraph.",
+                  "4. A heading exactly written as: ✨ Key Features",
+                  "5. A concise hyphen bullet list of only supported key features.",
+                  `6. End with: Stay refined. Stay ${youtubePrimaryBrand || "the brand"}.`,
+                  "Do not invent materials, specifications, benefits, use cases, features, variants, or claims that are not supported by the supplied product rows or E-commerce output.",
+                  "Do not include prices, links, hashtags, timestamps, calls to subscribe, or marketplace ordering instructions.",
+                  "Keep the description useful for YouTube and easy to read.",
+                ].join("\n"),
+                input:JSON.stringify({
+                  checklistType:
+                    checklistAnnouncementType,
+                  checklistTitle:
+                    youtubeChecklistTitle,
+                  hookTitle:
+                    youtubeChecklistTitle,
+                  requiredTitle:
+                    buildYoutubeTitle(),
+                  brand:
+                    youtubePrimaryBrand,
+                  products:
+                    youtubeProductSource,
+                  ecommerceOutput:
+                    youtubeEcommerceSource,
+                  referenceFormat:{
+                    title:
+                      "ALL-CAPS BRAND + Checklist Hook Title",
+                    descriptionSections:[
+                      "Premium opening paragraph",
+                      "Problem-solving and use occasions",
+                      "Emotional brand statement",
+                      "✨ Key Features",
+                      "Hyphen feature bullets",
+                      "Stay refined. Stay Brand.",
+                    ],
+                  },
+                },null,2),
+              }),
+            }
+          );
+
+          const json =
+            await response
+              .json()
+              .catch(()=>null);
+
+          if(!response.ok){
+            throw new Error(
+              json?.error ||
+              json?.message ||
+              "Unable to generate YouTube copy."
+            );
+          }
+
+          const generated =
+            parseYoutubeCopyJson(
+              json?.text || ""
+            );
+
+          if(!generated.description){
+            throw new Error(
+              "AI returned an empty YouTube description. Please generate again."
+            );
+          }
+
+          updateAiWorkspace("digital",{
+            youtubeTitle:
+              normalizeGeneratedYoutubeTitle(
+                generated.title
+              ),
+            youtubeDescription:
+              generated.description,
+            youtubeCopyGeneratedAt:
+              new Date().toISOString(),
+          });
+
+          markActionDone(
+            "generate-youtube-copy"
+          );
+        } catch(error:any) {
+          setAiError((current:any)=>({
+            ...current,
+            youtubeCopy:
+              error?.message ||
+              "Unable to generate YouTube copy."
+          }));
+        } finally {
+          setAiBusy((current:any)=>({
+            ...current,
+            youtubeCopy:false,
+          }));
+        }
+      };
+
+      const copyYoutubeField = async (
+        type:"title"|"description"|"all"
+      ) => {
+        const draft =
+          readYoutubeCopyDraft();
+
+        const value =
+          type === "title"
+            ? draft.title
+            : type === "description"
+              ? draft.description
+              : [
+                  "YouTube Title",
+                  draft.title,
+                  "",
+                  "YouTube Description",
+                  draft.description,
+                ].join("\n");
+
+        if(!value.trim()) return;
+
+        try {
+          await navigator.clipboard.writeText(
+            value
+          );
+          markActionDone(
+            `copy-youtube-${type}`
+          );
+        } catch {}
+      };
+
+      const addYoutubeCopyToOverview = () => {
+        const saved =
+          saveYoutubeCopy();
+
+        if(
+          !saved.title &&
+          !saved.description
+        ) return;
+
+        addToOverview(
+          "Digital Creative",
+          `${checklistAnnouncementType} YouTube Copy`,
+          [
+            "YouTube Title",
+            saved.title,
+            "",
+            "YouTube Description",
+            saved.description,
+          ].join("\n"),
+          "YouTube Copy",
+          {
+            tab:"digital",
+            type:"youtubeCopy",
+            checklistType:
+              checklistAnnouncementType,
+          }
+        );
+
+        markActionDone(
+          "overview-youtube-copy"
+        );
+      };
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
           <div style={{ padding:isMobile?12:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -18018,6 +18485,402 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           {!!formatMainPromotion(((group.aiWorkspace || {}).digital || {}).mainPromotion)&&(
             renderMainPromotionCard(((group.aiWorkspace || {}).digital || {}).mainPromotion, true)
+          )}
+
+          {youtubeGeneratorEligible&&(
+            <div
+              style={{
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+                overflow:"hidden",
+              }}
+            >
+              <div
+                style={{
+                  padding:isMobile?12:14,
+                  borderBottom:`1px solid ${C.border}`,
+                  display:"flex",
+                  justifyContent:"space-between",
+                  gap:10,
+                  alignItems:"flex-start",
+                  flexWrap:"wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display:"flex",
+                      alignItems:"center",
+                      gap:7,
+                      flexWrap:"wrap",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        margin:0,
+                        fontSize:15,
+                        fontWeight:900,
+                        color:C.text,
+                      }}
+                    >
+                      YouTube Title & Description
+                    </h3>
+
+                    <span
+                      style={{
+                        padding:"3px 8px",
+                        borderRadius:999,
+                        border:`1px solid ${C.border}`,
+                        background:C.surfaceAlt,
+                        color:C.muted,
+                        fontSize:9.5,
+                        fontWeight:900,
+                      }}
+                    >
+                      {checklistAnnouncementType}
+                    </span>
+                  </div>
+
+                  <p
+                    style={{
+                      margin:"4px 0 0",
+                      maxWidth:820,
+                      color:C.muted,
+                      fontSize:11.5,
+                      lineHeight:1.5,
+                    }}
+                  >
+                    Uses the checklist title as the Hook Title and reads product details from selected SKUs and the E-commerce output.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    gap:7,
+                    alignItems:"center",
+                    flexWrap:"wrap",
+                  }}
+                >
+                  <Btn
+                    xs
+                    variant={
+                      actionDone(
+                        "generate-youtube-copy"
+                      )
+                        ? "primary"
+                        : "outline"
+                    }
+                    onClick={
+                      generateYoutubeCopy
+                    }
+                    disabled={
+                      !!aiBusy.youtubeCopy
+                    }
+                  >
+                    {aiBusy.youtubeCopy
+                      ? "Generating..."
+                      : actionDone(
+                          "generate-youtube-copy"
+                        )
+                        ? "✓ Generated"
+                        : "Generate YouTube Copy"}
+                  </Btn>
+
+                  <Btn
+                    xs
+                    variant={
+                      actionDone(
+                        "save-youtube-copy"
+                      )
+                        ? "primary"
+                        : "outline"
+                    }
+                    onClick={()=>{
+                      saveYoutubeCopy();
+                      markActionDone(
+                        "save-youtube-copy"
+                      );
+                    }}
+                  >
+                    {actionDone(
+                      "save-youtube-copy"
+                    )
+                      ? "✓ Saved"
+                      : "Save Copy"}
+                  </Btn>
+
+                  <Btn
+                    xs
+                    variant={
+                      actionDone(
+                        "overview-youtube-copy"
+                      )
+                        ? "primary"
+                        : "outline"
+                    }
+                    onClick={
+                      addYoutubeCopyToOverview
+                    }
+                  >
+                    {actionDone(
+                      "overview-youtube-copy"
+                    )
+                      ? "✓ Added"
+                      : "Add to Overview"}
+                  </Btn>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding:isMobile?12:14,
+                  display:"flex",
+                  flexDirection:"column",
+                  gap:12,
+                }}
+              >
+                <div
+                  style={{
+                    padding:"10px 12px",
+                    display:"grid",
+                    gridTemplateColumns:
+                      isMobile
+                        ? "1fr"
+                        : "repeat(2,minmax(0,1fr))",
+                    gap:8,
+                    border:`1px solid ${C.border}`,
+                    borderRadius:9,
+                    background:C.surfaceAlt,
+                  }}
+                >
+                  <div>
+                    <span
+                      style={{
+                        display:"block",
+                        color:C.faint,
+                        fontSize:9.5,
+                        fontWeight:900,
+                        textTransform:"uppercase",
+                        letterSpacing:".05em",
+                      }}
+                    >
+                      Brand Rule
+                    </span>
+
+                    <strong
+                      style={{
+                        display:"block",
+                        marginTop:3,
+                        color:C.text,
+                        fontSize:11.5,
+                      }}
+                    >
+                      {youtubeBrandUpper ||
+                        "Brand from SKU Storage"}{" "}
+                      in all caps
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span
+                      style={{
+                        display:"block",
+                        color:C.faint,
+                        fontSize:9.5,
+                        fontWeight:900,
+                        textTransform:"uppercase",
+                        letterSpacing:".05em",
+                      }}
+                    >
+                      Hook Title
+                    </span>
+
+                    <strong
+                      style={{
+                        display:"block",
+                        marginTop:3,
+                        color:C.text,
+                        fontSize:11.5,
+                        overflowWrap:"anywhere",
+                      }}
+                    >
+                      {youtubeChecklistTitle}
+                    </strong>
+                  </div>
+                </div>
+
+                <Field label="YouTube Title">
+                  <input
+                    key={`youtube-title-${
+                      digitalData?.youtubeCopyGeneratedAt ||
+                      digitalData?.youtubeCopySavedAt ||
+                      "initial"
+                    }`}
+                    id={youtubeTitleFieldId}
+                    defaultValue={
+                      digitalData?.youtubeTitle ||
+                      buildYoutubeTitle()
+                    }
+                    onBlur={()=>
+                      saveYoutubeCopy()
+                    }
+                    placeholder="YouTube title"
+                    style={{
+                      width:"100%",
+                      height:40,
+                      boxSizing:"border-box",
+                      padding:"0 11px",
+                      border:`1.5px solid ${C.border}`,
+                      borderRadius:9,
+                      background:C.surface,
+                      color:C.text,
+                      fontSize:12.5,
+                      fontWeight:800,
+                      outline:"none",
+                    }}
+                  />
+                </Field>
+
+                <Field label="YouTube Description">
+                  <textarea
+                    key={`youtube-description-${
+                      digitalData?.youtubeCopyGeneratedAt ||
+                      digitalData?.youtubeCopySavedAt ||
+                      "initial"
+                    }`}
+                    id={youtubeDescriptionFieldId}
+                    defaultValue={
+                      digitalData?.youtubeDescription ||
+                      ""
+                    }
+                    onBlur={()=>
+                      saveYoutubeCopy()
+                    }
+                    placeholder={
+                      youtubeEcommerceSource
+                        ? "Click Generate YouTube Copy to create the description."
+                        : "Generate and save the E-commerce output first for stronger product details."
+                    }
+                    rows={12}
+                    style={{
+                      width:"100%",
+                      minHeight:260,
+                      boxSizing:"border-box",
+                      resize:"vertical",
+                      padding:"11px 12px",
+                      border:`1.5px solid ${C.border}`,
+                      borderRadius:9,
+                      background:C.surface,
+                      color:C.text,
+                      fontSize:12.5,
+                      lineHeight:1.6,
+                      outline:"none",
+                      whiteSpace:"pre-wrap",
+                    }}
+                  />
+                </Field>
+
+                {!!aiError.youtubeCopy&&(
+                  <div
+                    style={{
+                      padding:"9px 11px",
+                      border:"1px solid #FCA5A5",
+                      borderRadius:8,
+                      background:"#FEF2F2",
+                      color:"#B91C1C",
+                      fontSize:11,
+                      fontWeight:700,
+                      lineHeight:1.45,
+                    }}
+                  >
+                    {aiError.youtubeCopy}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display:"flex",
+                    justifyContent:"space-between",
+                    alignItems:"center",
+                    gap:8,
+                    flexWrap:"wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      color:
+                        youtubeEcommerceSource
+                          ? "#15803D"
+                          : C.faint,
+                      fontSize:10.5,
+                      fontWeight:700,
+                    }}
+                  >
+                    {youtubeEcommerceSource
+                      ? "E-commerce product details are ready as the description source."
+                      : "No E-commerce output detected. The generator will use selected SKU information only."}
+                  </span>
+
+                  <div
+                    style={{
+                      display:"flex",
+                      gap:6,
+                      flexWrap:"wrap",
+                    }}
+                  >
+                    <Btn
+                      xs
+                      variant="outline"
+                      onClick={()=>
+                        copyYoutubeField(
+                          "title"
+                        )
+                      }
+                    >
+                      {actionDone(
+                        "copy-youtube-title"
+                      )
+                        ? "✓ Copied"
+                        : "Copy Title"}
+                    </Btn>
+
+                    <Btn
+                      xs
+                      variant="outline"
+                      onClick={()=>
+                        copyYoutubeField(
+                          "description"
+                        )
+                      }
+                    >
+                      {actionDone(
+                        "copy-youtube-description"
+                      )
+                        ? "✓ Copied"
+                        : "Copy Description"}
+                    </Btn>
+
+                    <Btn
+                      xs
+                      variant="outline"
+                      onClick={()=>
+                        copyYoutubeField(
+                          "all"
+                        )
+                      }
+                    >
+                      {actionDone(
+                        "copy-youtube-all"
+                      )
+                        ? "✓ Copied"
+                        : "Copy All"}
+                    </Btn>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
