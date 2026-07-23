@@ -17417,7 +17417,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             "",
             "Please review the uploaded files and proceed with your respective next steps.",
             "",
-            "Generated automatically by EMDC Engine.",
           ].filter((line,index,rows)=>
             line !== "" ||
             (index > 0 && rows[index-1] !== "")
