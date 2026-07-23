@@ -13887,6 +13887,12 @@ ${slidesHtml}
                         )&&(
                           <button
                             onClick={()=>{
+                              const resolvedAnnouncementType = String(
+                                launchTypes?.[group?.launchType]?.label ||
+                                group?.launchType ||
+                                "Product Introduction"
+                              ).trim();
+
                               setAssetAnnouncementError("");
 
                               // Overview does not have the Digital Creative branch's
@@ -13947,15 +13953,15 @@ ${slidesHtml}
                                       ?.viber
                                       ?.subject ||
                                     `${
-                                      checklistAnnouncementType==="Product Introduction"
+                                      resolvedAnnouncementType==="Product Introduction"
                                         ? "[New Arrival]"
-                                        : checklistAnnouncementType==="Product Reactivation"
+                                        : resolvedAnnouncementType==="Product Reactivation"
                                           ? "[Product Reactivation]"
-                                          : checklistAnnouncementType==="Campaign"
+                                          : resolvedAnnouncementType==="Campaign"
                                             ? "[Campaign]"
-                                            : checklistAnnouncementType==="Special Campaign"
+                                            : resolvedAnnouncementType==="Special Campaign"
                                               ? "[Special Campaign]"
-                                              : `[${checklistAnnouncementType}]`
+                                              : `[${resolvedAnnouncementType}]`
                                     } VIBER Message: ${
                                       String(
                                         group.groupName ||
