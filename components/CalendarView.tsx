@@ -16691,6 +16691,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         announcementYoutubeVideoId
           ? `https://i.ytimg.com/vi/${encodeURIComponent(
               announcementYoutubeVideoId
+            )}/maxresdefault.jpg`
+          : "";
+
+      const fallbackYoutubeThumbnailUrl =
+        announcementYoutubeVideoId
+          ? `https://i.ytimg.com/vi/${encodeURIComponent(
+              announcementYoutubeVideoId
             )}/hqdefault.jpg`
           : "";
 
@@ -19785,6 +19792,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             alt="YouTube thumbnail preview"
                             loading="lazy"
                             referrerPolicy="no-referrer"
+                            onError={(event)=>{
+                              if(
+                                fallbackYoutubeThumbnailUrl &&
+                                event.currentTarget.src !==
+                                  fallbackYoutubeThumbnailUrl
+                              ){
+                                event.currentTarget.src =
+                                  fallbackYoutubeThumbnailUrl;
+                              }
+                            }}
                             style={{
                               display:"block",
                               width:"100%",
