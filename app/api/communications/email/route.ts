@@ -303,8 +303,13 @@ function plainTextToHtml(
     bullets = [];
   };
 
-  lines.forEach((rawLine) => {
+  lines.forEach((rawLine, lineIndex) => {
     const line = rawLine.trim();
+
+    const nextNonEmptyLine = lines
+      .slice(lineIndex + 1)
+      .map((item) => item.trim())
+      .find(Boolean) || "";
 
     if (!line) {
       flushBullets();
@@ -342,6 +347,92 @@ function plainTextToHtml(
         pendingGreeting = "";
       }
 
+      return;
+    }
+
+    const checklistSummaryMatch =
+      line.match(
+        /^(Checklist Title|No\.?\s*of\s*SKU|Checklist Type)\s*:\s*(.*)$/i
+      );
+
+    if (checklistSummaryMatch) {
+      flushBullets();
+
+      const label =
+        checklistSummaryMatch[1];
+
+      const value =
+        checklistSummaryMatch[2];
+
+      parts.push(
+        `<p style="margin:0 0 12px;line-height:1.55;color:#374151;">
+          <strong style="font-weight:700;color:#111827;">${escapeHtml(
+            label
+          )}:</strong>${
+            value
+              ? ` ${formatInlineText(
+                  value,
+                  options?.boldPhrases
+                )}`
+              : ""
+          }
+        </p>`
+      );
+      return;
+    }
+
+    if (
+      /^uploaded\s+assets\s*:?\s*$/i.test(
+        line
+      )
+    ) {
+      flushBullets();
+
+      parts.push(
+        `<h3 style="margin:22px 0 14px;font-size:17px;line-height:1.3;color:#111827;font-weight:700;">Uploaded Assets</h3>`
+      );
+      return;
+    }
+
+    const isStandaloneUrl =
+      /^https?:\/\/\S+$/i.test(line);
+
+    if (isStandaloneUrl) {
+      flushBullets();
+
+      const safeUrl =
+        escapeHtml(line);
+
+      parts.push(
+        `<p style="margin:0 0 16px;line-height:1.45;overflow-wrap:anywhere;">
+          <a
+            href="${safeUrl}"
+            style="color:#1D4ED8;text-decoration:underline;font-size:13px;"
+          >${safeUrl}</a>
+        </p>`
+      );
+      return;
+    }
+
+    const nextLineIsUrl =
+      /^https?:\/\/\S+$/i.test(
+        nextNonEmptyLine
+      );
+
+    if (
+      nextLineIsUrl &&
+      line.length <= 100
+    ) {
+      flushBullets();
+
+      parts.push(
+        `<p style="margin:18px 0 6px;line-height:1.45;color:#111827;">
+          <strong style="font-weight:700;">${formatInlineText(
+            line,
+            options?.boldPhrases
+          )}</strong>
+        </p>`
+      );
       return;
     }
 
