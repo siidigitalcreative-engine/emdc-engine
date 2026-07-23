@@ -18035,6 +18035,30 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         String(value || "")
           .replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
 
+      const youtubeProductSource = productRows.map(
+        (row:any,index:number)=>({
+          no:index+1,
+          brand:String(row?.brand || ""),
+          collection:String(
+            row?.collection ||
+            row?.category ||
+            ""
+          ),
+          product:String(
+            row?.product ||
+            row?.productName ||
+            row?.name ||
+            ""
+          ),
+          sku:String(
+            row?.skuCode ||
+            row?.sku ||
+            row?.value ||
+            ""
+          ),
+        })
+      );
+
       const youtubePrimaryProductName = String(
         youtubeProductSource?.[0]?.product ||
         youtubeProductSource?.[0]?.collection ||
@@ -18155,30 +18179,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         youtubeLatestSavedEcommerceOutput?.generatedText ||
         ""
       ).trim();
-
-      const youtubeProductSource = productRows.map(
-        (row:any,index:number)=>({
-          no:index+1,
-          brand:String(row?.brand || ""),
-          collection:String(
-            row?.collection ||
-            row?.category ||
-            ""
-          ),
-          product:String(
-            row?.product ||
-            row?.productName ||
-            row?.name ||
-            ""
-          ),
-          sku:String(
-            row?.skuCode ||
-            row?.sku ||
-            row?.value ||
-            ""
-          ),
-        })
-      );
 
       const youtubeFieldKey = String(
         group?.id ||
@@ -18377,8 +18377,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 input:JSON.stringify({
                   checklistType:
                     checklistAnnouncementType,
-                  checklistTitle:
-                    youtubeChecklistTitle,
                   checklistTitle:
                     youtubeChecklistTitle,
                   productOrCollectionName:
