@@ -196,6 +196,7 @@ function plainTextToHtml(
   const parts: string[] = [];
   let bullets: string[] = [];
   let greetingSeen = false;
+  let pendingGreeting = "";
   let bodyHeadlineRendered = false;
   let insertedBeforeWhy = false;
 
@@ -228,13 +229,7 @@ function plainTextToHtml(
     if (/^dear\s+partner\s*,?$/i.test(line)) {
       flushBullets();
       greetingSeen = true;
-
-      parts.push(
-        `<p style="margin:0 0 18px;line-height:1.6;color:#374151;">${formatInlineText(
-          line,
-          options?.boldPhrase
-        )}</p>`
-      );
+      pendingGreeting = line;
       return;
     }
 
@@ -246,11 +241,22 @@ function plainTextToHtml(
       bodyHeadlineRendered = true;
 
       parts.push(
-        `<h2 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#111827;font-weight:700;">${formatInlineText(
+        `<h2 style="margin:0 0 18px;font-size:24px;line-height:1.25;color:#111827;font-weight:700;">${formatInlineText(
           line,
           options?.boldPhrase
         )}</h2>`
       );
+
+      if (pendingGreeting) {
+        parts.push(
+          `<p style="margin:0 0 18px;line-height:1.6;color:#374151;">${formatInlineText(
+            pendingGreeting,
+            options?.boldPhrase
+          )}</p>`
+        );
+        pendingGreeting = "";
+      }
+
       return;
     }
 
@@ -329,6 +335,15 @@ function plainTextToHtml(
   });
 
   flushBullets();
+
+  if (pendingGreeting) {
+    parts.push(
+      `<p style="margin:0 0 18px;line-height:1.6;color:#374151;">${formatInlineText(
+        pendingGreeting,
+        options?.boldPhrase
+      )}</p>`
+    );
+  }
 
   if (
     options?.insertHtmlBeforeWhy &&
