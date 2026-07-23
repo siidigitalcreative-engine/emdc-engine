@@ -18192,6 +18192,32 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const youtubeDescriptionFieldId =
         `emdc-youtube-description-${youtubeFieldKey}`;
 
+      const extractYoutubeBenefitHook = (
+        value:any
+      ) => {
+        const raw = String(value || "")
+          .replace(/\s+/g," ")
+          .trim();
+
+        const colonIndex = raw.indexOf(":");
+
+        return colonIndex >= 0
+          ? raw
+              .slice(colonIndex + 1)
+              .replace(/^[\s:–—-]+|[\s:–—-]+$/g,"")
+              .trim()
+          : "";
+      };
+
+      const normalizeYoutubeHookForComparison = (
+        value:any
+      ) =>
+        String(value || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g," ")
+          .replace(/\s+/g," ")
+          .trim();
+
       const normalizeGeneratedYoutubeTitle = (
         value:any
       ) => {
@@ -18336,113 +18362,281 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         }));
 
         try {
-          const response = await fetch(
-            "/api/ai/generate-text",
-            {
-              method:"POST",
-              headers:{
-                "Content-Type":
-                  "application/json",
-              },
-              body:JSON.stringify({
-                task:
-                  "youtube_product_copy",
-                taskLabel:
-                  `${checklistAnnouncementType} YouTube Title and Description`,
-                tone:"premium",
-                maxOutputTokens:1800,
-                instruction:[
-                  `Create one YouTube title and one YouTube description for a ${checklistAnnouncementType} checklist.`,
-                  'Return strict JSON only in this shape: {"title":"","description":""}.',
-                  "Do not use markdown code fences.",
-                  `The YouTube title must follow this exact format: ${buildYoutubeTitle("BENEFIT-DRIVEN HOOK TITLE")}`,
-                  "The brand name at the beginning of the title must be written in ALL CAPS.",
-                  `Use this product or collection name exactly in the title: ${youtubeBaseProductTitle}`,
-                  "After the colon, create a concise benefit-driven Hook Title.",
-                  "The Hook Title must communicate a clear emotional or practical benefit, not repeat the product name.",
-                  "Keep the Hook Title punchy, premium, and memorable, ideally 4 to 8 words.",
-                  "Good Hook Title examples: Beauty and Symmetry in Every Sip; Recovery That Travels With You.",
-                  "Write the description in polished, sophisticated, natural English.",
-                  "Follow this structure:",
-                  "1. Opening paragraph that elevates the product or collection and explains its everyday and entertaining value.",
-                  "2. A second paragraph that explains the problems it helps solve and gives realistic use occasions.",
-                  "3. One short emotional brand paragraph.",
-                  "4. A heading exactly written as: ✨ Key Features",
-                  "5. A concise hyphen bullet list of only supported key features.",
-                  `6. End with: Stay refined. Stay ${youtubePrimaryBrand || "the brand"}.`,
-                  "Do not invent materials, specifications, benefits, use cases, features, variants, or claims that are not supported by the supplied product rows or E-commerce output.",
-                  "Do not include prices, links, hashtags, timestamps, calls to subscribe, or marketplace ordering instructions.",
-                  "Keep the description useful for YouTube and easy to read.",
-                ].join("\n"),
-                input:JSON.stringify({
-                  checklistType:
-                    checklistAnnouncementType,
-                  checklistTitle:
-                    youtubeChecklistTitle,
-                  productOrCollectionName:
-                    youtubeBaseProductTitle,
-                  requiredTitleFormat:
-                    buildYoutubeTitle(
-                      "BENEFIT-DRIVEN HOOK TITLE"
-                    ),
-                  hookTitleGuidance:
-                    "Create a short benefit-driven phrase, such as Beauty and Symmetry in Every Sip or Recovery That Travels With You.",
-                  brand:
-                    youtubePrimaryBrand,
-                  products:
-                    youtubeProductSource,
-                  ecommerceOutput:
-                    youtubeEcommerceSource,
-                  referenceFormat:{
-                    title:
-                      "ALL-CAPS BRAND + Product/Collection Name: Benefit-Driven Hook Title",
-                    descriptionSections:[
-                      "Premium opening paragraph",
-                      "Problem-solving and use occasions",
-                      "Emotional brand statement",
-                      "✨ Key Features",
-                      "Hyphen feature bullets",
-                      "Stay refined. Stay Brand.",
-                    ],
-                  },
-                },null,2),
-              }),
+          const currentDraft =
+            readYoutubeCopyDraft();
+
+          const currentHook =
+            extractYoutubeBenefitHook(
+              currentDraft.title
+            );
+
+          const savedHookHistory =
+            Array.isArray(
+              digitalData?.youtubeHookHistory
+            )
+              ? digitalData.youtubeHookHistory
+                  .map((item:any)=>
+                    String(item || "").trim()
+                  )
+                  .filter(Boolean)
+              : [];
+
+          const excludedHooks = Array.from(
+            new Set(
+              [
+                currentHook,
+                ...savedHookHistory,
+              ].filter(Boolean)
+            )
+          ).slice(-10);
+
+          const excludedNormalized =
+            new Set(
+              excludedHooks.map(
+                normalizeYoutubeHookForComparison
+              )
+            );
+
+          const hookAngles = [
+            "elevated everyday experience",
+            "ease and convenience",
+            "organized and polished spaces",
+            "confidence and dependable performance",
+            "comfort and daily wellbeing",
+            "effortless hosting and entertaining",
+            "durability for everyday routines",
+            "thoughtful gifting",
+            "space-saving practicality",
+            "premium design and visual harmony",
+          ];
+
+          let acceptedCopy:{
+            title:string;
+            description:string;
+            hook:string;
+          } | null = null;
+
+          let lastGeneratedTitle = "";
+
+          for(
+            let attempt = 0;
+            attempt < 3;
+            attempt += 1
+          ){
+            const variationSeed =
+              `${Date.now()}-${attempt}-${Math.random()
+                .toString(36)
+                .slice(2,8)}`;
+
+            const preferredAngle =
+              hookAngles[
+                (
+                  Date.now() +
+                  attempt
+                ) %
+                hookAngles.length
+              ];
+
+            const response = await fetch(
+              "/api/ai/generate-text",
+              {
+                method:"POST",
+                headers:{
+                  "Content-Type":
+                    "application/json",
+                },
+                body:JSON.stringify({
+                  task:
+                    "youtube_product_copy",
+                  taskLabel:
+                    `${checklistAnnouncementType} YouTube Title and Description Variation ${attempt + 1}`,
+                  tone:"premium",
+                  maxOutputTokens:1800,
+                  instruction:[
+                    `Create one YouTube title and one YouTube description for a ${checklistAnnouncementType} checklist.`,
+                    'Return strict JSON only in this shape: {"title":"","description":""}.',
+                    "Do not use markdown code fences.",
+                    `The YouTube title must follow this exact format: ${buildYoutubeTitle("BENEFIT-DRIVEN HOOK TITLE")}`,
+                    "The brand name at the beginning of the title must be written in ALL CAPS.",
+                    `Use this product or collection name exactly in the title: ${youtubeBaseProductTitle}`,
+                    "After the colon, create a concise benefit-driven Hook Title.",
+                    "The Hook Title must communicate a clear emotional or practical benefit, not repeat the product name.",
+                    "Keep the Hook Title punchy, premium, and memorable, ideally 4 to 8 words.",
+                    "Good Hook Title examples: Beauty and Symmetry in Every Sip; Recovery That Travels With You.",
+                    excludedHooks.length
+                      ? `Do not reuse or closely paraphrase any of these previous Hook Titles: ${excludedHooks.join(" | ")}`
+                      : "Create an original Hook Title.",
+                    `For this version, explore a different benefit angle centered on: ${preferredAngle}.`,
+                    "Change both the core benefit and wording from previous versions.",
+                    "Avoid merely swapping one adjective while keeping the same sentence structure.",
+                    "Write the description in polished, sophisticated, natural English.",
+                    "Follow this structure:",
+                    "1. Opening paragraph that elevates the product or collection and explains its everyday and entertaining value.",
+                    "2. A second paragraph that explains the problems it helps solve and gives realistic use occasions.",
+                    "3. One short emotional brand paragraph.",
+                    "4. A heading exactly written as: ✨ Key Features",
+                    "5. A concise hyphen bullet list of only supported key features.",
+                    `6. End with: Stay refined. Stay ${youtubePrimaryBrand || "the brand"}.`,
+                    "Do not invent materials, specifications, benefits, use cases, features, variants, or claims that are not supported by the supplied product rows or E-commerce output.",
+                    "Do not include prices, links, hashtags, timestamps, calls to subscribe, or marketplace ordering instructions.",
+                    "Keep the description useful for YouTube and easy to read.",
+                  ].join("\n"),
+                  input:JSON.stringify({
+                    checklistType:
+                      checklistAnnouncementType,
+                    checklistTitle:
+                      youtubeChecklistTitle,
+                    productOrCollectionName:
+                      youtubeBaseProductTitle,
+                    requiredTitleFormat:
+                      buildYoutubeTitle(
+                        "BENEFIT-DRIVEN HOOK TITLE"
+                      ),
+                    hookTitleGuidance:
+                      "Create a short benefit-driven phrase, such as Beauty and Symmetry in Every Sip or Recovery That Travels With You.",
+                    previousHookTitles:
+                      excludedHooks,
+                    preferredBenefitAngle:
+                      preferredAngle,
+                    variationSeed,
+                    attempt:
+                      attempt + 1,
+                    brand:
+                      youtubePrimaryBrand,
+                    products:
+                      youtubeProductSource,
+                    ecommerceOutput:
+                      youtubeEcommerceSource,
+                    referenceFormat:{
+                      title:
+                        "ALL-CAPS BRAND + Product/Collection Name: Benefit-Driven Hook Title",
+                      descriptionSections:[
+                        "Premium opening paragraph",
+                        "Problem-solving and use occasions",
+                        "Emotional brand statement",
+                        "✨ Key Features",
+                        "Hyphen feature bullets",
+                        "Stay refined. Stay Brand.",
+                      ],
+                    },
+                  },null,2),
+                }),
+              }
+            );
+
+            const json =
+              await response
+                .json()
+                .catch(()=>null);
+
+            if(!response.ok){
+              throw new Error(
+                json?.error ||
+                json?.message ||
+                "Unable to generate YouTube copy."
+              );
             }
-          );
 
-          const json =
-            await response
-              .json()
-              .catch(()=>null);
+            const generated =
+              parseYoutubeCopyJson(
+                json?.text || ""
+              );
 
-          if(!response.ok){
+            if(!generated.description){
+              throw new Error(
+                "AI returned an empty YouTube description. Please generate again."
+              );
+            }
+
+            const normalizedTitle =
+              normalizeGeneratedYoutubeTitle(
+                generated.title
+              );
+
+            const generatedHook =
+              extractYoutubeBenefitHook(
+                normalizedTitle
+              );
+
+            const generatedHookKey =
+              normalizeYoutubeHookForComparison(
+                generatedHook
+              );
+
+            const titleChanged =
+              normalizeYoutubeHookForComparison(
+                normalizedTitle
+              ) !==
+              normalizeYoutubeHookForComparison(
+                currentDraft.title
+              );
+
+            const hookIsNew =
+              Boolean(generatedHookKey) &&
+              !excludedNormalized.has(
+                generatedHookKey
+              );
+
+            lastGeneratedTitle =
+              normalizedTitle;
+
+            if(
+              titleChanged &&
+              hookIsNew
+            ){
+              acceptedCopy = {
+                title:
+                  normalizedTitle,
+                description:
+                  generated.description,
+                hook:
+                  generatedHook,
+              };
+              break;
+            }
+
+            if(generatedHookKey){
+              excludedNormalized.add(
+                generatedHookKey
+              );
+              excludedHooks.push(
+                generatedHook
+              );
+            }
+          }
+
+          if(!acceptedCopy){
             throw new Error(
-              json?.error ||
-              json?.message ||
-              "Unable to generate YouTube copy."
+              lastGeneratedTitle
+                ? "The AI repeated a previous benefit hook after several attempts. Please regenerate once more."
+                : "The AI did not return a new benefit hook. Please regenerate."
             );
           }
 
-          const generated =
-            parseYoutubeCopyJson(
-              json?.text || ""
-            );
-
-          if(!generated.description){
-            throw new Error(
-              "AI returned an empty YouTube description. Please generate again."
-            );
-          }
+          const nextHookHistory =
+            Array.from(
+              new Set(
+                [
+                  ...savedHookHistory,
+                  currentHook,
+                  acceptedCopy.hook,
+                ].filter(Boolean)
+              )
+            ).slice(-12);
 
           updateAiWorkspace("digital",{
             youtubeTitle:
-              normalizeGeneratedYoutubeTitle(
-                generated.title
-              ),
+              acceptedCopy.title,
             youtubeDescription:
-              generated.description,
+              acceptedCopy.description,
+            youtubeHookHistory:
+              nextHookHistory,
             youtubeCopyGeneratedAt:
               new Date().toISOString(),
+            youtubeCopyVariationId:
+              `${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2,8)}`,
           });
 
           markActionDone(
@@ -18848,6 +19042,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <Field label="YouTube Title">
                   <input
                     key={`youtube-title-${
+                      digitalData?.youtubeCopyVariationId ||
                       digitalData?.youtubeCopyGeneratedAt ||
                       digitalData?.youtubeCopySavedAt ||
                       "initial"
@@ -18880,6 +19075,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <Field label="YouTube Description">
                   <textarea
                     key={`youtube-description-${
+                      digitalData?.youtubeCopyVariationId ||
                       digitalData?.youtubeCopyGeneratedAt ||
                       digitalData?.youtubeCopySavedAt ||
                       "initial"
