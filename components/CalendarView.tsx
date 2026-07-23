@@ -16494,6 +16494,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         instructions:String(digitalData.assetAnnouncementInstructions || ""),
         to:String(digitalData.assetAnnouncementTo || ""),
         cc:String(digitalData.assetAnnouncementCc || ""),
+        headerImageUrl:String(
+          digitalData.assetAnnouncementHeaderImageUrl || ""
+        ),
         imageUrl:String(digitalData.assetAnnouncementImageUrl || ""),
         youtubeThumbnailUrl:String(
           digitalData.assetAnnouncementYoutubeThumbnailUrl || ""
@@ -16628,6 +16631,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
         return lines.join("\n");
       };
+
+      const announcementHeaderImagePreviewUrl =
+        getAnnouncementImagePreviewUrl(
+          assetAnnouncementData.headerImageUrl
+        );
 
       const announcementImagePreviewUrl =
         getAnnouncementImagePreviewUrl(
@@ -17448,6 +17456,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               body:normalizeWhyYouLoveItBullets(
                 email.body
               ),
+              headerImageUrl:
+                assetAnnouncementData.headerImageUrl,
               imageUrl:
                 assetAnnouncementData.imageUrl,
               youtubeUrl:
@@ -19720,6 +19730,69 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     }}
                   />
                 </Field>
+
+                {assetAnnouncementTab==="client"&&(
+                  <Field label="Email Header Image URL">
+                    <div
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:8,
+                      }}
+                    >
+                      <TI
+                        value={
+                          assetAnnouncementData.headerImageUrl
+                        }
+                        onChange={(value:any)=>
+                          patchAssetAnnouncement({
+                            assetAnnouncementHeaderImageUrl:
+                              value,
+                          })
+                        }
+                        placeholder="Paste a wide Google Drive banner image link or direct image URL"
+                      />
+
+                      {!!announcementHeaderImagePreviewUrl&&(
+                        <div
+                          style={{
+                            width:"100%",
+                            overflow:"hidden",
+                            border:`1px solid ${C.border}`,
+                            borderRadius:10,
+                            background:C.surfaceAlt,
+                          }}
+                        >
+                          <img
+                            src={
+                              announcementHeaderImagePreviewUrl
+                            }
+                            alt="Email header banner preview"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            style={{
+                              display:"block",
+                              width:"100%",
+                              aspectRatio:"4 / 1",
+                              objectFit:"cover",
+                              background:"#FFFFFF",
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          color:C.faint,
+                          fontSize:10.5,
+                          lineHeight:1.45,
+                        }}
+                      >
+                        Recommended size: 1600 × 400 px. For Google Drive, set the file to “Anyone with the link can view.” This banner appears at the very top of the email.
+                      </div>
+                    </div>
+                  </Field>
+                )}
 
                 {assetAnnouncementTab==="client"&&(
                   <Field label="Email Image URL">
