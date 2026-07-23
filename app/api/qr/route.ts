@@ -5,7 +5,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OUTPUT_SIZE = 2048;
-const QUIET_ZONE_MODULES = 1;
+
+/*
+ * Exact visible white space around the complete styled QR.
+ *
+ * The custom finder markers extend 0.17 module beyond the normal
+ * QR grid. The QR origin includes that overshoot so the outermost
+ * black shape remains exactly the same distance from every edge.
+ */
+const OUTER_PADDING_MODULES = 2;
+const FINDER_OVERSHOOT_MODULES = 0.17;
 
 const DARK = "#000000";
 const LIGHT = "#FFFFFF";
@@ -591,9 +600,13 @@ function buildReferenceQrSvg(
       matrix
     );
 
+  const qrOrigin =
+    OUTER_PADDING_MODULES +
+    FINDER_OVERSHOOT_MODULES;
+
   const canvasModules =
     matrix.size +
-    QUIET_ZONE_MODULES * 2;
+    qrOrigin * 2;
 
   const elements: string[] = [
     `<rect width="${canvasModules}" height="${canvasModules}" fill="${LIGHT}"/>`,
@@ -634,12 +647,12 @@ function buildReferenceQrSvg(
       }
 
       const x =
-        QUIET_ZONE_MODULES +
+        qrOrigin +
         column +
         DOT_INSET;
 
       const y =
-        QUIET_ZONE_MODULES +
+        qrOrigin +
         row +
         DOT_INSET;
 
@@ -656,15 +669,15 @@ function buildReferenceQrSvg(
   }
 
   const topLeft =
-    QUIET_ZONE_MODULES;
+    qrOrigin;
 
   const topRight =
-    QUIET_ZONE_MODULES +
+    qrOrigin +
     matrix.size -
     7;
 
   const bottomLeft =
-    QUIET_ZONE_MODULES +
+    qrOrigin +
     matrix.size -
     7;
 
@@ -698,10 +711,10 @@ function buildReferenceQrSvg(
   if (alignment) {
     elements.push(
       drawAlignmentMarker(
-        QUIET_ZONE_MODULES +
+        qrOrigin +
           alignment.column,
 
-        QUIET_ZONE_MODULES +
+        qrOrigin +
           alignment.row
       )
     );
@@ -766,7 +779,12 @@ export async function GET(
             "image/svg+xml; charset=utf-8",
 
           "Cache-Control":
-            "public, max-age=3600",
+            "public, max-age=0, must-revalidate",
+
+          "ETag":
+            `"emdc-qr-equal-spacing-v1-${Buffer.from(
+              text.trim()
+            ).toString("base64url").slice(0, 20)}"`,
 
           "X-Content-Type-Options":
             "nosniff",
