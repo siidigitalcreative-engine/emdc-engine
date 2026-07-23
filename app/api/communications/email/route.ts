@@ -299,9 +299,32 @@ function buildHtmlEmail({
 
   return `<!doctype html>
 <html>
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      @media screen and (max-width:640px) {
+        .emdc-email-outer {
+          padding:12px 8px !important;
+        }
+
+        .emdc-email-card {
+          width:100% !important;
+          padding:16px !important;
+          border-radius:12px !important;
+        }
+      }
+    </style>
+  </head>
+
   <body style="margin:0;padding:0;background:#F3F4F6;">
-    <div style="width:100%;padding:24px 12px;box-sizing:border-box;">
-      <div style="max-width:720px;margin:0 auto;padding:28px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;box-sizing:border-box;">
+    <div
+      class="emdc-email-outer"
+      style="width:100%;padding:28px 16px;box-sizing:border-box;"
+    >
+      <div
+        class="emdc-email-card"
+        style="width:100%;max-width:860px;margin:0 auto;padding:36px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;box-sizing:border-box;"
+      >
         ${imageHtml}
         ${plainTextToHtml(body, {
           hideYoutubeLine: Boolean(youtubeUrl),
