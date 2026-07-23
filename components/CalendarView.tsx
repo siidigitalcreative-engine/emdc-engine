@@ -18546,6 +18546,143 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             renderMainPromotionCard(((group.aiWorkspace || {}).digital || {}).mainPromotion, true)
           )}
 
+          <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+            <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+              <div>
+                <h3 style={{ margin:"0 0 4px",fontSize:15,fontWeight:900,color:C.text }}>Digital Creative Asset Links</h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>Add editable asset names and final output links for Product Image, banners, feed, story, and video deliverables.</p>
+              </div>
+              <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <select
+                  value={assetCompletionStatusId}
+                  onChange={(event:any)=>{
+                    const nextStatusId = String(event.target.value || "");
+                    const nextStatus = statuses.find(
+                      (status:any)=>String(status?.id)===nextStatusId
+                    );
+                    patchAssetAnnouncement({
+                      assetCompletionStatusId:nextStatusId,
+                      assetCompletionStatusUpdatedAt:new Date().toISOString(),
+                    });
+                    if(nextStatusId!==assetCompletionStatusId){
+                      void logActivity({
+                        action:"changed Digital Creative Asset Links status to",
+                        entityType:"checklist",
+                        entityName:nextStatus?.label || "No status",
+                        description:group.groupName || "",
+                        href:"/#/checklists",
+                        metadata:{
+                          groupId:group.id,
+                          statusId:nextStatusId,
+                        },
+                      });
+                    }
+                  }}
+                  style={{
+                    height:30,
+                    minWidth:118,
+                    border:`1px solid ${assetCompletionStatus?.color || C.border}`,
+                    borderRadius:7,
+                    padding:"0 9px",
+                    background:assetCompletionStatus
+                      ? `${assetCompletionStatus.color}12`
+                      : C.surface,
+                    color:assetCompletionStatus?.color || C.textSub,
+                    fontSize:11,
+                    fontWeight:800,
+                    outline:"none",
+                  }}
+                >
+                  <option value="">Set status</option>
+                  {statuses.map((status:any)=>(
+                    <option key={status.id} value={status.id}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+
+                <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
+                <Btn
+                  xs
+                  variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"}
+                  onClick={()=>{
+                    commitCurrentProductIntroDigitalAssetRows();
+                    markActionDone("save-product-intro-digital-assets");
+                  }}
+                >
+                  {actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}
+                </Btn>
+                <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
+              </div>
+            </div>
+            <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:isMobile?760:900 }}>
+                <thead>
+                  <tr style={{ background:C.surfaceAlt }}>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:118 }}>Rearrange</th>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Asset Name</th>
+                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Link</th>
+                    <th style={{ textAlign:"right",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:130 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productIntroDigitalAssetRows.map((row:any,index:number)=>(
+                    <tr key={row.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",whiteSpace:"nowrap",width:118 }}>
+                        <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                          <Btn xs variant="outline" disabled={index===0} onClick={()=>moveProductIntroDigitalAssetRow(row.id,-1)}>↑</Btn>
+                          <Btn xs variant="outline" disabled={index===productIntroDigitalAssetRows.length-1} onClick={()=>moveProductIntroDigitalAssetRow(row.id,1)}>↓</Btn>
+                          <span style={{ fontSize:11,fontWeight:800,color:C.faint,minWidth:18,textAlign:"center" }}>{index+1}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
+                        <input
+                          key={`asset-name-${row.id}`}
+                          data-product-intro-asset-name={String(row.id)}
+                          defaultValue={row.name || ""}
+                          onBlur={(e:any)=>{
+                            const value = String(e.currentTarget.value || "");
+                            if(value !== String(row.name || "")){
+                              updateProductIntroDigitalAssetRow(row.id,{ name:value });
+                            }
+                          }}
+                          placeholder="Asset name"
+                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,fontWeight:700,color:C.text,outline:"none",background:C.surface }}
+                        />
+                      </td>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top" }}>
+                        <input
+                          key={`asset-link-${row.id}`}
+                          data-product-intro-asset-link={String(row.id)}
+                          defaultValue={row.link || ""}
+                          onBlur={(e:any)=>{
+                            const value = String(e.currentTarget.value || "").trim();
+                            if(value !== String(row.link || "")){
+                              updateProductIntroDigitalAssetRow(row.id,{ link:value });
+                            }
+                          }}
+                          onPaste={(e:any)=>{
+                            // Keep the pasted value in the field immediately. Saving occurs
+                            // on blur, avoiding a cloud rerender on every character.
+                            requestAnimationFrame(()=>e.currentTarget?.focus());
+                          }}
+                          placeholder="Paste final output link here"
+                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,color:C.text,outline:"none",background:C.surface }}
+                        />
+                      </td>
+                      <td style={{ padding:"8px 10px",verticalAlign:"top",textAlign:"right",whiteSpace:"nowrap" }}>
+                        <div style={{ display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
+                          {row.link&&<Btn xs variant="outline" onClick={async()=>{ try { await navigator.clipboard.writeText(row.link || ""); markActionDone(`copy-digital-asset-${row.id}`); } catch {} }}>{actionDone(`copy-digital-asset-${row.id}`)?"✓":"Copy"}</Btn>}
+                          <Btn xs variant="danger" onClick={()=>deleteProductIntroDigitalAssetRow(row.id)}>Delete</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {youtubeGeneratorEligible&&(
             <div
               style={{
@@ -18640,10 +18777,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   >
                     {aiBusy.youtubeCopy
                       ? "Generating..."
-                      : actionDone(
-                          "generate-youtube-copy"
+                      : Boolean(
+                          String(
+                            digitalData?.youtubeTitle ||
+                            ""
+                          ).trim() ||
+                          String(
+                            digitalData?.youtubeDescription ||
+                            ""
+                          ).trim()
                         )
-                        ? "✓ Generated"
+                        ? "Regenerate YouTube Copy"
                         : "Generate YouTube Copy"}
                   </Btn>
 
@@ -18872,143 +19016,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
             </div>
           )}
-
-          <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-            <div style={{ padding:isMobile?12:14,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
-              <div>
-                <h3 style={{ margin:"0 0 4px",fontSize:15,fontWeight:900,color:C.text }}>Digital Creative Asset Links</h3>
-                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.45 }}>Add editable asset names and final output links for Product Image, banners, feed, story, and video deliverables.</p>
-              </div>
-              <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                <select
-                  value={assetCompletionStatusId}
-                  onChange={(event:any)=>{
-                    const nextStatusId = String(event.target.value || "");
-                    const nextStatus = statuses.find(
-                      (status:any)=>String(status?.id)===nextStatusId
-                    );
-                    patchAssetAnnouncement({
-                      assetCompletionStatusId:nextStatusId,
-                      assetCompletionStatusUpdatedAt:new Date().toISOString(),
-                    });
-                    if(nextStatusId!==assetCompletionStatusId){
-                      void logActivity({
-                        action:"changed Digital Creative Asset Links status to",
-                        entityType:"checklist",
-                        entityName:nextStatus?.label || "No status",
-                        description:group.groupName || "",
-                        href:"/#/checklists",
-                        metadata:{
-                          groupId:group.id,
-                          statusId:nextStatusId,
-                        },
-                      });
-                    }
-                  }}
-                  style={{
-                    height:30,
-                    minWidth:118,
-                    border:`1px solid ${assetCompletionStatus?.color || C.border}`,
-                    borderRadius:7,
-                    padding:"0 9px",
-                    background:assetCompletionStatus
-                      ? `${assetCompletionStatus.color}12`
-                      : C.surface,
-                    color:assetCompletionStatus?.color || C.textSub,
-                    fontSize:11,
-                    fontWeight:800,
-                    outline:"none",
-                  }}
-                >
-                  <option value="">Set status</option>
-                  {statuses.map((status:any)=>(
-                    <option key={status.id} value={status.id}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-
-                <Btn xs variant="outline" onClick={addProductIntroDigitalAssetRow}>+ Add Row</Btn>
-                <Btn
-                  xs
-                  variant={actionDone("save-product-intro-digital-assets")?"primary":"outline"}
-                  onClick={()=>{
-                    commitCurrentProductIntroDigitalAssetRows();
-                    markActionDone("save-product-intro-digital-assets");
-                  }}
-                >
-                  {actionDone("save-product-intro-digital-assets")?"✓ Saved":"Save Table"}
-                </Btn>
-                <Btn xs variant={actionDone("overview-product-intro-digital-assets")?"primary":"outline"} onClick={addProductIntroDigitalAssetTableToOverview}>{actionDone("overview-product-intro-digital-assets")?"✓ Added":"Add to Overview"}</Btn>
-              </div>
-            </div>
-            <div style={{ overflowX:"auto",WebkitOverflowScrolling:"touch" }}>
-              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:isMobile?760:900 }}>
-                <thead>
-                  <tr style={{ background:C.surfaceAlt }}>
-                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:118 }}>Rearrange</th>
-                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Asset Name</th>
-                    <th style={{ textAlign:"left",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Link</th>
-                    <th style={{ textAlign:"right",padding:"10px 12px",borderBottom:`1px solid ${C.border}`,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",width:130 }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {productIntroDigitalAssetRows.map((row:any,index:number)=>(
-                    <tr key={row.id} style={{ borderBottom:`1px solid ${C.border}` }}>
-                      <td style={{ padding:"8px 10px",verticalAlign:"top",whiteSpace:"nowrap",width:118 }}>
-                        <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-                          <Btn xs variant="outline" disabled={index===0} onClick={()=>moveProductIntroDigitalAssetRow(row.id,-1)}>↑</Btn>
-                          <Btn xs variant="outline" disabled={index===productIntroDigitalAssetRows.length-1} onClick={()=>moveProductIntroDigitalAssetRow(row.id,1)}>↓</Btn>
-                          <span style={{ fontSize:11,fontWeight:800,color:C.faint,minWidth:18,textAlign:"center" }}>{index+1}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding:"8px 10px",verticalAlign:"top",width:"30%" }}>
-                        <input
-                          key={`asset-name-${row.id}`}
-                          data-product-intro-asset-name={String(row.id)}
-                          defaultValue={row.name || ""}
-                          onBlur={(e:any)=>{
-                            const value = String(e.currentTarget.value || "");
-                            if(value !== String(row.name || "")){
-                              updateProductIntroDigitalAssetRow(row.id,{ name:value });
-                            }
-                          }}
-                          placeholder="Asset name"
-                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,fontWeight:700,color:C.text,outline:"none",background:C.surface }}
-                        />
-                      </td>
-                      <td style={{ padding:"8px 10px",verticalAlign:"top" }}>
-                        <input
-                          key={`asset-link-${row.id}`}
-                          data-product-intro-asset-link={String(row.id)}
-                          defaultValue={row.link || ""}
-                          onBlur={(e:any)=>{
-                            const value = String(e.currentTarget.value || "").trim();
-                            if(value !== String(row.link || "")){
-                              updateProductIntroDigitalAssetRow(row.id,{ link:value });
-                            }
-                          }}
-                          onPaste={(e:any)=>{
-                            // Keep the pasted value in the field immediately. Saving occurs
-                            // on blur, avoiding a cloud rerender on every character.
-                            requestAnimationFrame(()=>e.currentTarget?.focus());
-                          }}
-                          placeholder="Paste final output link here"
-                          style={{ width:"100%",height:36,border:`1px solid ${C.border}`,borderRadius:8,padding:"0 10px",fontSize:12.5,color:C.text,outline:"none",background:C.surface }}
-                        />
-                      </td>
-                      <td style={{ padding:"8px 10px",verticalAlign:"top",textAlign:"right",whiteSpace:"nowrap" }}>
-                        <div style={{ display:"flex",gap:6,justifyContent:"flex-end",alignItems:"center" }}>
-                          {row.link&&<Btn xs variant="outline" onClick={async()=>{ try { await navigator.clipboard.writeText(row.link || ""); markActionDone(`copy-digital-asset-${row.id}`); } catch {} }}>{actionDone(`copy-digital-asset-${row.id}`)?"✓":"Copy"}</Btn>}
-                          <Btn xs variant="danger" onClick={()=>deleteProductIntroDigitalAssetRow(row.id)}>Delete</Btn>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
           <Modal
             open={assetAnnouncementOpen}
