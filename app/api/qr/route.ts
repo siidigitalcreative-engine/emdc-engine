@@ -14,7 +14,7 @@ const OUTPUT_SIZE = 2048;
  * black shape remains exactly the same distance from every edge.
  */
 const OUTER_PADDING_MODULES = 2;
-const FINDER_OVERSHOOT_MODULES = 0.17;
+const FINDER_OVERSHOOT_MODULES = 0.26;
 
 const DARK = "#000000";
 const LIGHT = "#FFFFFF";
@@ -436,28 +436,34 @@ function drawFinderMarker(
   sharpCorner: SharpCorner
 ) {
   /*
-   * Measurements are based on the uploaded reference:
+   * Reference-style large finder marker.
    *
-   * Outer silhouette: 7.34 modules
-   * White cutout:     5.22 modules
-   * Center mark:      3.16 modules
+   * The three nested shapes use equal visual spacing:
    *
-   * The corner facing the QR center is intentionally much less
-   * rounded, creating the characteristic leaf/drop silhouette.
+   * outer black border = 1.08 modules
+   * inner white gap    = 1.10 modules
+   *
+   * All three shapes use the same inward-facing sharp corner.
+   * This keeps the center box visually centered and prevents one
+   * side of the white gap from appearing narrower.
    */
-  const outerOffset = -0.17;
-  const outerSize = 7.34;
+  const outerOffset = -0.26;
+  const outerSize = 7.52;
 
-  const innerOffset = 0.89;
-  const innerSize = 5.22;
+  const blackBorder = 1.08;
+  const whiteGap = 1.10;
 
-  const centerOffset = 2.08;
-  const centerSize = 3.16;
+  const innerOffset =
+    outerOffset + blackBorder;
 
-  const centerSharpCorner =
-    rotateSharpCornerCounterClockwise(
-      sharpCorner
-    );
+  const innerSize =
+    outerSize - blackBorder * 2;
+
+  const centerOffset =
+    innerOffset + whiteGap;
+
+  const centerSize =
+    innerSize - whiteGap * 2;
 
   return [
     drawAsymmetricRoundedRect(
@@ -467,8 +473,8 @@ function drawFinderMarker(
       outerSize,
       getCornerRadii(
         sharpCorner,
-        2.32,
-        0.68
+        2.40,
+        0.60
       ),
       DARK
     ),
@@ -480,8 +486,8 @@ function drawFinderMarker(
       innerSize,
       getCornerRadii(
         sharpCorner,
-        1.50,
-        0
+        1.60,
+        0.38
       ),
       LIGHT
     ),
@@ -492,9 +498,9 @@ function drawFinderMarker(
       centerSize,
       centerSize,
       getCornerRadii(
-        centerSharpCorner,
-        0.82,
-        0.16
+        sharpCorner,
+        0.88,
+        0.22
       ),
       DARK
     ),
@@ -782,7 +788,7 @@ export async function GET(
             "public, max-age=0, must-revalidate",
 
           "ETag":
-            `"emdc-qr-equal-spacing-v1-${Buffer.from(
+            `"emdc-qr-larger-equal-gap-finders-v2-${Buffer.from(
               text.trim()
             ).toString("base64url").slice(0, 20)}"`,
 
