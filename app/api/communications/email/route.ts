@@ -109,6 +109,33 @@ function getGoogleDriveFileId(
   return "";
 }
 
+function resolveImageCandidates(
+  value: unknown
+) {
+  const source = String(value || "").trim();
+
+  if (!source) return [];
+
+  const driveId =
+    getGoogleDriveFileId(source);
+
+  if (driveId) {
+    const encodedId =
+      encodeURIComponent(driveId);
+
+    return [
+      `https://drive.usercontent.google.com/download?id=${encodedId}&export=download&confirm=t`,
+      `https://drive.google.com/uc?export=download&id=${encodedId}&confirm=t`,
+      `https://drive.google.com/uc?export=view&id=${encodedId}`,
+      `https://drive.google.com/thumbnail?id=${encodedId}&sz=w2000`,
+    ];
+  }
+
+  return /^https?:\/\//i.test(source)
+    ? [source]
+    : [];
+}
+
 function resolveImageUrl(
   value: unknown
 ) {
@@ -360,6 +387,7 @@ function plainTextToHtml(
 function buildHtmlEmail({
   subject,
   body,
+  headerImageSource,
   imageSource,
   youtubeUrl,
   youtubeThumbnailSource,
@@ -367,11 +395,22 @@ function buildHtmlEmail({
 }: {
   subject: string;
   body: string;
+  headerImageSource?: string;
   imageSource?: string;
   youtubeUrl?: string;
   youtubeThumbnailSource?: string;
   checklistTitle?: string;
 }) {
+  const headerImageHtml = headerImageSource
+    ? `<div style="margin:0 0 28px;text-align:center;">
+        <img
+          src="${escapeHtml(headerImageSource)}"
+          alt="Email header"
+          style="display:block;width:100%;max-width:860px;height:auto;aspect-ratio:4/1;object-fit:cover;margin:0 auto;border:0;border-radius:10px;"
+        />
+      </div>`
+    : "";
+
   const imageHtml = imageSource
     ? `<div style="margin:0 0 22px;text-align:center;">
         <img
@@ -445,6 +484,7 @@ function buildHtmlEmail({
         class="emdc-email-card"
         style="width:100%;max-width:860px;margin:0 auto;padding:36px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;box-sizing:border-box;"
       >
+        ${headerImageHtml}
         ${plainTextToHtml(body, {
           hideYoutubeLine: Boolean(youtubeUrl),
           insertHtmlBeforeWhy:
@@ -457,6 +497,70 @@ function buildHtmlEmail({
     </div>
   </body>
 </html>`;
+}
+
+function detectImageContentType(
+  bytes: Buffer,
+  statedType: string
+) {
+  const normalizedType =
+    String(statedType || "")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+
+  if (
+    normalizedType.startsWith(
+      "image/"
+    )
+  ) {
+    return normalizedType;
+  }
+
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return "image/png";
+  }
+
+  if (
+    bytes.length >= 3 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff
+  ) {
+    return "image/jpeg";
+  }
+
+  if (
+    bytes.length >= 6 &&
+    bytes
+      .subarray(0, 6)
+      .toString("ascii")
+      .startsWith("GIF8")
+  ) {
+    return "image/gif";
+  }
+
+  if (
+    bytes.length >= 12 &&
+    bytes
+      .subarray(0, 4)
+      .toString("ascii") ===
+      "RIFF" &&
+    bytes
+      .subarray(8, 12)
+      .toString("ascii") ===
+      "WEBP"
+  ) {
+    return "image/webp";
+  }
+
+  return "";
 }
 
 async function fetchInlineImage(
@@ -477,18 +581,6 @@ async function fetchInlineImage(
 
     if (!response.ok) return null;
 
-    const contentType = String(
-      response.headers.get("content-type") ||
-        ""
-    )
-      .split(";")[0]
-      .trim()
-      .toLowerCase();
-
-    if (!contentType.startsWith("image/")) {
-      return null;
-    }
-
     const bytes = Buffer.from(
       await response.arrayBuffer()
     );
@@ -497,6 +589,20 @@ async function fetchInlineImage(
       !bytes.length ||
       bytes.length > MAX_INLINE_IMAGE_BYTES
     ) {
+      return null;
+    }
+
+    const contentType =
+      detectImageContentType(
+        bytes,
+        String(
+          response.headers.get(
+            "content-type"
+          ) || ""
+        )
+      );
+
+    if (!contentType) {
       return null;
     }
 
@@ -632,10 +738,23 @@ export async function POST(
       requestBody?.checklistTitle || ""
     ).trim();
 
-    const requestedImageUrl =
-      resolveImageUrl(
+    const requestedHeaderImageCandidates =
+      resolveImageCandidates(
+        requestBody?.headerImageUrl
+      );
+
+    const requestedHeaderImageUrl =
+      requestedHeaderImageCandidates[0] ||
+      "";
+
+    const requestedImageCandidates =
+      resolveImageCandidates(
         requestBody?.imageUrl
       );
+
+    const requestedImageUrl =
+      requestedImageCandidates[0] ||
+      "";
 
     const youtubeUrl = String(
       requestBody?.youtubeUrl || ""
@@ -677,14 +796,26 @@ export async function POST(
       await getAccessToken();
 
     const [
-      inlineImage,
+      headerImageResult,
+      productImageResult,
       youtubeThumbnailResult,
     ] = await Promise.all([
-      requestedImageUrl
-        ? fetchInlineImage(
-            requestedImageUrl
+      requestedHeaderImageCandidates.length
+        ? fetchFirstAvailableInlineImage(
+            requestedHeaderImageCandidates
           )
-        : Promise.resolve(null),
+        : Promise.resolve({
+            image: null,
+            url: "",
+          }),
+      requestedImageCandidates.length
+        ? fetchFirstAvailableInlineImage(
+            requestedImageCandidates
+          )
+        : Promise.resolve({
+            image: null,
+            url: "",
+          }),
       youtubeUrl &&
       youtubeThumbnailCandidates.length
         ? fetchFirstAvailableInlineImage(
@@ -695,6 +826,34 @@ export async function POST(
             url: "",
           }),
     ]);
+
+    const inlineHeaderImage =
+      headerImageResult.image;
+
+    const resolvedHeaderImageUrl =
+      headerImageResult.url;
+
+    const inlineImage =
+      productImageResult.image;
+
+    const resolvedImageUrl =
+      productImageResult.url;
+
+    if (
+      requestedHeaderImageCandidates.length &&
+      !inlineHeaderImage
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "The Email Header Image could not be embedded. In Google Drive, open Share and set General access to “Anyone with the link” as Viewer, then try again.",
+          code:
+            "HEADER_IMAGE_NOT_PUBLIC",
+        },
+        { status: 400 }
+      );
+    }
 
     const inlineYoutubeThumbnail =
       youtubeThumbnailResult.image;
@@ -712,6 +871,9 @@ export async function POST(
         .toString(36)
         .slice(2)}`;
 
+    const headerImageContentId =
+      "emdc-email-header-image";
+
     const imageContentId =
       "emdc-email-image";
 
@@ -721,9 +883,13 @@ export async function POST(
     const htmlBody = buildHtmlEmail({
       subject,
       body: messageBody,
+      headerImageSource:
+        inlineHeaderImage
+          ? `cid:${headerImageContentId}`
+          : "",
       imageSource: inlineImage
         ? `cid:${imageContentId}`
-        : requestedImageUrl,
+        : resolvedImageUrl,
       youtubeUrl,
       youtubeThumbnailSource:
         inlineYoutubeThumbnail
@@ -755,6 +921,13 @@ export async function POST(
     ].join("\r\n");
 
     const inlineAttachments = [
+      inlineHeaderImage
+        ? {
+            ...inlineHeaderImage,
+            contentId:
+              headerImageContentId,
+          }
+        : null,
       inlineImage
         ? {
             ...inlineImage,
@@ -860,6 +1033,12 @@ export async function POST(
         json?.id ||
         json?.message?.id ||
         "",
+      headerImageEmbedded:
+        Boolean(inlineHeaderImage),
+      headerImageUrlUsed:
+        Boolean(requestedHeaderImageUrl),
+      headerImageFetchUrl:
+        resolvedHeaderImageUrl,
       imageEmbedded:
         Boolean(inlineImage),
       imageUrlUsed:
