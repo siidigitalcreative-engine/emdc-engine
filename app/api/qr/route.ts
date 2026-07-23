@@ -4,106 +4,288 @@ import QRCode from "qrcode";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const QR_SIZE = 1024;
-const QUIET_ZONE_MODULES = 4;
-const DARK_COLOR = "#000000";
-const LIGHT_COLOR = "#FFFFFF";
+const OUTPUT_SIZE = 2048;
+
+/*
+ * The uploaded reference uses a compact one-module white margin.
+ * Keep the background pure white and every active module pure black.
+ */
+const QUIET_ZONE_MODULES = 1;
+const DARK = "#000000";
+const LIGHT = "#FFFFFF";
+
+/*
+ * Reference proportions measured from the uploaded sample:
+ * - roughly 89% of each QR module is filled
+ * - a narrow white gap remains between neighboring modules
+ */
+const DOT_INSET = 0.055;
+const DOT_SIZE = 1 - DOT_INSET * 2;
+
+type QrMatrix = {
+  size: number;
+  get: (row: number, column: number) => boolean;
+};
 
 function isFinderCell(
   row: number,
   column: number,
   moduleCount: number
 ) {
-  const inTopLeft =
+  const topLeft =
     row >= 0 &&
     row <= 6 &&
     column >= 0 &&
     column <= 6;
 
-  const inTopRight =
+  const topRight =
     row >= 0 &&
     row <= 6 &&
     column >= moduleCount - 7 &&
     column < moduleCount;
 
-  const inBottomLeft =
+  const bottomLeft =
     row >= moduleCount - 7 &&
     row < moduleCount &&
     column >= 0 &&
     column <= 6;
 
-  return (
-    inTopLeft ||
-    inTopRight ||
-    inBottomLeft
+  return topLeft || topRight || bottomLeft;
+}
+
+function isDark(
+  matrix: QrMatrix,
+  row: number,
+  column: number
+) {
+  if (
+    row < 0 ||
+    column < 0 ||
+    row >= matrix.size ||
+    column >= matrix.size
+  ) {
+    return false;
+  }
+
+  return Boolean(
+    matrix.get(row, column)
   );
 }
 
-function drawRoundedFinder(
+function drawCircleModule(
   x: number,
   y: number
 ) {
-  /*
-   * Finder structure remains QR-standard:
-   * 7 × 7 dark outer area
-   * 5 × 5 light middle area
-   * 3 × 3 dark center
-   *
-   * Only the corner radii are customized.
-   */
+  const radius = DOT_SIZE / 2;
+
+  return `<circle cx="${x + radius}" cy="${y + radius}" r="${radius}" fill="${DARK}"/>`;
+}
+
+function drawTopRoundedModule(
+  x: number,
+  y: number
+) {
+  const width = DOT_SIZE;
+  const height = DOT_SIZE;
+  const radius = width / 2;
+
   return [
-    `<rect x="${x}" y="${y}" width="7" height="7" rx="0.8" fill="${DARK_COLOR}"/>`,
-    `<rect x="${x + 1}" y="${y + 1}" width="5" height="5" rx="0.62" fill="${LIGHT_COLOR}"/>`,
-    `<rect x="${x + 2}" y="${y + 2}" width="3" height="3" rx="0.48" fill="${DARK_COLOR}"/>`,
+    `<path`,
+    ` d="M ${x} ${y + height}`,
+    ` L ${x} ${y + radius}`,
+    ` A ${radius} ${radius} 0 0 1 ${x + radius} ${y}`,
+    ` L ${x + width - radius} ${y}`,
+    ` A ${radius} ${radius} 0 0 1 ${x + width} ${y + radius}`,
+    ` L ${x + width} ${y + height}`,
+    ` Z"`,
+    ` fill="${DARK}"`,
+    `/>`,
   ].join("");
 }
 
-function buildStyledQrSvg(
+function drawBottomRoundedModule(
+  x: number,
+  y: number
+) {
+  const width = DOT_SIZE;
+  const height = DOT_SIZE;
+  const radius = width / 2;
+
+  return [
+    `<path`,
+    ` d="M ${x} ${y}`,
+    ` L ${x + width} ${y}`,
+    ` L ${x + width} ${y + height - radius}`,
+    ` A ${radius} ${radius} 0 0 1 ${x + width - radius} ${y + height}`,
+    ` L ${x + radius} ${y + height}`,
+    ` A ${radius} ${radius} 0 0 1 ${x} ${y + height - radius}`,
+    ` Z"`,
+    ` fill="${DARK}"`,
+    `/>`,
+  ].join("");
+}
+
+/*
+ * This recreates the "classy-rounded" behavior visible in the reference:
+ *
+ * - isolated and horizontally grouped modules remain circular
+ * - the first module in a vertical run has a rounded top and flat bottom
+ * - the last module in a vertical run has a flat top and rounded bottom
+ * - middle modules in longer vertical runs remain circular
+ */
+function drawClassyRoundedModule(
+  matrix: QrMatrix,
+  row: number,
+  column: number,
+  x: number,
+  y: number
+) {
+  const up = isDark(
+    matrix,
+    row - 1,
+    column
+  );
+
+  const down = isDark(
+    matrix,
+    row + 1,
+    column
+  );
+
+  if (!up && down) {
+    return drawTopRoundedModule(
+      x,
+      y
+    );
+  }
+
+  if (up && !down) {
+    return drawBottomRoundedModule(
+      x,
+      y
+    );
+  }
+
+  return drawCircleModule(
+    x,
+    y
+  );
+}
+
+/*
+ * Extra-rounded finder style matching the uploaded reference:
+ * - heavily rounded outer square
+ * - rounded white inner square
+ * - rounded black center square
+ *
+ * The small overshoot recreates the slightly oversized finder markers.
+ */
+function drawExtraRoundedFinder(
+  baseX: number,
+  baseY: number
+) {
+  const outerOffset = 0.17;
+  const outerX =
+    baseX - outerOffset;
+  const outerY =
+    baseY - outerOffset;
+  const outerSize = 7.34;
+  const outerRadius = 2.22;
+
+  const innerX =
+    baseX + 0.89;
+  const innerY =
+    baseY + 0.89;
+  const innerSize = 5.22;
+  const innerRadius = 1.48;
+
+  const centerX =
+    baseX + 2.08;
+  const centerY =
+    baseY + 2.08;
+  const centerSize = 3.16;
+  const centerRadius = 0.72;
+
+  return [
+    `<rect`,
+    ` x="${outerX}"`,
+    ` y="${outerY}"`,
+    ` width="${outerSize}"`,
+    ` height="${outerSize}"`,
+    ` rx="${outerRadius}"`,
+    ` fill="${DARK}"`,
+    `/>`,
+
+    `<rect`,
+    ` x="${innerX}"`,
+    ` y="${innerY}"`,
+    ` width="${innerSize}"`,
+    ` height="${innerSize}"`,
+    ` rx="${innerRadius}"`,
+    ` fill="${LIGHT}"`,
+    `/>`,
+
+    `<rect`,
+    ` x="${centerX}"`,
+    ` y="${centerY}"`,
+    ` width="${centerSize}"`,
+    ` height="${centerSize}"`,
+    ` rx="${centerRadius}"`,
+    ` fill="${DARK}"`,
+    `/>`,
+  ].join("");
+}
+
+function buildReferenceStyleQrSvg(
   text: string
 ) {
   const qr = QRCode.create(text, {
     errorCorrectionLevel: "H",
   });
 
-  const moduleCount =
-    qr.modules.size;
+  const matrix: QrMatrix = {
+    size: qr.modules.size,
+    get: (row, column) =>
+      Boolean(
+        qr.modules.get(
+          row,
+          column
+        )
+      ),
+  };
 
-  const canvasSize =
-    moduleCount +
+  const canvasModules =
+    matrix.size +
     QUIET_ZONE_MODULES * 2;
 
-  const moduleInset = 0.06;
-  const moduleSize =
-    1 - moduleInset * 2;
-
-  const shapes: string[] = [
-    `<rect width="${canvasSize}" height="${canvasSize}" fill="${LIGHT_COLOR}"/>`,
+  const elements: string[] = [
+    `<rect width="${canvasModules}" height="${canvasModules}" fill="${LIGHT}"/>`,
   ];
 
-  /*
-   * Render each active data module as a rounded dot.
-   * The occupied QR cells remain unchanged, which preserves scanning
-   * reliability while creating the softer reference-image appearance.
-   */
   for (
     let row = 0;
-    row < moduleCount;
+    row < matrix.size;
     row += 1
   ) {
     for (
       let column = 0;
-      column < moduleCount;
+      column < matrix.size;
       column += 1
     ) {
       if (
-        !qr.modules.get(
+        !matrix.get(
           row,
           column
-        ) ||
+        )
+      ) {
+        continue;
+      }
+
+      if (
         isFinderCell(
           row,
           column,
-          moduleCount
+          matrix.size
         )
       ) {
         continue;
@@ -112,44 +294,50 @@ function buildStyledQrSvg(
       const x =
         QUIET_ZONE_MODULES +
         column +
-        moduleInset;
+        DOT_INSET;
 
       const y =
         QUIET_ZONE_MODULES +
         row +
-        moduleInset;
+        DOT_INSET;
 
-      shapes.push(
-        `<rect x="${x}" y="${y}" width="${moduleSize}" height="${moduleSize}" rx="${moduleSize / 2}" fill="${DARK_COLOR}"/>`
+      elements.push(
+        drawClassyRoundedModule(
+          matrix,
+          row,
+          column,
+          x,
+          y
+        )
       );
     }
   }
 
-  const topLeft =
+  const finderTopLeft =
     QUIET_ZONE_MODULES;
 
-  const topRight =
+  const finderTopRight =
     QUIET_ZONE_MODULES +
-    moduleCount -
+    matrix.size -
     7;
 
-  const bottomLeft =
+  const finderBottomLeft =
     QUIET_ZONE_MODULES +
-    moduleCount -
+    matrix.size -
     7;
 
-  shapes.push(
-    drawRoundedFinder(
-      topLeft,
-      topLeft
+  elements.push(
+    drawExtraRoundedFinder(
+      finderTopLeft,
+      finderTopLeft
     ),
-    drawRoundedFinder(
-      topRight,
-      topLeft
+    drawExtraRoundedFinder(
+      finderTopRight,
+      finderTopLeft
     ),
-    drawRoundedFinder(
-      topLeft,
-      bottomLeft
+    drawExtraRoundedFinder(
+      finderTopLeft,
+      finderBottomLeft
     )
   );
 
@@ -157,14 +345,14 @@ function buildStyledQrSvg(
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<svg`,
     ` xmlns="http://www.w3.org/2000/svg"`,
-    ` width="${QR_SIZE}"`,
-    ` height="${QR_SIZE}"`,
-    ` viewBox="0 0 ${canvasSize} ${canvasSize}"`,
+    ` width="${OUTPUT_SIZE}"`,
+    ` height="${OUTPUT_SIZE}"`,
+    ` viewBox="0 0 ${canvasModules} ${canvasModules}"`,
     ` role="img"`,
     ` aria-label="EMDC product QR code"`,
     ` shape-rendering="geometricPrecision"`,
     `>`,
-    shapes.join(""),
+    elements.join(""),
     `</svg>`,
   ].join("");
 }
@@ -176,7 +364,7 @@ export async function GET(
     new URL(req.url);
 
   /*
-   * Preserve both existing URL formats:
+   * Preserve both existing formats:
    * /api/qr?text=https://...
    * /api/qr?url=https://...
    */
@@ -197,7 +385,7 @@ export async function GET(
 
   try {
     const svg =
-      buildStyledQrSvg(
+      buildReferenceStyleQrSvg(
         text.trim()
       );
 
@@ -216,7 +404,7 @@ export async function GET(
     );
   } catch (error) {
     console.error(
-      "[EMDC] Styled QR generation failed:",
+      "[EMDC] Reference-style QR generation failed:",
       error
     );
 
