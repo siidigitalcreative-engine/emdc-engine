@@ -16494,6 +16494,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         instructions:String(digitalData.assetAnnouncementInstructions || ""),
         to:String(digitalData.assetAnnouncementTo || ""),
         cc:String(digitalData.assetAnnouncementCc || ""),
+        imageUrl:String(digitalData.assetAnnouncementImageUrl || ""),
         drafts:assetAnnouncementOpen
           ? assetAnnouncementEditor
           : {
@@ -16525,6 +16526,110 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const patchAssetAnnouncement = (patch:any) => {
         updateAiWorkspace("digital",patch);
       };
+
+      const getAnnouncementGoogleDriveFileId = (
+        value:any
+      ) => {
+        const source = String(value || "").trim();
+
+        if(!source) return "";
+
+        const patterns = [
+          /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+          /drive\.google\.com\/open\?id=([^&#]+)/i,
+          /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&#]+)/i,
+          /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&#]+)/i,
+          /[?&]id=([^&#]+)/i,
+        ];
+
+        for(const pattern of patterns){
+          const match = source.match(pattern);
+
+          if(match?.[1]){
+            try {
+              return decodeURIComponent(match[1]);
+            } catch {
+              return match[1];
+            }
+          }
+        }
+
+        return "";
+      };
+
+      const getAnnouncementImagePreviewUrl = (
+        value:any
+      ) => {
+        const source = String(value || "").trim();
+
+        if(!source) return "";
+
+        const driveId =
+          getAnnouncementGoogleDriveFileId(source);
+
+        if(driveId){
+          return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+            driveId
+          )}&sz=w1600`;
+        }
+
+        return /^https?:\/\//i.test(source)
+          ? source
+          : "";
+      };
+
+      const normalizeWhyYouLoveItBullets = (
+        value:any
+      ) => {
+        const lines = String(value || "")
+          .replace(/\r\n?/g,"\n")
+          .split("\n");
+
+        const headingIndex = lines.findIndex(
+          (line:string)=>
+            /^why\s+you(?:'|’)?ll\s+love\s+it\s*:?\s*$/i.test(
+              line.trim()
+            )
+        );
+
+        if(headingIndex < 0){
+          return lines.join("\n");
+        }
+
+        let started = false;
+
+        for(
+          let index = headingIndex + 1;
+          index < lines.length;
+          index += 1
+        ){
+          const clean = lines[index].trim();
+
+          if(!clean){
+            if(started) break;
+            continue;
+          }
+
+          if(
+            /^watch\s+on\s+youtube\s*:/i.test(clean) ||
+            /^reply\s+order\b/i.test(clean) ||
+            /^please\s+/i.test(clean)
+          ){
+            break;
+          }
+
+          started = true;
+          lines[index] =
+            `• ${clean.replace(/^(?:[-*•]|\d+[.)])\s*/,"")}`;
+        }
+
+        return lines.join("\n");
+      };
+
+      const announcementImagePreviewUrl =
+        getAnnouncementImagePreviewUrl(
+          assetAnnouncementData.imageUrl
+        );
 
       const readCurrentAnnouncementAssets = () => {
         const digitalWorkspace =
@@ -16843,8 +16948,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ecommerceSections["Key Features"] ||
           ""
         )
-          .replace(/^\s*[-*]\s*/gm,"• ")
-          .trim();
+          .replace(/\r\n?/g,"\n")
+          .split("\n")
+          .map((line:string)=>
+            line
+              .trim()
+              .replace(/^(?:[-*•]|\d+[.)])\s*/,"")
+          )
+          .filter(Boolean)
+          .map((line:string)=>`• ${line}`)
+          .join("\n");
 
         // Do not invent product details. The external announcement uses only
         // the Product Overview and Key Features found in the E-commerce output.
@@ -16934,12 +17047,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           return {
             subject:template.subject,
-            body:externalBodyLines
-              .filter((line,index,rows)=>
-                line !== "" ||
-                (index > 0 && rows[index-1] !== "")
-              )
-              .join("\n"),
+            body:normalizeWhyYouLoveItBullets(
+              externalBodyLines
+                .filter((line,index,rows)=>
+                  line !== "" ||
+                  (index > 0 && rows[index-1] !== "")
+                )
+                .join("\n")
+            ),
           };
         }
 
@@ -17072,7 +17187,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 'Return strict JSON only in this shape: {"subject":"","body":""}.',
                 "Do not use markdown code fences.",
                 audience === "client"
-                  ? "Use a professional partner-facing tone similar to a polished New Arrival email. Include a headline, product overview, Why You'll Love It section, ordering or coordination instruction, and place Watch on YouTube as the final line. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links."
+                  ? "Use a professional partner-facing tone similar to a polished New Arrival email. Include a headline, product overview, Why You'll Love It section, ordering or coordination instruction, and place Watch on YouTube as the final line. Under Why You'll Love It, place every feature on its own line and begin every feature with the bullet character •. Do not include Google Drive, product image, banner, feed, story, signage, or other internal asset links in the written body."
                   : "Use a concise operational tone. Confirm that all available assets are uploaded, list each uploaded asset and its link, and state the next action for the team. Do not mention percentage completion.",
                 audience === "internal"
                   ? "Only include assets that have valid links."
@@ -17115,7 +17230,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               subject:String(assetAnnouncementEditor?.internal?.subject || ""),
               body:String(assetAnnouncementEditor?.internal?.body || ""),
             },
-            [audience]:draft,
+            [audience]:{
+              ...draft,
+              body:audience==="client"
+                ? normalizeWhyYouLoveItBullets(
+                    draft.body
+                  )
+                : draft.body,
+            },
           };
 
           setAssetAnnouncementEditor(nextDrafts);
@@ -17204,7 +17326,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               to:assetAnnouncementData.to,
               cc:assetAnnouncementData.cc,
               subject:email.subject,
-              body:email.body,
+              body:normalizeWhyYouLoveItBullets(
+                email.body
+              ),
+              imageUrl:
+                assetAnnouncementData.imageUrl,
             }),
           });
           const json = await response.json().catch(()=>null);
@@ -19465,6 +19591,70 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     }}
                   />
                 </Field>
+
+                {assetAnnouncementTab==="client"&&(
+                  <Field label="Email Image URL">
+                    <div
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:8,
+                      }}
+                    >
+                      <TI
+                        value={
+                          assetAnnouncementData.imageUrl
+                        }
+                        onChange={(value:any)=>
+                          patchAssetAnnouncement({
+                            assetAnnouncementImageUrl:
+                              value,
+                          })
+                        }
+                        placeholder="Paste a Google Drive image link or direct image URL"
+                      />
+
+                      {!!announcementImagePreviewUrl&&(
+                        <div
+                          style={{
+                            width:"100%",
+                            maxHeight:280,
+                            overflow:"hidden",
+                            border:`1px solid ${C.border}`,
+                            borderRadius:10,
+                            background:C.surfaceAlt,
+                          }}
+                        >
+                          <img
+                            src={
+                              announcementImagePreviewUrl
+                            }
+                            alt="Email image preview"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            style={{
+                              display:"block",
+                              width:"100%",
+                              maxHeight:280,
+                              objectFit:"contain",
+                              background:"#FFFFFF",
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          color:C.faint,
+                          fontSize:10.5,
+                          lineHeight:1.45,
+                        }}
+                      >
+                        For Google Drive, set the file to “Anyone with the link can view.” The image is embedded by Create Gmail Draft and Send Email. Open Gmail can only prefill plain text.
+                      </div>
+                    </div>
+                  </Field>
+                )}
 
                 <Field label={
                   assetAnnouncementTab==="client"
