@@ -6289,6 +6289,20 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const budgetImportInputRef = useRef<any>(null);
   const [budgetSkuPickerRowId,setBudgetSkuPickerRowId] = useState<string|null>(null);
   const [specialCampaignSkuPickerRowId,setSpecialCampaignSkuPickerRowId] = useState<string|null>(null);
+  const [specialCampaignDcSentFeedback,setSpecialCampaignDcSentFeedback] = useState(false);
+  const specialCampaignDcSentTimerRef = useRef<any>(null);
+  useEffect(()=>{
+    return ()=>{
+      if(
+        specialCampaignDcSentTimerRef.current
+      ){
+        clearTimeout(
+          specialCampaignDcSentTimerRef.current
+        );
+      }
+    };
+  },[]);
+
   const setActiveGroupTab = (nextTab:any) => {
     const safeTab = safeChecklistInnerTab(nextTab);
     setActiveGroupTabState(safeTab);
@@ -10461,6 +10475,29 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     "Custom",
   ];
 
+  const ecommerceCampaignTextModels = [
+    {
+      value:"",
+      label:"Default Model (Vercel)",
+    },
+    {
+      value:"gemini-3.5-flash-lite",
+      label:"Gemini 3.5 Flash-Lite",
+    },
+    {
+      value:"gemini-3.1-flash-lite",
+      label:"Gemini 3.1 Flash-Lite",
+    },
+    {
+      value:"gemini-3.5-flash",
+      label:"Gemini 3.5 Flash",
+    },
+    {
+      value:"gemini-3.6-flash",
+      label:"Gemini 3.6 Flash",
+    },
+  ];
+
   const getCampaignProductKey = (item:any) => String(item?.sourceId || item?.id || item?.skuCode || item?.sku || item?.product || item?.productName || "").trim();
   const getCampaignProductOptionKey = (item:any,idx:number) => `${getCampaignProductKey(item) || "mapped-product"}__${idx}`;
   const getCampaignProductByOptionKey = (key:string) => {
@@ -10537,6 +10574,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       headlineInstructions: builder.headlineInstructions || "",
       subheadlineInstructions: builder.subheadlineInstructions || "",
       ctaInstructions: builder.ctaInstructions || "",
+      textModel: builder.textModel || "",
       selectedProductKey: builder.selectedProductKey || "",
       productRows: Array.isArray(builder.productRows) ? builder.productRows : [],
       generatedText: builder.generatedText || "",
@@ -10954,6 +10992,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         task:"ecommerce_campaign_copy_single_row",
         taskLabel:"Campaign E-commerce Copy Per Product Row",
         tone:"commercial",
+        model:String(builder.textModel || "").trim(),
         instruction,
         input:JSON.stringify({
           platform:row.platform || builder.platform,
@@ -19374,13 +19413,29 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         markActionDone(
           "special-campaign-send-to-dc"
         );
-      };
 
-      const allSentToDigital =
-        tracker.requirements.length>0 &&
-        tracker.requirements.every(
-          (row:any)=>!!row?.sentToDigital
+        setSpecialCampaignDcSentFeedback(
+          true
         );
+
+        if(
+          specialCampaignDcSentTimerRef.current
+        ){
+          clearTimeout(
+            specialCampaignDcSentTimerRef.current
+          );
+        }
+
+        specialCampaignDcSentTimerRef.current =
+          setTimeout(()=>{
+            setSpecialCampaignDcSentFeedback(
+              false
+            );
+
+            specialCampaignDcSentTimerRef.current =
+              null;
+          },1600);
+      };
 
       const activeSpecialCampaignSkuRow =
         tracker.requirements.find(
@@ -19618,23 +19673,26 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 xs
                 type="button"
                 variant={
-                  allSentToDigital
+                  specialCampaignDcSentFeedback
                     ? "primary"
                     : "outline"
                 }
                 disabled={!tracker.requirements.length}
                 onClick={sendToDigitalCreative}
                 style={{
-                  transform:allSentToDigital
-                    ? "scale(1.04)"
-                    : "scale(1)",
-                  boxShadow:allSentToDigital
-                    ? "0 0 0 3px rgba(37,99,235,.14)"
-                    : "none",
-                  transition:"transform .18s ease, box-shadow .18s ease",
+                  transform:
+                    specialCampaignDcSentFeedback
+                      ? "scale(1.04)"
+                      : "scale(1)",
+                  boxShadow:
+                    specialCampaignDcSentFeedback
+                      ? "0 0 0 3px rgba(37,99,235,.14)"
+                      : "none",
+                  transition:
+                    "transform .18s ease, box-shadow .18s ease",
                 }}
               >
-                {allSentToDigital
+                {specialCampaignDcSentFeedback
                   ? "✓ Sent to DC"
                   : "Send to DC"}
               </Btn>
@@ -29898,6 +29956,39 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             + Add Row
                           </Btn>
 
+                          <Select
+                            value={campaignBuilder.textModel || ""}
+                            onChange={(value:any)=>
+                              updateEcommerceCampaignBuilder({
+                                textModel:value,
+                              })
+                            }
+                            title="Select another model when the current model quota is reached."
+                            aria-label="Campaign Gemini text model"
+                            style={{
+                              width:isMobile?"100%":220,
+                              minWidth:isMobile?0:220,
+                              height:32,
+                              minHeight:32,
+                              padding:"5px 30px 5px 9px",
+                              borderRadius:7,
+                              fontSize:10.5,
+                              fontWeight:750,
+                              background:C.surface,
+                            }}
+                          >
+                            {ecommerceCampaignTextModels.map(
+                              (model:any)=>(
+                                <option
+                                  key={model.value || "default"}
+                                  value={model.value}
+                                >
+                                  {model.label}
+                                </option>
+                              )
+                            )}
+                          </Select>
+
                           <button
                             className="emdc-date-display-v3"
                             type="button"
@@ -30065,8 +30156,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           >
                             <table
                               style={{
-                                width:1790,
-                                minWidth:1790,
+                                width:1890,
+                                minWidth:1890,
                                 maxWidth:"none",
                                 borderCollapse:"separate",
                                 borderSpacing:0,
@@ -30397,7 +30488,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                                 rowIndex
                                               )
                                             }
-                                            placeholder={isGenerating?"Generating...":"Enter headline or generate all..."}
+                                            placeholder={isGenerating?"Generating...":"Enter headline or generate row/all..."}
                                             disabled={isGenerating}
                                             style={{
                                               height:38,
@@ -30428,7 +30519,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                                 rowIndex
                                               )
                                             }
-                                            placeholder={isGenerating?"Generating...":"Enter subheadline or generate all..."}
+                                            placeholder={isGenerating?"Generating...":"Enter subheadline or generate row/all..."}
                                             disabled={isGenerating}
                                             style={{
                                               height:38,
@@ -30459,7 +30550,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                                 rowIndex
                                               )
                                             }
-                                            placeholder={isGenerating?"Generating...":"Enter CTA or generate all..."}
+                                            placeholder={isGenerating?"Generating...":"Enter CTA or generate row/all..."}
                                             disabled={isGenerating}
                                             style={{
                                               height:38,
@@ -30473,8 +30564,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                                         <td
                                           style={{
-                                            width:360,
-                                            minWidth:360,
+                                            width:460,
+                                            minWidth:460,
                                             padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             verticalAlign:"middle",
@@ -30489,6 +30580,51 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                               alignItems:"center",
                                             }}
                                           >
+                                            <button
+                                              className="emdc-date-display-v3"
+                                              type="button"
+                                              onClick={()=>
+                                                generateEcommerceCampaignRow(
+                                                  row.id
+                                                )
+                                              }
+                                              disabled={
+                                                isGenerating ||
+                                                !!aiBusy.ecommerceCampaign ||
+                                                !productKeys.length
+                                              }
+                                              style={{
+                                                border:"none",
+                                                background:C.accent,
+                                                color:"#fff",
+                                                borderRadius:7,
+                                                padding:"6px 8px",
+                                                fontSize:9.5,
+                                                fontWeight:850,
+                                                cursor:
+                                                  (
+                                                    isGenerating ||
+                                                    !!aiBusy.ecommerceCampaign ||
+                                                    !productKeys.length
+                                                  )
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                                opacity:
+                                                  (
+                                                    isGenerating ||
+                                                    !!aiBusy.ecommerceCampaign ||
+                                                    !productKeys.length
+                                                  )
+                                                    ? .6
+                                                    : 1,
+                                                whiteSpace:"nowrap",
+                                              }}
+                                            >
+                                              {isGenerating
+                                                ? "Generating..."
+                                                : "Generate Row"}
+                                            </button>
+
                                             <button
                                               className="emdc-date-display-v3"
                                               type="button"
