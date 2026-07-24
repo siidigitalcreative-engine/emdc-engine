@@ -7684,6 +7684,287 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
     if(
       structuredContent &&
+      overviewSourceType==="specialCampaignCollateralSummary"
+    ){
+      const summaryRows = Array.isArray(
+        structuredContent.rows
+      )
+        ? structuredContent.rows
+        : [];
+
+      const statusLabel = (status:any) =>
+        status==="submitted"
+          ? "Submitted"
+          : status==="review"
+            ? "For Review"
+            : status==="inprogress"
+              ? "In Progress"
+              : "Requested";
+
+      return (
+        <div
+          style={{
+            display:"flex",
+            flexDirection:"column",
+            gap:12,
+          }}
+        >
+          <div
+            style={{
+              display:"flex",
+              alignItems:"center",
+              gap:7,
+              flexWrap:"wrap",
+            }}
+          >
+            {structuredContent.platform&&(
+              <span
+                style={{
+                  padding:"4px 8px",
+                  borderRadius:999,
+                  background:"#ECFCCB",
+                  color:"#3F6212",
+                  fontSize:10,
+                  fontWeight:850,
+                }}
+              >
+                {structuredContent.platform}
+              </span>
+            )}
+
+            {structuredContent.store&&(
+              <span
+                style={{
+                  padding:"4px 8px",
+                  borderRadius:999,
+                  background:"#E5E7EB",
+                  color:"#475569",
+                  fontSize:10,
+                  fontWeight:850,
+                }}
+              >
+                {structuredContent.store}
+              </span>
+            )}
+
+            {structuredContent.deadline&&(
+              <span
+                style={{
+                  color:C.muted,
+                  fontSize:10.5,
+                  fontWeight:750,
+                }}
+              >
+                Deadline: {structuredContent.deadline}
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              overflowX:"auto",
+              border:`1px solid ${C.border}`,
+              borderRadius:9,
+            }}
+          >
+            <table
+              style={{
+                width:"100%",
+                minWidth:880,
+                borderCollapse:"separate",
+                borderSpacing:0,
+                fontSize:11.5,
+              }}
+            >
+              <thead>
+                <tr>
+                  {[
+                    "Asset Requirement",
+                    "Featured SKU/s",
+                    "Dimensions",
+                    "Preview",
+                    "Final Asset",
+                    "Status",
+                    "Posted",
+                  ].map((heading:string)=>(
+                    <th
+                      key={heading}
+                      style={{
+                        padding:"9px 10px",
+                        borderBottom:`1px solid ${C.border}`,
+                        borderRight:`1px solid ${C.border}`,
+                        background:C.surfaceAlt,
+                        color:C.textSub,
+                        textAlign:"left",
+                        fontSize:9.5,
+                        fontWeight:900,
+                        textTransform:"uppercase",
+                        letterSpacing:".04em",
+                        whiteSpace:"nowrap",
+                      }}
+                    >
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {summaryRows.map(
+                  (row:any,index:number)=>(
+                    <tr
+                      key={
+                        row?.requirementId ||
+                        index
+                      }
+                      style={{
+                        background:index%2
+                          ? C.surface
+                          : C.bg,
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          verticalAlign:"top",
+                          fontWeight:850,
+                          color:C.text,
+                        }}
+                      >
+                        {row?.assetName || "Untitled Requirement"}
+                      </td>
+
+                      <td
+                        style={{
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          verticalAlign:"top",
+                          color:C.textSub,
+                        }}
+                      >
+                        {row?.skuText || "—"}
+                      </td>
+
+                      <td
+                        style={{
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          verticalAlign:"top",
+                          color:C.textSub,
+                          whiteSpace:"nowrap",
+                        }}
+                      >
+                        {row?.dimensions || "—"}
+                      </td>
+
+                      <td
+                        style={{
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          verticalAlign:"top",
+                        }}
+                      >
+                        {row?.finalPreviewUrl ? (
+                          <a
+                            href={row.finalPreviewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              color:"#2563EB",
+                              fontWeight:800,
+                              textDecoration:"none",
+                            }}
+                          >
+                            Open Preview
+                          </a>
+                        ) : "—"}
+                      </td>
+
+                      <td
+                        style={{
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          verticalAlign:"top",
+                        }}
+                      >
+                        {row?.finalAssetLink ? (
+                          <a
+                            href={row.finalAssetLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              color:"#2563EB",
+                              fontWeight:800,
+                              textDecoration:"none",
+                            }}
+                          >
+                            Open Final Asset
+                          </a>
+                        ) : "—"}
+                      </td>
+
+                      <td
+                        style={{
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          verticalAlign:"top",
+                          whiteSpace:"nowrap",
+                          color:C.textSub,
+                        }}
+                      >
+                        {statusLabel(row?.status)}
+                      </td>
+
+                      <td
+                        style={{
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          verticalAlign:"top",
+                          textAlign:"center",
+                          color:row?.posted
+                            ? "#0F766E"
+                            : C.faint,
+                          fontWeight:850,
+                        }}
+                      >
+                        {row?.posted ? "Posted" : "—"}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {structuredContent.sellerKitLink&&(
+            <a
+              href={structuredContent.sellerKitLink}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                alignSelf:"flex-start",
+                color:"#2563EB",
+                fontSize:11,
+                fontWeight:800,
+                textDecoration:"none",
+              }}
+            >
+              Open Seller Kit
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    if(
+      structuredContent &&
       overviewSourceType==="specialCampaignRequirement"
     ){
       const previewUrl =
@@ -16165,11 +16446,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
     };
 
 
-    const renderSpecialCampaignRequirementsTracker = () => {
-      /*
-       * Special Campaign requirements live in the E-commerce workspace
-       * so moving the UI does not migrate, duplicate, or reset saved data.
-       */
+
+    const getSpecialCampaignTrackerSnapshot = () => {
       const ecommerceBackupData =
         (
           backupWorkspace &&
@@ -16203,7 +16481,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ...ecommerceGroupData,
         });
 
-      const rawSpecialCampaignTracker =
+      const rawTracker =
         ecommerceSpecialData?.specialCampaignTracker &&
         typeof ecommerceSpecialData.specialCampaignTracker==="object" &&
         !Array.isArray(
@@ -16212,39 +16490,164 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ? ecommerceSpecialData.specialCampaignTracker
           : {};
 
-      const specialCampaignTracker:any = {
-        ...rawSpecialCampaignTracker,
-        requirements:Array.isArray(
-          rawSpecialCampaignTracker.requirements
-        )
-          ? rawSpecialCampaignTracker.requirements
+      return {
+        ...rawTracker,
+        requirements:Array.isArray(rawTracker.requirements)
+          ? rawTracker.requirements
           : [],
       };
+    };
 
-      const updateSpecialCampaignTracker = (
-        patch:any
-      ) => {
-        updateAiWorkspace("ecommerce",{
-          specialCampaignTracker:{
-            ...rawSpecialCampaignTracker,
-            ...specialCampaignTracker,
-            ...patch,
-            updatedAt:new Date().toISOString(),
-          },
-        });
-      };
-
-      const saveSpecialCampaignRequirements = (
-        rows:any[]
-      ) => {
-        updateSpecialCampaignTracker({
+    const saveSpecialCampaignTrackerRequirements = (
+      tracker:any,
+      rows:any[]
+    ) => {
+      updateAiWorkspace("ecommerce",{
+        specialCampaignTracker:{
+          ...tracker,
           requirements:Array.isArray(rows)
             ? rows
             : [],
-        });
-      };
+          updatedAt:new Date().toISOString(),
+        },
+      });
+    };
 
-      const specialCampaignChecklistSkuCodes =
+    const getSpecialCampaignRequirementSkuIds = (
+      row:any
+    ) => {
+      const savedIds = Array.isArray(row?.skuIds)
+        ? row.skuIds.map(String).filter(Boolean)
+        : [];
+
+      if(savedIds.length) return savedIds;
+
+      const savedCodes = String(row?.skuText || "")
+        .split(/[;,\n]/)
+        .map((value:string)=>value.trim())
+        .filter(Boolean);
+
+      if(!savedCodes.length) return [];
+
+      return (skuStorage || [])
+        .filter((sku:any)=>
+          savedCodes.includes(
+            String(sku?.sku || "").trim()
+          )
+        )
+        .map((sku:any)=>String(sku.id))
+        .filter(Boolean);
+    };
+
+    const getSpecialCampaignSelectedSkuRows = (
+      row:any
+    ) => {
+      const selectedIds = new Set(
+        getSpecialCampaignRequirementSkuIds(row)
+      );
+
+      return (skuStorage || []).filter((sku:any)=>
+        selectedIds.has(String(sku.id))
+      );
+    };
+
+    const specialCampaignStatusOptions = [
+      {
+        id:"requested",
+        label:"Requested",
+        color:"#6B7280",
+        background:"#F3F4F6",
+      },
+      {
+        id:"inprogress",
+        label:"In Progress",
+        color:"#2563EB",
+        background:"#EFF6FF",
+      },
+      {
+        id:"review",
+        label:"For Review",
+        color:"#B45309",
+        background:"#FFF7ED",
+      },
+      {
+        id:"submitted",
+        label:"Submitted",
+        color:"#15803D",
+        background:"#F0FDF4",
+      },
+    ];
+
+    const getSpecialCampaignStatusMeta = (
+      statusId:any
+    ) =>
+      specialCampaignStatusOptions.find(
+        (status:any)=>status.id===statusId
+      ) ||
+      specialCampaignStatusOptions[0];
+
+    const updateSpecialCampaignRequirementRow = (
+      rowId:any,
+      patch:any
+    ) => {
+      const tracker =
+        getSpecialCampaignTrackerSnapshot();
+
+      saveSpecialCampaignTrackerRequirements(
+        tracker,
+        tracker.requirements.map(
+          (row:any)=>
+            String(row?.id)===String(rowId)
+              ? {
+                  ...row,
+                  ...patch,
+                  updatedAt:new Date().toISOString(),
+                }
+              : row
+        )
+      );
+    };
+
+    const toggleSpecialCampaignRequirementSku = (
+      row:any,
+      sku:any
+    ) => {
+      const currentIds =
+        getSpecialCampaignRequirementSkuIds(row);
+
+      const skuId = String(sku?.id || "");
+      if(!skuId) return;
+
+      const nextIds = currentIds.includes(skuId)
+        ? currentIds.filter(
+            (id:string)=>id!==skuId
+          )
+        : [...currentIds,skuId];
+
+      const nextSkuRows = (skuStorage || []).filter(
+        (item:any)=>
+          nextIds.includes(String(item.id))
+      );
+
+      updateSpecialCampaignRequirementRow(
+        row.id,
+        {
+          skuIds:nextIds,
+          skuText:nextSkuRows
+            .map((item:any)=>
+              String(item?.sku || "").trim()
+            )
+            .filter(Boolean)
+            .join(", "),
+        }
+      );
+    };
+
+    const renderSpecialCampaignRequirementsTracker = () => {
+      const tracker =
+        getSpecialCampaignTrackerSnapshot();
+
+      const checklistSkuCodes =
         Array.from(
           new Set(
             productRows
@@ -16260,286 +16663,766 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           )
         );
 
-      const specialCampaignChecklistSkuIds =
+      const checklistSkuIds =
         (skuStorage || [])
           .filter((sku:any)=>
-            specialCampaignChecklistSkuCodes.includes(
+            checklistSkuCodes.includes(
               String(sku?.sku || "").trim()
             )
           )
           .map((sku:any)=>String(sku.id))
           .filter(Boolean);
 
-      const getSpecialCampaignRequirementSkuIds = (
-        row:any
-      ) => {
-        const savedIds = Array.isArray(row?.skuIds)
-          ? row.skuIds.map(String).filter(Boolean)
-          : [];
-
-        if(savedIds.length) return savedIds;
-
-        const savedCodes = String(row?.skuText || "")
-          .split(/[;,\n]/)
-          .map((value:string)=>value.trim())
-          .filter(Boolean);
-
-        if(!savedCodes.length) return [];
-
-        return (skuStorage || [])
-          .filter((sku:any)=>
-            savedCodes.includes(
-              String(sku?.sku || "").trim()
-            )
-          )
-          .map((sku:any)=>String(sku.id))
-          .filter(Boolean);
-      };
-
-      const getSpecialCampaignRequirementSelectedSkus = (
-        row:any
-      ) => {
-        const selectedIds = new Set(
-          getSpecialCampaignRequirementSkuIds(row)
-        );
-
-        return (skuStorage || []).filter((sku:any)=>
-          selectedIds.has(String(sku.id))
-        );
-      };
-
-      const updateSpecialCampaignRequirement = (
-        rowId:any,
-        patch:any
-      ) => {
-        saveSpecialCampaignRequirements(
-          specialCampaignTracker.requirements.map(
-            (row:any)=>
-              String(row?.id)===String(rowId)
-                ? {
-                    ...row,
-                    ...patch,
-                    updatedAt:new Date().toISOString(),
-                  }
-                : row
-          )
-        );
-      };
-
-      const toggleSpecialCampaignRequirementSku = (
-        row:any,
-        sku:any
-      ) => {
-        const currentIds =
-          getSpecialCampaignRequirementSkuIds(row);
-
-        const skuId = String(sku?.id || "");
-        if(!skuId) return;
-
-        const nextIds = currentIds.includes(skuId)
-          ? currentIds.filter(
-              (id:string)=>id!==skuId
-            )
-          : [...currentIds,skuId];
-
-        const nextRows = (skuStorage || []).filter(
-          (item:any)=>
-            nextIds.includes(String(item.id))
-        );
-
-        updateSpecialCampaignRequirement(
-          row.id,
-          {
-            skuIds:nextIds,
-            skuText:nextRows
-              .map((item:any)=>
-                String(item?.sku || "").trim()
-              )
-              .filter(Boolean)
-              .join(", "),
-          }
-        );
-      };
-
-      const addSpecialCampaignRequirement = () => {
+      const addRequirement = () => {
         const selectedRows =
           (skuStorage || []).filter(
             (item:any)=>
-              specialCampaignChecklistSkuIds.includes(
+              checklistSkuIds.includes(
                 String(item.id)
               )
           );
 
-        saveSpecialCampaignRequirements([
-          ...specialCampaignTracker.requirements,
-          {
-            id:uid(),
-            assetName:"",
-            skuIds:specialCampaignChecklistSkuIds,
-            skuText:selectedRows
-              .map((item:any)=>
-                String(item?.sku || "").trim()
-              )
-              .filter(Boolean)
-              .join(", "),
-            copyInstructions:"",
-            notes:"",
-            status:"requested",
-            posted:false,
-            submittedAt:"",
-            postedAt:"",
-            dimensions:"",
-            finalPreviewUrl:"",
-            finalAssetLink:"",
-          },
-        ]);
+        saveSpecialCampaignTrackerRequirements(
+          tracker,
+          [
+            ...tracker.requirements,
+            {
+              id:uid(),
+              assetName:"",
+              skuIds:checklistSkuIds,
+              skuText:selectedRows
+                .map((item:any)=>
+                  String(item?.sku || "").trim()
+                )
+                .filter(Boolean)
+                .join(", "),
+              copyInstructions:"",
+              notes:"",
+              status:"requested",
+              posted:false,
+              submittedAt:"",
+              postedAt:"",
+              sentToDigital:false,
+              sentAt:"",
+              dimensions:"",
+              finalPreviewUrl:"",
+              finalAssetLink:"",
+            },
+          ]
+        );
       };
 
-      const deleteSpecialCampaignRequirement = (
+      const deleteRequirement = (
         rowId:any
       ) => {
-        saveSpecialCampaignRequirements(
-          specialCampaignTracker.requirements.filter(
+        saveSpecialCampaignTrackerRequirements(
+          tracker,
+          tracker.requirements.filter(
             (row:any)=>
               String(row?.id)!==String(rowId)
           )
         );
       };
 
-      const specialCampaignStatusOptions = [
-        {
-          id:"requested",
-          label:"Requested",
-          color:"#6B7280",
-          background:"#F3F4F6",
-        },
-        {
-          id:"inprogress",
-          label:"In Progress",
-          color:"#2563EB",
-          background:"#EFF6FF",
-        },
-        {
-          id:"review",
-          label:"For Review",
-          color:"#B45309",
-          background:"#FFF7ED",
-        },
-        {
-          id:"submitted",
-          label:"Submitted",
-          color:"#15803D",
-          background:"#F0FDF4",
-        },
-      ];
+      const sendToDigitalCreative = () => {
+        if(!tracker.requirements.length) return;
 
-      const getSpecialCampaignStatusMeta = (
-        statusId:any
-      ) =>
-        specialCampaignStatusOptions.find(
-          (status:any)=>
-            status.id===statusId
-        ) ||
-        specialCampaignStatusOptions[0];
+        const now = new Date().toISOString();
 
-      const specialCampaignCounts = {
-        total:
-          specialCampaignTracker.requirements.length,
-        inProgress:
-          specialCampaignTracker.requirements.filter(
-            (row:any)=>
-              row?.status==="inprogress" ||
-              row?.status==="review"
-          ).length,
-        submitted:
-          specialCampaignTracker.requirements.filter(
-            (row:any)=>
-              row?.status==="submitted"
-          ).length,
-        posted:
-          specialCampaignTracker.requirements.filter(
-            (row:any)=>!!row?.posted
-          ).length,
-      };
-
-      const summaryCards = [
-        {
-          label:"Requirements",
-          value:specialCampaignCounts.total,
-        },
-        {
-          label:"In Progress",
-          value:specialCampaignCounts.inProgress,
-        },
-        {
-          label:"Submitted",
-          value:specialCampaignCounts.submitted,
-        },
-        {
-          label:"Posted",
-          value:specialCampaignCounts.posted,
-        },
-      ];
-
-      const markAllSpecialCampaignSubmitted = () => {
-        const submittedAt =
-          new Date().toISOString();
-
-        saveSpecialCampaignRequirements(
-          specialCampaignTracker.requirements.map(
+        saveSpecialCampaignTrackerRequirements(
+          tracker,
+          tracker.requirements.map(
             (row:any)=>({
               ...row,
-              status:"submitted",
-              submittedAt:
-                row?.submittedAt ||
-                submittedAt,
+              sentToDigital:true,
+              sentAt:row?.sentAt || now,
+              status:
+                row?.status==="requested"
+                  ? "inprogress"
+                  : row?.status || "inprogress",
+              updatedAt:now,
             })
           )
         );
 
         markActionDone(
-          "special-campaign-mark-all-submitted"
+          "special-campaign-send-to-dc"
         );
       };
 
-      const addSpecialCampaignRequirementsToOverview = () => {
-        if(!specialCampaignTracker.requirements.length) return;
+      const allSentToDigital =
+        tracker.requirements.length>0 &&
+        tracker.requirements.every(
+          (row:any)=>!!row?.sentToDigital
+        );
 
-        specialCampaignTracker.requirements.forEach(
+      return (
+        <section
+          style={{
+            padding:isMobile?14:16,
+            background:C.surface,
+            border:`1.5px solid ${C.border}`,
+            borderRadius:12,
+            minWidth:0,
+          }}
+        >
+          <div
+            style={{
+              display:"flex",
+              justifyContent:"space-between",
+              alignItems:"flex-start",
+              gap:10,
+              flexWrap:"wrap",
+              marginBottom:14,
+            }}
+          >
+            <div style={{minWidth:0}}>
+              <h4
+                style={{
+                  margin:0,
+                  fontSize:14,
+                  fontWeight:900,
+                  color:C.text,
+                }}
+              >
+                3. Asset Requirements & Output Tracker
+              </h4>
+              <p
+                style={{
+                  margin:"4px 0 0",
+                  fontSize:11,
+                  lineHeight:1.45,
+                  color:C.muted,
+                }}
+              >
+                Build the campaign collateral list, assign featured SKUs,
+                then send the full requirement table to Digital Creative.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display:"flex",
+                gap:8,
+                flexWrap:"wrap",
+              }}
+            >
+              <Btn
+                xs
+                type="button"
+                variant={
+                  allSentToDigital
+                    ? "primary"
+                    : "outline"
+                }
+                disabled={!tracker.requirements.length}
+                onClick={sendToDigitalCreative}
+                style={{
+                  transform:allSentToDigital
+                    ? "scale(1.04)"
+                    : "scale(1)",
+                  boxShadow:allSentToDigital
+                    ? "0 0 0 3px rgba(37,99,235,.14)"
+                    : "none",
+                  transition:"transform .18s ease, box-shadow .18s ease",
+                }}
+              >
+                {allSentToDigital
+                  ? "✓ Sent to DC"
+                  : "Send to DC"}
+              </Btn>
+
+              <Btn
+                xs
+                type="button"
+                onClick={addRequirement}
+              >
+                + Add Requirement
+              </Btn>
+            </div>
+          </div>
+
+          {tracker.requirements.length===0 ? (
+            <div
+              style={{
+                padding:"28px 18px",
+                border:`1.5px dashed ${C.border}`,
+                borderRadius:10,
+                textAlign:"center",
+              }}
+            >
+              <p
+                style={{
+                  margin:"0 0 5px",
+                  fontSize:13,
+                  fontWeight:850,
+                  color:C.textSub,
+                }}
+              >
+                No collateral requirements yet
+              </p>
+              <p
+                style={{
+                  margin:"0 0 13px",
+                  fontSize:12,
+                  color:C.muted,
+                }}
+              >
+                Add the campaign banners, feeds, stories, marketplace
+                assets, signage, or other required collateral.
+              </p>
+              <Btn
+                sm
+                type="button"
+                onClick={addRequirement}
+              >
+                Add First Requirement
+              </Btn>
+            </div>
+          ) : (
+            <div
+              style={{
+                overflowX:"auto",
+                border:`1.5px solid ${C.border}`,
+                borderRadius:10,
+                background:C.bg,
+              }}
+            >
+              <table
+                style={{
+                  width:"100%",
+                  minWidth:1220,
+                  borderCollapse:"separate",
+                  borderSpacing:0,
+                  fontSize:12,
+                }}
+              >
+                <thead>
+                  <tr>
+                    {[
+                      "Asset Requirement",
+                      "Featured SKU/s",
+                      "Copy / Headline Instructions",
+                      "Notes",
+                      "Status",
+                      "Posted",
+                      "DC",
+                      "Actions",
+                    ].map((heading:string)=>(
+                      <th
+                        key={heading}
+                        style={{
+                          padding:"10px 11px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          background:C.surfaceAlt,
+                          color:C.textSub,
+                          textAlign:"left",
+                          fontSize:10,
+                          fontWeight:900,
+                          letterSpacing:".04em",
+                          textTransform:"uppercase",
+                          whiteSpace:"nowrap",
+                        }}
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <tr>
+                    <td
+                      colSpan={8}
+                      style={{
+                        padding:"9px 11px",
+                        borderBottom:`1px solid ${C.border}`,
+                        background:"#F8FAFC",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display:"flex",
+                          alignItems:"center",
+                          gap:7,
+                          flexWrap:"wrap",
+                        }}
+                      >
+                        <strong
+                          style={{
+                            color:C.text,
+                            fontSize:12,
+                          }}
+                        >
+                          {tracker.campaignName ||
+                            group?.groupName ||
+                            "Special Campaign"}
+                        </strong>
+
+                        {tracker.platform&&(
+                          <span
+                            style={{
+                              padding:"3px 8px",
+                              borderRadius:999,
+                              background:"#ECFCCB",
+                              color:"#3F6212",
+                              border:"1px solid #BEF264",
+                              fontSize:10,
+                              fontWeight:850,
+                            }}
+                          >
+                            {tracker.platform}
+                          </span>
+                        )}
+
+                        {tracker.store&&(
+                          <span
+                            style={{
+                              padding:"3px 8px",
+                              borderRadius:999,
+                              background:"#E5E7EB",
+                              color:"#475569",
+                              border:"1px solid #CBD5E1",
+                              fontSize:10,
+                              fontWeight:850,
+                            }}
+                          >
+                            {tracker.store}
+                          </span>
+                        )}
+
+                        {(tracker.deadlineDate || tracker.deadline)&&(
+                          <span
+                            style={{
+                              color:C.muted,
+                              fontSize:10.5,
+                              fontWeight:750,
+                            }}
+                          >
+                            Due: {
+                              tracker.deadlineDate
+                                ? `${tracker.deadlineDate}${
+                                    tracker.deadlineTime
+                                      ? ` ${tracker.deadlineTime}`
+                                      : ""
+                                  }`
+                                : tracker.deadline
+                            }
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {tracker.requirements.map(
+                    (row:any,index:number)=>{
+                      const selectedSkuIds =
+                        getSpecialCampaignRequirementSkuIds(
+                          row
+                        );
+
+                      const selectedSkuRows =
+                        getSpecialCampaignSelectedSkuRows(
+                          row
+                        );
+
+                      const statusMeta =
+                        getSpecialCampaignStatusMeta(
+                          row?.status
+                        );
+
+                      return (
+                        <tr
+                          key={row?.id || index}
+                          style={{
+                            background:index%2
+                              ? C.surface
+                              : C.bg,
+                          }}
+                        >
+                          <td
+                            style={{
+                              width:220,
+                              minWidth:220,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <TI
+                              value={String(row?.assetName || "")}
+                              onChange={(value:any)=>
+                                updateSpecialCampaignRequirementRow(
+                                  row.id,
+                                  {assetName:value}
+                                )
+                              }
+                              placeholder="e.g. BMO Channel Sliding Banner"
+                            />
+                          </td>
+
+                          <td
+                            style={{
+                              width:330,
+                              minWidth:330,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display:"flex",
+                                flexDirection:"column",
+                                gap:7,
+                              }}
+                            >
+                              {selectedSkuRows.length>0&&(
+                                <div
+                                  style={{
+                                    display:"flex",
+                                    flexWrap:"wrap",
+                                    gap:5,
+                                  }}
+                                >
+                                  {selectedSkuRows.map((sku:any)=>(
+                                    <span
+                                      key={sku.id}
+                                      style={{
+                                        display:"inline-flex",
+                                        alignItems:"center",
+                                        gap:5,
+                                        maxWidth:145,
+                                        padding:"3px 6px",
+                                        borderRadius:6,
+                                        border:`1px solid ${C.border}`,
+                                        background:C.surface,
+                                        color:C.textSub,
+                                        fontSize:10,
+                                        fontWeight:800,
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          overflow:"hidden",
+                                          textOverflow:"ellipsis",
+                                          whiteSpace:"nowrap",
+                                        }}
+                                      >
+                                        {sku.sku}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={()=>
+                                          toggleSpecialCampaignRequirementSku(
+                                            row,
+                                            sku
+                                          )
+                                        }
+                                        style={{
+                                          padding:0,
+                                          border:"none",
+                                          background:"transparent",
+                                          color:"#DC2626",
+                                          fontWeight:900,
+                                          cursor:"pointer",
+                                        }}
+                                        aria-label={`Remove ${sku.sku}`}
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              <SKUPicker
+                                skuStorage={skuStorage}
+                                brands={brands}
+                                multiSelect
+                                selectedIds={selectedSkuIds}
+                                onSelect={(sku:any)=>
+                                  toggleSpecialCampaignRequirementSku(
+                                    row,
+                                    sku
+                                  )
+                                }
+                                placeholder="Search and select SKUs..."
+                              />
+                            </div>
+                          </td>
+
+                          <td
+                            style={{
+                              width:280,
+                              minWidth:280,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <textarea
+                              value={String(row?.copyInstructions || "")}
+                              onChange={(event:any)=>
+                                updateSpecialCampaignRequirementRow(
+                                  row.id,
+                                  {
+                                    copyInstructions:
+                                      event.target.value,
+                                  }
+                                )
+                              }
+                              placeholder="Required headline, mechanics, font, disclaimer, or copy..."
+                              rows={4}
+                              style={{
+                                width:"100%",
+                                minHeight:84,
+                                resize:"vertical",
+                                padding:"8px 9px",
+                                border:`1px solid ${C.border}`,
+                                borderRadius:8,
+                                background:C.surface,
+                                color:C.text,
+                                fontSize:11.5,
+                                lineHeight:1.45,
+                                outline:"none",
+                              }}
+                            />
+                          </td>
+
+                          <td
+                            style={{
+                              width:230,
+                              minWidth:230,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <textarea
+                              value={String(row?.notes || "")}
+                              onChange={(event:any)=>
+                                updateSpecialCampaignRequirementRow(
+                                  row.id,
+                                  {notes:event.target.value}
+                                )
+                              }
+                              placeholder="Additional notes..."
+                              rows={4}
+                              style={{
+                                width:"100%",
+                                minHeight:84,
+                                resize:"vertical",
+                                padding:"8px 9px",
+                                border:`1px solid ${C.border}`,
+                                borderRadius:8,
+                                background:C.surface,
+                                color:C.text,
+                                fontSize:11.5,
+                                lineHeight:1.45,
+                                outline:"none",
+                              }}
+                            />
+                          </td>
+
+                          <td
+                            style={{
+                              width:135,
+                              minWidth:135,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <Select
+                              value={String(
+                                row?.status || "requested"
+                              )}
+                              onChange={(value:any)=>
+                                updateSpecialCampaignRequirementRow(
+                                  row.id,
+                                  {
+                                    status:value,
+                                    submittedAt:
+                                      value==="submitted"
+                                        ? row?.submittedAt ||
+                                          new Date().toISOString()
+                                        : row?.submittedAt || "",
+                                  }
+                                )
+                              }
+                            >
+                              {specialCampaignStatusOptions.map(
+                                (status:any)=>(
+                                  <option
+                                    key={status.id}
+                                    value={status.id}
+                                  >
+                                    {status.label}
+                                  </option>
+                                )
+                              )}
+                            </Select>
+
+                            <div
+                              style={{
+                                marginTop:6,
+                                display:"inline-flex",
+                                padding:"3px 7px",
+                                borderRadius:999,
+                                background:statusMeta.background,
+                                color:statusMeta.color,
+                                fontSize:9.5,
+                                fontWeight:900,
+                              }}
+                            >
+                              {statusMeta.label}
+                            </div>
+                          </td>
+
+                          <td
+                            style={{
+                              width:85,
+                              minWidth:85,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              textAlign:"center",
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!row?.posted}
+                              onChange={(event:any)=>
+                                updateSpecialCampaignRequirementRow(
+                                  row.id,
+                                  {
+                                    posted:event.target.checked,
+                                    postedAt:event.target.checked
+                                      ? row?.postedAt ||
+                                        new Date().toISOString()
+                                      : "",
+                                  }
+                                )
+                              }
+                            />
+                          </td>
+
+                          <td
+                            style={{
+                              width:92,
+                              minWidth:92,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              textAlign:"center",
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display:"inline-flex",
+                                padding:"4px 7px",
+                                borderRadius:999,
+                                background:row?.sentToDigital
+                                  ? "#DBEAFE"
+                                  : "#F3F4F6",
+                                color:row?.sentToDigital
+                                  ? "#1D4ED8"
+                                  : "#6B7280",
+                                fontSize:9.5,
+                                fontWeight:900,
+                              }}
+                            >
+                              {row?.sentToDigital
+                                ? "Sent"
+                                : "Pending"}
+                            </span>
+                          </td>
+
+                          <td
+                            style={{
+                              width:84,
+                              minWidth:84,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              textAlign:"center",
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <Btn
+                              xs
+                              type="button"
+                              variant="danger"
+                              onClick={()=>
+                                deleteRequirement(row.id)
+                              }
+                            >
+                              Delete
+                            </Btn>
+                          </td>
+                        </tr>
+                      );
+                    }
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      );
+    };
+
+    const renderSpecialCampaignDigitalCreative = () => {
+      const tracker =
+        getSpecialCampaignTrackerSnapshot();
+
+      const digitalRows =
+        tracker.requirements.filter(
+          (row:any)=>!!row?.sentToDigital
+        );
+
+      const updateDigitalRow = (
+        rowId:any,
+        patch:any
+      ) => {
+        updateSpecialCampaignRequirementRow(
+          rowId,
+          patch
+        );
+      };
+
+      const addDigitalSummaryToOverview = () => {
+        if(!digitalRows.length) return;
+
+        const rows = digitalRows.map(
           (row:any,index:number)=>{
-            const selectedSkus =
-              getSpecialCampaignRequirementSelectedSkus(
+            const selectedRows =
+              getSpecialCampaignSelectedSkuRows(
                 row
               );
 
-            const skuText = selectedSkus.length
-              ? selectedSkus
-                  .map((sku:any)=>
-                    String(sku?.sku || "").trim()
-                  )
-                  .filter(Boolean)
-                  .join(", ")
-              : String(row?.skuText || "").trim();
-
-            const content:any = {
-              requirementId:String(row?.id || ""),
+            return {
+              requirementId:String(row?.id || index),
               assetName:String(
                 row?.assetName ||
                 `Untitled Requirement ${index+1}`
               ),
-              skuIds:
-                getSpecialCampaignRequirementSkuIds(
-                  row
-                ),
-              skuText,
-              copyInstructions:String(
-                row?.copyInstructions || ""
-              ),
-              notes:String(row?.notes || ""),
-              status:String(
-                row?.status || "requested"
-              ),
-              posted:!!row?.posted,
+              skuText:selectedRows.length
+                ? selectedRows
+                    .map((sku:any)=>
+                      String(sku?.sku || "").trim()
+                    )
+                    .filter(Boolean)
+                    .join(", ")
+                : String(row?.skuText || ""),
               dimensions:String(
                 row?.dimensions || ""
               ),
@@ -16549,35 +17432,98 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               finalAssetLink:String(
                 row?.finalAssetLink || ""
               ),
+              status:String(
+                row?.status || "inprogress"
+              ),
+              posted:!!row?.posted,
             };
+          }
+        );
 
-            content.output =
-              formatSpecialCampaignOverviewRequirementOutput(
-                content
-              );
+        const content:any = {
+          campaignName:String(
+            tracker.campaignName ||
+            group?.groupName ||
+            "Special Campaign"
+          ),
+          platform:String(tracker.platform || ""),
+          store:String(tracker.store || ""),
+          deadline:String(
+            tracker.deadlineDate
+              ? `${tracker.deadlineDate}${
+                  tracker.deadlineTime
+                    ? ` ${tracker.deadlineTime}`
+                    : ""
+                }`
+              : tracker.deadline || ""
+          ),
+          sellerKitLink:String(
+            tracker.sellerKitLink || ""
+          ),
+          rows,
+        };
 
-            addToOverview(
-              "E-commerce",
-              `${
-                specialCampaignTracker.campaignName ||
-                group?.groupName ||
-                "Special Campaign"
-              } · ${content.assetName}`,
-              content,
-              "Special Campaign Requirement",
-              {
-                tab:"ecommerce",
-                type:"specialCampaignRequirement",
-                id:String(row?.id || index),
-              }
-            );
+        content.output = [
+          content.campaignName,
+          content.platform
+            ? `Platform: ${content.platform}`
+            : "",
+          content.store
+            ? `Store / Account: ${content.store}`
+            : "",
+          content.deadline
+            ? `Deadline: ${content.deadline}`
+            : "",
+          "",
+          ...rows.flatMap(
+            (row:any,index:number)=>[
+              `${index+1}. ${row.assetName}`,
+              row.skuText
+                ? `SKUs: ${row.skuText}`
+                : "",
+              row.dimensions
+                ? `Dimensions: ${row.dimensions}`
+                : "",
+              row.finalPreviewUrl
+                ? `Preview: ${row.finalPreviewUrl}`
+                : "",
+              row.finalAssetLink
+                ? `Final Asset: ${row.finalAssetLink}`
+                : "",
+              "",
+            ]
+          ),
+        ].filter(
+          (line:any,index:number,array:any[])=>
+            line!=="" ||
+            (
+              index>0 &&
+              array[index-1]!==""
+            )
+        ).join("\n");
+
+        addToOverview(
+          "Digital Creative",
+          `${content.campaignName} · Collateral Summary`,
+          content,
+          "Special Campaign Collateral Summary",
+          {
+            tab:"digital",
+            type:"specialCampaignCollateralSummary",
+            id:"collateral-summary",
           }
         );
 
         markActionDone(
-          "overview-special-campaign-requirements"
+          "overview-special-campaign-collateral-summary"
         );
       };
+
+      const completedRows =
+        digitalRows.filter(
+          (row:any)=>
+            !!String(row?.finalAssetLink || "").trim()
+        ).length;
 
       return (
         <div
@@ -16618,15 +17564,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     color:C.text,
                   }}
                 >
-                  Special Campaign Asset Requirements
+                  Special Campaign Collateral Production
                 </h3>
                 <span
                   style={{
                     padding:"3px 8px",
                     borderRadius:999,
-                    background:"#EFF6FF",
-                    border:"1px solid #BFDBFE",
-                    color:"#1D4ED8",
+                    background:"#F3E8FF",
+                    border:"1px solid #D8B4FE",
+                    color:"#7E22CE",
                     fontSize:10,
                     fontWeight:900,
                   }}
@@ -16640,652 +17586,507 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   fontSize:12,
                   lineHeight:1.5,
                   color:C.muted,
-                  maxWidth:900,
+                  maxWidth:920,
                 }}
               >
-                Add the required campaign collaterals, assign or remove
-                SKUs, track production status, and send each requirement
-                to Overview for final asset completion.
+                Complete the dimensions, preview image, and final asset
+                links for requirements sent from E-commerce, then add
+                the finished table summary to Overview.
               </p>
             </div>
 
-            <span
+            <div
               style={{
-                padding:"5px 10px",
-                borderRadius:999,
-                background:C.surfaceAlt,
-                border:`1px solid ${C.border}`,
-                color:C.muted,
-                fontSize:11,
-                fontWeight:800,
+                display:"flex",
+                alignItems:"center",
+                gap:8,
+                flexWrap:"wrap",
               }}
             >
-              Auto-saved
-            </span>
-          </div>
-
-          <div
-            style={{
-              display:"grid",
-              gridTemplateColumns:isMobile
-                ? "repeat(2,minmax(0,1fr))"
-                : "repeat(4,minmax(0,1fr))",
-              gap:10,
-            }}
-          >
-            {summaryCards.map((card:any)=>(
-              <div
-                key={card.label}
+              <span
                 style={{
-                  padding:"13px 14px",
-                  background:C.surface,
-                  border:`1.5px solid ${C.border}`,
-                  borderRadius:11,
+                  padding:"5px 9px",
+                  borderRadius:999,
+                  background:C.surfaceAlt,
+                  border:`1px solid ${C.border}`,
+                  color:C.muted,
+                  fontSize:10.5,
+                  fontWeight:850,
                 }}
               >
-                <p
-                  style={{
-                    margin:"0 0 5px",
-                    fontSize:10,
-                    fontWeight:900,
-                    color:C.faint,
-                    letterSpacing:".06em",
-                    textTransform:"uppercase",
-                  }}
-                >
-                  {card.label}
-                </p>
-                <p
-                  style={{
-                    margin:0,
-                    fontSize:21,
-                    fontWeight:900,
-                    color:C.text,
-                  }}
-                >
-                  {card.value}
-                </p>
-              </div>
-            ))}
+                {completedRows}/{digitalRows.length} final links added
+              </span>
+
+              <Btn
+                xs
+                type="button"
+                variant={
+                  actionDone(
+                    "overview-special-campaign-collateral-summary"
+                  )
+                    ? "primary"
+                    : "outline"
+                }
+                disabled={!digitalRows.length}
+                onClick={addDigitalSummaryToOverview}
+                style={{
+                  transform:actionDone(
+                    "overview-special-campaign-collateral-summary"
+                  )
+                    ? "scale(1.04)"
+                    : "scale(1)",
+                  boxShadow:actionDone(
+                    "overview-special-campaign-collateral-summary"
+                  )
+                    ? "0 0 0 3px rgba(34,197,94,.14)"
+                    : "none",
+                  transition:"transform .18s ease, box-shadow .18s ease",
+                }}
+              >
+                {actionDone(
+                  "overview-special-campaign-collateral-summary"
+                )
+                  ? "✓ Added"
+                  : "Add to Overview"}
+              </Btn>
+            </div>
           </div>
 
-            <section
+          {digitalRows.length===0 ? (
+            <div
               style={{
-                padding:isMobile?14:16,
+                padding:"34px 18px",
                 background:C.surface,
+                border:`1.5px dashed ${C.border}`,
+                borderRadius:12,
+                textAlign:"center",
+              }}
+            >
+              <p
+                style={{
+                  margin:"0 0 6px",
+                  fontSize:14,
+                  fontWeight:900,
+                  color:C.text,
+                }}
+              >
+                No requirements sent to Digital Creative
+              </p>
+              <p
+                style={{
+                  margin:0,
+                  fontSize:12,
+                  lineHeight:1.5,
+                  color:C.muted,
+                }}
+              >
+                Open E-commerce, complete the Asset Requirements table,
+                then click Send to DC.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                overflowX:"auto",
                 border:`1.5px solid ${C.border}`,
                 borderRadius:12,
+                background:C.surface,
               }}
             >
-              <div
+              <table
                 style={{
-                  display:"flex",
-                  justifyContent:"space-between",
-                  alignItems:"flex-start",
-                  gap:10,
-                  flexWrap:"wrap",
-                  marginBottom:14,
+                  width:"100%",
+                  minWidth:1240,
+                  borderCollapse:"separate",
+                  borderSpacing:0,
+                  fontSize:12,
                 }}
               >
-                <div>
-                  <h4
-                    style={{
-                      margin:0,
-                      fontSize:14,
-                      fontWeight:900,
-                      color:C.text,
-                    }}
-                  >
-                    3. Asset Requirements & Output Tracker
-                  </h4>
-                  <p
-                    style={{
-                      margin:"4px 0 0",
-                      fontSize:11,
-                      lineHeight:1.45,
-                      color:C.muted,
-                    }}
-                  >
-                    Add each required collateral, assign its SKUs, and send it to Overview. Dimensions, the final preview image, and the final asset link are completed in Overview.
-                  </p>
-                </div>
+                <thead>
+                  <tr>
+                    {[
+                      "Asset Requirement",
+                      "Featured SKU/s",
+                      "Dimensions",
+                      "Final Preview Image URL",
+                      "Final Asset Link",
+                      "Status",
+                      "Posted",
+                    ].map((heading:string)=>(
+                      <th
+                        key={heading}
+                        style={{
+                          padding:"10px 11px",
+                          borderBottom:`1px solid ${C.border}`,
+                          borderRight:`1px solid ${C.border}`,
+                          background:C.surfaceAlt,
+                          color:C.textSub,
+                          textAlign:"left",
+                          fontSize:10,
+                          fontWeight:900,
+                          letterSpacing:".04em",
+                          textTransform:"uppercase",
+                          whiteSpace:"nowrap",
+                        }}
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
 
-                <div
-                  style={{
-                    display:"flex",
-                    gap:8,
-                    flexWrap:"wrap",
-                  }}
-                >
-                  <Btn
-                    xs
-                    variant={
-                      actionDone(
-                        "overview-special-campaign-requirements"
-                      )
-                        ? "primary"
-                        : "outline"
-                    }
-                    disabled={
-                      !specialCampaignTracker.requirements.length
-                    }
-                    onClick={
-                      addSpecialCampaignRequirementsToOverview
-                    }
-                    style={{
-                      transform:actionDone(
-                        "overview-special-campaign-requirements"
-                      )
-                        ? "scale(1.04)"
-                        : "scale(1)",
-                      boxShadow:actionDone(
-                        "overview-special-campaign-requirements"
-                      )
-                        ? "0 0 0 3px rgba(34,197,94,.14)"
-                        : "none",
-                      transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
-                    }}
-                  >
-                    {actionDone(
-                      "overview-special-campaign-requirements"
-                    )
-                      ? "✓ Added"
-                      : "Add to Overview"}
-                  </Btn>
-
-                  <Btn
-                    xs
-                    variant="outline"
-                    disabled={
-                      !specialCampaignTracker.requirements.length
-                    }
-                    onClick={
-                      markAllSpecialCampaignSubmitted
-                    }
-                  >
-                    Mark All Submitted
-                  </Btn>
-
-                  <Btn
-                    xs
-                    onClick={
-                      addSpecialCampaignRequirement
-                    }
-                  >
-                    + Add Requirement
-                  </Btn>
-                </div>
-              </div>
-
-              {specialCampaignTracker.requirements.length===0 ? (
-                <div
-                  style={{
-                    padding:"30px 18px",
-                    border:`1.5px dashed ${C.border}`,
-                    borderRadius:10,
-                    textAlign:"center",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin:"0 0 5px",
-                      fontSize:13,
-                      fontWeight:800,
-                      color:C.textSub,
-                    }}
-                  >
-                    No collateral requirements yet
-                  </p>
-                  <p
-                    style={{
-                      margin:"0 0 14px",
-                      fontSize:12,
-                      color:C.muted,
-                    }}
-                  >
-                    Add the required banner, feed, story, marketplace, signage, or other campaign asset.
-                  </p>
-                  <Btn
-                    sm
-                    onClick={
-                      addSpecialCampaignRequirement
-                    }
-                  >
-                    Add First Requirement
-                  </Btn>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display:"flex",
-                    flexDirection:"column",
-                    gap:10,
-                  }}
-                >
-                  {specialCampaignTracker.requirements.map(
-                    (row:any,index:number)=>{
-                      const statusMeta =
-                        getSpecialCampaignStatusMeta(
-                          row?.status
-                        );
-                      const selectedSkuIds =
-                        getSpecialCampaignRequirementSkuIds(row);
-                      const selectedSkuRows =
-                        getSpecialCampaignRequirementSelectedSkus(row);
-
-                      return (
-                        <article
-                          key={row?.id || index}
+                <tbody>
+                  <tr>
+                    <td
+                      colSpan={7}
+                      style={{
+                        padding:"9px 11px",
+                        borderBottom:`1px solid ${C.border}`,
+                        background:"#FAF5FF",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display:"flex",
+                          gap:7,
+                          alignItems:"center",
+                          flexWrap:"wrap",
+                        }}
+                      >
+                        <strong
                           style={{
-                            border:`1.5px solid ${C.border}`,
-                            borderRadius:11,
-                            overflow:"hidden",
-                            background:C.surface,
+                            color:C.text,
+                            fontSize:12,
                           }}
                         >
-                          <div
+                          {tracker.campaignName ||
+                            group?.groupName ||
+                            "Special Campaign"}
+                        </strong>
+
+                        {tracker.platform&&(
+                          <span
                             style={{
-                              display:"flex",
-                              alignItems:"center",
-                              justifyContent:"space-between",
-                              gap:10,
-                              flexWrap:"wrap",
-                              padding:"10px 12px",
-                              background:C.surfaceAlt,
+                              padding:"3px 8px",
+                              borderRadius:999,
+                              background:"#ECFCCB",
+                              color:"#3F6212",
+                              fontSize:10,
+                              fontWeight:850,
+                            }}
+                          >
+                            {tracker.platform}
+                          </span>
+                        )}
+
+                        {tracker.store&&(
+                          <span
+                            style={{
+                              padding:"3px 8px",
+                              borderRadius:999,
+                              background:"#E5E7EB",
+                              color:"#475569",
+                              fontSize:10,
+                              fontWeight:850,
+                            }}
+                          >
+                            {tracker.store}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {digitalRows.map(
+                    (row:any,index:number)=>{
+                      const selectedSkuRows =
+                        getSpecialCampaignSelectedSkuRows(
+                          row
+                        );
+
+                      const previewUrl =
+                        getSpecialCampaignOverviewImagePreview(
+                          row?.finalPreviewUrl
+                        );
+
+                      return (
+                        <tr
+                          key={row?.id || index}
+                          style={{
+                            background:index%2
+                              ? C.surface
+                              : C.bg,
+                          }}
+                        >
+                          <td
+                            style={{
+                              width:210,
+                              minWidth:210,
+                              padding:"10px 11px",
                               borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                              fontWeight:850,
+                              color:C.text,
+                            }}
+                          >
+                            {row?.assetName ||
+                              `Untitled Requirement ${index+1}`}
+                          </td>
+
+                          <td
+                            style={{
+                              width:245,
+                              minWidth:245,
+                              padding:"10px 11px",
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
                             }}
                           >
                             <div
                               style={{
                                 display:"flex",
-                                alignItems:"center",
-                                gap:8,
-                                minWidth:0,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  width:26,
-                                  height:26,
-                                  borderRadius:7,
-                                  display:"inline-flex",
-                                  alignItems:"center",
-                                  justifyContent:"center",
-                                  background:C.accent,
-                                  color:"#fff",
-                                  fontSize:11,
-                                  fontWeight:900,
-                                  flexShrink:0,
-                                }}
-                              >
-                                {index+1}
-                              </span>
-                              <strong
-                                style={{
-                                  minWidth:0,
-                                  overflow:"hidden",
-                                  textOverflow:"ellipsis",
-                                  whiteSpace:"nowrap",
-                                  fontSize:13,
-                                  color:C.text,
-                                }}
-                              >
-                                {row?.assetName ||
-                                  "Untitled Requirement"}
-                              </strong>
-                            </div>
-
-                            <div
-                              style={{
-                                display:"flex",
-                                alignItems:"center",
-                                gap:7,
+                                gap:5,
                                 flexWrap:"wrap",
                               }}
                             >
-                              <span
-                                style={{
-                                  padding:"3px 8px",
-                                  borderRadius:999,
-                                  background:statusMeta.background,
-                                  color:statusMeta.color,
-                                  border:`1px solid ${statusMeta.color}25`,
-                                  fontSize:10,
-                                  fontWeight:900,
-                                }}
-                              >
-                                {statusMeta.label}
-                              </span>
-
-                              {row?.posted&&(
-                                <span
-                                  style={{
-                                    padding:"3px 8px",
-                                    borderRadius:999,
-                                    background:"#ECFEFF",
-                                    color:"#0F766E",
-                                    border:"1px solid #A5F3FC",
-                                    fontSize:10,
-                                    fontWeight:900,
-                                  }}
-                                >
-                                  Posted
-                                </span>
-                              )}
-
-                              <Btn
-                                xs
-                                variant="danger"
-                                onClick={()=>
-                                  deleteSpecialCampaignRequirement(
-                                    row.id
-                                  )
-                                }
-                              >
-                                Delete
-                              </Btn>
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              display:"grid",
-                              gridTemplateColumns:isMobile
-                                ? "1fr"
-                                : "minmax(0,1.4fr) minmax(220px,.6fr)",
-                              gap:10,
-                              padding:12,
-                            }}
-                          >
-                            <Field label="Asset Requirement">
-                              <TI
-                                value={String(row?.assetName || "")}
-                                onChange={(value:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {assetName:value}
-                                  )
-                                }
-                                placeholder="e.g. BMO Channel Sliding Banner"
-                              />
-                            </Field>
-
-                            <Field label="Work Status">
-                              <Select
-                                value={String(
-                                  row?.status || "requested"
-                                )}
-                                onChange={(value:any)=>{
-                                  const now =
-                                    new Date().toISOString();
-
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {
-                                      status:value,
-                                      submittedAt:
-                                        value==="submitted"
-                                          ? row?.submittedAt || now
-                                          : row?.submittedAt || "",
-                                    }
-                                  );
-                                }}
-                              >
-                                {specialCampaignStatusOptions.map(
-                                  (status:any)=>(
-                                    <option
-                                      key={status.id}
-                                      value={status.id}
+                              {selectedSkuRows.length
+                                ? selectedSkuRows.map((sku:any)=>(
+                                    <span
+                                      key={sku.id}
+                                      style={{
+                                        padding:"3px 6px",
+                                        borderRadius:6,
+                                        background:C.surfaceAlt,
+                                        border:`1px solid ${C.border}`,
+                                        color:C.textSub,
+                                        fontSize:10,
+                                        fontWeight:800,
+                                      }}
                                     >
-                                      {status.label}
-                                    </option>
-                                  )
-                                )}
-                              </Select>
-                            </Field>
-                          </div>
-
-                          <div
-                            style={{
-                              display:"grid",
-                              gridTemplateColumns:isMobile
-                                ? "1fr"
-                                : "minmax(0,1fr) minmax(0,1fr)",
-                              gap:10,
-                              padding:"0 12px 12px",
-                              alignItems:"start",
-                            }}
-                          >
-                            <Field label="Included SKUs">
-                              <div
-                                style={{
-                                  display:"flex",
-                                  flexDirection:"column",
-                                  gap:8,
-                                }}
-                              >
-                                {selectedSkuRows.length>0&&(
-                                  <div
+                                      {sku.sku}
+                                    </span>
+                                  ))
+                                : (
+                                  <span
                                     style={{
-                                      display:"flex",
-                                      gap:6,
-                                      flexWrap:"wrap",
-                                      padding:"8px 9px",
-                                      border:`1px solid ${C.border}`,
-                                      borderRadius:9,
-                                      background:C.bg,
-                                    }}
-                                  >
-                                    {selectedSkuRows.map((sku:any)=>(
-                                      <span
-                                        key={sku.id}
-                                        style={{
-                                          display:"inline-flex",
-                                          alignItems:"center",
-                                          gap:6,
-                                          maxWidth:"100%",
-                                          padding:"4px 7px",
-                                          borderRadius:7,
-                                          border:`1px solid ${C.border}`,
-                                          background:C.surface,
-                                          color:C.textSub,
-                                          fontSize:11,
-                                          fontWeight:800,
-                                        }}
-                                      >
-                                        <span
-                                          style={{
-                                            overflow:"hidden",
-                                            textOverflow:"ellipsis",
-                                            whiteSpace:"nowrap",
-                                          }}
-                                        >
-                                          {sku.sku}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={()=>
-                                            toggleSpecialCampaignRequirementSku(
-                                              row,
-                                              sku
-                                            )
-                                          }
-                                          style={{
-                                            border:"none",
-                                            background:"transparent",
-                                            color:"#DC2626",
-                                            fontSize:13,
-                                            fontWeight:900,
-                                            cursor:"pointer",
-                                            padding:0,
-                                            lineHeight:1,
-                                          }}
-                                          aria-label={`Remove ${sku.sku}`}
-                                        >
-                                          ×
-                                        </button>
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                <SKUPicker
-                                  skuStorage={skuStorage}
-                                  brands={brands}
-                                  multiSelect
-                                  selectedIds={selectedSkuIds}
-                                  onSelect={(sku:any)=>
-                                    toggleSpecialCampaignRequirementSku(
-                                      row,
-                                      sku
-                                    )
-                                  }
-                                  placeholder="Search and select SKUs..."
-                                />
-
-                                {selectedSkuRows.length===0&&(
-                                  <div
-                                    style={{
-                                      padding:"8px 9px",
-                                      borderRadius:8,
-                                      background:C.surfaceAlt,
-                                      color:C.muted,
+                                      color:C.faint,
                                       fontSize:11,
                                     }}
                                   >
-                                    No SKUs selected yet.
-                                  </div>
+                                    No SKUs selected
+                                  </span>
                                 )}
-                              </div>
-                            </Field>
+                            </div>
+                          </td>
 
-                            <Field label="Copy / Headline Instructions">
-                              <textarea
-                                value={String(
-                                  row?.copyInstructions || ""
-                                )}
-                                onChange={(event:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {
-                                      copyInstructions:
-                                        event.target.value,
-                                    }
-                                  )
-                                }
-                                placeholder="Required headline, promo mechanics, fonts, disclaimer, or copy..."
-                                rows={5}
-                                style={{
-                                  width:"100%",
-                                  resize:"vertical",
-                                  minHeight:116,
-                                  padding:"9px 11px",
-                                  borderRadius:8,
-                                  border:`1.5px solid ${C.border}`,
-                                  background:C.surface,
-                                  color:C.text,
-                                  fontSize:12,
-                                  lineHeight:1.45,
-                                  outline:"none",
-                                }}
-                              />
-                            </Field>
-                          </div>
-
-                          <div
+                          <td
                             style={{
-                              display:"grid",
-                              gridTemplateColumns:isMobile
-                                ? "1fr"
-                                : "minmax(0,1fr) auto",
-                              gap:10,
-                              alignItems:"start",
-                              padding:"0 12px 12px",
+                              width:150,
+                              minWidth:150,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
                             }}
                           >
-                            <Field label="Notes">
-                              <textarea
-                                value={String(row?.notes || "")}
-                                onChange={(event:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {notes:event.target.value}
-                                  )
-                                }
-                                placeholder="Revision notes, approvals, submission reference, or posting notes..."
-                                rows={3}
-                                style={{
-                                  width:"100%",
-                                  resize:"vertical",
-                                  minHeight:72,
-                                  padding:"9px 11px",
-                                  borderRadius:8,
-                                  border:`1.5px solid ${C.border}`,
-                                  background:C.surface,
-                                  color:C.text,
-                                  fontSize:12,
-                                  lineHeight:1.45,
-                                  outline:"none",
-                                }}
-                              />
-                            </Field>
+                            <TI
+                              value={String(row?.dimensions || "")}
+                              onChange={(value:any)=>
+                                updateDigitalRow(
+                                  row.id,
+                                  {dimensions:value}
+                                )
+                              }
+                              placeholder="e.g. 1200 × 400 px"
+                            />
+                          </td>
 
-                            <label
+                          <td
+                            style={{
+                              width:255,
+                              minWidth:255,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <div
                               style={{
-                                minWidth:isMobile?0:170,
                                 display:"flex",
-                                alignItems:"center",
-                                gap:9,
-                                padding:"11px 12px",
-                                borderRadius:9,
-                                border:`1.5px solid ${
-                                  row?.posted
-                                    ? "#99F6E4"
-                                    : C.border
-                                }`,
-                                background:row?.posted
-                                  ? "#F0FDFA"
-                                  : C.surfaceAlt,
-                                color:row?.posted
-                                  ? "#0F766E"
-                                  : C.textSub,
-                                fontSize:12,
-                                fontWeight:850,
-                                cursor:"pointer",
+                                flexDirection:"column",
+                                gap:7,
                               }}
                             >
-                              <input
-                                type="checkbox"
-                                checked={!!row?.posted}
-                                onChange={(event:any)=>{
-                                  const checked =
-                                    event.target.checked;
-
-                                  updateSpecialCampaignRequirement(
+                              <TI
+                                value={String(
+                                  row?.finalPreviewUrl || ""
+                                )}
+                                onChange={(value:any)=>
+                                  updateDigitalRow(
                                     row.id,
-                                    {
-                                      posted:checked,
-                                      postedAt:checked
-                                        ? row?.postedAt ||
-                                          new Date().toISOString()
-                                        : "",
-                                    }
-                                  );
-                                }}
+                                    {finalPreviewUrl:value}
+                                  )
+                                }
+                                placeholder="Google Drive image link"
                               />
-                              Posted / Published
-                            </label>
-                          </div>
-                        </article>
+
+                              {previewUrl&&(
+                                <img
+                                  src={previewUrl}
+                                  alt={`${row?.assetName || "Collateral"} preview`}
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  style={{
+                                    display:"block",
+                                    width:94,
+                                    height:58,
+                                    objectFit:"cover",
+                                    borderRadius:7,
+                                    border:`1px solid ${C.border}`,
+                                    background:C.surfaceAlt,
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </td>
+
+                          <td
+                            style={{
+                              width:255,
+                              minWidth:255,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display:"flex",
+                                flexDirection:"column",
+                                gap:7,
+                              }}
+                            >
+                              <TI
+                                value={String(
+                                  row?.finalAssetLink || ""
+                                )}
+                                onChange={(value:any)=>
+                                  updateDigitalRow(
+                                    row.id,
+                                    {finalAssetLink:value}
+                                  )
+                                }
+                                placeholder="Final Drive file or folder link"
+                              />
+
+                              {!!String(
+                                row?.finalAssetLink || ""
+                              ).trim()&&(
+                                <Btn
+                                  xs
+                                  type="button"
+                                  variant="outline"
+                                  onClick={()=>
+                                    window.open(
+                                      row.finalAssetLink,
+                                      "_blank",
+                                      "noopener,noreferrer"
+                                    )
+                                  }
+                                >
+                                  Open Final Asset
+                                </Btn>
+                              )}
+                            </div>
+                          </td>
+
+                          <td
+                            style={{
+                              width:130,
+                              minWidth:130,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <Select
+                              value={String(
+                                row?.status || "inprogress"
+                              )}
+                              onChange={(value:any)=>
+                                updateDigitalRow(
+                                  row.id,
+                                  {
+                                    status:value,
+                                    submittedAt:
+                                      value==="submitted"
+                                        ? row?.submittedAt ||
+                                          new Date().toISOString()
+                                        : row?.submittedAt || "",
+                                  }
+                                )
+                              }
+                            >
+                              {specialCampaignStatusOptions.map(
+                                (status:any)=>(
+                                  <option
+                                    key={status.id}
+                                    value={status.id}
+                                  >
+                                    {status.label}
+                                  </option>
+                                )
+                              )}
+                            </Select>
+                          </td>
+
+                          <td
+                            style={{
+                              width:80,
+                              minWidth:80,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              textAlign:"center",
+                              verticalAlign:"top",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!row?.posted}
+                              onChange={(event:any)=>
+                                updateDigitalRow(
+                                  row.id,
+                                  {
+                                    posted:event.target.checked,
+                                    postedAt:event.target.checked
+                                      ? row?.postedAt ||
+                                        new Date().toISOString()
+                                      : "",
+                                  }
+                                )
+                              }
+                            />
+                          </td>
+                        </tr>
                       );
                     }
                   )}
-                </div>
-              )}
-            </section>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       );
     };
+
+    if(tab==="digital" && isSpecialCampaignChecklist){
+      return renderSpecialCampaignDigitalCreative();
+    }
 
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = mergeDigitalCreativeRows(
