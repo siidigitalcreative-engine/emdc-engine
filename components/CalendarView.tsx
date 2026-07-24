@@ -20999,6 +20999,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   }
                                 )
                               }
+                              style={{
+                                height:38,
+                                minHeight:38,
+                                boxSizing:"border-box",
+                                padding:"5px 28px 5px 9px",
+                                fontSize:10.5,
+                                fontWeight:500,
+                                lineHeight:1.2,
+                              }}
                             >
                               {specialCampaignStatusOptions.map(
                                 (status:any)=>(
