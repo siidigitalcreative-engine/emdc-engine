@@ -16112,26 +16112,138 @@ ${slidesHtml}
               </p>
             </div>
           ) : (
-            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start" }}>
+            <div
+              style={{
+                display:"grid",
+                gridTemplateColumns:
+                  isSpecialCampaignOverview
+                    ? "minmax(0,1fr)"
+                    : isMobile
+                      ? "1fr"
+                      : "repeat(2,minmax(0,1fr))",
+                gap:14,
+                alignItems:"start",
+                width:"100%",
+                maxWidth:"100%",
+                minWidth:0,
+              }}
+            >
               {(() => {
                 const sourceRank:any = { "E-commerce":0, "Marketing":1, "Digital Creative":2, "Livestream":3, "Training Materials":4 };
+
                 const normalizeSource = (value:any) => {
                   const v = String(value || "").toLowerCase();
-                  if(v.includes("e-commerce") || v.includes("ecommerce")) return "E-commerce";
-                  if(v.includes("marketing")) return "Marketing";
-                  if(v.includes("digital")) return "Digital Creative";
-                  if(v.includes("livestream") || v.includes("live")) return "Livestream";
-                  if(v.includes("training")) return "Training Materials";
+
+                  if(
+                    v.includes("e-commerce") ||
+                    v.includes("ecommerce")
+                  ){
+                    return "E-commerce";
+                  }
+
+                  if(v.includes("marketing")){
+                    return "Marketing";
+                  }
+
+                  if(v.includes("digital")){
+                    return "Digital Creative";
+                  }
+
+                  if(
+                    v.includes("livestream") ||
+                    v.includes("live")
+                  ){
+                    return "Livestream";
+                  }
+
+                  if(v.includes("training")){
+                    return "Training Materials";
+                  }
+
                   return "Other";
                 };
-                const sorted = [...overviewItems].sort((a:any,b:any)=>{
-                  const ar = sourceRank[normalizeSource(a.sourceTab)] ?? 9;
-                  const br = sourceRank[normalizeSource(b.sourceTab)] ?? 9;
-                  if(ar!==br) return ar-br;
-                  return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
-                });
+
+                const isSpecialCampaignBriefCard = (
+                  item:any
+                ) => {
+                  const sourceType = String(
+                    item?.sourceRef?.type || ""
+                  ).toLowerCase();
+
+                  const title = String(
+                    item?.title || ""
+                  ).toLowerCase();
+
+                  const kind = String(
+                    item?.kind || ""
+                  ).toLowerCase();
+
+                  return (
+                    sourceType ===
+                      "specialcampaignbriefassets" ||
+                    title.includes(
+                      "campaign brief & seller kit"
+                    ) ||
+                    kind.includes(
+                      "special campaign brief & seller kit"
+                    )
+                  );
+                };
+
+                const getOverviewCardRank = (
+                  item:any
+                ) => {
+                  if(
+                    isSpecialCampaignOverview &&
+                    isSpecialCampaignBriefCard(item)
+                  ){
+                    return -100;
+                  }
+
+                  return (
+                    sourceRank[
+                      normalizeSource(item?.sourceTab)
+                    ] ?? 9
+                  );
+                };
+
+                const sorted = [...overviewItems].sort(
+                  (a:any,b:any)=>{
+                    const ar =
+                      getOverviewCardRank(a);
+
+                    const br =
+                      getOverviewCardRank(b);
+
+                    if(ar!==br) return ar-br;
+
+                    return String(
+                      a.createdAt || ""
+                    ).localeCompare(
+                      String(b.createdAt || "")
+                    );
+                  }
+                );
                 return sorted.map((item:any)=>(
-                  <article key={item.id} style={{ padding:isMobile?12:16,border:`1.5px solid ${C.border}`,borderRadius:14,background:C.surface,minWidth:0,boxShadow:"0 2px 8px rgba(15,23,42,.04)",overflow:"hidden" }}>
+                  <article
+                    key={item.id}
+                    style={{
+                      gridColumn:
+                        isSpecialCampaignOverview
+                          ? "1 / -1"
+                          : undefined,
+                      width:"100%",
+                      maxWidth:"100%",
+                      minWidth:0,
+                      boxSizing:"border-box",
+                      padding:isMobile?12:16,
+                      border:`1.5px solid ${C.border}`,
+                      borderRadius:14,
+                      background:C.surface,
+                      boxShadow:"0 2px 8px rgba(15,23,42,.04)",
+                      overflow:"hidden",
+                    }}
+                  >
                     <div style={{ display:"flex",flexDirection:isMobile?"column":"row",justifyContent:"space-between",gap:isMobile?10:12,alignItems:isMobile?"stretch":"flex-start",marginBottom:10,minWidth:0 }}>
                       <div style={{ minWidth:0,flex:1,width:"100%" }}>
                         <span style={{ display:"inline-flex",fontSize:10.5,fontWeight:900,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px",marginBottom:7,maxWidth:"100%" }}>{normalizeSource(item.sourceTab)}</span>
