@@ -8385,158 +8385,151 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
           <div
             style={{
-              padding:isMobile?12:14,
-              borderRadius:11,
-              border:"1.5px solid #BFDBFE",
-              background:"#EFF6FF",
+              display:"grid",
+              gridTemplateColumns:isMobile
+                ? "minmax(0,1fr)"
+                : "repeat(3,minmax(0,1fr))",
+              gap:8,
             }}
           >
             <div
               style={{
-                display:"flex",
-                justifyContent:"space-between",
-                gap:10,
-                alignItems:"flex-start",
-                flexWrap:"wrap",
-                marginBottom:12,
+                minWidth:0,
+                padding:"10px 11px",
+                borderRadius:9,
+                border:`1px solid ${C.border}`,
+                background:C.bg,
               }}
             >
-              <div>
-                <div
-                  style={{
-                    fontSize:13,
-                    fontWeight:900,
-                    color:"#1E3A8A",
-                  }}
-                >
-                  Final Collateral Details
-                </div>
-                <div
-                  style={{
-                    marginTop:3,
-                    fontSize:11,
-                    lineHeight:1.45,
-                    color:"#1D4ED8",
-                  }}
-                >
-                  Add the dimensions, preview image, and final Drive link here in Overview.
-                </div>
-              </div>
-              <span
+              <div
                 style={{
-                  padding:"4px 8px",
-                  borderRadius:999,
-                  background:"#DBEAFE",
-                  border:"1px solid #93C5FD",
-                  color:"#1D4ED8",
+                  marginBottom:4,
                   fontSize:10,
                   fontWeight:900,
+                  color:C.faint,
+                  textTransform:"uppercase",
+                  letterSpacing:".05em",
                 }}
               >
-                Auto-saved
-              </span>
+                Dimensions
+              </div>
+              <div
+                style={{
+                  fontSize:12,
+                  fontWeight:800,
+                  color:C.textSub,
+                  overflowWrap:"anywhere",
+                }}
+              >
+                {structuredContent.dimensions || "—"}
+              </div>
             </div>
 
             <div
               style={{
-                display:"grid",
-                gridTemplateColumns:isMobile
-                  ? "1fr"
-                  : "repeat(3,minmax(0,1fr))",
-                gap:10,
-                alignItems:"start",
+                minWidth:0,
+                padding:"10px 11px",
+                borderRadius:9,
+                border:`1px solid ${C.border}`,
+                background:C.bg,
               }}
             >
-              <Field label="Dimensions">
-                <TI
-                  value={String(structuredContent.dimensions || "")}
-                  onChange={(value:any)=>
-                    updateSpecialCampaignOverviewRequirement(
-                      item,
-                      {dimensions:value}
-                    )
-                  }
-                  placeholder="e.g. 1200 × 400 px"
-                />
-              </Field>
+              <div
+                style={{
+                  marginBottom:7,
+                  fontSize:10,
+                  fontWeight:900,
+                  color:C.faint,
+                  textTransform:"uppercase",
+                  letterSpacing:".05em",
+                }}
+              >
+                Preview
+              </div>
 
-              <Field label="Final Preview Image URL">
-                <TI
-                  value={String(structuredContent.finalPreviewUrl || "")}
-                  onChange={(value:any)=>
-                    updateSpecialCampaignOverviewRequirement(
-                      item,
-                      {finalPreviewUrl:value}
-                    )
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt={
+                    structuredContent.assetName ||
+                    "Collateral preview"
                   }
-                  placeholder="Google Drive image link"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  style={{
+                    display:"block",
+                    width:"100%",
+                    maxHeight:180,
+                    objectFit:"contain",
+                    borderRadius:7,
+                    border:`1px solid ${C.border}`,
+                    background:C.surface,
+                  }}
                 />
-              </Field>
-
-              <Field label="Final Asset Link">
+              ) : (
                 <div
                   style={{
-                    display:"flex",
-                    flexDirection:"column",
-                    gap:7,
+                    fontSize:12,
+                    color:C.faint,
                   }}
                 >
-                  <TI
-                    value={String(structuredContent.finalAssetLink || "")}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignOverviewRequirement(
-                        item,
-                        {finalAssetLink:value}
-                      )
-                    }
-                    placeholder="Final Drive file or folder link"
-                  />
-                  <Btn
-                    xs
-                    variant="outline"
-                    disabled={
-                      !/^https?:\/\//i.test(
-                        String(
-                          structuredContent.finalAssetLink || ""
-                        )
-                      )
-                    }
-                    onClick={()=>
-                      window.open(
-                        String(structuredContent.finalAssetLink || ""),
-                        "_blank",
-                        "noopener,noreferrer"
-                      )
-                    }
-                    style={{alignSelf:"flex-start"}}
-                  >
-                    Open Final Asset
-                  </Btn>
+                  No preview added
                 </div>
-              </Field>
+              )}
             </div>
 
-            {previewUrl&&(
-              <img
-                src={previewUrl}
-                alt={
-                  structuredContent.assetName ||
-                  "Final collateral preview"
-                }
-                loading="lazy"
-                referrerPolicy="no-referrer"
+            <div
+              style={{
+                minWidth:0,
+                padding:"10px 11px",
+                borderRadius:9,
+                border:`1px solid ${C.border}`,
+                background:C.bg,
+              }}
+            >
+              <div
                 style={{
-                  display:"block",
-                  width:"100%",
-                  maxHeight:460,
-                  objectFit:"contain",
-                  marginTop:12,
-                  borderRadius:10,
-                  border:`1px solid ${C.border}`,
-                  background:C.surface,
+                  marginBottom:4,
+                  fontSize:10,
+                  fontWeight:900,
+                  color:C.faint,
+                  textTransform:"uppercase",
+                  letterSpacing:".05em",
                 }}
-              />
-            )}
+              >
+                Final Asset
+              </div>
+
+              {structuredContent.finalAssetLink ? (
+                <a
+                  href={
+                    structuredContent
+                      .finalAssetLink
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display:"inline-flex",
+                    color:"#2563EB",
+                    fontSize:12,
+                    fontWeight:850,
+                    textDecoration:"none",
+                    overflowWrap:"anywhere",
+                  }}
+                >
+                  Open Final Asset
+                </a>
+              ) : (
+                <div
+                  style={{
+                    fontSize:12,
+                    color:C.faint,
+                  }}
+                >
+                  No final asset added
+                </div>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -15721,18 +15714,72 @@ ${slidesHtml}
     }
 
     if(tab==="overview"){
-      const overviewItems = getOverviewItems();
+      const rawOverviewItems =
+        getOverviewItems();
 
-      const overviewChecklistTypeLabel = String(
-        lt?.label ||
-        group?.launchType ||
-        group?.type ||
-        ""
-      ).toLowerCase();
+      const overviewItems =
+        rawOverviewItems.filter(
+          (item:any)=>
+            String(
+              item?.sourceRef?.type || ""
+            )!=="specialCampaignCollateralSummary"
+        );
+
+      const overviewChecklistTypeLabel =
+        checklistTypeFingerprint;
+
+      const overviewEcommerceData =
+        getMergedEcommerceData({
+          ...(
+            backupWorkspace &&
+            typeof backupWorkspace.ecommerce==="object"
+              ? backupWorkspace.ecommerce
+              : {}
+          ),
+          ...(
+            persistedWorkspace &&
+            typeof persistedWorkspace.ecommerce==="object"
+              ? persistedWorkspace.ecommerce
+              : {}
+          ),
+          ...(
+            ((group.aiWorkspace || {}) as any).ecommerce &&
+            typeof ((group.aiWorkspace || {}) as any).ecommerce==="object"
+              ? ((group.aiWorkspace || {}) as any).ecommerce
+              : {}
+          ),
+        });
+
+      const overviewSpecialCampaignTracker =
+        (
+          overviewEcommerceData?.specialCampaignTracker &&
+          typeof overviewEcommerceData.specialCampaignTracker==="object" &&
+          !Array.isArray(
+            overviewEcommerceData.specialCampaignTracker
+          )
+        )
+          ? {
+              ...overviewEcommerceData.specialCampaignTracker,
+              requirements:Array.isArray(
+                overviewEcommerceData
+                  .specialCampaignTracker
+                  .requirements
+              )
+                ? overviewEcommerceData
+                    .specialCampaignTracker
+                    .requirements
+                : [],
+            }
+          : {
+              requirements:[],
+            };
 
       const isSpecialCampaignOverview =
-        overviewChecklistTypeLabel.includes("special") &&
-        overviewChecklistTypeLabel.includes("campaign");
+        (
+          overviewChecklistTypeLabel.includes("special") &&
+          overviewChecklistTypeLabel.includes("campaign")
+        ) ||
+        !!overviewEcommerceData?.specialCampaignTracker;
 
       const isCampaignOverview =
         overviewChecklistTypeLabel.includes("campaign") &&
@@ -16427,13 +16474,202 @@ ${slidesHtml}
               )==="specialCampaignBriefAssets"
           );
 
-        const requirementItems =
-          visibleSpecialItems.filter(
-            (item:any)=>
-              String(
-                item?.sourceRef?.type || ""
-              )==="specialCampaignRequirement"
+        const liveRequirementById =
+          new Map(
+            (
+              overviewSpecialCampaignTracker
+                .requirements || []
+            ).map((row:any)=>[
+              String(row?.id || ""),
+              row,
+            ])
           );
+
+        const resolveSpecialCampaignSkuText = (
+          row:any,
+          fallback:any = ""
+        ) => {
+          const skuIds = Array.isArray(row?.skuIds)
+            ? row.skuIds.map(String).filter(Boolean)
+            : [];
+
+          const matchedCodes = (skuStorage || [])
+            .filter((sku:any)=>
+              skuIds.includes(String(sku?.id || ""))
+            )
+            .map((sku:any)=>
+              String(sku?.sku || "").trim()
+            )
+            .filter(Boolean);
+
+          return (
+            matchedCodes.join(", ") ||
+            String(row?.skuText || "").trim() ||
+            String(fallback || "").trim()
+          );
+        };
+
+        const overviewSpecialDeadline =
+          overviewSpecialCampaignTracker
+            ?.deadlineDate
+            ? `${
+                overviewSpecialCampaignTracker
+                  .deadlineDate
+              }${
+                overviewSpecialCampaignTracker
+                  ?.deadlineTime
+                  ? ` ${
+                      overviewSpecialCampaignTracker
+                        .deadlineTime
+                    }`
+                  : ""
+              }`
+            : String(
+                overviewSpecialCampaignTracker
+                  ?.deadline || ""
+              );
+
+        const requirementItems =
+          visibleSpecialItems
+            .filter(
+              (item:any)=>
+                String(
+                  item?.sourceRef?.type || ""
+                )==="specialCampaignRequirement"
+            )
+            .map((item:any,index:number)=>{
+              const requirementId = String(
+                item?.sourceRef?.id ||
+                item?.content?.requirementId ||
+                ""
+              );
+
+              const liveRow =
+                liveRequirementById.get(
+                  requirementId
+                );
+
+              if(!liveRow){
+                return item;
+              }
+
+              const previousContent =
+                (
+                  item?.content &&
+                  typeof item.content==="object"
+                )
+                  ? item.content
+                  : {};
+
+              const nextContent:any = {
+                ...previousContent,
+                requirementId,
+                campaignName:String(
+                  overviewSpecialCampaignTracker
+                    ?.campaignName ||
+                  previousContent?.campaignName ||
+                  group?.groupName ||
+                  "Special Campaign"
+                ),
+                platform:String(
+                  overviewSpecialCampaignTracker
+                    ?.platform ||
+                  previousContent?.platform ||
+                  ""
+                ),
+                store:String(
+                  overviewSpecialCampaignTracker
+                    ?.store ||
+                  previousContent?.store ||
+                  ""
+                ),
+                deadline:
+                  overviewSpecialDeadline ||
+                  String(
+                    previousContent?.deadline ||
+                    ""
+                  ),
+                assetName:String(
+                  liveRow?.assetName ||
+                  previousContent?.assetName ||
+                  `Untitled Requirement ${
+                    index+1
+                  }`
+                ),
+                skuIds:Array.isArray(
+                  liveRow?.skuIds
+                )
+                  ? liveRow.skuIds
+                  : (
+                      Array.isArray(
+                        previousContent?.skuIds
+                      )
+                        ? previousContent.skuIds
+                        : []
+                    ),
+                skuText:
+                  resolveSpecialCampaignSkuText(
+                    liveRow,
+                    previousContent?.skuText
+                  ),
+                copyInstructions:String(
+                  liveRow?.copyInstructions ??
+                  previousContent
+                    ?.copyInstructions ??
+                  ""
+                ),
+                notes:String(
+                  liveRow?.notes ??
+                  previousContent?.notes ??
+                  ""
+                ),
+                dimensions:String(
+                  liveRow?.dimensions ??
+                  previousContent?.dimensions ??
+                  ""
+                ),
+                finalPreviewUrl:String(
+                  liveRow?.finalPreviewUrl ??
+                  previousContent
+                    ?.finalPreviewUrl ??
+                  ""
+                ),
+                finalAssetLink:String(
+                  liveRow?.finalAssetLink ??
+                  previousContent
+                    ?.finalAssetLink ??
+                  ""
+                ),
+                status:String(
+                  liveRow?.status ||
+                  previousContent?.status ||
+                  "requested"
+                ),
+                posted:!!(
+                  liveRow?.posted ??
+                  previousContent?.posted
+                ),
+                sentToDigital:!!(
+                  liveRow?.sentToDigital ??
+                  previousContent
+                    ?.sentToDigital
+                ),
+                updatedAt:String(
+                  liveRow?.updatedAt ||
+                  previousContent?.updatedAt ||
+                  item?.updatedAt ||
+                  ""
+                ),
+              };
+
+              return {
+                ...item,
+                content:nextContent,
+                updatedAt:
+                  nextContent.updatedAt ||
+                  item?.updatedAt,
+              };
+            });
 
         const otherItems =
           visibleSpecialItems.filter(
