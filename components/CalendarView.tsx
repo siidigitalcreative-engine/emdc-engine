@@ -6362,6 +6362,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const toggleDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: !prev?.[key] }));
   const closeDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: false }));
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
+  const [campaignOverviewImagePreview,setCampaignOverviewImagePreview] = useState<any>(null);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
   const [campaignRowSkuPickerId,setCampaignRowSkuPickerId] = useState<string|null>(null);
   const [campaignRowSkuSearch,setCampaignRowSkuSearch] = useState("");
@@ -7567,6 +7568,49 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return /^https?:\/\//i.test(source)
       ? source
       : "";
+  };
+
+  const saveCampaignOverviewPreviewImage = async (
+    sourceUrl:any,
+    fileName:string = "campaign-preview-image.png"
+  ) => {
+    const previewUrl =
+      getSpecialCampaignOverviewImagePreview(
+        sourceUrl
+      );
+
+    if(!previewUrl) return;
+
+    try {
+      const response = await fetch(previewUrl);
+
+      if(!response.ok){
+        throw new Error(
+          `Image request failed: ${response.status}`
+        );
+      }
+
+      const blob = await response.blob();
+      const objectUrl =
+        URL.createObjectURL(blob);
+
+      const anchor =
+        document.createElement("a");
+
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(
+        previewUrl,
+        "_blank",
+        "noopener,noreferrer"
+      );
+    }
   };
 
   const formatSpecialCampaignOverviewRequirementOutput = (
@@ -15624,6 +15668,90 @@ ${slidesHtml}
       if(isCampaignOverview){
         return (
           <div style={{ display:"flex",flexDirection:"column",gap:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+            <Modal
+              open={!!campaignOverviewImagePreview}
+              onClose={()=>
+                setCampaignOverviewImagePreview(null)
+              }
+              title={
+                campaignOverviewImagePreview?.title ||
+                "Campaign Preview"
+              }
+              width={900}
+            >
+              {campaignOverviewImagePreview&&(
+                <div
+                  style={{
+                    display:"flex",
+                    flexDirection:"column",
+                    gap:14,
+                  }}
+                >
+                  <div
+                    style={{
+                      display:"flex",
+                      alignItems:"center",
+                      justifyContent:"center",
+                      minHeight:280,
+                      maxHeight:"72vh",
+                      overflow:"hidden",
+                      border:`1px solid ${C.border}`,
+                      borderRadius:12,
+                      background:C.bg,
+                    }}
+                  >
+                    <img
+                      src={
+                        campaignOverviewImagePreview.previewUrl ||
+                        getSpecialCampaignOverviewImagePreview(
+                          campaignOverviewImagePreview.url
+                        )
+                      }
+                      alt="Expanded Campaign preview"
+                      referrerPolicy="no-referrer"
+                      style={{
+                        display:"block",
+                        width:"100%",
+                        maxHeight:"72vh",
+                        objectFit:"contain",
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display:"flex",
+                      justifyContent:"flex-end",
+                      gap:8,
+                      flexWrap:"wrap",
+                    }}
+                  >
+                    <Btn
+                      type="button"
+                      variant="outline"
+                      onClick={()=>
+                        saveCampaignOverviewPreviewImage(
+                          campaignOverviewImagePreview.url,
+                          `campaign-preview-${Date.now()}.png`
+                        )
+                      }
+                    >
+                      Save Image
+                    </Btn>
+
+                    <Btn
+                      type="button"
+                      onClick={()=>
+                        setCampaignOverviewImagePreview(null)
+                      }
+                    >
+                      Close
+                    </Btn>
+                  </div>
+                </div>
+              )}
+            </Modal>
+
             <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
                 <div>
@@ -15801,26 +15929,62 @@ ${slidesHtml}
 
                               <td
                                 style={{
-                                  padding:10,
+                                  padding:8,
                                   borderBottom:`1px solid ${C.border}`,
                                   borderRight:`1px solid ${C.border}`,
-                                  verticalAlign:"top",
-                                  minWidth:130,
+                                  verticalAlign:"middle",
+                                  minWidth:150,
+                                  textAlign:"center",
                                 }}
                               >
                                 {row.finalPreviewUrl ? (
-                                  <a
-                                    href={row.finalPreviewUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                  <button
+                                    type="button"
+                                    onClick={()=>
+                                      setCampaignOverviewImagePreview({
+                                        url:row.finalPreviewUrl,
+                                        previewUrl:
+                                          getSpecialCampaignOverviewImagePreview(
+                                            row.finalPreviewUrl
+                                          ),
+                                        title:
+                                          row.product ||
+                                          row.sku ||
+                                          "Campaign Preview",
+                                      })
+                                    }
                                     style={{
-                                      color:"#2563EB",
-                                      fontWeight:850,
-                                      textDecoration:"none",
+                                      display:"inline-flex",
+                                      alignItems:"center",
+                                      justifyContent:"center",
+                                      width:112,
+                                      height:70,
+                                      padding:0,
+                                      overflow:"hidden",
+                                      border:`1px solid ${C.border}`,
+                                      borderRadius:8,
+                                      background:C.surfaceAlt,
+                                      cursor:"zoom-in",
                                     }}
+                                    aria-label={`Preview ${row.product || row.sku || "campaign image"}`}
                                   >
-                                    Open Preview
-                                  </a>
+                                    <img
+                                      src={
+                                        getSpecialCampaignOverviewImagePreview(
+                                          row.finalPreviewUrl
+                                        )
+                                      }
+                                      alt={`${row.product || row.sku || "Campaign"} preview`}
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                      style={{
+                                        display:"block",
+                                        width:"100%",
+                                        height:"100%",
+                                        objectFit:"cover",
+                                      }}
+                                    />
+                                  </button>
                                 ) : "—"}
                               </td>
 
@@ -16278,16 +16442,86 @@ ${slidesHtml}
                     const skuText=products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", ");
                     return (
                       <tr key={row?.sourceRowId||row?.id||index} style={{background:index%2?C.surface:C.bg}}>
-                        <td style={{width:260,minWidth:260,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
-                          <strong style={{display:"block",color:C.text,fontSize:11.5}}>{row?.product||"Campaign Product Row"}</strong>
-                          <span style={{display:"block",marginTop:4,color:C.muted,fontSize:9.5,lineHeight:1.35}}>{skuText||"No SKU selected"}</span>
+                        <td style={{width:260,minWidth:260,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                          <div
+                            style={{
+                              display:"flex",
+                              flexDirection:"column",
+                              justifyContent:"center",
+                              minHeight:38,
+                              padding:"4px 8px",
+                              overflow:"hidden",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                            }}
+                          >
+                            <strong
+                              title={String(row?.product||"Campaign Product Row")}
+                              style={{
+                                display:"block",
+                                overflow:"hidden",
+                                color:C.text,
+                                fontSize:10.5,
+                                lineHeight:1.25,
+                                textOverflow:"ellipsis",
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              {row?.product||"Campaign Product Row"}
+                            </strong>
+                            <span
+                              title={skuText}
+                              style={{
+                                display:"block",
+                                marginTop:2,
+                                overflow:"hidden",
+                                color:C.muted,
+                                fontSize:9,
+                                lineHeight:1.2,
+                                textOverflow:"ellipsis",
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              {skuText||"No SKU selected"}
+                            </span>
+                          </div>
                         </td>
                         {[row?.platform||"",row?.discount||"",row?.mechanics||"",row?.headline||"",row?.subheadline||"",row?.cta||""].map((value:any,valueIndex:number)=>(
-                          <td key={valueIndex} style={{width:valueIndex===4?280:valueIndex===3?220:165,minWidth:valueIndex===4?280:valueIndex===3?220:165,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",color:C.textSub,lineHeight:1.4}}>
-                            {value||"—"}
+                          <td
+                            key={valueIndex}
+                            style={{
+                              width:valueIndex===4?280:valueIndex===3?220:165,
+                              minWidth:valueIndex===4?280:valueIndex===3?220:165,
+                              padding:6,
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              verticalAlign:"middle",
+                              color:C.textSub,
+                            }}
+                          >
+                            <div
+                              title={String(value || "")}
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                minHeight:38,
+                                padding:"0 8px",
+                                overflow:"hidden",
+                                border:`1px solid ${C.border}`,
+                                borderRadius:8,
+                                background:C.surface,
+                                fontSize:10.5,
+                                lineHeight:1.35,
+                                whiteSpace:"nowrap",
+                                textOverflow:"ellipsis",
+                              }}
+                            >
+                              {value||"—"}
+                            </div>
                           </td>
                         ))}
-                        <td style={{width:360,minWidth:360,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                        <td style={{width:360,minWidth:360,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
                           <textarea
                             value={String(row?.caption||"")}
                             onChange={(event:any)=>updateCampaignCaption(row?.sourceRowId||row?.id,event.target.value)}
@@ -16301,8 +16535,22 @@ ${slidesHtml}
                               )
                             }
                             placeholder="Enter campaign caption for this row..."
-                            rows={3}
-                            style={{width:"100%",minHeight:62,boxSizing:"border-box",resize:"vertical",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11.5,lineHeight:1.45,outline:"none"}}
+                            rows={1}
+                            style={{
+                              width:"100%",
+                              height:38,
+                              minHeight:38,
+                              boxSizing:"border-box",
+                              resize:"vertical",
+                              padding:"8px 9px",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                              color:C.text,
+                              fontSize:10.5,
+                              lineHeight:1.35,
+                              outline:"none",
+                            }}
                           />
                         </td>
 
@@ -19791,38 +20039,144 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     const caption=captionBySourceId.get(rowId)||"";
                     return (
                       <tr key={rowId} style={{background:index%2?C.surface:C.bg}}>
-                        <td style={{width:280,minWidth:280,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
-                          <strong style={{display:"block",color:C.text,fontSize:11.5}}>{row?.product||row?.title||"Campaign Product Row"}</strong>
-                          <span style={{display:"block",marginTop:4,color:C.muted,fontSize:9.5}}>{skuText||"No SKU selected"}</span>
+                        <td style={{width:280,minWidth:280,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                          <div
+                            style={{
+                              display:"flex",
+                              flexDirection:"column",
+                              justifyContent:"center",
+                              minHeight:38,
+                              padding:"4px 8px",
+                              overflow:"hidden",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                            }}
+                          >
+                            <strong
+                              title={String(row?.product||row?.title||"Campaign Product Row")}
+                              style={{
+                                display:"block",
+                                overflow:"hidden",
+                                color:C.text,
+                                fontSize:10.5,
+                                lineHeight:1.25,
+                                textOverflow:"ellipsis",
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              {row?.product||row?.title||"Campaign Product Row"}
+                            </strong>
+                            <span
+                              title={skuText}
+                              style={{
+                                display:"block",
+                                marginTop:2,
+                                overflow:"hidden",
+                                color:C.muted,
+                                fontSize:9,
+                                lineHeight:1.2,
+                                textOverflow:"ellipsis",
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              {skuText||"No SKU selected"}
+                            </span>
+                          </div>
                         </td>
-                        <td style={{width:150,minWidth:150,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",color:C.textSub}}>
-                          {row?.platform||"—"}
+                        <td style={{width:150,minWidth:150,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",color:C.textSub}}>
+                          <div
+                            style={{
+                              display:"flex",
+                              alignItems:"center",
+                              minHeight:38,
+                              padding:"0 8px",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                              fontSize:10.5,
+                            }}
+                          >
+                            {row?.platform||"—"}
+                          </div>
                         </td>
-                        <td style={{width:320,minWidth:320,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",color:C.textSub,lineHeight:1.45}}>
-                          {caption||"No caption added in Marketing yet."}
+                        <td style={{width:320,minWidth:320,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",color:C.textSub}}>
+                          <div
+                            title={caption||"No caption added in Marketing yet."}
+                            style={{
+                              display:"flex",
+                              alignItems:"center",
+                              minHeight:38,
+                              padding:"0 8px",
+                              overflow:"hidden",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                              fontSize:10.5,
+                              lineHeight:1.35,
+                              whiteSpace:"nowrap",
+                              textOverflow:"ellipsis",
+                            }}
+                          >
+                            {caption||"No caption added in Marketing yet."}
+                          </div>
                         </td>
-                        <td style={{width:300,minWidth:300,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                        <td style={{width:300,minWidth:300,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
                           <TI
                             value={String(row?.finalPreviewUrl||"")}
                             onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{finalPreviewUrl:value})}
                             placeholder="Google Drive image link"
+                            style={{
+                              height:38,
+                              minHeight:38,
+                              boxSizing:"border-box",
+                              fontSize:10.5,
+                            }}
                           />
                         </td>
-                        <td style={{width:300,minWidth:300,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
-                          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        <td style={{width:360,minWidth:360,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:"minmax(0,1fr) auto",
+                              alignItems:"center",
+                              gap:6,
+                            }}
+                          >
                             <TI
                               value={String(row?.finalAssetLink||"")}
                               onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{finalAssetLink:value})}
                               placeholder="Final Drive file or folder link"
+                              style={{
+                                height:38,
+                                minHeight:38,
+                                boxSizing:"border-box",
+                                fontSize:10.5,
+                              }}
                             />
-                            {!!String(row?.finalAssetLink||"").trim()&&(
-                              <Btn xs type="button" variant="outline" onClick={()=>window.open(row.finalAssetLink,"_blank","noopener,noreferrer")}>
-                                Open Final Asset
-                              </Btn>
-                            )}
+                            <Btn
+                              xs
+                              type="button"
+                              variant="outline"
+                              disabled={!String(row?.finalAssetLink||"").trim()}
+                              onClick={()=>
+                                window.open(
+                                  row.finalAssetLink,
+                                  "_blank",
+                                  "noopener,noreferrer"
+                                )
+                              }
+                              style={{
+                                height:38,
+                                minHeight:38,
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              Open
+                            </Btn>
                           </div>
                         </td>
-                        <td style={{width:145,minWidth:145,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                        <td style={{width:145,minWidth:145,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
                           <Select
                             value={String(row?.status||"inprogress")}
                             onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{status:value})}
@@ -19864,6 +20218,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               type="button"
                               style={{
                                 flex:"0 0 auto",
+                                height:38,
+                                minHeight:38,
                                 whiteSpace:"nowrap",
                               }}
                               variant={
@@ -19886,6 +20242,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               variant="danger"
                               style={{
                                 flex:"0 0 auto",
+                                height:38,
+                                minHeight:38,
                                 whiteSpace:"nowrap",
                               }}
                               onClick={()=>
