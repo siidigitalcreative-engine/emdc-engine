@@ -16126,15 +16126,15 @@ ${slidesHtml}
               )}
             </Modal>
 
-            <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-              <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <div style={{ padding:isMobile?10:11,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                 <div>
-                  <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Overview</h3>
-                  <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Master table of campaign outputs added from E-commerce and Digital Creative.</p>
+                  <h3 style={{ margin:"0 0 3px",fontSize:isMobile?14:15,fontWeight:900,color:C.text }}>Overview</h3>
+                  <p style={{ margin:0,fontSize:10.5,color:C.muted,lineHeight:1.35,maxWidth:680 }}>Master table of campaign outputs added from E-commerce and Digital Creative.</p>
                 </div>
-                <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",justifyContent:isMobile?"stretch":"flex-end",width:isMobile?"100%":"auto" }}>
-                  <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{campaignOverviewRows.length} row{campaignOverviewRows.length!==1?"s":""}</span>
-                  <Select value={campaignOverviewGroupBy} onChange={(value)=>updateAiWorkspace("overview",{ campaignOverviewGroupBy:value })} style={{ width:isMobile?"100%":180,height:32,fontSize:12,padding:"5px 32px 5px 9px" }}>
+                <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",justifyContent:isMobile?"stretch":"flex-end",width:isMobile?"100%":"auto" }}>
+                  <span style={{ fontSize:10,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"3px 8px" }}>{campaignOverviewRows.length} row{campaignOverviewRows.length!==1?"s":""}</span>
+                  <Select value={campaignOverviewGroupBy} onChange={(value)=>updateAiWorkspace("overview",{ campaignOverviewGroupBy:value })} style={{ width:isMobile?"100%":168,height:30,minHeight:30,fontSize:10.5,padding:"4px 28px 4px 8px" }}>
                     <option value="none">No Grouping</option>
                     <option value="brand">Group by Brand</option>
                     <option value="platform">Group by Platform</option>
@@ -16149,13 +16149,13 @@ ${slidesHtml}
                 <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No rows yet. Add the Campaign product rows from E-commerce. Marketing and Digital Creative will update those same rows.</p>
               </div>
             ) : (
-              <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-                <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?430:620 }}>
-                  <table style={{ width:"100%",minWidth:2180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+              <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden" }}>
+                <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?410:560 }}>
+                  <table style={{ width:"100%",minWidth:1720,borderCollapse:"collapse",fontSize:10.75,color:C.textSub }}>
                     <thead>
                       <tr style={{ background:C.surfaceAlt }}>
                         {["Platform","Brand","Category","SKU","Product","Headline","Subheadline","CTA","Caption","Preview","Final Asset","Status","Actions"].map((label:string)=>(
-                          <th key={label} style={{ position:"sticky",top:0,zIndex:2,background:C.surfaceAlt,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
+                          <th key={label} style={{ position:"sticky",top:0,zIndex:2,background:C.surfaceAlt,padding:"7px 8px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:9,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".045em",whiteSpace:"nowrap" }}>{label}</th>
                         ))}
                       </tr>
                     </thead>
@@ -16164,20 +16164,20 @@ ${slidesHtml}
                         <React.Fragment key={`${group.label || "all"}-${groupIndex}`}>
                           {campaignOverviewGroupBy!=="none"&&(
                             <tr>
-                              <td colSpan={13} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                              <td colSpan={13} style={{ position:"sticky",left:0,zIndex:1,padding:"6px 8px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:9.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".045em" }}>
                                 {group.label} <span style={{ color:C.faint,fontWeight:800,textTransform:"none",letterSpacing:0 }}>({group.rows.length} row{group.rows.length!==1?"s":""})</span>
                               </td>
                             </tr>
                           )}
                           {group.rows.map(({item,row}:any,idx:number)=>(
                             <tr key={item.id} style={{ background:idx%2?C.surface:C.bg }}>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap",fontWeight:750 }}>{row.platform || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.brand || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap" }}>{row.category || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:130,fontFamily:"monospace",fontSize:11.5,color:C.muted }}>{row.sku || ""}</td>
-                              <td style={{ padding:12,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:220 }}>{row.product || ""}</td>
+                              <td style={{ padding:"7px 8px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",whiteSpace:"nowrap",fontWeight:750,minWidth:82 }}>{row.platform || ""}</td>
+                              <td style={{ padding:"7px 8px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",whiteSpace:"nowrap",minWidth:92 }}>{row.brand || ""}</td>
+                              <td style={{ padding:"7px 8px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",minWidth:135,maxWidth:170,lineHeight:1.25 }}>{row.category || ""}</td>
+                              <td style={{ padding:"7px 8px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",minWidth:108,maxWidth:125,fontFamily:"monospace",fontSize:9.5,color:C.muted,lineHeight:1.25 }}>{row.sku || ""}</td>
+                              <td style={{ padding:"7px 8px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",minWidth:180,maxWidth:220,lineHeight:1.28 }}>{row.product || ""}</td>
 
-                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:210 }}>
+                              <td style={{ padding:5,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",minWidth:165 }}>
                                 <textarea
                                   defaultValue={row.headline || ""}
                                   onBlur={(event:any)=>{
@@ -16196,25 +16196,26 @@ ${slidesHtml}
                                     }
                                   }}
                                   aria-label="Edit headline"
-                                  rows={3}
+                                  rows={2}
                                   style={{
                                     width:"100%",
                                     boxSizing:"border-box",
-                                    minHeight:64,
+                                    minHeight:46,
+                                    maxHeight:86,
                                     resize:"vertical",
-                                    padding:"7px 8px",
+                                    padding:"6px 7px",
                                     border:`1px solid ${C.border}`,
-                                    borderRadius:7,
+                                    borderRadius:6,
                                     background:C.bg,
                                     color:C.text,
-                                    fontSize:12,
-                                    lineHeight:1.4,
+                                    fontSize:10.5,
+                                    lineHeight:1.3,
                                     outline:"none",
                                   }}
                                 />
                               </td>
 
-                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:320 }}>
+                              <td style={{ padding:5,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",minWidth:235 }}>
                                 <textarea
                                   defaultValue={row.subheadline || ""}
                                   onBlur={(event:any)=>{
@@ -16233,25 +16234,26 @@ ${slidesHtml}
                                     }
                                   }}
                                   aria-label="Edit subheadline"
-                                  rows={4}
+                                  rows={2}
                                   style={{
                                     width:"100%",
                                     boxSizing:"border-box",
-                                    minHeight:82,
+                                    minHeight:46,
+                                    maxHeight:96,
                                     resize:"vertical",
-                                    padding:"7px 8px",
+                                    padding:"6px 7px",
                                     border:`1px solid ${C.border}`,
-                                    borderRadius:7,
+                                    borderRadius:6,
                                     background:C.bg,
                                     color:C.text,
-                                    fontSize:12,
-                                    lineHeight:1.4,
+                                    fontSize:10.5,
+                                    lineHeight:1.3,
                                     outline:"none",
                                   }}
                                 />
                               </td>
 
-                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:170 }}>
+                              <td style={{ padding:5,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",minWidth:110 }}>
                                 <input
                                   type="text"
                                   defaultValue={row.cta || ""}
@@ -16274,13 +16276,13 @@ ${slidesHtml}
                                   style={{
                                     width:"100%",
                                     boxSizing:"border-box",
-                                    minHeight:34,
-                                    padding:"7px 8px",
+                                    minHeight:32,
+                                    padding:"5px 7px",
                                     border:`1px solid ${C.border}`,
-                                    borderRadius:7,
+                                    borderRadius:6,
                                     background:C.bg,
                                     color:C.text,
-                                    fontSize:12,
+                                    fontSize:10.5,
                                     fontWeight:850,
                                     outline:"none",
                                   }}
@@ -16289,25 +16291,35 @@ ${slidesHtml}
 
                               <td
                                 style={{
-                                  padding:10,
+                                  padding:"7px 8px",
                                   borderBottom:`1px solid ${C.border}`,
                                   borderRight:`1px solid ${C.border}`,
-                                  verticalAlign:"top",
-                                  minWidth:280,
+                                  verticalAlign:"middle",
+                                  minWidth:205,
+                                  maxWidth:250,
                                   whiteSpace:"pre-wrap",
-                                  lineHeight:1.45,
+                                  lineHeight:1.3,
+                                  fontSize:10.25,
                                 }}
                               >
-                                {row.caption || ""}
+                                <div
+                                  title={row.caption || ""}
+                                  style={{
+                                    maxHeight:54,
+                                    overflow:"hidden",
+                                  }}
+                                >
+                                  {row.caption || ""}
+                                </div>
                               </td>
 
                               <td
                                 style={{
-                                  padding:8,
+                                  padding:5,
                                   borderBottom:`1px solid ${C.border}`,
                                   borderRight:`1px solid ${C.border}`,
                                   verticalAlign:"middle",
-                                  minWidth:150,
+                                  minWidth:104,
                                   textAlign:"center",
                                 }}
                               >
@@ -16331,12 +16343,12 @@ ${slidesHtml}
                                       display:"inline-flex",
                                       alignItems:"center",
                                       justifyContent:"center",
-                                      width:112,
-                                      height:70,
+                                      width:82,
+                                      height:50,
                                       padding:0,
                                       overflow:"hidden",
                                       border:`1px solid ${C.border}`,
-                                      borderRadius:8,
+                                      borderRadius:6,
                                       background:C.surfaceAlt,
                                       cursor:"zoom-in",
                                     }}
@@ -16364,11 +16376,12 @@ ${slidesHtml}
 
                               <td
                                 style={{
-                                  padding:10,
+                                  padding:"7px 8px",
                                   borderBottom:`1px solid ${C.border}`,
                                   borderRight:`1px solid ${C.border}`,
-                                  verticalAlign:"top",
-                                  minWidth:140,
+                                  verticalAlign:"middle",
+                                  minWidth:105,
+                                  fontSize:10.25,
                                 }}
                               >
                                 {row.finalAssetLink ? (
@@ -16389,12 +16402,13 @@ ${slidesHtml}
 
                               <td
                                 style={{
-                                  padding:10,
+                                  padding:"7px 8px",
                                   borderBottom:`1px solid ${C.border}`,
                                   borderRight:`1px solid ${C.border}`,
-                                  verticalAlign:"top",
-                                  minWidth:110,
+                                  verticalAlign:"middle",
+                                  minWidth:84,
                                   whiteSpace:"nowrap",
+                                  fontSize:10.25,
                                   fontWeight:800,
                                   color:C.textSub,
                                 }}
@@ -16404,10 +16418,10 @@ ${slidesHtml}
 
                               <td
                                 style={{
-                                  padding:8,
+                                  padding:5,
                                   borderBottom:`1px solid ${C.border}`,
-                                  verticalAlign:"top",
-                                  minWidth:92,
+                                  verticalAlign:"middle",
+                                  minWidth:76,
                                   textAlign:"center",
                                 }}
                               >
