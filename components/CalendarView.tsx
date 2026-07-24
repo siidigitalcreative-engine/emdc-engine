@@ -68,24 +68,24 @@ const GlobalStyles = () => {
       ::-webkit-scrollbar-track{background:#F1F5F9;border-radius:999px;}
       ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:999px;border:3px solid transparent;background-clip:content-box;}
       .emdc-campaign-table-scroll{
-        scrollbar-width:auto!important;
-        scrollbar-color:#94A3B8 #E2E8F0!important;
+        scrollbar-width:thin!important;
+        scrollbar-color:#CBD5E1 #F1F5F9!important;
       }
       .emdc-campaign-table-scroll::-webkit-scrollbar{
-        height:14px!important;
+        height:8px!important;
       }
       .emdc-campaign-table-scroll::-webkit-scrollbar-track{
-        background:#E2E8F0!important;
+        background:#F1F5F9!important;
         border-radius:999px!important;
       }
       .emdc-campaign-table-scroll::-webkit-scrollbar-thumb{
-        background:#94A3B8!important;
-        border:3px solid #E2E8F0!important;
+        background:#CBD5E1!important;
+        border:2px solid #F1F5F9!important;
         border-radius:999px!important;
         background-clip:border-box!important;
       }
       .emdc-campaign-table-scroll::-webkit-scrollbar-thumb:hover{
-        background:#64748B!important;
+        background:#94A3B8!important;
       }
       .emdc-btn:hover{opacity:.85;}
       .emdc-row:hover{background:#F9FAFB;}
@@ -14993,10 +14993,10 @@ ${slidesHtml}
             ) : (
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                 <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?430:620 }}>
-                  <table style={{ width:"100%",minWidth:1320,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                  <table style={{ width:"100%",minWidth:1410,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                     <thead>
                       <tr style={{ background:C.surfaceAlt }}>
-                        {["Platform","Brand","Category","SKU","Product","Headline","Subheadline","CTA"].map((label:string)=>(
+                        {["Platform","Brand","Category","SKU","Product","Headline","Subheadline","CTA","Actions"].map((label:string)=>(
                           <th key={label} style={{ position:"sticky",top:0,zIndex:2,background:C.surfaceAlt,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                         ))}
                       </tr>
@@ -15006,7 +15006,7 @@ ${slidesHtml}
                         <React.Fragment key={`${group.label || "all"}-${groupIndex}`}>
                           {campaignOverviewGroupBy!=="none"&&(
                             <tr>
-                              <td colSpan={8} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                              <td colSpan={9} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
                                 {group.label} <span style={{ color:C.faint,fontWeight:800,textTransform:"none",letterSpacing:0 }}>({group.rows.length} row{group.rows.length!==1?"s":""})</span>
                               </td>
                             </tr>
@@ -15093,7 +15093,7 @@ ${slidesHtml}
                                 />
                               </td>
 
-                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",minWidth:170 }}>
+                              <td style={{ padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",minWidth:170 }}>
                                 <input
                                   type="text"
                                   defaultValue={row.cta || ""}
@@ -15127,6 +15127,27 @@ ${slidesHtml}
                                     outline:"none",
                                   }}
                                 />
+                              </td>
+
+                              <td
+                                style={{
+                                  padding:8,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  verticalAlign:"top",
+                                  minWidth:92,
+                                  textAlign:"center",
+                                }}
+                              >
+                                <Btn
+                                  xs
+                                  type="button"
+                                  variant="danger"
+                                  onClick={()=>
+                                    deleteOverviewItem(item.id)
+                                  }
+                                >
+                                  Delete
+                                </Btn>
                               </td>
                             </tr>
                           ))}
@@ -27567,7 +27588,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             onClick={addEcommerceCampaignToOverview}
                             disabled={!campaignHasOutput}
                           >
-                            Add Copy to Overview
+                            Add to Overview
                           </Btn>
 
                           {campaignRows.length>0&&(
@@ -27646,7 +27667,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               overscrollBehaviorX:"contain",
                               touchAction:"pan-x",
                               scrollbarGutter:"stable",
-                              paddingBottom:10,
+                              paddingBottom:4,
                               boxSizing:"border-box",
                             }}
                           >
