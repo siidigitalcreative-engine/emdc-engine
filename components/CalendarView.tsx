@@ -28545,53 +28545,100 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     boxSizing:"border-box",
                   }}
                 >
-                  <Field label="Deadline">
-                    <div
-                      style={{
-                        display:"grid",
-                        gridTemplateColumns:isMobile
-                          ? "minmax(0,1fr)"
-                          : "minmax(0,1fr) minmax(0,1fr)",
-                        gap:8,
-                        width:"100%",
-                        maxWidth:"100%",
-                        minWidth:0,
-                        boxSizing:"border-box",
-                      }}
-                    >
-                      <TI
-                        type="date"
-                        value={specialCampaignTracker.deadlineDate}
-                        onChange={(value:any)=>
-                          updateSpecialCampaignTracker({
-                            deadlineDate:value,
-                            deadline:"",
-                          })
-                        }
+                  <div
+                    style={{
+                      width:"100%",
+                      maxWidth:"100%",
+                      minWidth:0,
+                      overflow:"hidden",
+                      boxSizing:"border-box",
+                    }}
+                  >
+                    <Field label="Deadline">
+                      <div
                         style={{
+                          display:"grid",
+                          gridTemplateColumns:
+                            "repeat(2,minmax(0,1fr))",
+                          gap:8,
                           width:"100%",
                           maxWidth:"100%",
                           minWidth:0,
+                          paddingRight:isMobile?2:0,
+                          overflow:"hidden",
                           boxSizing:"border-box",
                         }}
-                      />
-                      <TI
-                        type="time"
-                        value={specialCampaignTracker.deadlineTime}
-                        onChange={(value:any)=>
-                          updateSpecialCampaignTracker({
-                            deadlineTime:value,
-                            deadline:"",
-                          })
-                        }
-                        style={{
-                          width:"100%",
-                          maxWidth:"100%",
-                          minWidth:0,
-                          boxSizing:"border-box",
-                        }}
-                      />
-                    </div>
+                      >
+                        <div
+                          style={{
+                            width:"100%",
+                            maxWidth:"100%",
+                            minWidth:0,
+                            overflow:"hidden",
+                            boxSizing:"border-box",
+                          }}
+                        >
+                          <TI
+                            type="date"
+                            value={specialCampaignTracker.deadlineDate}
+                            onChange={(value:any)=>
+                              updateSpecialCampaignTracker({
+                                deadlineDate:value,
+                                deadline:"",
+                              })
+                            }
+                            style={{
+                              display:"block",
+                              width:"100%",
+                              maxWidth:"100%",
+                              minWidth:0,
+                              inlineSize:"100%",
+                              maxInlineSize:"100%",
+                              minInlineSize:0,
+                              boxSizing:"border-box",
+                              fontSize:isMobile?12:14,
+                              padding:isMobile
+                                ? "9px 7px"
+                                : "9px 12px",
+                            }}
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            width:"100%",
+                            maxWidth:"100%",
+                            minWidth:0,
+                            overflow:"hidden",
+                            boxSizing:"border-box",
+                          }}
+                        >
+                          <TI
+                            type="time"
+                            value={specialCampaignTracker.deadlineTime}
+                            onChange={(value:any)=>
+                              updateSpecialCampaignTracker({
+                                deadlineTime:value,
+                                deadline:"",
+                              })
+                            }
+                            style={{
+                              display:"block",
+                              width:"100%",
+                              maxWidth:"100%",
+                              minWidth:0,
+                              inlineSize:"100%",
+                              maxInlineSize:"100%",
+                              minInlineSize:0,
+                              boxSizing:"border-box",
+                              fontSize:isMobile?12:14,
+                              padding:isMobile
+                                ? "9px 7px"
+                                : "9px 12px",
+                            }}
+                          />
+                        </div>
+                      </div>
 
                     {specialCampaignDeadlineLabel&&(
                       <div
@@ -28610,7 +28657,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         {specialCampaignDeadlineLabel}
                       </div>
                     )}
-                  </Field>
+                    </Field>
+                  </div>
 
                   <Field label="Request Instructions">
                     <textarea
