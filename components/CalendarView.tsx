@@ -7006,6 +7006,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const getOverviewDeletedLocalStorageKey = () =>
     group?.id ? `emdc_overview_deleted_v2_${group.id}` : "";
 
+  const getOverviewRestoredLocalStorageKey = () =>
+    group?.id ? `emdc_overview_restored_v1_${group.id}` : "";
+
   const overviewCanonicalKey = (item:any) => {
     const sourceTab = String(
       item?.sourceRef?.tab || item?.sourceTab || ""
@@ -7089,6 +7092,80 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     } catch {
       return { ids:[], keys:[] };
     }
+  };
+
+  const readOverviewRestoredFromLocal = () => {
+    if(typeof window === "undefined"){
+      return { keys:[] };
+    }
+
+    const key = getOverviewRestoredLocalStorageKey();
+    if(!key) return { keys:[] };
+
+    try {
+      const parsed = JSON.parse(
+        localStorage.getItem(key) || "{}"
+      );
+
+      return {
+        keys:Array.isArray(parsed?.keys)
+          ? parsed.keys.map(String)
+          : [],
+      };
+    } catch {
+      return { keys:[] };
+    }
+  };
+
+  const writeOverviewRestoredToLocal = (value:any) => {
+    if(typeof window === "undefined") return;
+
+    const key = getOverviewRestoredLocalStorageKey();
+    if(!key) return;
+
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          keys:Array.from(
+            new Set((value?.keys || []).map(String))
+          ),
+          updatedAt:new Date().toISOString(),
+        })
+      );
+    } catch {}
+  };
+
+  const getOverviewRestorationState = () => {
+    const currentOverview =
+      ((group.aiWorkspace || {}).overview || {}) as any;
+    const persistedOverview =
+      (
+        (
+          (getPersistedChecklistGroup() || {})
+            .aiWorkspace || {}
+        ).overview || {}
+      ) as any;
+    const localRestored =
+      readOverviewRestoredFromLocal();
+
+    return {
+      keys:Array.from(
+        new Set([
+          ...(Array.isArray(
+            currentOverview.restoredItemKeys
+          )
+            ? currentOverview.restoredItemKeys
+            : []),
+          ...(Array.isArray(
+            persistedOverview.restoredItemKeys
+          )
+            ? persistedOverview.restoredItemKeys
+            : []),
+          ...(localRestored.keys || []),
+        ].map(String))
+      ),
+    };
   };
 
   const writeOverviewDeletedToLocal = (value:any) => {
@@ -7221,6 +7298,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             : []),
           ...(localDeleted.keys || []),
         ].map(String))
+      ).filter(
+        (key:string)=>
+          !new Set(
+            getOverviewRestorationState().keys
+          ).has(key)
       ),
     };
   };
@@ -7337,13 +7419,27 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       ),
     };
 
+    const restored =
+      getOverviewRestorationState();
+
+    const nextRestored = {
+      keys:Array.from(
+        new Set([
+          ...restored.keys,
+          candidateKey,
+        ])
+      ),
+    };
+
     writeOverviewDeletedToLocal(nextDeleted);
+    writeOverviewRestoredToLocal(nextRestored);
     writeOverviewItemsToLocal(nextItems);
 
     updateAiWorkspace("overview",{
       items:nextItems,
       deletedItemIds:nextDeleted.ids,
       deletedItemKeys:nextDeleted.keys,
+      restoredItemKeys:nextRestored.keys,
       updatedAt:now,
     });
 
@@ -8331,17 +8427,41 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
       ),
     };
 
+    const restored =
+      getOverviewRestorationState();
+
+    const nextRestored = {
+      keys:restored.keys.filter(
+        (key:string)=>key!==targetKey
+      ),
+    };
+
     const now = new Date().toISOString();
 
     writeOverviewDeletedToLocal(nextDeleted);
+    writeOverviewRestoredToLocal(nextRestored);
     writeOverviewItemsToLocal(nextItems);
 
     updateAiWorkspace("overview",{
       items:nextItems,
       deletedItemIds:nextDeleted.ids,
       deletedItemKeys:nextDeleted.keys,
+      restoredItemKeys:nextRestored.keys,
       updatedAt:now,
     });
+
+    const sourceActionKey = String(
+      target?.sourceRef?.actionKey || ""
+    );
+
+    if(sourceActionKey){
+      setActionDoneIds(
+        (prev:string[])=>
+          prev.filter(
+            (item:string)=>item!==sourceActionKey
+          )
+      );
+    }
 
     markActionDone(
       `overview-delete-${targetKey}`
