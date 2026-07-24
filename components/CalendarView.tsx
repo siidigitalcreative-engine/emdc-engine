@@ -14033,7 +14033,21 @@ ${slidesHtml}
 
     if(tab==="overview"){
       const overviewItems = getOverviewItems();
-      const isCampaignOverview = String(lt?.label || group?.launchType || group?.type || "").toLowerCase().includes("campaign");
+
+      const overviewChecklistTypeLabel = String(
+        lt?.label ||
+        group?.launchType ||
+        group?.type ||
+        ""
+      ).toLowerCase();
+
+      const isSpecialCampaignOverview =
+        overviewChecklistTypeLabel.includes("special") &&
+        overviewChecklistTypeLabel.includes("campaign");
+
+      const isCampaignOverview =
+        overviewChecklistTypeLabel.includes("campaign") &&
+        !isSpecialCampaignOverview;
       const parseCampaignOverviewCopy = (content:any) => {
         const lines = String(content || "").split(/\r?\n/).map((line:string)=>line.trim());
         const getAfter = (label:string) => {
@@ -14370,8 +14384,16 @@ ${slidesHtml}
           <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
             <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
               <div>
-                <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>Overview</h3>
-                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>Collected outputs added from E-commerce, Marketing, and Digital Creative.</p>
+                <h3 style={{ margin:"0 0 5px",fontSize:16,fontWeight:900,color:C.text }}>
+                  {isSpecialCampaignOverview
+                    ? "Special Campaign Overview"
+                    : "Overview"}
+                </h3>
+                <p style={{ margin:0,fontSize:12,color:C.muted,lineHeight:1.5,maxWidth:760 }}>
+                  {isSpecialCampaignOverview
+                    ? "Campaign brief, seller kit, and collateral requirements added from E-commerce and Digital Creative."
+                    : "Collected outputs added from E-commerce, Marketing, and Digital Creative."}
+                </p>
               </div>
               <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                 <span style={{ fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"4px 9px" }}>{overviewItems.length} item{overviewItems.length!==1?"s":""}</span>
@@ -14382,7 +14404,11 @@ ${slidesHtml}
 
           {overviewItems.length===0 ? (
             <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
-              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No overview items yet. Go to E-commerce, Marketing, or Digital Creative and click Add to Overview on any output.</p>
+              <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>
+                {isSpecialCampaignOverview
+                  ? "No Special Campaign items have been added yet. Use Add to Overview from Campaign Brief & Seller Kit or Digital Creative."
+                  : "No overview items yet. Go to E-commerce, Marketing, or Digital Creative and click Add to Overview on any output."}
+              </p>
             </div>
           ) : (
             <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start" }}>
@@ -24166,107 +24192,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
             </section>
 
-            <section
-              style={{
-                padding:isMobile?14:16,
-                background:C.surface,
-                border:`1.5px solid ${C.border}`,
-                borderRadius:12,
-              }}
-            >
-              <div
-                style={{
-                  display:"flex",
-                  justifyContent:"space-between",
-                  alignItems:"flex-start",
-                  gap:10,
-                  flexWrap:"wrap",
-                  marginBottom:12,
-                }}
-              >
-                <div>
-                  <h4
-                    style={{
-                      margin:0,
-                      fontSize:14,
-                      fontWeight:900,
-                      color:C.text,
-                    }}
-                  >
-                    3. Submission Package
-                  </h4>
-                  <p
-                    style={{
-                      margin:"4px 0 0",
-                      fontSize:11,
-                      lineHeight:1.45,
-                      color:C.muted,
-                    }}
-                  >
-                    Generate the completed collateral message for
-                    E-commerce, Lark, email, or the Overview tab.
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display:"flex",
-                    gap:8,
-                    flexWrap:"wrap",
-                  }}
-                >
-                  <Btn
-                    xs
-                    variant="outline"
-                    onClick={prepareSpecialCampaignSubmission}
-                  >
-                    Prepare Submission
-                  </Btn>
-                  <Btn
-                    xs
-                    variant="outline"
-                    onClick={copySpecialCampaignSubmission}
-                  >
-                    Copy Message
-                  </Btn>
-                  <Btn
-                    xs
-                    onClick={
-                      addSpecialCampaignSubmissionToOverview
-                    }
-                  >
-                    Add to Overview
-                  </Btn>
-                </div>
-              </div>
-
-              <textarea
-                value={
-                  specialCampaignTracker.submissionMessage ||
-                  buildSpecialCampaignSubmissionMessage()
-                }
-                onChange={(event:any)=>
-                  updateSpecialCampaignTracker({
-                    submissionMessage:event.target.value,
-                  })
-                }
-                rows={16}
-                style={{
-                  width:"100%",
-                  minHeight:300,
-                  resize:"vertical",
-                  padding:"12px 14px",
-                  borderRadius:10,
-                  border:`1.5px solid ${C.border}`,
-                  background:C.bg,
-                  color:C.text,
-                  fontSize:12.5,
-                  lineHeight:1.55,
-                  outline:"none",
-                  whiteSpace:"pre-wrap",
-                }}
-              />
-            </section>
+            
           </div>
         );
       }
