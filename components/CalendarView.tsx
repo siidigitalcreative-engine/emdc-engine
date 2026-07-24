@@ -10999,13 +10999,183 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     window.setTimeout(()=>setCampaignOverviewAddedIds((prev:string[])=>prev.filter((id:string)=>id!==rowKey)),1800);
   };
 
+  const getCampaignDepartmentDeletedRowsKey = (
+    department:string
+  ) => {
+    const groupKey = String(
+      group?.id ||
+      group?.groupName ||
+      group?.name ||
+      ""
+    )
+      .trim()
+      .replace(/[^a-z0-9_-]+/gi,"_");
+
+    return groupKey
+      ? `emdc_campaign_department_deleted_v1_${groupKey}_${department}`
+      : "";
+  };
+
+  const readCampaignDepartmentDeletedRows = (
+    department:string
+  ) => {
+    if(typeof window==="undefined") return [];
+
+    const key =
+      getCampaignDepartmentDeletedRowsKey(
+        department
+      );
+
+    if(!key) return [];
+
+    try {
+      const parsed = JSON.parse(
+        localStorage.getItem(key) || "[]"
+      );
+
+      return Array.isArray(parsed)
+        ? parsed.map(String).filter(Boolean)
+        : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const writeCampaignDepartmentDeletedRows = (
+    department:string,
+    rowIds:any[] = []
+  ) => {
+    if(typeof window==="undefined") return;
+
+    const key =
+      getCampaignDepartmentDeletedRowsKey(
+        department
+      );
+
+    if(!key) return;
+
+    const cleanIds = Array.from(
+      new Set(
+        (Array.isArray(rowIds) ? rowIds : [])
+          .map(String)
+          .filter(Boolean)
+      )
+    );
+
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify(cleanIds)
+      );
+
+      markEmdcLocalStateUpdated();
+      window.dispatchEvent(
+        new Event("emdc-local-sync")
+      );
+    } catch {}
+  };
+
+  const markCampaignDepartmentRowDeleted = (
+    department:string,
+    rowId:any
+  ) => {
+    const cleanId = String(rowId || "").trim();
+    if(!cleanId) return;
+
+    writeCampaignDepartmentDeletedRows(
+      department,
+      [
+        ...readCampaignDepartmentDeletedRows(
+          department
+        ),
+        cleanId,
+      ]
+    );
+  };
+
+  const restoreCampaignDepartmentRows = (
+    department:string,
+    rowIds:any[] = []
+  ) => {
+    const restored = new Set(
+      (Array.isArray(rowIds) ? rowIds : [])
+        .map(String)
+        .filter(Boolean)
+    );
+
+    if(!restored.size) return;
+
+    writeCampaignDepartmentDeletedRows(
+      department,
+      readCampaignDepartmentDeletedRows(
+        department
+      ).filter(
+        (rowId:string)=>!restored.has(rowId)
+      )
+    );
+  };
+
+  const isCampaignDepartmentRowDeleted = (
+    department:string,
+    row:any
+  ) => {
+    const rowId = String(
+      row?.sourceRowId ||
+      row?.id ||
+      row?.productKey ||
+      row?.product ||
+      ""
+    ).trim();
+
+    return !!rowId &&
+      readCampaignDepartmentDeletedRows(
+        department
+      ).includes(rowId);
+  };
+
+  const isCampaignRowInOverview = (
+    row:any
+  ) => {
+    const sourceRowId = String(
+      row?.sourceRowId ||
+      row?.id ||
+      row?.productKey ||
+      row?.product ||
+      ""
+    ).trim();
+
+    if(!sourceRowId) return false;
+
+    return getOverviewItems().some(
+      (item:any)=>
+        String(
+          item?.sourceRef?.type ||
+          ""
+        )==="campaignRow" &&
+        String(
+          item?.sourceRef?.id ||
+          ""
+        )===sourceRowId
+    );
+  };
+
   const getCampaignMarketingRowsWithBackup = () => {
     const marketing = ((group.aiWorkspace || {}).marketing || {}) as any;
     const persistedMarketing = ((((getPersistedChecklistGroup() || group) || {}).aiWorkspace || {}).marketing || {}) as any;
     const stateRows = Array.isArray(marketing.campaignMarketingRows) ? marketing.campaignMarketingRows : [];
     const persistedRows = Array.isArray(persistedMarketing.campaignMarketingRows) ? persistedMarketing.campaignMarketingRows : [];
     const backupRows = readEcommerceTransferRowsBackup("marketing","campaign");
-    return mergeEcommerceTransferRows(persistedRows,stateRows,backupRows);
+    return mergeEcommerceTransferRows(
+      persistedRows,
+      stateRows,
+      backupRows
+    ).filter(
+      (row:any)=>
+        !isCampaignDepartmentRowDeleted(
+          "marketing",
+          row
+        )
+    );
   };
 
   const getCampaignLivestreamRowsWithBackup = () => {
@@ -11259,6 +11429,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       );
     });
 
+    restoreCampaignDepartmentRows(
+      "marketing",
+      nextRows.map(
+        (row:any)=>
+          row?.sourceRowId ||
+          row?.id
+      )
+    );
+
     writeEcommerceTransferRowsBackup(
       "marketing",
       "campaign",
@@ -11326,6 +11505,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       );
     });
 
+    restoreCampaignDepartmentRows(
+      "digital",
+      nextRows.map(
+        (row:any)=>
+          row?.sourceRowId ||
+          row?.id
+      )
+    );
+
     writeMarketingDcTransferRowsBackup(
       "campaign",
       nextRows
@@ -11369,6 +11557,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         ? currentDigital.campaignCreativeRows
         : [],
       readMarketingDcTransferRowsBackup("campaign")
+    ).filter(
+      (row:any)=>
+        !isCampaignDepartmentRowDeleted(
+          "digital",
+          row
+        )
     );
   };
 
@@ -15994,6 +16188,63 @@ ${slidesHtml}
         });
       };
 
+      const addCampaignMarketingRowToOverview = (
+        row:any
+      ) => {
+        upsertCampaignSharedRowsToOverview(
+          [{
+            ...row,
+            caption:String(row?.caption || ""),
+          }],
+          { refreshBase:false }
+        );
+
+        markActionDone(
+          `overview-campaign-marketing-row-${
+            row?.sourceRowId ||
+            row?.id ||
+            ""
+          }`
+        );
+      };
+
+      const deleteCampaignMarketingRow = (
+        row:any
+      ) => {
+        const rowId = String(
+          row?.sourceRowId ||
+          row?.id ||
+          ""
+        ).trim();
+
+        if(!rowId) return;
+
+        const nextRows = rows.filter(
+          (item:any)=>
+            String(
+              item?.sourceRowId ||
+              item?.id ||
+              ""
+            )!==rowId
+        );
+
+        markCampaignDepartmentRowDeleted(
+          "marketing",
+          rowId
+        );
+
+        writeEcommerceTransferRowsBackup(
+          "marketing",
+          "campaign",
+          nextRows
+        );
+
+        updateAiWorkspace("marketing",{
+          campaignMarketingRows:nextRows,
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
       return (
         <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
           <div style={{padding:isMobile?14:16,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
@@ -16011,10 +16262,10 @@ ${slidesHtml}
             </div>
           ) : (
             <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingBottom:6,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
-              <table style={{width:"max-content",minWidth:1500,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+              <table style={{width:"max-content",minWidth:1690,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
                 <thead>
                   <tr>
-                    {["Product / SKU","Platform","Discount / Offer","Mechanics / Notes","Headline","Subheadline","CTA","Caption"].map((heading:string)=>(
+                    {["Product / SKU","Platform","Discount / Offer","Mechanics / Notes","Headline","Subheadline","CTA","Caption","Actions"].map((heading:string)=>(
                       <th key={heading} style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,textAlign:"left",fontSize:9.5,fontWeight:900,letterSpacing:".04em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
                         {heading}
                       </th>
@@ -16036,7 +16287,7 @@ ${slidesHtml}
                             {value||"—"}
                           </td>
                         ))}
-                        <td style={{width:360,minWidth:360,padding:8,borderBottom:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                        <td style={{width:360,minWidth:360,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
                           <textarea
                             value={String(row?.caption||"")}
                             onChange={(event:any)=>updateCampaignCaption(row?.sourceRowId||row?.id,event.target.value)}
@@ -16050,9 +16301,68 @@ ${slidesHtml}
                               )
                             }
                             placeholder="Enter campaign caption for this row..."
-                            rows={4}
-                            style={{width:"100%",minHeight:82,boxSizing:"border-box",resize:"vertical",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11.5,lineHeight:1.45,outline:"none"}}
+                            rows={3}
+                            style={{width:"100%",minHeight:62,boxSizing:"border-box",resize:"vertical",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11.5,lineHeight:1.45,outline:"none"}}
                           />
+                        </td>
+
+                        <td
+                          style={{
+                            width:190,
+                            minWidth:190,
+                            padding:8,
+                            borderBottom:`1px solid ${C.border}`,
+                            verticalAlign:"middle",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display:"flex",
+                              alignItems:"center",
+                              gap:6,
+                              flexWrap:"wrap",
+                            }}
+                          >
+                            <Btn
+                              xs
+                              type="button"
+                              variant={
+                                isCampaignRowInOverview(row)
+                                  ? "primary"
+                                  : "outline"
+                              }
+                              onClick={()=>
+                                addCampaignMarketingRowToOverview(
+                                  row
+                                )
+                              }
+                            >
+                              {actionDone(
+                                `overview-campaign-marketing-row-${
+                                  row?.sourceRowId ||
+                                  row?.id ||
+                                  ""
+                                }`
+                              )
+                                ? "✓ Added"
+                                : isCampaignRowInOverview(row)
+                                  ? "Update Overview"
+                                  : "Add to Overview"}
+                            </Btn>
+
+                            <Btn
+                              xs
+                              type="button"
+                              variant="danger"
+                              onClick={()=>
+                                deleteCampaignMarketingRow(
+                                  row
+                                )
+                              }
+                            >
+                              Delete
+                            </Btn>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -19249,7 +19559,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       !isSpecialCampaignChecklist
     ){
       const digital=((group.aiWorkspace||{}).digital||{}) as any;
-      const rows=Array.isArray(digital.campaignCreativeRows)?digital.campaignCreativeRows:[];
+      const rows=getCampaignDigitalRowsWithBackup();
       const marketingRows=getCampaignMarketingRowsWithBackup();
       const captionBySourceId=new Map(
         marketingRows.map((row:any)=>[
@@ -19265,6 +19575,154 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             : row
         );
         writeMarketingDcTransferRowsBackup("campaign",nextRows);
+        updateAiWorkspace("digital",{
+          campaignCreativeRows:nextRows,
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
+      const addCampaignDigitalRowToOverview = (
+        row:any
+      ) => {
+        const rowId = String(
+          row?.sourceRowId ||
+          row?.id ||
+          ""
+        );
+
+        upsertCampaignSharedRowsToOverview(
+          [{
+            ...row,
+            caption:String(
+              captionBySourceId.get(rowId) ||
+              row?.caption ||
+              ""
+            ),
+          }],
+          { refreshBase:false }
+        );
+
+        markActionDone(
+          `overview-campaign-digital-row-${rowId}`
+        );
+      };
+
+      const deleteCampaignDigitalRow = (
+        row:any
+      ) => {
+        const rowId = String(
+          row?.sourceRowId ||
+          row?.id ||
+          ""
+        ).trim();
+
+        if(!rowId) return;
+
+        const nextRows = rows.filter(
+          (item:any)=>
+            String(
+              item?.sourceRowId ||
+              item?.id ||
+              ""
+            )!==rowId
+        );
+
+        markCampaignDepartmentRowDeleted(
+          "digital",
+          rowId
+        );
+
+        deleteMarketingDcBridgeRow(rowId);
+
+        writeMarketingDcGlobalQueue(
+          "campaign",
+          nextRows
+        );
+
+        const backupKeys = [
+          getMarketingDcTransferRowsBackupKey(
+            "campaign"
+          ),
+          getMarketingDcDirectQueueKey(
+            "campaign"
+          ),
+          getLegacyMarketingDcTransferRowsBackupKey(
+            "campaign"
+          ),
+        ].filter(Boolean);
+
+        backupKeys.forEach((key:string)=>{
+          try {
+            localStorage.setItem(
+              key,
+              JSON.stringify(
+                normalizeTransferRowsForStorage(
+                  nextRows
+                )
+              )
+            );
+          } catch {}
+        });
+
+        try {
+          const filterDirectRows = (
+            current:any[]
+          ) => (
+            Array.isArray(current)
+              ? current
+              : []
+          ).filter((item:any)=>{
+            const sameGroup =
+              getMarketingDcDirectRowGroupMatches(
+                item,
+                "campaign"
+              );
+
+            const itemId = String(
+              item?.sourceRowId ||
+              item?.id ||
+              ""
+            );
+
+            return !(
+              sameGroup &&
+              itemId===rowId
+            );
+          });
+
+          const localDirect = JSON.parse(
+            localStorage.getItem(
+              MARKETING_TO_DC_DIRECT_INBOX_KEY
+            ) || "[]"
+          );
+
+          const sessionDirect = JSON.parse(
+            sessionStorage.getItem(
+              MARKETING_TO_DC_DIRECT_INBOX_KEY
+            ) || "[]"
+          );
+
+          localStorage.setItem(
+            MARKETING_TO_DC_DIRECT_INBOX_KEY,
+            JSON.stringify(
+              filterDirectRows(localDirect)
+            )
+          );
+
+          sessionStorage.setItem(
+            MARKETING_TO_DC_DIRECT_INBOX_KEY,
+            JSON.stringify(
+              filterDirectRows(sessionDirect)
+            )
+          );
+
+          setMarketingDcDirectInboxMemory(
+            filterDirectRows(
+              getMarketingDcDirectInboxMemory()
+            )
+          );
+        } catch {}
+
         updateAiWorkspace("digital",{
           campaignCreativeRows:nextRows,
           generatedAt:new Date().toISOString(),
@@ -19300,7 +19758,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               disabled={!rows.length}
               onClick={updateCampaignSharedRowsInOverview}
             >
-              {actionDone("overview-campaign-shared-row-links")?"✓ Updated":"Update Overview Rows"}
+              {actionDone("overview-campaign-shared-row-links")?"✓ Updated":"Update All Overview Rows"}
             </Btn>
           </div>
 
@@ -19312,10 +19770,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             </div>
           ) : (
             <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingBottom:6,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
-              <table style={{width:"max-content",minWidth:1500,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+              <table style={{width:"max-content",minWidth:1690,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
                 <thead>
                   <tr>
-                    {["Product / SKU","Platform","Caption","Final Preview Image URL","Final Asset Link","Status"].map((heading:string)=>(
+                    {["Product / SKU","Platform","Caption","Final Preview Image URL","Final Asset Link","Status","Actions"].map((heading:string)=>(
                       <th key={heading} style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,textAlign:"left",fontSize:9.5,fontWeight:900,letterSpacing:".04em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
                         {heading}
                       </th>
@@ -19361,15 +19819,74 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             )}
                           </div>
                         </td>
-                        <td style={{width:145,minWidth:145,padding:8,borderBottom:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                        <td style={{width:145,minWidth:145,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
                           <Select
                             value={String(row?.status||"inprogress")}
                             onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{status:value})}
+                            style={{
+                              height:38,
+                              minHeight:38,
+                            }}
                           >
                             <option value="inprogress">In Progress</option>
                             <option value="review">For Review</option>
                             <option value="submitted">Submitted</option>
                           </Select>
+                        </td>
+
+                        <td
+                          style={{
+                            width:190,
+                            minWidth:190,
+                            padding:8,
+                            borderBottom:`1px solid ${C.border}`,
+                            verticalAlign:"middle",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display:"flex",
+                              alignItems:"center",
+                              gap:6,
+                              flexWrap:"wrap",
+                            }}
+                          >
+                            <Btn
+                              xs
+                              type="button"
+                              variant={
+                                isCampaignRowInOverview(row)
+                                  ? "primary"
+                                  : "outline"
+                              }
+                              onClick={()=>
+                                addCampaignDigitalRowToOverview(
+                                  row
+                                )
+                              }
+                            >
+                              {actionDone(
+                                `overview-campaign-digital-row-${rowId}`
+                              )
+                                ? "✓ Added"
+                                : isCampaignRowInOverview(row)
+                                  ? "Update Overview"
+                                  : "Add to Overview"}
+                            </Btn>
+
+                            <Btn
+                              xs
+                              type="button"
+                              variant="danger"
+                              onClick={()=>
+                                deleteCampaignDigitalRow(
+                                  row
+                                )
+                              }
+                            >
+                              Delete
+                            </Btn>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -28378,10 +28895,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:155,
                                             minWidth:155,
-                                            padding:8,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
+                                            verticalAlign:"middle",
                                           }}
                                         >
                                           <Select
@@ -28400,7 +28917,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                             style={{
                                               width:"100%",
                                               minWidth:0,
-                                              height:36,
+                                              height:38,
+                                              minHeight:38,
                                               padding:"7px 30px 7px 8px",
                                               fontSize:10.5,
                                               background:C.surface,
@@ -28423,10 +28941,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:180,
                                             minWidth:180,
-                                            padding:8,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
+                                            verticalAlign:"middle",
                                           }}
                                         >
                                           <div
@@ -28478,10 +28996,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:220,
                                             minWidth:220,
-                                            padding:8,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
+                                            verticalAlign:"middle",
                                           }}
                                         >
                                           <TI
@@ -28495,6 +29013,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                             }
                                             placeholder="e.g. Min spend ₱599"
                                             style={{
+                                              height:38,
+                                              minHeight:38,
+                                              boxSizing:"border-box",
                                               fontSize:10.5,
                                               padding:"7px 8px",
                                             }}
@@ -28505,7 +29026,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:235,
                                             minWidth:235,
-                                            padding:8,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
                                             verticalAlign:"middle",
@@ -28523,6 +29044,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                             placeholder={isGenerating?"Generating...":"Enter headline or generate all..."}
                                             disabled={isGenerating}
                                             style={{
+                                              height:38,
+                                              minHeight:38,
+                                              boxSizing:"border-box",
                                               fontSize:10.5,
                                               padding:"7px 8px",
                                             }}
@@ -28533,7 +29057,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:300,
                                             minWidth:300,
-                                            padding:8,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
                                             verticalAlign:"middle",
@@ -28551,6 +29075,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                             placeholder={isGenerating?"Generating...":"Enter subheadline or generate all..."}
                                             disabled={isGenerating}
                                             style={{
+                                              height:38,
+                                              minHeight:38,
+                                              boxSizing:"border-box",
                                               fontSize:10.5,
                                               padding:"7px 8px",
                                             }}
@@ -28561,7 +29088,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:145,
                                             minWidth:145,
-                                            padding:8,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
                                             verticalAlign:"middle",
@@ -28579,6 +29106,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                             placeholder={isGenerating?"Generating...":"Enter CTA or generate all..."}
                                             disabled={isGenerating}
                                             style={{
+                                              height:38,
+                                              minHeight:38,
+                                              boxSizing:"border-box",
                                               fontSize:10.5,
                                               padding:"7px 8px",
                                             }}
@@ -28589,14 +29119,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:360,
                                             minWidth:360,
-                                            padding:8,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
+                                            verticalAlign:"middle",
                                           }}
                                         >
                                           <div
                                             style={{
                                               display:"flex",
+                                              minHeight:38,
                                               flexWrap:"wrap",
                                               gap:5,
                                               alignItems:"center",
