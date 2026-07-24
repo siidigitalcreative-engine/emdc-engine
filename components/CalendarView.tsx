@@ -10916,21 +10916,215 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   }).join("\n");
 
   const parseCampaignCopySections = (value:any) => {
-    const text = cleanReadyToUseOutput(value || "");
-    const grab = (label:string, nextLabels:string[]) => {
-      const next = nextLabels.map((item:string)=>item.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|");
-      const regex = new RegExp(`${label}\\s*\\n([\\s\\S]*?)(?=\\n(?:${next})\\s*\\n|$)`,"i");
-      const match = text.match(regex);
-      return String(match?.[1] || "").trim();
+    const rawText =
+      cleanReadyToUseOutput(value || "");
+
+    const text = String(rawText || "")
+      .replace(/```(?:json|text)?/gi,"")
+      .replace(/```/g,"")
+      .replace(
+        /\s*\|\s*(?=(?:Headline|Subheadline|CTA|Call to Action|CTA Button)\s*:)/gi,
+        "\n"
+      )
+      .trim();
+
+    const cleanFieldValue = (fieldValue:any) =>
+      String(fieldValue || "")
+        .replace(/^\s*[-*•]\s*/,"")
+        .replace(/^\s*["']|["']\s*$/g,"")
+        .replace(/\s+/g," ")
+        .trim();
+
+    const readJsonResponse = () => {
+      const jsonCandidates = [
+        text,
+        String(
+          text.match(/\{[\s\S]*\}/)?.[0] ||
+          ""
+        ),
+      ].filter(Boolean);
+
+      for(const candidate of jsonCandidates){
+        try {
+          const parsed = JSON.parse(candidate);
+
+          if(
+            parsed &&
+            typeof parsed==="object"
+          ){
+            return {
+              headline:cleanFieldValue(
+                parsed.headline ||
+                parsed.hook ||
+                parsed.title
+              ),
+              subheadline:cleanFieldValue(
+                parsed.subheadline ||
+                parsed.subHeadline ||
+                parsed.supportingCopy ||
+                parsed.description
+              ),
+              cta:cleanFieldValue(
+                parsed.cta ||
+                parsed.callToAction ||
+                parsed.call_to_action ||
+                parsed.ctaButton
+              ),
+            };
+          }
+        } catch {}
+      }
+
+      return {
+        headline:"",
+        subheadline:"",
+        cta:"",
+      };
     };
-    const headline = grab("Headline",["Subheadline","CTA"]);
-    const subheadline = grab("Subheadline",["CTA"]);
-    const cta = grab("CTA",[]);
+
+    const jsonFields = readJsonResponse();
+
+    const fieldLines:any = {
+      headline:[],
+      subheadline:[],
+      cta:[],
+    };
+
+    let activeField = "";
+
+    const labelPattern =
+      /^(?:#{1,6}\s*)?(?:\*\*)?\s*(Headline|Subheadline|CTA|Call to Action|CTA Button)\s*(?:\*\*)?\s*[:\-–—]?\s*(.*)$/i;
+
+    text
+      .split(/\r?\n/)
+      .map((line:string)=>line.trim())
+      .forEach((line:string)=>{
+        if(!line) return;
+
+        const normalizedLine = line
+          .replace(/^\s*[-*•]\s*/,"")
+          .trim();
+
+        const labelMatch =
+          normalizedLine.match(labelPattern);
+
+        if(labelMatch){
+          const rawLabel =
+            String(labelMatch[1] || "")
+              .toLowerCase()
+              .replace(/\s+/g," ");
+
+          activeField =
+            rawLabel==="headline"
+              ? "headline"
+              : rawLabel==="subheadline"
+                ? "subheadline"
+                : "cta";
+
+          const inlineValue =
+            cleanFieldValue(labelMatch[2]);
+
+          if(inlineValue){
+            fieldLines[activeField].push(
+              inlineValue
+            );
+          }
+
+          return;
+        }
+
+        if(activeField){
+          fieldLines[activeField].push(
+            cleanFieldValue(normalizedLine)
+          );
+        }
+      });
+
+    const joinField = (key:string) =>
+      cleanFieldValue(
+        (fieldLines[key] || [])
+          .filter(Boolean)
+          .join(" ")
+      );
+
+    const inlineGrab = (
+      labels:string[],
+      nextLabels:string[]
+    ) => {
+      const escapedLabels = labels
+        .map((label:string)=>
+          label.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )
+        )
+        .join("|");
+
+      const escapedNext = nextLabels
+        .map((label:string)=>
+          label.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )
+        )
+        .join("|");
+
+      const lookAhead = escapedNext
+        ? `(?=\\s*(?:${escapedNext})\\s*[:\\-–—]|$)`
+        : "$";
+
+      const regex = new RegExp(
+        `(?:${escapedLabels})\\s*[:\\-–—]\\s*([\\s\\S]*?)${lookAhead}`,
+        "i"
+      );
+
+      return cleanFieldValue(
+        text.match(regex)?.[1] || ""
+      );
+    };
+
+    const headline =
+      jsonFields.headline ||
+      joinField("headline") ||
+      inlineGrab(
+        ["Headline"],
+        [
+          "Subheadline",
+          "CTA",
+          "Call to Action",
+          "CTA Button",
+        ]
+      );
+
+    const subheadline =
+      jsonFields.subheadline ||
+      joinField("subheadline") ||
+      inlineGrab(
+        ["Subheadline"],
+        [
+          "CTA",
+          "Call to Action",
+          "CTA Button",
+        ]
+      );
+
+    const cta =
+      jsonFields.cta ||
+      joinField("cta") ||
+      inlineGrab(
+        [
+          "CTA",
+          "Call to Action",
+          "CTA Button",
+        ],
+        []
+      );
+
     return {
-      headline: headline || "",
-      subheadline: subheadline || "",
-      cta: cta || "",
-      output: text,
+      headline:headline || "",
+      subheadline:subheadline || "",
+      cta:cta || "",
+      output:text,
     };
   };
 
@@ -10969,21 +11163,26 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       "Output must be ready to copy and paste.",
       "Do not use markdown heading symbols like ###.",
       "Do not number the section headers.",
-      "Use this exact clean structure only:",
+      "Return exactly this six-line structure and no other commentary:",
       "Headline",
+      "<one-line benefit or campaign headline>",
       "Subheadline",
+      "<one-line supporting copy>",
       "CTA",
+      "<two-to-four-word action CTA>",
       "",
+      "The CTA is required and must never be blank.",
+      "Use a direct marketplace CTA such as Shop Now, Shop the Sale, Add to Cart, or Get Yours.",
       "Headline should be short, catchy, marketplace-friendly, and connected to the theme.",
-      headlineInstructions ? `Headline-specific instruction:\\n${headlineInstructions}` : "",
+      headlineInstructions ? `Headline-specific instruction:\n${headlineInstructions}` : "",
       "Subheadline should mention the product, discount/offer, or mechanics if provided.",
-      subheadlineInstructions ? `Subheadline-specific instruction:\\n${subheadlineInstructions}` : "",
+      subheadlineInstructions ? `Subheadline-specific instruction:\n${subheadlineInstructions}` : "",
       "CTA should be short and action-oriented.",
-      ctaInstructions ? `CTA-specific instruction:\\n${ctaInstructions}` : "",
+      ctaInstructions ? `CTA-specific instruction:\n${ctaInstructions}` : "",
       "Avoid em dashes.",
       "Do not invent product specs.",
-      customInstructions ? `General additional instructions:\\n${customInstructions}` : "",
-    ].filter(Boolean).join("\\n");
+      customInstructions ? `General additional instructions:\n${customInstructions}` : "",
+    ].filter(Boolean).join("\n");
 
     const res = await fetch("/api/ai/generate-text", {
       method:"POST",
@@ -11021,9 +11220,18 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const parsed = parseCampaignCopySections(payload?.text || "");
     return {
       ...row,
-      headline:parsed.headline,
-      subheadline:parsed.subheadline,
-      cta:parsed.cta,
+      headline:
+        parsed.headline ||
+        row.headline ||
+        "",
+      subheadline:
+        parsed.subheadline ||
+        row.subheadline ||
+        "",
+      cta:
+        parsed.cta ||
+        row.cta ||
+        "Shop Now",
       output:parsed.output,
     };
   };
