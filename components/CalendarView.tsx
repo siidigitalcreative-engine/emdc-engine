@@ -6764,7 +6764,15 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const checklistTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
   const isProductIntroOrReactivation = checklistTypeLabel.includes("product introduction") || checklistTypeLabel.includes("product reactivation");
-  const canShowLivestreamTab = isProductIntroOrReactivation || checklistTypeLabel.includes("campaign");
+  const isSpecialCampaignWorkspace =
+    checklistTypeLabel.includes("special") &&
+    checklistTypeLabel.includes("campaign");
+  const canShowLivestreamTab =
+    (
+      isProductIntroOrReactivation ||
+      checklistTypeLabel.includes("campaign")
+    ) &&
+    !isSpecialCampaignWorkspace;
   const visibleWorkspaceTabs = workspaceTabs.filter((tab:any)=>{
     if(tab.id==="livestream") return canShowLivestreamTab;
     if(tab.id==="budget") return isProductIntroOrReactivation;
@@ -6774,14 +6782,21 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   useEffect(()=>{
     if(
-      activeGroupTab==="training" &&
-      !isProductIntroOrReactivation
+      (
+        activeGroupTab==="training" &&
+        !isProductIntroOrReactivation
+      ) ||
+      (
+        activeGroupTab==="livestream" &&
+        !canShowLivestreamTab
+      )
     ){
       setActiveGroupTab("tasks");
     }
   },[
     activeGroupTab,
     isProductIntroOrReactivation,
+    canShowLivestreamTab,
   ]);
 
   const workspaceConfig:any = {
@@ -16150,7 +16165,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
     };
 
 
-    if(tab==="digital" && isSpecialCampaignChecklist){
+    const renderSpecialCampaignRequirementsTracker = () => {
       /*
        * Special Campaign requirements live in the E-commerce workspace
        * so moving the UI does not migrate, duplicate, or reset saved data.
@@ -16542,7 +16557,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               );
 
             addToOverview(
-              "Digital Creative",
+              "E-commerce",
               `${
                 specialCampaignTracker.campaignName ||
                 group?.groupName ||
@@ -16551,7 +16566,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               content,
               "Special Campaign Requirement",
               {
-                tab:"digital",
+                tab:"ecommerce",
                 type:"specialCampaignRequirement",
                 id:String(row?.id || index),
               }
@@ -16628,10 +16643,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   maxWidth:900,
                 }}
               >
-                Receive the collateral requirements from E-commerce,
-                assign or remove SKUs, track production status, and
-                send the requirements to Overview for final asset
-                completion.
+                Add the required campaign collaterals, assign or remove
+                SKUs, track production status, and send each requirement
+                to Overview for final asset completion.
               </p>
             </div>
 
@@ -17271,7 +17285,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             </section>
         </div>
       );
-    }
+    };
 
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = mergeDigitalCreativeRows(
@@ -22809,6 +22823,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             ? data.specialCampaignTracker
             : {};
 
+        const specialCampaignPlatformOptions = [
+          "Lazada",
+          "Shopee",
+          "TikTok",
+          "Landers",
+        ];
+
         const specialCampaignStoreOptions = [
           "Sunbeams Lifestyle",
           "Slique",
@@ -22875,6 +22896,23 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             legacySpecialCampaignDeadline
           );
 
+        const savedSpecialCampaignPlatform = String(
+          rawSpecialCampaignTracker.platform || ""
+        ).trim();
+
+        const savedSpecialCampaignPlatformMode = String(
+          rawSpecialCampaignTracker.platformMode || ""
+        ).trim();
+
+        const isSavedSpecialCampaignCustomPlatform =
+          savedSpecialCampaignPlatformMode==="custom" ||
+          (
+            !!savedSpecialCampaignPlatform &&
+            !specialCampaignPlatformOptions.includes(
+              savedSpecialCampaignPlatform
+            )
+          );
+
         const savedSpecialCampaignStore = String(
           rawSpecialCampaignTracker.store || ""
         ).trim();
@@ -22900,7 +22938,18 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             group?.name ||
             ""
           ),
-          platform:String(rawSpecialCampaignTracker.platform || ""),
+          platform:savedSpecialCampaignPlatform,
+          platformMode:isSavedSpecialCampaignCustomPlatform
+            ? "custom"
+            : "default",
+          customPlatform:String(
+            rawSpecialCampaignTracker.customPlatform ||
+            (
+              isSavedSpecialCampaignCustomPlatform
+                ? savedSpecialCampaignPlatform
+                : ""
+            )
+          ),
           store:savedSpecialCampaignStore,
           storeMode:isSavedSpecialCampaignCustomStore
             ? "custom"
@@ -23935,15 +23984,82 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   </Field>
 
                   <Field label="Platform">
-                    <TI
-                      value={specialCampaignTracker.platform}
-                      onChange={(value:any)=>
-                        updateSpecialCampaignTracker({
-                          platform:value,
-                        })
-                      }
-                      placeholder="Lazada, Shopee, TikTok, Landers..."
-                    />
+                    <div
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:8,
+                      }}
+                    >
+                      <Select
+                        value={
+                          specialCampaignTracker.platformMode==="custom"
+                            ? "__custom__"
+                            : specialCampaignTracker.platform
+                        }
+                        onChange={(value:any)=>{
+                          if(value==="__custom__"){
+                            const currentCustom = String(
+                              specialCampaignTracker.customPlatform ||
+                              (
+                                !specialCampaignPlatformOptions.includes(
+                                  specialCampaignTracker.platform
+                                )
+                                  ? specialCampaignTracker.platform
+                                  : ""
+                              ) ||
+                              ""
+                            );
+
+                            updateSpecialCampaignTracker({
+                              platformMode:"custom",
+                              customPlatform:currentCustom,
+                              platform:currentCustom,
+                            });
+                            return;
+                          }
+
+                          updateSpecialCampaignTracker({
+                            platformMode:"default",
+                            platform:value,
+                            customPlatform:"",
+                          });
+                        }}
+                      >
+                        <option value="">Select platform</option>
+                        {specialCampaignPlatformOptions.map(
+                          (platformName:string)=>(
+                            <option
+                              key={platformName}
+                              value={platformName}
+                            >
+                              {platformName}
+                            </option>
+                          )
+                        )}
+                        <option value="__custom__">
+                          + Add custom platform
+                        </option>
+                      </Select>
+
+                      {specialCampaignTracker.platformMode==="custom"&&(
+                        <TI
+                          value={
+                            specialCampaignTracker.customPlatform ||
+                            specialCampaignTracker.platform ||
+                            ""
+                          }
+                          onChange={(value:any)=>
+                            updateSpecialCampaignTracker({
+                              platformMode:"custom",
+                              customPlatform:value,
+                              platform:value,
+                            })
+                          }
+                          placeholder="Enter custom platform"
+                        />
+                      )}
+                    </div>
                   </Field>
 
                   <Field label="Store / Account">
@@ -24313,6 +24429,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             </section>
 
             
+
+            {renderSpecialCampaignRequirementsTracker()}
           </div>
         );
       }
