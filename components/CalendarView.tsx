@@ -6472,6 +6472,33 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
   const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
+
+  const checklistTypeFingerprint = [
+    lt?.label,
+    lt?.tag,
+    group?.launchType,
+    group?.type,
+    group?.checklistType,
+    group?.groupType,
+    group?.templateType,
+    group?.category,
+    group?.groupName,
+    group?.name,
+    (
+      ((group?.aiWorkspace || {}) as any)
+        ?.ecommerce
+        ?.specialCampaignTracker
+    )
+      ? "special campaign"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[_-]+/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+
   const groupColor = group.calendarColor || lt?.color || C.accent;
   const linkedEvents = (events||[]).filter((ev:any)=>(group.linkedEventIds||[]).includes(ev.id));
   const allItems = Object.values(items || {}).flat().filter((item:any)=>item && typeof item==="object");
@@ -6800,11 +6827,33 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     { id:"overview", label:"Overview", sub:"Collected final outputs" },
   ];
 
-  const checklistTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
-  const isProductIntroOrReactivation = checklistTypeLabel.includes("product introduction") || checklistTypeLabel.includes("product reactivation");
+  const checklistTypeLabel =
+    checklistTypeFingerprint;
+
+  const isProductIntroOrReactivation =
+    checklistTypeLabel.includes(
+      "product introduction"
+    ) ||
+    checklistTypeLabel.includes(
+      "product reactivation"
+    ) ||
+    checklistTypeLabel.includes(
+      "reactivation"
+    ) ||
+    checklistTypeLabel.includes(
+      "relaunch"
+    );
+
   const isSpecialCampaignWorkspace =
-    checklistTypeLabel.includes("special") &&
-    checklistTypeLabel.includes("campaign");
+    (
+      checklistTypeLabel.includes("special") &&
+      checklistTypeLabel.includes("campaign")
+    ) ||
+    !!(
+      ((group?.aiWorkspace || {}) as any)
+        ?.ecommerce
+        ?.specialCampaignTracker
+    );
   const canShowLivestreamTab =
     (
       isProductIntroOrReactivation ||
@@ -6836,8 +6885,13 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   useEffect(()=>{
     if(
-      activeGroupTab==="marketing" &&
-      isSpecialCampaignWorkspace
+      isSpecialCampaignWorkspace &&
+      (
+        activeGroupTab==="marketing" ||
+        activeGroupTab==="budget" ||
+        activeGroupTab==="training" ||
+        activeGroupTab==="livestream"
+      )
     ){
       setActiveGroupTab("ecommerce");
       return;
@@ -6860,6 +6914,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     isProductIntroOrReactivation,
     isSpecialCampaignWorkspace,
     canShowLivestreamTab,
+    checklistTypeFingerprint,
   ]);
 
   const workspaceConfig:any = {
@@ -17444,11 +17499,23 @@ ${slidesHtml}
       );
     }
 
-    const workspaceTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
-    const isCampaignChecklist = workspaceTypeLabel.includes("campaign");
+    const workspaceTypeLabel =
+      checklistTypeFingerprint;
+
     const isSpecialCampaignChecklist =
-      workspaceTypeLabel.includes("special") &&
-      workspaceTypeLabel.includes("campaign");
+      (
+        workspaceTypeLabel.includes("special") &&
+        workspaceTypeLabel.includes("campaign")
+      ) ||
+      !!(
+        ((group?.aiWorkspace || {}) as any)
+          ?.ecommerce
+          ?.specialCampaignTracker
+      );
+
+    const isCampaignChecklist =
+      workspaceTypeLabel.includes("campaign") ||
+      isSpecialCampaignChecklist;
     const isProductIntroductionChecklist = workspaceTypeLabel.includes("product introduction") || workspaceTypeLabel.includes("product reactivation") || workspaceTypeLabel.includes("reactivation") || workspaceTypeLabel.includes("relaunch");
 
     if(
@@ -27248,10 +27315,28 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .toLowerCase()
           .includes(campaignRowSkuQuery);
       });
-            const ecommerceTabMode = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
-      const isCampaignChecklist = ecommerceTabMode.includes("campaign");
+      const ecommerceTabMode =
+        checklistTypeFingerprint;
 
-      if(isSpecialCampaignChecklist){
+      const ecommerceIsSpecialCampaign =
+        (
+          ecommerceTabMode.includes("special") &&
+          ecommerceTabMode.includes("campaign")
+        ) ||
+        !!(
+          ((group?.aiWorkspace || {}) as any)
+            ?.ecommerce
+            ?.specialCampaignTracker
+        );
+
+      const isCampaignChecklist =
+        ecommerceTabMode.includes("campaign") ||
+        ecommerceIsSpecialCampaign;
+
+      if(
+        isSpecialCampaignChecklist ||
+        ecommerceIsSpecialCampaign
+      ){
         const rawSpecialCampaignTracker =
           data?.specialCampaignTracker &&
           typeof data.specialCampaignTracker==="object" &&
@@ -33568,7 +33653,70 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       );
     }
 
-    return <ChecklistBoard group={activeGroup} onBack={()=>{ setActive(null); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:null, groupTab:"tasks" }); }} skuStorage={skuStorage} brands={brands} templates={templates} launchTypes={launchTypes} events={seasonalEvents||[]} onStateChange={(patch:any)=>{ applyImmediateAppPatch(patch); if(onStateChange) onStateChange(patch); }} initialGroupTab={navigateToGroupTab} onGroupTabChange={(groupTab:any)=>{ if(onRouteChange) onRouteChange({ tab:"checklists", groupId:activeGroup.id, groupTab }); }} initialItems={allGroupItems[activeGroup.id]||null} onItemsChange={(items:any)=>updateGroupItems(activeGroup.id,items)} statuses={statuses} setStatuses={updateStatuses} onUpdateGroup={(patch:any)=>updateGroup(activeGroup.id,patch)} />;
+    return (
+      <ChecklistBoard
+        key={[
+          activeGroup?.id,
+          activeGroup?.launchType,
+          activeGroup?.type,
+          activeGroup?.checklistType,
+        ]
+          .filter(Boolean)
+          .join("-")}
+        group={activeGroup}
+        onBack={()=>{
+          setActive(null);
+
+          if(onRouteChange){
+            onRouteChange({
+              tab:"checklists",
+              groupId:null,
+              groupTab:"tasks",
+            });
+          }
+        }}
+        skuStorage={skuStorage}
+        brands={brands}
+        templates={templates}
+        launchTypes={launchTypes}
+        events={seasonalEvents||[]}
+        onStateChange={(patch:any)=>{
+          applyImmediateAppPatch(patch);
+
+          if(onStateChange){
+            onStateChange(patch);
+          }
+        }}
+        initialGroupTab={navigateToGroupTab}
+        onGroupTabChange={(groupTab:any)=>{
+          if(onRouteChange){
+            onRouteChange({
+              tab:"checklists",
+              groupId:activeGroup.id,
+              groupTab,
+            });
+          }
+        }}
+        initialItems={
+          allGroupItems[activeGroup.id]||
+          null
+        }
+        onItemsChange={(items:any)=>
+          updateGroupItems(
+            activeGroup.id,
+            items
+          )
+        }
+        statuses={statuses}
+        setStatuses={updateStatuses}
+        onUpdateGroup={(patch:any)=>
+          updateGroup(
+            activeGroup.id,
+            patch
+          )
+        }
+      />
+    );
   }
 
   return (
