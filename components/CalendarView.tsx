@@ -6798,13 +6798,37 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     ) &&
     !isSpecialCampaignWorkspace;
   const visibleWorkspaceTabs = workspaceTabs.filter((tab:any)=>{
-    if(tab.id==="livestream") return canShowLivestreamTab;
-    if(tab.id==="budget") return isProductIntroOrReactivation;
-    if(tab.id==="training") return isProductIntroOrReactivation;
+    if(
+      tab.id==="marketing" &&
+      isSpecialCampaignWorkspace
+    ){
+      return false;
+    }
+
+    if(tab.id==="livestream"){
+      return canShowLivestreamTab;
+    }
+
+    if(tab.id==="budget"){
+      return isProductIntroOrReactivation;
+    }
+
+    if(tab.id==="training"){
+      return isProductIntroOrReactivation;
+    }
+
     return true;
   });
 
   useEffect(()=>{
+    if(
+      activeGroupTab==="marketing" &&
+      isSpecialCampaignWorkspace
+    ){
+      setActiveGroupTab("ecommerce");
+      return;
+    }
+
     if(
       (
         activeGroupTab==="training" &&
@@ -6820,6 +6844,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   },[
     activeGroupTab,
     isProductIntroOrReactivation,
+    isSpecialCampaignWorkspace,
     canShowLivestreamTab,
   ]);
 
@@ -16080,6 +16105,755 @@ ${slidesHtml}
         );
       }
 
+      if(isSpecialCampaignOverview){
+        const legacySummaryType =
+          "specialCampaignCollateralSummary";
+
+        const visibleSpecialItems =
+          overviewItems.filter(
+            (item:any)=>
+              String(
+                item?.sourceRef?.type || ""
+              )!==legacySummaryType
+          );
+
+        const briefItems =
+          visibleSpecialItems.filter(
+            (item:any)=>
+              String(
+                item?.sourceRef?.type || ""
+              )==="specialCampaignBriefAssets"
+          );
+
+        const requirementItems =
+          visibleSpecialItems.filter(
+            (item:any)=>
+              String(
+                item?.sourceRef?.type || ""
+              )==="specialCampaignRequirement"
+          );
+
+        const otherItems =
+          visibleSpecialItems.filter(
+            (item:any)=>{
+              const type = String(
+                item?.sourceRef?.type || ""
+              );
+
+              return (
+                type!=="specialCampaignBriefAssets" &&
+                type!=="specialCampaignRequirement"
+              );
+            }
+          );
+
+        const renderSpecialOverviewCard = (
+          item:any
+        ) => (
+          <article
+            key={item.id}
+            style={{
+              width:"100%",
+              maxWidth:"100%",
+              minWidth:0,
+              boxSizing:"border-box",
+              padding:isMobile?12:16,
+              border:`1.5px solid ${C.border}`,
+              borderRadius:14,
+              background:C.surface,
+              boxShadow:"0 2px 8px rgba(15,23,42,.04)",
+              overflow:"hidden",
+            }}
+          >
+            <div
+              style={{
+                display:"flex",
+                justifyContent:"space-between",
+                gap:10,
+                alignItems:"flex-start",
+                flexWrap:"wrap",
+                marginBottom:10,
+              }}
+            >
+              <div style={{minWidth:0,flex:1}}>
+                <span
+                  style={{
+                    display:"inline-flex",
+                    marginBottom:7,
+                    padding:"3px 8px",
+                    borderRadius:999,
+                    border:`1px solid ${C.border}`,
+                    background:C.surfaceAlt,
+                    color:C.muted,
+                    fontSize:10.5,
+                    fontWeight:900,
+                  }}
+                >
+                  {item?.sourceTab || "E-commerce"}
+                </span>
+
+                <p
+                  style={{
+                    margin:0,
+                    color:C.text,
+                    fontSize:isMobile?15:13,
+                    fontWeight:900,
+                    lineHeight:1.3,
+                    overflowWrap:"anywhere",
+                  }}
+                >
+                  {item?.title || "Overview Item"}
+                </p>
+
+                <p
+                  style={{
+                    margin:"3px 0 0",
+                    color:C.faint,
+                    fontSize:10.5,
+                    lineHeight:1.4,
+                  }}
+                >
+                  {item?.kind || "Output"}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display:"flex",
+                  gap:6,
+                  flexWrap:"wrap",
+                }}
+              >
+                <Btn
+                  xs
+                  type="button"
+                  variant="outline"
+                  onClick={()=>
+                    navigator.clipboard.writeText(
+                      typeof item?.content==="string"
+                        ? item.content
+                        : String(
+                            item?.content?.output ||
+                            ""
+                          )
+                    )
+                  }
+                >
+                  Copy
+                </Btn>
+
+                <Btn
+                  xs
+                  type="button"
+                  variant="danger"
+                  onClick={()=>
+                    deleteOverviewItem(item.id)
+                  }
+                >
+                  Delete
+                </Btn>
+              </div>
+            </div>
+
+            {renderOverviewContent(item)}
+          </article>
+        );
+
+        return (
+          <div
+            style={{
+              display:"flex",
+              flexDirection:"column",
+              gap:14,
+              width:"100%",
+              maxWidth:"100%",
+              minWidth:0,
+            }}
+          >
+            <Modal
+              open={!!campaignOverviewImagePreview}
+              onClose={()=>
+                setCampaignOverviewImagePreview(null)
+              }
+              title={
+                campaignOverviewImagePreview?.title ||
+                "Special Campaign Preview"
+              }
+              width={900}
+            >
+              {campaignOverviewImagePreview&&(
+                <div
+                  style={{
+                    display:"flex",
+                    flexDirection:"column",
+                    gap:14,
+                  }}
+                >
+                  <div
+                    style={{
+                      display:"flex",
+                      alignItems:"center",
+                      justifyContent:"center",
+                      minHeight:280,
+                      maxHeight:"72vh",
+                      overflow:"hidden",
+                      border:`1px solid ${C.border}`,
+                      borderRadius:12,
+                      background:C.bg,
+                    }}
+                  >
+                    <img
+                      src={
+                        campaignOverviewImagePreview.previewUrl ||
+                        getSpecialCampaignOverviewImagePreview(
+                          campaignOverviewImagePreview.url
+                        )
+                      }
+                      alt="Expanded Special Campaign preview"
+                      referrerPolicy="no-referrer"
+                      style={{
+                        display:"block",
+                        width:"100%",
+                        maxHeight:"72vh",
+                        objectFit:"contain",
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display:"flex",
+                      justifyContent:"flex-end",
+                      gap:8,
+                    }}
+                  >
+                    <Btn
+                      type="button"
+                      variant="outline"
+                      onClick={()=>
+                        saveCampaignOverviewPreviewImage(
+                          campaignOverviewImagePreview.url,
+                          `special-campaign-preview-${Date.now()}.png`
+                        )
+                      }
+                    >
+                      Save Image
+                    </Btn>
+
+                    <Btn
+                      type="button"
+                      onClick={()=>
+                        setCampaignOverviewImagePreview(null)
+                      }
+                    >
+                      Close
+                    </Btn>
+                  </div>
+                </div>
+              )}
+            </Modal>
+
+            <div
+              style={{
+                padding:14,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <div
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  gap:10,
+                  alignItems:"flex-start",
+                  flexWrap:"wrap",
+                }}
+              >
+                <div>
+                  <h3
+                    style={{
+                      margin:"0 0 5px",
+                      fontSize:16,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    Special Campaign Overview
+                  </h3>
+
+                  <p
+                    style={{
+                      margin:0,
+                      fontSize:12,
+                      color:C.muted,
+                      lineHeight:1.5,
+                    }}
+                  >
+                    Campaign Brief & Seller Kit appears first, followed
+                    by the same shared collateral rows used in
+                    E-commerce and Digital Creative.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    gap:8,
+                    alignItems:"center",
+                  }}
+                >
+                  <span
+                    style={{
+                      padding:"4px 9px",
+                      borderRadius:999,
+                      border:`1px solid ${C.border}`,
+                      background:C.surfaceAlt,
+                      color:C.muted,
+                      fontSize:11,
+                      fontWeight:800,
+                    }}
+                  >
+                    {
+                      briefItems.length +
+                      requirementItems.length +
+                      otherItems.length
+                    } items
+                  </span>
+
+                  <Btn
+                    sm
+                    variant="outline"
+                    onClick={copyAllOverviewItems}
+                    disabled={
+                      !(
+                        briefItems.length ||
+                        requirementItems.length ||
+                        otherItems.length
+                      )
+                    }
+                  >
+                    Copy All
+                  </Btn>
+                </div>
+              </div>
+            </div>
+
+            {briefItems.map(
+              (item:any)=>
+                renderSpecialOverviewCard(item)
+            )}
+
+            {requirementItems.length>0&&(
+              <section
+                style={{
+                  width:"100%",
+                  maxWidth:"100%",
+                  minWidth:0,
+                  padding:isMobile?12:16,
+                  boxSizing:"border-box",
+                  border:`1.5px solid ${C.border}`,
+                  borderRadius:14,
+                  background:C.surface,
+                  overflow:"hidden",
+                }}
+              >
+                <div
+                  style={{
+                    display:"flex",
+                    justifyContent:"space-between",
+                    gap:10,
+                    alignItems:"flex-start",
+                    flexWrap:"wrap",
+                    marginBottom:12,
+                  }}
+                >
+                  <div>
+                    <span
+                      style={{
+                        display:"inline-flex",
+                        marginBottom:7,
+                        padding:"3px 8px",
+                        borderRadius:999,
+                        border:`1px solid ${C.border}`,
+                        background:C.surfaceAlt,
+                        color:C.muted,
+                        fontSize:10.5,
+                        fontWeight:900,
+                      }}
+                    >
+                      Shared Rows
+                    </span>
+
+                    <h4
+                      style={{
+                        margin:0,
+                        color:C.text,
+                        fontSize:14,
+                        fontWeight:900,
+                      }}
+                    >
+                      Collateral Requirements & Output Tracker
+                    </h4>
+
+                    <p
+                      style={{
+                        margin:"4px 0 0",
+                        color:C.muted,
+                        fontSize:11,
+                        lineHeight:1.45,
+                      }}
+                    >
+                      Each row is the same requirement record updated
+                      by E-commerce and Digital Creative.
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display:"block",
+                    width:"100%",
+                    maxWidth:"100%",
+                    minWidth:0,
+                    overflowX:"auto",
+                    WebkitOverflowScrolling:"touch",
+                    paddingBottom:5,
+                  }}
+                >
+                  <table
+                    style={{
+                      width:"max-content",
+                      minWidth:1680,
+                      borderCollapse:"separate",
+                      borderSpacing:0,
+                      fontSize:11.5,
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        {[
+                          "Asset Requirement",
+                          "Featured SKU/s",
+                          "Copy / Headline Instructions",
+                          "Notes",
+                          "Dimensions",
+                          "Preview",
+                          "Final Asset",
+                          "Status",
+                          "Posted",
+                          "Actions",
+                        ].map((heading:string)=>(
+                          <th
+                            key={heading}
+                            style={{
+                              padding:"9px 10px",
+                              borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
+                              background:C.surfaceAlt,
+                              color:C.textSub,
+                              textAlign:"left",
+                              fontSize:9.5,
+                              fontWeight:900,
+                              textTransform:"uppercase",
+                              letterSpacing:".04em",
+                              whiteSpace:"nowrap",
+                            }}
+                          >
+                            {heading}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {requirementItems.map(
+                        (item:any,index:number)=>{
+                          const row =
+                            item?.content &&
+                            typeof item.content==="object"
+                              ? item.content
+                              : {};
+
+                          const previewUrl =
+                            getSpecialCampaignOverviewImagePreview(
+                              row?.finalPreviewUrl
+                            );
+
+                          const statusLabel =
+                            row?.status==="submitted"
+                              ? "Submitted"
+                              : row?.status==="review"
+                                ? "For Review"
+                                : row?.status==="inprogress"
+                                  ? "In Progress"
+                                  : "Requested";
+
+                          return (
+                            <tr
+                              key={item.id}
+                              style={{
+                                background:index%2
+                                  ? C.surface
+                                  : C.bg,
+                              }}
+                            >
+                              <td
+                                style={{
+                                  width:220,
+                                  minWidth:220,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  color:C.text,
+                                  fontWeight:850,
+                                }}
+                              >
+                                {row?.assetName ||
+                                  "Untitled Requirement"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:230,
+                                  minWidth:230,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  color:C.textSub,
+                                }}
+                              >
+                                {row?.skuText || "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:280,
+                                  minWidth:280,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  color:C.textSub,
+                                }}
+                              >
+                                {row?.copyInstructions || "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:220,
+                                  minWidth:220,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  color:C.textSub,
+                                }}
+                              >
+                                {row?.notes || "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:140,
+                                  minWidth:140,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  color:C.textSub,
+                                }}
+                              >
+                                {row?.dimensions || "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:140,
+                                  minWidth:140,
+                                  padding:8,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  textAlign:"center",
+                                }}
+                              >
+                                {previewUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={()=>
+                                      setCampaignOverviewImagePreview({
+                                        url:row.finalPreviewUrl,
+                                        previewUrl,
+                                        title:
+                                          row.assetName ||
+                                          "Special Campaign Preview",
+                                      })
+                                    }
+                                    style={{
+                                      display:"inline-flex",
+                                      alignItems:"center",
+                                      justifyContent:"center",
+                                      width:96,
+                                      height:60,
+                                      padding:0,
+                                      overflow:"hidden",
+                                      border:`1px solid ${C.border}`,
+                                      borderRadius:7,
+                                      background:C.surfaceAlt,
+                                      cursor:"zoom-in",
+                                    }}
+                                  >
+                                    <img
+                                      src={previewUrl}
+                                      alt={`${row?.assetName || "Collateral"} preview`}
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                      style={{
+                                        display:"block",
+                                        width:"100%",
+                                        height:"100%",
+                                        objectFit:"cover",
+                                      }}
+                                    />
+                                  </button>
+                                ) : "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:140,
+                                  minWidth:140,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                }}
+                              >
+                                {row?.finalAssetLink ? (
+                                  <a
+                                    href={row.finalAssetLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      color:"#2563EB",
+                                      fontWeight:850,
+                                      textDecoration:"none",
+                                      whiteSpace:"nowrap",
+                                    }}
+                                  >
+                                    Open Final Asset
+                                  </a>
+                                ) : "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:110,
+                                  minWidth:110,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  color:C.textSub,
+                                  fontWeight:800,
+                                  whiteSpace:"nowrap",
+                                }}
+                              >
+                                {statusLabel}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:80,
+                                  minWidth:80,
+                                  padding:"9px 10px",
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  textAlign:"center",
+                                  color:row?.posted
+                                    ? "#0F766E"
+                                    : C.faint,
+                                  fontWeight:850,
+                                }}
+                              >
+                                {row?.posted ? "Posted" : "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  width:90,
+                                  minWidth:90,
+                                  padding:8,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  verticalAlign:"middle",
+                                  textAlign:"center",
+                                }}
+                              >
+                                <Btn
+                                  xs
+                                  type="button"
+                                  variant="danger"
+                                  onClick={()=>
+                                    deleteOverviewItem(item.id)
+                                  }
+                                >
+                                  Delete
+                                </Btn>
+                              </td>
+                            </tr>
+                          );
+                        }
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {otherItems.map(
+              (item:any)=>
+                renderSpecialOverviewCard(item)
+            )}
+
+            {!briefItems.length &&
+              !requirementItems.length &&
+              !otherItems.length&&(
+                <div
+                  style={{
+                    minHeight:220,
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                    textAlign:"center",
+                    padding:18,
+                    border:`1.5px dashed ${C.border}`,
+                    borderRadius:12,
+                    background:C.surface,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin:0,
+                      color:C.muted,
+                      fontSize:13,
+                      lineHeight:1.5,
+                    }}
+                  >
+                    No Special Campaign items have been added yet.
+                    Add the Campaign Brief & Seller Kit first, then add
+                    requirement rows from E-commerce or Digital Creative.
+                  </p>
+                </div>
+              )}
+          </div>
+        );
+      }
+
       return (
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
@@ -18313,6 +19087,148 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       );
     };
 
+    const buildSpecialCampaignRequirementOverviewContent = (
+      row:any,
+      index:number = 0,
+      trackerOverride:any = null
+    ) => {
+      const tracker =
+        trackerOverride ||
+        getSpecialCampaignTrackerSnapshot();
+
+      const selectedRows =
+        getSpecialCampaignSelectedSkuRows(row);
+
+      const skuIds =
+        getSpecialCampaignRequirementSkuIds(row);
+
+      const skuText = selectedRows.length
+        ? selectedRows
+            .map((sku:any)=>
+              String(sku?.sku || "").trim()
+            )
+            .filter(Boolean)
+            .join(", ")
+        : String(row?.skuText || "").trim();
+
+      const deadline = tracker?.deadlineDate
+        ? `${tracker.deadlineDate}${
+            tracker?.deadlineTime
+              ? ` ${tracker.deadlineTime}`
+              : ""
+          }`
+        : String(tracker?.deadline || "");
+
+      const content:any = {
+        requirementId:String(row?.id || index),
+        campaignName:String(
+          tracker?.campaignName ||
+          group?.groupName ||
+          "Special Campaign"
+        ),
+        platform:String(tracker?.platform || ""),
+        store:String(tracker?.store || ""),
+        deadline,
+        assetName:String(
+          row?.assetName ||
+          `Untitled Requirement ${index+1}`
+        ),
+        skuIds,
+        skuText,
+        copyInstructions:String(
+          row?.copyInstructions || ""
+        ),
+        notes:String(row?.notes || ""),
+        dimensions:String(row?.dimensions || ""),
+        finalPreviewUrl:String(
+          row?.finalPreviewUrl || ""
+        ),
+        finalAssetLink:String(
+          row?.finalAssetLink || ""
+        ),
+        status:String(
+          row?.status || "requested"
+        ),
+        posted:!!row?.posted,
+        sentToDigital:!!row?.sentToDigital,
+        updatedAt:String(
+          row?.updatedAt ||
+          new Date().toISOString()
+        ),
+      };
+
+      content.output =
+        formatSpecialCampaignOverviewRequirementOutput(
+          content
+        );
+
+      return content;
+    };
+
+    const upsertSpecialCampaignRequirementRowsToOverview = (
+      rows:any[],
+      trackerOverride:any = null
+    ) => {
+      const tracker =
+        trackerOverride ||
+        getSpecialCampaignTrackerSnapshot();
+
+      const safeRows = Array.isArray(rows)
+        ? rows.filter(Boolean)
+        : [];
+
+      if(!safeRows.length) return;
+
+      safeRows.forEach((row:any,index:number)=>{
+        const content =
+          buildSpecialCampaignRequirementOverviewContent(
+            row,
+            index,
+            tracker
+          );
+
+        addToOverview(
+          "E-commerce",
+          `${content.campaignName} · ${content.assetName}`,
+          content,
+          "Special Campaign Shared Requirement",
+          {
+            tab:"ecommerce",
+            type:"specialCampaignRequirement",
+            id:String(
+              row?.id ||
+              content.requirementId ||
+              index
+            ),
+          }
+        );
+      });
+    };
+
+    const removeSpecialCampaignRequirementFromOverview = (
+      rowId:any
+    ) => {
+      const cleanId = String(rowId || "").trim();
+      if(!cleanId) return;
+
+      getOverviewItems()
+        .filter(
+          (item:any)=>
+            String(
+              item?.sourceRef?.type || ""
+            )==="specialCampaignRequirement" &&
+            String(
+              item?.sourceRef?.id || ""
+            )===cleanId
+        )
+        .forEach(
+          (item:any)=>
+            deleteOverviewItem(
+              String(item?.id || "")
+            )
+        );
+    };
+
     const toggleSpecialCampaignRequirementSku = (
       row:any,
       sku:any
@@ -18427,6 +19343,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               String(row?.id)!==String(rowId)
           )
         );
+
+        removeSpecialCampaignRequirementFromOverview(
+          rowId
+        );
       };
 
       const sendToDigitalCreative = () => {
@@ -18440,6 +19360,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             (row:any)=>({
               ...row,
               sentToDigital:true,
+              hiddenFromDigital:false,
               sentAt:row?.sentAt || now,
               status:
                 row?.status==="requested"
@@ -18681,6 +19602,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <Btn
                 xs
                 type="button"
+                variant="outline"
+                disabled={!tracker.requirements.length}
+                onClick={()=>
+                  upsertSpecialCampaignRequirementRowsToOverview(
+                    tracker.requirements,
+                    tracker
+                  )
+                }
+              >
+                Add to Overview
+              </Btn>
+
+              <Btn
+                xs
+                type="button"
                 variant={
                   allSentToDigital
                     ? "primary"
@@ -18762,7 +19698,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <table
                 style={{
                   width:"100%",
-                  minWidth:1180,
+                  minWidth:1320,
                   borderCollapse:"separate",
                   borderSpacing:0,
                   fontSize:12,
@@ -19176,24 +20112,56 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                           <td
                             style={{
-                              width:84,
-                              minWidth:84,
+                              width:210,
+                              minWidth:210,
                               padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               textAlign:"center",
                               verticalAlign:"middle",
                             }}
                           >
-                            <Btn
-                              xs
-                              type="button"
-                              variant="danger"
-                              onClick={()=>
-                                deleteRequirement(row.id)
-                              }
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                justifyContent:"center",
+                                gap:6,
+                                flexWrap:"nowrap",
+                              }}
                             >
-                              Delete
-                            </Btn>
+                              <Btn
+                                xs
+                                type="button"
+                                variant="outline"
+                                style={{
+                                  flex:"0 0 auto",
+                                  whiteSpace:"nowrap",
+                                }}
+                                onClick={()=>
+                                  upsertSpecialCampaignRequirementRowsToOverview(
+                                    [row],
+                                    tracker
+                                  )
+                                }
+                              >
+                                Add to Overview
+                              </Btn>
+
+                              <Btn
+                                xs
+                                type="button"
+                                variant="danger"
+                                style={{
+                                  flex:"0 0 auto",
+                                  whiteSpace:"nowrap",
+                                }}
+                                onClick={()=>
+                                  deleteRequirement(row.id)
+                                }
+                              >
+                                Delete
+                              </Btn>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -19214,7 +20182,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const digitalRows =
         tracker.requirements.filter(
-          (row:any)=>!!row?.sentToDigital
+          (row:any)=>
+            !!row?.sentToDigital &&
+            !row?.hiddenFromDigital
         );
 
       const updateDigitalRow = (
@@ -19227,123 +20197,43 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         );
       };
 
-      const addDigitalSummaryToOverview = () => {
+      const addDigitalRowsToOverview = () => {
         if(!digitalRows.length) return;
 
-        const rows = digitalRows.map(
-          (row:any,index:number)=>{
-            const selectedRows =
-              getSpecialCampaignSelectedSkuRows(
-                row
-              );
-
-            return {
-              requirementId:String(row?.id || index),
-              assetName:String(
-                row?.assetName ||
-                `Untitled Requirement ${index+1}`
-              ),
-              skuText:selectedRows.length
-                ? selectedRows
-                    .map((sku:any)=>
-                      String(sku?.sku || "").trim()
-                    )
-                    .filter(Boolean)
-                    .join(", ")
-                : String(row?.skuText || ""),
-              dimensions:String(
-                row?.dimensions || ""
-              ),
-              finalPreviewUrl:String(
-                row?.finalPreviewUrl || ""
-              ),
-              finalAssetLink:String(
-                row?.finalAssetLink || ""
-              ),
-              status:String(
-                row?.status || "inprogress"
-              ),
-              posted:!!row?.posted,
-            };
-          }
-        );
-
-        const content:any = {
-          campaignName:String(
-            tracker.campaignName ||
-            group?.groupName ||
-            "Special Campaign"
-          ),
-          platform:String(tracker.platform || ""),
-          store:String(tracker.store || ""),
-          deadline:String(
-            tracker.deadlineDate
-              ? `${tracker.deadlineDate}${
-                  tracker.deadlineTime
-                    ? ` ${tracker.deadlineTime}`
-                    : ""
-                }`
-              : tracker.deadline || ""
-          ),
-          sellerKitLink:String(
-            tracker.sellerKitLink || ""
-          ),
-          rows,
-        };
-
-        content.output = [
-          content.campaignName,
-          content.platform
-            ? `Platform: ${content.platform}`
-            : "",
-          content.store
-            ? `Store / Account: ${content.store}`
-            : "",
-          content.deadline
-            ? `Deadline: ${content.deadline}`
-            : "",
-          "",
-          ...rows.flatMap(
-            (row:any,index:number)=>[
-              `${index+1}. ${row.assetName}`,
-              row.skuText
-                ? `SKUs: ${row.skuText}`
-                : "",
-              row.dimensions
-                ? `Dimensions: ${row.dimensions}`
-                : "",
-              row.finalPreviewUrl
-                ? `Preview: ${row.finalPreviewUrl}`
-                : "",
-              row.finalAssetLink
-                ? `Final Asset: ${row.finalAssetLink}`
-                : "",
-              "",
-            ]
-          ),
-        ].filter(
-          (line:any,index:number,array:any[])=>
-            line!=="" ||
-            (
-              index>0 &&
-              array[index-1]!==""
-            )
-        ).join("\n");
-
-        addToOverview(
-          "Digital Creative",
-          `${content.campaignName} · Collateral Summary`,
-          content,
-          "Special Campaign Collateral Summary",
-          {
-            tab:"digital",
-            type:"specialCampaignCollateralSummary",
-            id:"collateral-summary",
-          }
+        upsertSpecialCampaignRequirementRowsToOverview(
+          digitalRows,
+          tracker
         );
 
         markActionDone(
-          "overview-special-campaign-collateral-summary"
+          "overview-special-campaign-shared-requirements"
+        );
+      };
+
+      const addDigitalRowToOverview = (
+        row:any
+      ) => {
+        upsertSpecialCampaignRequirementRowsToOverview(
+          [row],
+          tracker
+        );
+
+        markActionDone(
+          `overview-special-campaign-requirement-${
+            row?.id || ""
+          }`
+        );
+      };
+
+      const removeDigitalRow = (
+        row:any
+      ) => {
+        updateDigitalRow(
+          row?.id,
+          {
+            hiddenFromDigital:true,
+            updatedAt:new Date().toISOString(),
+          }
         );
       };
 
@@ -19418,8 +20308,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 }}
               >
                 Complete the dimensions, preview image, and final asset
-                links for requirements sent from E-commerce, then add
-                the finished table summary to Overview.
+                links on the same requirement rows sent from E-commerce,
+                then update those exact rows in Overview.
               </p>
             </div>
 
@@ -19450,32 +20340,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 type="button"
                 variant={
                   actionDone(
-                    "overview-special-campaign-collateral-summary"
+                    "overview-special-campaign-shared-requirements"
                   )
                     ? "primary"
                     : "outline"
                 }
                 disabled={!digitalRows.length}
-                onClick={addDigitalSummaryToOverview}
-                style={{
-                  transform:actionDone(
-                    "overview-special-campaign-collateral-summary"
-                  )
-                    ? "scale(1.04)"
-                    : "scale(1)",
-                  boxShadow:actionDone(
-                    "overview-special-campaign-collateral-summary"
-                  )
-                    ? "0 0 0 3px rgba(34,197,94,.14)"
-                    : "none",
-                  transition:"transform .18s ease, box-shadow .18s ease",
-                }}
+                onClick={addDigitalRowsToOverview}
               >
-                {actionDone(
-                  "overview-special-campaign-collateral-summary"
-                )
-                  ? "✓ Added"
-                  : "Add to Overview"}
+                Update All Overview Rows
               </Btn>
             </div>
           </div>
@@ -19524,7 +20397,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <table
                 style={{
                   width:"100%",
-                  minWidth:1240,
+                  minWidth:1450,
                   borderCollapse:"separate",
                   borderSpacing:0,
                   fontSize:12,
@@ -19540,6 +20413,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       "Final Asset Link",
                       "Status",
                       "Posted",
+                      "Actions",
                     ].map((heading:string)=>(
                       <th
                         key={heading}
@@ -19566,7 +20440,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 <tbody>
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       style={{
                         padding:"9px 11px",
                         borderBottom:`1px solid ${C.border}`,
@@ -19879,8 +20753,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               minWidth:80,
                               padding:8,
                               borderBottom:`1px solid ${C.border}`,
+                              borderRight:`1px solid ${C.border}`,
                               textAlign:"center",
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
                             <input
@@ -19899,6 +20774,55 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 )
                               }
                             />
+                          </td>
+
+                          <td
+                            style={{
+                              width:210,
+                              minWidth:210,
+                              padding:8,
+                              borderBottom:`1px solid ${C.border}`,
+                              verticalAlign:"middle",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                gap:6,
+                                flexWrap:"nowrap",
+                              }}
+                            >
+                              <Btn
+                                xs
+                                type="button"
+                                variant="outline"
+                                style={{
+                                  flex:"0 0 auto",
+                                  whiteSpace:"nowrap",
+                                }}
+                                onClick={()=>
+                                  addDigitalRowToOverview(row)
+                                }
+                              >
+                                Add to Overview
+                              </Btn>
+
+                              <Btn
+                                xs
+                                type="button"
+                                variant="danger"
+                                style={{
+                                  flex:"0 0 auto",
+                                  whiteSpace:"nowrap",
+                                }}
+                                onClick={()=>
+                                  removeDigitalRow(row)
+                                }
+                              >
+                                Delete
+                              </Btn>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -26782,63 +27706,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         };
 
         const addSpecialCampaignRequirementsToOverview = () => {
-          if(!specialCampaignTracker.requirements.length) return;
+          if(
+            !specialCampaignTracker.requirements.length
+          ){
+            return;
+          }
 
-          specialCampaignTracker.requirements.forEach(
-            (row:any,index:number)=>{
-              const selectedSkus =
-                getSpecialCampaignRequirementSelectedSkus(row);
-              const skuText = selectedSkus.length
-                ? selectedSkus
-                    .map((sku:any)=>String(sku?.sku || "").trim())
-                    .filter(Boolean)
-                    .join(", ")
-                : String(row?.skuText || "").trim();
-
-              const content:any = {
-                requirementId:String(row?.id || ""),
-                assetName:String(
-                  row?.assetName ||
-                  `Untitled Requirement ${index+1}`
-                ),
-                skuIds:getSpecialCampaignRequirementSkuIds(row),
-                skuText,
-                copyInstructions:String(
-                  row?.copyInstructions || ""
-                ),
-                notes:String(row?.notes || ""),
-                status:String(row?.status || "requested"),
-                posted:!!row?.posted,
-                dimensions:String(row?.dimensions || ""),
-                finalPreviewUrl:String(
-                  row?.finalPreviewUrl || ""
-                ),
-                finalAssetLink:String(
-                  row?.finalAssetLink || ""
-                ),
-              };
-
-              content.output =
-                formatSpecialCampaignOverviewRequirementOutput(
-                  content
-                );
-
-              addToOverview(
-                "E-commerce",
-                `${
-                  specialCampaignTracker.campaignName ||
-                  group?.groupName ||
-                  "Special Campaign"
-                } · ${content.assetName}`,
-                content,
-                "Special Campaign Requirement",
-                {
-                  tab:"ecommerce",
-                  type:"specialCampaignRequirement",
-                  id:String(row?.id || index),
-                }
-              );
-            }
+          upsertSpecialCampaignRequirementRowsToOverview(
+            specialCampaignTracker.requirements,
+            specialCampaignTracker
           );
 
           markActionDone(
