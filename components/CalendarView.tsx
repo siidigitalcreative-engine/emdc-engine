@@ -19865,16 +19865,46 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <Btn
                 xs
                 type="button"
-                variant="outline"
+                variant={
+                  actionDone(
+                    "overview-special-campaign-requirements"
+                  )
+                    ? "primary"
+                    : "outline"
+                }
                 disabled={!tracker.requirements.length}
-                onClick={()=>
+                onClick={()=>{
                   upsertSpecialCampaignRequirementRowsToOverview(
                     tracker.requirements,
                     tracker
-                  )
-                }
+                  );
+
+                  markActionDone(
+                    "overview-special-campaign-requirements"
+                  );
+                }}
+                style={{
+                  transform:
+                    actionDone(
+                      "overview-special-campaign-requirements"
+                    )
+                      ? "scale(1.04)"
+                      : "scale(1)",
+                  boxShadow:
+                    actionDone(
+                      "overview-special-campaign-requirements"
+                    )
+                      ? "0 0 0 3px rgba(34,197,94,.14)"
+                      : "none",
+                  transition:
+                    "transform .18s ease, box-shadow .18s ease, background .18s ease, color .18s ease",
+                }}
               >
-                Add to Overview
+                {actionDone(
+                  "overview-special-campaign-requirements"
+                )
+                  ? "✓ Added"
+                  : "Add to Overview"}
               </Btn>
 
               <Btn
