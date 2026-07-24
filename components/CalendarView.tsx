@@ -14586,6 +14586,9 @@ ${slidesHtml}
 
     const workspaceTypeLabel = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
     const isCampaignChecklist = workspaceTypeLabel.includes("campaign");
+    const isSpecialCampaignChecklist =
+      workspaceTypeLabel.includes("special") &&
+      workspaceTypeLabel.includes("campaign");
     const isProductIntroductionChecklist = workspaceTypeLabel.includes("product introduction") || workspaceTypeLabel.includes("product reactivation") || workspaceTypeLabel.includes("reactivation") || workspaceTypeLabel.includes("relaunch");
 
     if(tab==="marketing" && (isCampaignChecklist || isProductIntroductionChecklist)){
@@ -15999,6 +16002,1130 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       return firstLink ? [firstLink] : [];
     };
+
+
+    if(tab==="digital" && isSpecialCampaignChecklist){
+      /*
+       * Special Campaign requirements live in the E-commerce workspace
+       * so moving the UI does not migrate, duplicate, or reset saved data.
+       */
+      const ecommerceBackupData =
+        (
+          backupWorkspace &&
+          typeof backupWorkspace.ecommerce==="object" &&
+          backupWorkspace.ecommerce
+        )
+          ? backupWorkspace.ecommerce
+          : {};
+
+      const ecommercePersistedData =
+        (
+          persistedWorkspace &&
+          typeof persistedWorkspace.ecommerce==="object" &&
+          persistedWorkspace.ecommerce
+        )
+          ? persistedWorkspace.ecommerce
+          : {};
+
+      const ecommerceGroupData =
+        (
+          ((group.aiWorkspace || {}) as any).ecommerce &&
+          typeof ((group.aiWorkspace || {}) as any).ecommerce==="object"
+        )
+          ? ((group.aiWorkspace || {}) as any).ecommerce
+          : {};
+
+      const ecommerceSpecialData =
+        getMergedEcommerceData({
+          ...ecommerceBackupData,
+          ...ecommercePersistedData,
+          ...ecommerceGroupData,
+        });
+
+      const rawSpecialCampaignTracker =
+        ecommerceSpecialData?.specialCampaignTracker &&
+        typeof ecommerceSpecialData.specialCampaignTracker==="object" &&
+        !Array.isArray(
+          ecommerceSpecialData.specialCampaignTracker
+        )
+          ? ecommerceSpecialData.specialCampaignTracker
+          : {};
+
+      const specialCampaignTracker:any = {
+        ...rawSpecialCampaignTracker,
+        requirements:Array.isArray(
+          rawSpecialCampaignTracker.requirements
+        )
+          ? rawSpecialCampaignTracker.requirements
+          : [],
+      };
+
+      const updateSpecialCampaignTracker = (
+        patch:any
+      ) => {
+        updateAiWorkspace("ecommerce",{
+          specialCampaignTracker:{
+            ...rawSpecialCampaignTracker,
+            ...specialCampaignTracker,
+            ...patch,
+            updatedAt:new Date().toISOString(),
+          },
+        });
+      };
+
+      const saveSpecialCampaignRequirements = (
+        rows:any[]
+      ) => {
+        updateSpecialCampaignTracker({
+          requirements:Array.isArray(rows)
+            ? rows
+            : [],
+        });
+      };
+
+      const specialCampaignChecklistSkuCodes =
+        Array.from(
+          new Set(
+            productRows
+              .map((row:any)=>
+                String(
+                  row?.skuCode ||
+                  row?.sku ||
+                  row?.value ||
+                  ""
+                ).trim()
+              )
+              .filter(Boolean)
+          )
+        );
+
+      const specialCampaignChecklistSkuIds =
+        (skuStorage || [])
+          .filter((sku:any)=>
+            specialCampaignChecklistSkuCodes.includes(
+              String(sku?.sku || "").trim()
+            )
+          )
+          .map((sku:any)=>String(sku.id))
+          .filter(Boolean);
+
+      const getSpecialCampaignRequirementSkuIds = (
+        row:any
+      ) => {
+        const savedIds = Array.isArray(row?.skuIds)
+          ? row.skuIds.map(String).filter(Boolean)
+          : [];
+
+        if(savedIds.length) return savedIds;
+
+        const savedCodes = String(row?.skuText || "")
+          .split(/[;,\n]/)
+          .map((value:string)=>value.trim())
+          .filter(Boolean);
+
+        if(!savedCodes.length) return [];
+
+        return (skuStorage || [])
+          .filter((sku:any)=>
+            savedCodes.includes(
+              String(sku?.sku || "").trim()
+            )
+          )
+          .map((sku:any)=>String(sku.id))
+          .filter(Boolean);
+      };
+
+      const getSpecialCampaignRequirementSelectedSkus = (
+        row:any
+      ) => {
+        const selectedIds = new Set(
+          getSpecialCampaignRequirementSkuIds(row)
+        );
+
+        return (skuStorage || []).filter((sku:any)=>
+          selectedIds.has(String(sku.id))
+        );
+      };
+
+      const updateSpecialCampaignRequirement = (
+        rowId:any,
+        patch:any
+      ) => {
+        saveSpecialCampaignRequirements(
+          specialCampaignTracker.requirements.map(
+            (row:any)=>
+              String(row?.id)===String(rowId)
+                ? {
+                    ...row,
+                    ...patch,
+                    updatedAt:new Date().toISOString(),
+                  }
+                : row
+          )
+        );
+      };
+
+      const toggleSpecialCampaignRequirementSku = (
+        row:any,
+        sku:any
+      ) => {
+        const currentIds =
+          getSpecialCampaignRequirementSkuIds(row);
+
+        const skuId = String(sku?.id || "");
+        if(!skuId) return;
+
+        const nextIds = currentIds.includes(skuId)
+          ? currentIds.filter(
+              (id:string)=>id!==skuId
+            )
+          : [...currentIds,skuId];
+
+        const nextRows = (skuStorage || []).filter(
+          (item:any)=>
+            nextIds.includes(String(item.id))
+        );
+
+        updateSpecialCampaignRequirement(
+          row.id,
+          {
+            skuIds:nextIds,
+            skuText:nextRows
+              .map((item:any)=>
+                String(item?.sku || "").trim()
+              )
+              .filter(Boolean)
+              .join(", "),
+          }
+        );
+      };
+
+      const addSpecialCampaignRequirement = () => {
+        const selectedRows =
+          (skuStorage || []).filter(
+            (item:any)=>
+              specialCampaignChecklistSkuIds.includes(
+                String(item.id)
+              )
+          );
+
+        saveSpecialCampaignRequirements([
+          ...specialCampaignTracker.requirements,
+          {
+            id:uid(),
+            assetName:"",
+            skuIds:specialCampaignChecklistSkuIds,
+            skuText:selectedRows
+              .map((item:any)=>
+                String(item?.sku || "").trim()
+              )
+              .filter(Boolean)
+              .join(", "),
+            copyInstructions:"",
+            notes:"",
+            status:"requested",
+            posted:false,
+            submittedAt:"",
+            postedAt:"",
+            dimensions:"",
+            finalPreviewUrl:"",
+            finalAssetLink:"",
+          },
+        ]);
+      };
+
+      const deleteSpecialCampaignRequirement = (
+        rowId:any
+      ) => {
+        saveSpecialCampaignRequirements(
+          specialCampaignTracker.requirements.filter(
+            (row:any)=>
+              String(row?.id)!==String(rowId)
+          )
+        );
+      };
+
+      const specialCampaignStatusOptions = [
+        {
+          id:"requested",
+          label:"Requested",
+          color:"#6B7280",
+          background:"#F3F4F6",
+        },
+        {
+          id:"inprogress",
+          label:"In Progress",
+          color:"#2563EB",
+          background:"#EFF6FF",
+        },
+        {
+          id:"review",
+          label:"For Review",
+          color:"#B45309",
+          background:"#FFF7ED",
+        },
+        {
+          id:"submitted",
+          label:"Submitted",
+          color:"#15803D",
+          background:"#F0FDF4",
+        },
+      ];
+
+      const getSpecialCampaignStatusMeta = (
+        statusId:any
+      ) =>
+        specialCampaignStatusOptions.find(
+          (status:any)=>
+            status.id===statusId
+        ) ||
+        specialCampaignStatusOptions[0];
+
+      const specialCampaignCounts = {
+        total:
+          specialCampaignTracker.requirements.length,
+        inProgress:
+          specialCampaignTracker.requirements.filter(
+            (row:any)=>
+              row?.status==="inprogress" ||
+              row?.status==="review"
+          ).length,
+        submitted:
+          specialCampaignTracker.requirements.filter(
+            (row:any)=>
+              row?.status==="submitted"
+          ).length,
+        posted:
+          specialCampaignTracker.requirements.filter(
+            (row:any)=>!!row?.posted
+          ).length,
+      };
+
+      const summaryCards = [
+        {
+          label:"Requirements",
+          value:specialCampaignCounts.total,
+        },
+        {
+          label:"In Progress",
+          value:specialCampaignCounts.inProgress,
+        },
+        {
+          label:"Submitted",
+          value:specialCampaignCounts.submitted,
+        },
+        {
+          label:"Posted",
+          value:specialCampaignCounts.posted,
+        },
+      ];
+
+      const markAllSpecialCampaignSubmitted = () => {
+        const submittedAt =
+          new Date().toISOString();
+
+        saveSpecialCampaignRequirements(
+          specialCampaignTracker.requirements.map(
+            (row:any)=>({
+              ...row,
+              status:"submitted",
+              submittedAt:
+                row?.submittedAt ||
+                submittedAt,
+            })
+          )
+        );
+
+        markActionDone(
+          "special-campaign-mark-all-submitted"
+        );
+      };
+
+      const addSpecialCampaignRequirementsToOverview = () => {
+        if(!specialCampaignTracker.requirements.length) return;
+
+        specialCampaignTracker.requirements.forEach(
+          (row:any,index:number)=>{
+            const selectedSkus =
+              getSpecialCampaignRequirementSelectedSkus(
+                row
+              );
+
+            const skuText = selectedSkus.length
+              ? selectedSkus
+                  .map((sku:any)=>
+                    String(sku?.sku || "").trim()
+                  )
+                  .filter(Boolean)
+                  .join(", ")
+              : String(row?.skuText || "").trim();
+
+            const content:any = {
+              requirementId:String(row?.id || ""),
+              assetName:String(
+                row?.assetName ||
+                `Untitled Requirement ${index+1}`
+              ),
+              skuIds:
+                getSpecialCampaignRequirementSkuIds(
+                  row
+                ),
+              skuText,
+              copyInstructions:String(
+                row?.copyInstructions || ""
+              ),
+              notes:String(row?.notes || ""),
+              status:String(
+                row?.status || "requested"
+              ),
+              posted:!!row?.posted,
+              dimensions:String(
+                row?.dimensions || ""
+              ),
+              finalPreviewUrl:String(
+                row?.finalPreviewUrl || ""
+              ),
+              finalAssetLink:String(
+                row?.finalAssetLink || ""
+              ),
+            };
+
+            content.output =
+              formatSpecialCampaignOverviewRequirementOutput(
+                content
+              );
+
+            addToOverview(
+              "Digital Creative",
+              `${
+                specialCampaignTracker.campaignName ||
+                group?.groupName ||
+                "Special Campaign"
+              } · ${content.assetName}`,
+              content,
+              "Special Campaign Requirement",
+              {
+                tab:"digital",
+                type:"specialCampaignRequirement",
+                id:String(row?.id || index),
+              }
+            );
+          }
+        );
+
+        markActionDone(
+          "overview-special-campaign-requirements"
+        );
+      };
+
+      return (
+        <div
+          style={{
+            display:"flex",
+            flexDirection:"column",
+            gap:14,
+            minWidth:0,
+          }}
+        >
+          <div
+            style={{
+              display:"flex",
+              justifyContent:"space-between",
+              alignItems:"flex-start",
+              gap:12,
+              flexWrap:"wrap",
+              padding:isMobile?14:16,
+              background:C.surface,
+              border:`1.5px solid ${C.border}`,
+              borderRadius:12,
+            }}
+          >
+            <div style={{minWidth:0,flex:1}}>
+              <div
+                style={{
+                  display:"flex",
+                  alignItems:"center",
+                  gap:8,
+                  flexWrap:"wrap",
+                }}
+              >
+                <h3
+                  style={{
+                    margin:0,
+                    fontSize:17,
+                    fontWeight:900,
+                    color:C.text,
+                  }}
+                >
+                  Special Campaign Asset Requirements
+                </h3>
+                <span
+                  style={{
+                    padding:"3px 8px",
+                    borderRadius:999,
+                    background:"#EFF6FF",
+                    border:"1px solid #BFDBFE",
+                    color:"#1D4ED8",
+                    fontSize:10,
+                    fontWeight:900,
+                  }}
+                >
+                  Digital Creative
+                </span>
+              </div>
+              <p
+                style={{
+                  margin:"6px 0 0",
+                  fontSize:12,
+                  lineHeight:1.5,
+                  color:C.muted,
+                  maxWidth:900,
+                }}
+              >
+                Receive the collateral requirements from E-commerce,
+                assign or remove SKUs, track production status, and
+                send the requirements to Overview for final asset
+                completion.
+              </p>
+            </div>
+
+            <span
+              style={{
+                padding:"5px 10px",
+                borderRadius:999,
+                background:C.surfaceAlt,
+                border:`1px solid ${C.border}`,
+                color:C.muted,
+                fontSize:11,
+                fontWeight:800,
+              }}
+            >
+              Auto-saved
+            </span>
+          </div>
+
+          <div
+            style={{
+              display:"grid",
+              gridTemplateColumns:isMobile
+                ? "repeat(2,minmax(0,1fr))"
+                : "repeat(4,minmax(0,1fr))",
+              gap:10,
+            }}
+          >
+            {summaryCards.map((card:any)=>(
+              <div
+                key={card.label}
+                style={{
+                  padding:"13px 14px",
+                  background:C.surface,
+                  border:`1.5px solid ${C.border}`,
+                  borderRadius:11,
+                }}
+              >
+                <p
+                  style={{
+                    margin:"0 0 5px",
+                    fontSize:10,
+                    fontWeight:900,
+                    color:C.faint,
+                    letterSpacing:".06em",
+                    textTransform:"uppercase",
+                  }}
+                >
+                  {card.label}
+                </p>
+                <p
+                  style={{
+                    margin:0,
+                    fontSize:21,
+                    fontWeight:900,
+                    color:C.text,
+                  }}
+                >
+                  {card.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+            <section
+              style={{
+                padding:isMobile?14:16,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <div
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"flex-start",
+                  gap:10,
+                  flexWrap:"wrap",
+                  marginBottom:14,
+                }}
+              >
+                <div>
+                  <h4
+                    style={{
+                      margin:0,
+                      fontSize:14,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    3. Asset Requirements & Output Tracker
+                  </h4>
+                  <p
+                    style={{
+                      margin:"4px 0 0",
+                      fontSize:11,
+                      lineHeight:1.45,
+                      color:C.muted,
+                    }}
+                  >
+                    Add each required collateral, assign its SKUs, and send it to Overview. Dimensions, the final preview image, and the final asset link are completed in Overview.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    gap:8,
+                    flexWrap:"wrap",
+                  }}
+                >
+                  <Btn
+                    xs
+                    variant={
+                      actionDone(
+                        "overview-special-campaign-requirements"
+                      )
+                        ? "primary"
+                        : "outline"
+                    }
+                    disabled={
+                      !specialCampaignTracker.requirements.length
+                    }
+                    onClick={
+                      addSpecialCampaignRequirementsToOverview
+                    }
+                    style={{
+                      transform:actionDone(
+                        "overview-special-campaign-requirements"
+                      )
+                        ? "scale(1.04)"
+                        : "scale(1)",
+                      boxShadow:actionDone(
+                        "overview-special-campaign-requirements"
+                      )
+                        ? "0 0 0 3px rgba(34,197,94,.14)"
+                        : "none",
+                      transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
+                    }}
+                  >
+                    {actionDone(
+                      "overview-special-campaign-requirements"
+                    )
+                      ? "✓ Added"
+                      : "Add to Overview"}
+                  </Btn>
+
+                  <Btn
+                    xs
+                    variant="outline"
+                    disabled={
+                      !specialCampaignTracker.requirements.length
+                    }
+                    onClick={
+                      markAllSpecialCampaignSubmitted
+                    }
+                  >
+                    Mark All Submitted
+                  </Btn>
+
+                  <Btn
+                    xs
+                    onClick={
+                      addSpecialCampaignRequirement
+                    }
+                  >
+                    + Add Requirement
+                  </Btn>
+                </div>
+              </div>
+
+              {specialCampaignTracker.requirements.length===0 ? (
+                <div
+                  style={{
+                    padding:"30px 18px",
+                    border:`1.5px dashed ${C.border}`,
+                    borderRadius:10,
+                    textAlign:"center",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin:"0 0 5px",
+                      fontSize:13,
+                      fontWeight:800,
+                      color:C.textSub,
+                    }}
+                  >
+                    No collateral requirements yet
+                  </p>
+                  <p
+                    style={{
+                      margin:"0 0 14px",
+                      fontSize:12,
+                      color:C.muted,
+                    }}
+                  >
+                    Add the required banner, feed, story, marketplace, signage, or other campaign asset.
+                  </p>
+                  <Btn
+                    sm
+                    onClick={
+                      addSpecialCampaignRequirement
+                    }
+                  >
+                    Add First Requirement
+                  </Btn>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display:"flex",
+                    flexDirection:"column",
+                    gap:10,
+                  }}
+                >
+                  {specialCampaignTracker.requirements.map(
+                    (row:any,index:number)=>{
+                      const statusMeta =
+                        getSpecialCampaignStatusMeta(
+                          row?.status
+                        );
+                      const selectedSkuIds =
+                        getSpecialCampaignRequirementSkuIds(row);
+                      const selectedSkuRows =
+                        getSpecialCampaignRequirementSelectedSkus(row);
+
+                      return (
+                        <article
+                          key={row?.id || index}
+                          style={{
+                            border:`1.5px solid ${C.border}`,
+                            borderRadius:11,
+                            overflow:"hidden",
+                            background:C.surface,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display:"flex",
+                              alignItems:"center",
+                              justifyContent:"space-between",
+                              gap:10,
+                              flexWrap:"wrap",
+                              padding:"10px 12px",
+                              background:C.surfaceAlt,
+                              borderBottom:`1px solid ${C.border}`,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                gap:8,
+                                minWidth:0,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width:26,
+                                  height:26,
+                                  borderRadius:7,
+                                  display:"inline-flex",
+                                  alignItems:"center",
+                                  justifyContent:"center",
+                                  background:C.accent,
+                                  color:"#fff",
+                                  fontSize:11,
+                                  fontWeight:900,
+                                  flexShrink:0,
+                                }}
+                              >
+                                {index+1}
+                              </span>
+                              <strong
+                                style={{
+                                  minWidth:0,
+                                  overflow:"hidden",
+                                  textOverflow:"ellipsis",
+                                  whiteSpace:"nowrap",
+                                  fontSize:13,
+                                  color:C.text,
+                                }}
+                              >
+                                {row?.assetName ||
+                                  "Untitled Requirement"}
+                              </strong>
+                            </div>
+
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                gap:7,
+                                flexWrap:"wrap",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  padding:"3px 8px",
+                                  borderRadius:999,
+                                  background:statusMeta.background,
+                                  color:statusMeta.color,
+                                  border:`1px solid ${statusMeta.color}25`,
+                                  fontSize:10,
+                                  fontWeight:900,
+                                }}
+                              >
+                                {statusMeta.label}
+                              </span>
+
+                              {row?.posted&&(
+                                <span
+                                  style={{
+                                    padding:"3px 8px",
+                                    borderRadius:999,
+                                    background:"#ECFEFF",
+                                    color:"#0F766E",
+                                    border:"1px solid #A5F3FC",
+                                    fontSize:10,
+                                    fontWeight:900,
+                                  }}
+                                >
+                                  Posted
+                                </span>
+                              )}
+
+                              <Btn
+                                xs
+                                variant="danger"
+                                onClick={()=>
+                                  deleteSpecialCampaignRequirement(
+                                    row.id
+                                  )
+                                }
+                              >
+                                Delete
+                              </Btn>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:isMobile
+                                ? "1fr"
+                                : "minmax(0,1.4fr) minmax(220px,.6fr)",
+                              gap:10,
+                              padding:12,
+                            }}
+                          >
+                            <Field label="Asset Requirement">
+                              <TI
+                                value={String(row?.assetName || "")}
+                                onChange={(value:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {assetName:value}
+                                  )
+                                }
+                                placeholder="e.g. BMO Channel Sliding Banner"
+                              />
+                            </Field>
+
+                            <Field label="Work Status">
+                              <Select
+                                value={String(
+                                  row?.status || "requested"
+                                )}
+                                onChange={(value:any)=>{
+                                  const now =
+                                    new Date().toISOString();
+
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {
+                                      status:value,
+                                      submittedAt:
+                                        value==="submitted"
+                                          ? row?.submittedAt || now
+                                          : row?.submittedAt || "",
+                                    }
+                                  );
+                                }}
+                              >
+                                {specialCampaignStatusOptions.map(
+                                  (status:any)=>(
+                                    <option
+                                      key={status.id}
+                                      value={status.id}
+                                    >
+                                      {status.label}
+                                    </option>
+                                  )
+                                )}
+                              </Select>
+                            </Field>
+                          </div>
+
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:isMobile
+                                ? "1fr"
+                                : "minmax(0,1fr) minmax(0,1fr)",
+                              gap:10,
+                              padding:"0 12px 12px",
+                              alignItems:"start",
+                            }}
+                          >
+                            <Field label="Included SKUs">
+                              <div
+                                style={{
+                                  display:"flex",
+                                  flexDirection:"column",
+                                  gap:8,
+                                }}
+                              >
+                                {selectedSkuRows.length>0&&(
+                                  <div
+                                    style={{
+                                      display:"flex",
+                                      gap:6,
+                                      flexWrap:"wrap",
+                                      padding:"8px 9px",
+                                      border:`1px solid ${C.border}`,
+                                      borderRadius:9,
+                                      background:C.bg,
+                                    }}
+                                  >
+                                    {selectedSkuRows.map((sku:any)=>(
+                                      <span
+                                        key={sku.id}
+                                        style={{
+                                          display:"inline-flex",
+                                          alignItems:"center",
+                                          gap:6,
+                                          maxWidth:"100%",
+                                          padding:"4px 7px",
+                                          borderRadius:7,
+                                          border:`1px solid ${C.border}`,
+                                          background:C.surface,
+                                          color:C.textSub,
+                                          fontSize:11,
+                                          fontWeight:800,
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            overflow:"hidden",
+                                            textOverflow:"ellipsis",
+                                            whiteSpace:"nowrap",
+                                          }}
+                                        >
+                                          {sku.sku}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={()=>
+                                            toggleSpecialCampaignRequirementSku(
+                                              row,
+                                              sku
+                                            )
+                                          }
+                                          style={{
+                                            border:"none",
+                                            background:"transparent",
+                                            color:"#DC2626",
+                                            fontSize:13,
+                                            fontWeight:900,
+                                            cursor:"pointer",
+                                            padding:0,
+                                            lineHeight:1,
+                                          }}
+                                          aria-label={`Remove ${sku.sku}`}
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <SKUPicker
+                                  skuStorage={skuStorage}
+                                  brands={brands}
+                                  multiSelect
+                                  selectedIds={selectedSkuIds}
+                                  onSelect={(sku:any)=>
+                                    toggleSpecialCampaignRequirementSku(
+                                      row,
+                                      sku
+                                    )
+                                  }
+                                  placeholder="Search and select SKUs..."
+                                />
+
+                                {selectedSkuRows.length===0&&(
+                                  <div
+                                    style={{
+                                      padding:"8px 9px",
+                                      borderRadius:8,
+                                      background:C.surfaceAlt,
+                                      color:C.muted,
+                                      fontSize:11,
+                                    }}
+                                  >
+                                    No SKUs selected yet.
+                                  </div>
+                                )}
+                              </div>
+                            </Field>
+
+                            <Field label="Copy / Headline Instructions">
+                              <textarea
+                                value={String(
+                                  row?.copyInstructions || ""
+                                )}
+                                onChange={(event:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {
+                                      copyInstructions:
+                                        event.target.value,
+                                    }
+                                  )
+                                }
+                                placeholder="Required headline, promo mechanics, fonts, disclaimer, or copy..."
+                                rows={5}
+                                style={{
+                                  width:"100%",
+                                  resize:"vertical",
+                                  minHeight:116,
+                                  padding:"9px 11px",
+                                  borderRadius:8,
+                                  border:`1.5px solid ${C.border}`,
+                                  background:C.surface,
+                                  color:C.text,
+                                  fontSize:12,
+                                  lineHeight:1.45,
+                                  outline:"none",
+                                }}
+                              />
+                            </Field>
+                          </div>
+
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:isMobile
+                                ? "1fr"
+                                : "minmax(0,1fr) auto",
+                              gap:10,
+                              alignItems:"start",
+                              padding:"0 12px 12px",
+                            }}
+                          >
+                            <Field label="Notes">
+                              <textarea
+                                value={String(row?.notes || "")}
+                                onChange={(event:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {notes:event.target.value}
+                                  )
+                                }
+                                placeholder="Revision notes, approvals, submission reference, or posting notes..."
+                                rows={3}
+                                style={{
+                                  width:"100%",
+                                  resize:"vertical",
+                                  minHeight:72,
+                                  padding:"9px 11px",
+                                  borderRadius:8,
+                                  border:`1.5px solid ${C.border}`,
+                                  background:C.surface,
+                                  color:C.text,
+                                  fontSize:12,
+                                  lineHeight:1.45,
+                                  outline:"none",
+                                }}
+                              />
+                            </Field>
+
+                            <label
+                              style={{
+                                minWidth:isMobile?0:170,
+                                display:"flex",
+                                alignItems:"center",
+                                gap:9,
+                                padding:"11px 12px",
+                                borderRadius:9,
+                                border:`1.5px solid ${
+                                  row?.posted
+                                    ? "#99F6E4"
+                                    : C.border
+                                }`,
+                                background:row?.posted
+                                  ? "#F0FDFA"
+                                  : C.surfaceAlt,
+                                color:row?.posted
+                                  ? "#0F766E"
+                                  : C.textSub,
+                                fontSize:12,
+                                fontWeight:850,
+                                cursor:"pointer",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!!row?.posted}
+                                onChange={(event:any)=>{
+                                  const checked =
+                                    event.target.checked;
+
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {
+                                      posted:checked,
+                                      postedAt:checked
+                                        ? row?.postedAt ||
+                                          new Date().toISOString()
+                                        : "",
+                                    }
+                                  );
+                                }}
+                              />
+                              Posted / Published
+                            </label>
+                          </div>
+                        </article>
+                      );
+                    }
+                  )}
+                </div>
+              )}
+            </section>
+        </div>
+      );
+    }
 
     if(tab==="digital" && isCampaignChecklist){
       const campaignCreativeRows = mergeDigitalCreativeRows(
@@ -21528,10 +22655,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             const ecommerceTabMode = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
       const isCampaignChecklist = ecommerceTabMode.includes("campaign");
 
-      const isSpecialCampaignChecklist =
-        ecommerceTabMode.includes("special") &&
-        ecommerceTabMode.includes("campaign");
-
       if(isSpecialCampaignChecklist){
         const rawSpecialCampaignTracker =
           data?.specialCampaignTracker &&
@@ -22283,21 +23406,62 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           const actionId =
             "overview-special-campaign-brief-assets";
 
-          addToOverview(
-            "E-commerce",
-            `${
-              specialCampaignTracker.campaignName ||
-              group?.groupName ||
-              "Special Campaign"
-            } Campaign Brief & Seller Kit`,
-            buildSpecialCampaignBriefOverviewContent(),
-            "Special Campaign Brief & Seller Kit",
-            {
-              tab:"ecommerce",
-              type:"specialCampaignBriefAssets",
-              id:String(group?.id || "special-campaign"),
-            }
-          );
+          const overviewTitle = `${
+            specialCampaignTracker.campaignName ||
+            group?.groupName ||
+            "Special Campaign"
+          } Campaign Brief & Seller Kit`;
+
+          const overviewContent =
+            buildSpecialCampaignBriefOverviewContent();
+
+          const overviewSourceRef = {
+            tab:"ecommerce",
+            type:"specialCampaignBriefAssets",
+            id:String(group?.id || "special-campaign"),
+            actionKey:actionId,
+          };
+
+          const transferBrief = () =>
+            addToOverview(
+              "E-commerce",
+              overviewTitle,
+              overviewContent,
+              "Special Campaign Brief & Seller Kit",
+              overviewSourceRef
+            );
+
+          transferBrief();
+
+          /*
+           * Verify the transfer against the same merged Overview source
+           * used by the Overview tab. Retry once if a parent autosave
+           * finishes during the click.
+           */
+          if(typeof window!=="undefined"){
+            window.setTimeout(()=>{
+              const transferred =
+                getOverviewItems().some(
+                  (item:any)=>
+                    String(
+                      item?.sourceRef?.type || ""
+                    )==="specialCampaignBriefAssets" &&
+                    String(
+                      item?.sourceRef?.id || ""
+                    )===String(
+                      group?.id || "special-campaign"
+                    )
+                );
+
+              if(!transferred){
+                transferBrief();
+              }
+
+              window.dispatchEvent(
+                new Event("emdc-local-sync")
+              );
+            },80);
+          }
 
           markActionDone(actionId);
         };
@@ -22478,9 +23642,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     maxWidth:900,
                   }}
                 >
-                  Receive campaign seller kits and editable templates,
-                  assign the required collaterals, then track final
-                  submissions and posted assets in one place.
+                  Receive the campaign brief, seller kit, and editable
+                  source assets, then prepare the completed collateral
+                  submission in one place.
                 </p>
               </div>
 
@@ -22497,51 +23661,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               >
                 Auto-saved
               </span>
-            </div>
-
-            <div
-              style={{
-                display:"grid",
-                gridTemplateColumns:isMobile
-                  ? "repeat(2,minmax(0,1fr))"
-                  : "repeat(4,minmax(0,1fr))",
-                gap:10,
-              }}
-            >
-              {summaryCards.map((card:any)=>(
-                <div
-                  key={card.label}
-                  style={{
-                    padding:"13px 14px",
-                    background:C.surface,
-                    border:`1.5px solid ${C.border}`,
-                    borderRadius:11,
-                  }}
-                >
-                  <p
-                    style={{
-                      margin:"0 0 5px",
-                      fontSize:10,
-                      fontWeight:900,
-                      color:C.faint,
-                      letterSpacing:".06em",
-                      textTransform:"uppercase",
-                    }}
-                  >
-                    {card.label}
-                  </p>
-                  <p
-                    style={{
-                      margin:0,
-                      fontSize:21,
-                      fontWeight:900,
-                      color:C.text,
-                    }}
-                  >
-                    {card.value}
-                  </p>
-                </div>
-              ))}
             </div>
 
             <section
@@ -22594,7 +23713,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       ? "primary"
                       : "outline"
                   }
-                  onClick={addSpecialCampaignBriefToOverview}
+                  onClick={(event:any)=>{
+                    event?.preventDefault?.();
+                    event?.stopPropagation?.();
+                    addSpecialCampaignBriefToOverview();
+                  }}
                   style={{
                     transform:actionDone(
                       "overview-special-campaign-brief-assets"
@@ -23058,581 +24181,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   alignItems:"flex-start",
                   gap:10,
                   flexWrap:"wrap",
-                  marginBottom:14,
-                }}
-              >
-                <div>
-                  <h4
-                    style={{
-                      margin:0,
-                      fontSize:14,
-                      fontWeight:900,
-                      color:C.text,
-                    }}
-                  >
-                    3. Asset Requirements & Output Tracker
-                  </h4>
-                  <p
-                    style={{
-                      margin:"4px 0 0",
-                      fontSize:11,
-                      lineHeight:1.45,
-                      color:C.muted,
-                    }}
-                  >
-                    Add each required collateral, assign its SKUs, and send it to Overview. Dimensions, the final preview image, and the final asset link are completed in Overview.
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display:"flex",
-                    gap:8,
-                    flexWrap:"wrap",
-                  }}
-                >
-                  <Btn
-                    xs
-                    variant={
-                      actionDone(
-                        "overview-special-campaign-requirements"
-                      )
-                        ? "primary"
-                        : "outline"
-                    }
-                    disabled={
-                      !specialCampaignTracker.requirements.length
-                    }
-                    onClick={
-                      addSpecialCampaignRequirementsToOverview
-                    }
-                    style={{
-                      transform:actionDone(
-                        "overview-special-campaign-requirements"
-                      )
-                        ? "scale(1.04)"
-                        : "scale(1)",
-                      boxShadow:actionDone(
-                        "overview-special-campaign-requirements"
-                      )
-                        ? "0 0 0 3px rgba(34,197,94,.14)"
-                        : "none",
-                      transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
-                    }}
-                  >
-                    {actionDone(
-                      "overview-special-campaign-requirements"
-                    )
-                      ? "✓ Added"
-                      : "Add to Overview"}
-                  </Btn>
-
-                  <Btn
-                    xs
-                    variant="outline"
-                    disabled={
-                      !specialCampaignTracker.requirements.length
-                    }
-                    onClick={
-                      markAllSpecialCampaignSubmitted
-                    }
-                  >
-                    Mark All Submitted
-                  </Btn>
-
-                  <Btn
-                    xs
-                    onClick={
-                      addSpecialCampaignRequirement
-                    }
-                  >
-                    + Add Requirement
-                  </Btn>
-                </div>
-              </div>
-
-              {specialCampaignTracker.requirements.length===0 ? (
-                <div
-                  style={{
-                    padding:"30px 18px",
-                    border:`1.5px dashed ${C.border}`,
-                    borderRadius:10,
-                    textAlign:"center",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin:"0 0 5px",
-                      fontSize:13,
-                      fontWeight:800,
-                      color:C.textSub,
-                    }}
-                  >
-                    No collateral requirements yet
-                  </p>
-                  <p
-                    style={{
-                      margin:"0 0 14px",
-                      fontSize:12,
-                      color:C.muted,
-                    }}
-                  >
-                    Add the required banner, feed, story, marketplace, signage, or other campaign asset.
-                  </p>
-                  <Btn
-                    sm
-                    onClick={
-                      addSpecialCampaignRequirement
-                    }
-                  >
-                    Add First Requirement
-                  </Btn>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display:"flex",
-                    flexDirection:"column",
-                    gap:10,
-                  }}
-                >
-                  {specialCampaignTracker.requirements.map(
-                    (row:any,index:number)=>{
-                      const statusMeta =
-                        getSpecialCampaignStatusMeta(
-                          row?.status
-                        );
-                      const selectedSkuIds =
-                        getSpecialCampaignRequirementSkuIds(row);
-                      const selectedSkuRows =
-                        getSpecialCampaignRequirementSelectedSkus(row);
-
-                      return (
-                        <article
-                          key={row?.id || index}
-                          style={{
-                            border:`1.5px solid ${C.border}`,
-                            borderRadius:11,
-                            overflow:"hidden",
-                            background:C.surface,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display:"flex",
-                              alignItems:"center",
-                              justifyContent:"space-between",
-                              gap:10,
-                              flexWrap:"wrap",
-                              padding:"10px 12px",
-                              background:C.surfaceAlt,
-                              borderBottom:`1px solid ${C.border}`,
-                            }}
-                          >
-                            <div
-                              style={{
-                                display:"flex",
-                                alignItems:"center",
-                                gap:8,
-                                minWidth:0,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  width:26,
-                                  height:26,
-                                  borderRadius:7,
-                                  display:"inline-flex",
-                                  alignItems:"center",
-                                  justifyContent:"center",
-                                  background:C.accent,
-                                  color:"#fff",
-                                  fontSize:11,
-                                  fontWeight:900,
-                                  flexShrink:0,
-                                }}
-                              >
-                                {index+1}
-                              </span>
-                              <strong
-                                style={{
-                                  minWidth:0,
-                                  overflow:"hidden",
-                                  textOverflow:"ellipsis",
-                                  whiteSpace:"nowrap",
-                                  fontSize:13,
-                                  color:C.text,
-                                }}
-                              >
-                                {row?.assetName ||
-                                  "Untitled Requirement"}
-                              </strong>
-                            </div>
-
-                            <div
-                              style={{
-                                display:"flex",
-                                alignItems:"center",
-                                gap:7,
-                                flexWrap:"wrap",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  padding:"3px 8px",
-                                  borderRadius:999,
-                                  background:statusMeta.background,
-                                  color:statusMeta.color,
-                                  border:`1px solid ${statusMeta.color}25`,
-                                  fontSize:10,
-                                  fontWeight:900,
-                                }}
-                              >
-                                {statusMeta.label}
-                              </span>
-
-                              {row?.posted&&(
-                                <span
-                                  style={{
-                                    padding:"3px 8px",
-                                    borderRadius:999,
-                                    background:"#ECFEFF",
-                                    color:"#0F766E",
-                                    border:"1px solid #A5F3FC",
-                                    fontSize:10,
-                                    fontWeight:900,
-                                  }}
-                                >
-                                  Posted
-                                </span>
-                              )}
-
-                              <Btn
-                                xs
-                                variant="danger"
-                                onClick={()=>
-                                  deleteSpecialCampaignRequirement(
-                                    row.id
-                                  )
-                                }
-                              >
-                                Delete
-                              </Btn>
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              display:"grid",
-                              gridTemplateColumns:isMobile
-                                ? "1fr"
-                                : "minmax(0,1.4fr) minmax(220px,.6fr)",
-                              gap:10,
-                              padding:12,
-                            }}
-                          >
-                            <Field label="Asset Requirement">
-                              <TI
-                                value={String(row?.assetName || "")}
-                                onChange={(value:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {assetName:value}
-                                  )
-                                }
-                                placeholder="e.g. BMO Channel Sliding Banner"
-                              />
-                            </Field>
-
-                            <Field label="Work Status">
-                              <Select
-                                value={String(
-                                  row?.status || "requested"
-                                )}
-                                onChange={(value:any)=>{
-                                  const now =
-                                    new Date().toISOString();
-
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {
-                                      status:value,
-                                      submittedAt:
-                                        value==="submitted"
-                                          ? row?.submittedAt || now
-                                          : row?.submittedAt || "",
-                                    }
-                                  );
-                                }}
-                              >
-                                {specialCampaignStatusOptions.map(
-                                  (status:any)=>(
-                                    <option
-                                      key={status.id}
-                                      value={status.id}
-                                    >
-                                      {status.label}
-                                    </option>
-                                  )
-                                )}
-                              </Select>
-                            </Field>
-                          </div>
-
-                          <div
-                            style={{
-                              display:"grid",
-                              gridTemplateColumns:isMobile
-                                ? "1fr"
-                                : "minmax(0,1fr) minmax(0,1fr)",
-                              gap:10,
-                              padding:"0 12px 12px",
-                              alignItems:"start",
-                            }}
-                          >
-                            <Field label="Included SKUs">
-                              <div
-                                style={{
-                                  display:"flex",
-                                  flexDirection:"column",
-                                  gap:8,
-                                }}
-                              >
-                                {selectedSkuRows.length>0&&(
-                                  <div
-                                    style={{
-                                      display:"flex",
-                                      gap:6,
-                                      flexWrap:"wrap",
-                                      padding:"8px 9px",
-                                      border:`1px solid ${C.border}`,
-                                      borderRadius:9,
-                                      background:C.bg,
-                                    }}
-                                  >
-                                    {selectedSkuRows.map((sku:any)=>(
-                                      <span
-                                        key={sku.id}
-                                        style={{
-                                          display:"inline-flex",
-                                          alignItems:"center",
-                                          gap:6,
-                                          maxWidth:"100%",
-                                          padding:"4px 7px",
-                                          borderRadius:7,
-                                          border:`1px solid ${C.border}`,
-                                          background:C.surface,
-                                          color:C.textSub,
-                                          fontSize:11,
-                                          fontWeight:800,
-                                        }}
-                                      >
-                                        <span
-                                          style={{
-                                            overflow:"hidden",
-                                            textOverflow:"ellipsis",
-                                            whiteSpace:"nowrap",
-                                          }}
-                                        >
-                                          {sku.sku}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={()=>
-                                            toggleSpecialCampaignRequirementSku(
-                                              row,
-                                              sku
-                                            )
-                                          }
-                                          style={{
-                                            border:"none",
-                                            background:"transparent",
-                                            color:"#DC2626",
-                                            fontSize:13,
-                                            fontWeight:900,
-                                            cursor:"pointer",
-                                            padding:0,
-                                            lineHeight:1,
-                                          }}
-                                          aria-label={`Remove ${sku.sku}`}
-                                        >
-                                          ×
-                                        </button>
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                <SKUPicker
-                                  skuStorage={skuStorage}
-                                  brands={brands}
-                                  multiSelect
-                                  selectedIds={selectedSkuIds}
-                                  onSelect={(sku:any)=>
-                                    toggleSpecialCampaignRequirementSku(
-                                      row,
-                                      sku
-                                    )
-                                  }
-                                  placeholder="Search and select SKUs..."
-                                />
-
-                                {selectedSkuRows.length===0&&(
-                                  <div
-                                    style={{
-                                      padding:"8px 9px",
-                                      borderRadius:8,
-                                      background:C.surfaceAlt,
-                                      color:C.muted,
-                                      fontSize:11,
-                                    }}
-                                  >
-                                    No SKUs selected yet.
-                                  </div>
-                                )}
-                              </div>
-                            </Field>
-
-                            <Field label="Copy / Headline Instructions">
-                              <textarea
-                                value={String(
-                                  row?.copyInstructions || ""
-                                )}
-                                onChange={(event:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {
-                                      copyInstructions:
-                                        event.target.value,
-                                    }
-                                  )
-                                }
-                                placeholder="Required headline, promo mechanics, fonts, disclaimer, or copy..."
-                                rows={5}
-                                style={{
-                                  width:"100%",
-                                  resize:"vertical",
-                                  minHeight:116,
-                                  padding:"9px 11px",
-                                  borderRadius:8,
-                                  border:`1.5px solid ${C.border}`,
-                                  background:C.surface,
-                                  color:C.text,
-                                  fontSize:12,
-                                  lineHeight:1.45,
-                                  outline:"none",
-                                }}
-                              />
-                            </Field>
-                          </div>
-
-                          <div
-                            style={{
-                              display:"grid",
-                              gridTemplateColumns:isMobile
-                                ? "1fr"
-                                : "minmax(0,1fr) auto",
-                              gap:10,
-                              alignItems:"start",
-                              padding:"0 12px 12px",
-                            }}
-                          >
-                            <Field label="Notes">
-                              <textarea
-                                value={String(row?.notes || "")}
-                                onChange={(event:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {notes:event.target.value}
-                                  )
-                                }
-                                placeholder="Revision notes, approvals, submission reference, or posting notes..."
-                                rows={3}
-                                style={{
-                                  width:"100%",
-                                  resize:"vertical",
-                                  minHeight:72,
-                                  padding:"9px 11px",
-                                  borderRadius:8,
-                                  border:`1.5px solid ${C.border}`,
-                                  background:C.surface,
-                                  color:C.text,
-                                  fontSize:12,
-                                  lineHeight:1.45,
-                                  outline:"none",
-                                }}
-                              />
-                            </Field>
-
-                            <label
-                              style={{
-                                minWidth:isMobile?0:170,
-                                display:"flex",
-                                alignItems:"center",
-                                gap:9,
-                                padding:"11px 12px",
-                                borderRadius:9,
-                                border:`1.5px solid ${
-                                  row?.posted
-                                    ? "#99F6E4"
-                                    : C.border
-                                }`,
-                                background:row?.posted
-                                  ? "#F0FDFA"
-                                  : C.surfaceAlt,
-                                color:row?.posted
-                                  ? "#0F766E"
-                                  : C.textSub,
-                                fontSize:12,
-                                fontWeight:850,
-                                cursor:"pointer",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={!!row?.posted}
-                                onChange={(event:any)=>{
-                                  const checked =
-                                    event.target.checked;
-
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {
-                                      posted:checked,
-                                      postedAt:checked
-                                        ? row?.postedAt ||
-                                          new Date().toISOString()
-                                        : "",
-                                    }
-                                  );
-                                }}
-                              />
-                              Posted / Published
-                            </label>
-                          </div>
-                        </article>
-                      );
-                    }
-                  )}
-                </div>
-              )}
-            </section>
-
-            <section
-              style={{
-                padding:isMobile?14:16,
-                background:C.surface,
-                border:`1.5px solid ${C.border}`,
-                borderRadius:12,
-              }}
-            >
-              <div
-                style={{
-                  display:"flex",
-                  justifyContent:"space-between",
-                  alignItems:"flex-start",
-                  gap:10,
-                  flexWrap:"wrap",
                   marginBottom:12,
                 }}
               >
@@ -23645,7 +24193,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       color:C.text,
                     }}
                   >
-                    4. Submission Package
+                    3. Submission Package
                   </h4>
                   <p
                     style={{
