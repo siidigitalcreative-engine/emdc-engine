@@ -20854,16 +20854,48 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               <Btn
                                 xs
                                 type="button"
-                                variant="outline"
+                                variant={
+                                  actionDone(
+                                    `overview-special-campaign-requirement-${
+                                      row?.id || ""
+                                    }`
+                                  )
+                                    ? "primary"
+                                    : "outline"
+                                }
                                 style={{
                                   flex:"0 0 auto",
                                   whiteSpace:"nowrap",
+                                  transform:
+                                    actionDone(
+                                      `overview-special-campaign-requirement-${
+                                        row?.id || ""
+                                      }`
+                                    )
+                                      ? "scale(1.04)"
+                                      : "scale(1)",
+                                  boxShadow:
+                                    actionDone(
+                                      `overview-special-campaign-requirement-${
+                                        row?.id || ""
+                                      }`
+                                    )
+                                      ? "0 0 0 3px rgba(34,197,94,.14)"
+                                      : "none",
+                                  transition:
+                                    "transform .18s ease, box-shadow .18s ease, background .18s ease, color .18s ease",
                                 }}
                                 onClick={()=>
                                   addDigitalRowToOverview(row)
                                 }
                               >
-                                Add to Overview
+                                {actionDone(
+                                  `overview-special-campaign-requirement-${
+                                    row?.id || ""
+                                  }`
+                                )
+                                  ? "✓ Added"
+                                  : "Add to Overview"}
                               </Btn>
 
                               <Btn
