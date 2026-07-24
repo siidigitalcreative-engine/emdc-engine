@@ -11344,10 +11344,388 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     markActionDone("campaign-table-send-dc");
   };
 
+  const getCampaignSharedRowId = (row:any) =>
+    String(
+      row?.sourceRowId ||
+      row?.id ||
+      row?.productKey ||
+      row?.product ||
+      ""
+    ).trim();
+
+  const getCampaignDigitalRowsWithBackup = () => {
+    const currentDigital =
+      ((group.aiWorkspace || {}).digital || {}) as any;
+
+    const persistedDigital =
+      ((((getPersistedChecklistGroup() || group) || {})
+        .aiWorkspace || {}).digital || {}) as any;
+
+    return mergeDigitalCreativeRows(
+      Array.isArray(persistedDigital.campaignCreativeRows)
+        ? persistedDigital.campaignCreativeRows
+        : [],
+      Array.isArray(currentDigital.campaignCreativeRows)
+        ? currentDigital.campaignCreativeRows
+        : [],
+      readMarketingDcTransferRowsBackup("campaign")
+    );
+  };
+
+  const readCampaignSharedOverviewField = (
+    content:any,
+    label:string
+  ) => {
+    const lines = String(content || "")
+      .split(/\r?\n/);
+
+    const normalized = label
+      .trim()
+      .toLowerCase();
+
+    const exactIndex = lines.findIndex(
+      (line:string)=>
+        line.trim().toLowerCase()===normalized
+    );
+
+    if(exactIndex>=0){
+      return String(lines[exactIndex+1] || "").trim();
+    }
+
+    const inline = lines.find(
+      (line:string)=>
+        line
+          .trim()
+          .toLowerCase()
+          .startsWith(`${normalized}:`)
+    );
+
+    return inline
+      ? inline.slice(inline.indexOf(":")+1).trim()
+      : "";
+  };
+
+  const writeCampaignSharedOverviewField = (
+    content:any,
+    label:string,
+    value:any
+  ) => {
+    const lines = String(content || "")
+      .split(/\r?\n/);
+
+    const nextValue = String(value || "");
+    const normalized = label
+      .trim()
+      .toLowerCase();
+
+    const exactIndex = lines.findIndex(
+      (line:string)=>
+        line.trim().toLowerCase()===normalized
+    );
+
+    if(exactIndex>=0){
+      if(exactIndex+1<lines.length){
+        lines[exactIndex+1] = nextValue;
+      } else {
+        lines.push(nextValue);
+      }
+
+      return lines.join("\n");
+    }
+
+    const inlineIndex = lines.findIndex(
+      (line:string)=>
+        line
+          .trim()
+          .toLowerCase()
+          .startsWith(`${normalized}:`)
+    );
+
+    if(inlineIndex>=0){
+      lines[inlineIndex] = `${label}: ${nextValue}`;
+      return lines.join("\n");
+    }
+
+    return [
+      ...lines,
+      "",
+      label,
+      nextValue,
+    ].join("\n");
+  };
+
+  const upsertCampaignSharedRowsToOverview = (
+    incomingRows:any[],
+    options:any = {}
+  ) => {
+    const rows = Array.isArray(incomingRows)
+      ? incomingRows.filter(Boolean)
+      : [];
+
+    if(!rows.length) return;
+
+    const refreshBase = !!options.refreshBase;
+    const onlyExisting = !!options.onlyExisting;
+    const now = new Date().toISOString();
+
+    const ecommerceRows = getEcommerceCampaignRows();
+    const marketingRows = getCampaignMarketingRowsWithBackup();
+    const digitalRows = getCampaignDigitalRowsWithBackup();
+
+    const ecommerceById = new Map(
+      ecommerceRows.map((row:any)=>[
+        getCampaignSharedRowId(row),
+        row,
+      ])
+    );
+
+    const marketingById = new Map(
+      marketingRows.map((row:any)=>[
+        getCampaignSharedRowId(row),
+        row,
+      ])
+    );
+
+    const digitalById = new Map(
+      digitalRows.map((row:any)=>[
+        getCampaignSharedRowId(row),
+        row,
+      ])
+    );
+
+    const currentItems = getOverviewItems();
+    const nextItems = [...currentItems];
+    const touchedKeys:string[] = [];
+    const touchedIds:string[] = [];
+
+    rows.forEach((incoming:any,index:number)=>{
+      const sourceRowId = getCampaignSharedRowId(incoming);
+      if(!sourceRowId) return;
+
+      const sourceRef = {
+        tab:"ecommerce",
+        type:"campaignRow",
+        id:sourceRowId,
+      };
+
+      const candidateKey = overviewCanonicalKey({
+        sourceTab:"E-commerce",
+        title:"Campaign Copy",
+        kind:"Campaign Shared Row",
+        sourceRef,
+      });
+
+      const existingIndex = nextItems.findIndex(
+        (item:any)=>
+          overviewCanonicalKey(item)===candidateKey
+      );
+
+      const existingItem = existingIndex>=0
+        ? nextItems[existingIndex]
+        : null;
+
+      if(onlyExisting && !existingItem) return;
+
+      const ecommerceRow =
+        ecommerceById.get(sourceRowId) ||
+        incoming;
+
+      const marketingRow =
+        marketingById.get(sourceRowId) ||
+        incoming;
+
+      const digitalRow =
+        digitalById.get(sourceRowId) ||
+        incoming;
+
+      let content =
+        refreshBase || !existingItem
+          ? formatCampaignRowOutput(ecommerceRow)
+          : String(existingItem?.content || "");
+
+      if(!String(content || "").trim()){
+        content = formatCampaignRowOutput({
+          ...incoming,
+          id:sourceRowId,
+          product:
+            incoming?.product ||
+            incoming?.title ||
+            "Campaign Product Row",
+        });
+      }
+
+      const previousCaption = readCampaignSharedOverviewField(
+        existingItem?.content,
+        "Caption"
+      );
+
+      const previousPreview = readCampaignSharedOverviewField(
+        existingItem?.content,
+        "Final Preview Image URL"
+      );
+
+      const previousAsset = readCampaignSharedOverviewField(
+        existingItem?.content,
+        "Final Asset Link"
+      );
+
+      const previousStatus = readCampaignSharedOverviewField(
+        existingItem?.content,
+        "Creative Status"
+      );
+
+      const caption = String(
+        incoming?.caption ??
+        marketingRow?.caption ??
+        previousCaption ??
+        ""
+      );
+
+      const finalPreviewUrl = String(
+        incoming?.finalPreviewUrl ??
+        digitalRow?.finalPreviewUrl ??
+        previousPreview ??
+        ""
+      );
+
+      const finalAssetLink = String(
+        incoming?.finalAssetLink ??
+        digitalRow?.finalAssetLink ??
+        previousAsset ??
+        ""
+      );
+
+      const creativeStatus = String(
+        incoming?.status ??
+        digitalRow?.status ??
+        previousStatus ??
+        ""
+      );
+
+      content = writeCampaignSharedOverviewField(
+        content,
+        "Caption",
+        caption
+      );
+
+      content = writeCampaignSharedOverviewField(
+        content,
+        "Final Preview Image URL",
+        finalPreviewUrl
+      );
+
+      content = writeCampaignSharedOverviewField(
+        content,
+        "Final Asset Link",
+        finalAssetLink
+      );
+
+      content = writeCampaignSharedOverviewField(
+        content,
+        "Creative Status",
+        creativeStatus
+      );
+
+      const title = `${
+        ecommerceRow?.product ||
+        incoming?.product ||
+        incoming?.title ||
+        `Campaign Row ${index+1}`
+      } · ${
+        ecommerceRow?.platform ||
+        incoming?.platform ||
+        "All Platforms"
+      }`;
+
+      const nextItem = existingItem
+        ? {
+            ...existingItem,
+            sourceTab:"E-commerce",
+            kind:"Campaign Shared Row",
+            title,
+            content,
+            sourceRef,
+            updatedAt:now,
+          }
+        : {
+            id:uid(),
+            sourceTab:"E-commerce",
+            kind:"Campaign Shared Row",
+            title,
+            content,
+            sourceRef,
+            createdAt:now,
+            updatedAt:now,
+          };
+
+      if(existingIndex>=0){
+        nextItems[existingIndex] = nextItem;
+      } else {
+        nextItems.push(nextItem);
+      }
+
+      touchedKeys.push(candidateKey);
+      touchedIds.push(String(nextItem.id || ""));
+    });
+
+    if(!touchedKeys.length) return;
+
+    const deleted = getOverviewDeletionState();
+    const touchedKeySet = new Set(touchedKeys);
+    const touchedIdSet = new Set(touchedIds);
+
+    const nextDeleted = {
+      ids:deleted.ids.filter(
+        (id:string)=>!touchedIdSet.has(String(id))
+      ),
+      keys:deleted.keys.filter(
+        (key:string)=>!touchedKeySet.has(String(key))
+      ),
+    };
+
+    const restored = getOverviewRestorationState();
+    const nextRestored = {
+      keys:Array.from(
+        new Set([
+          ...restored.keys,
+          ...touchedKeys,
+        ])
+      ),
+    };
+
+    writeOverviewDeletedToLocal(nextDeleted);
+    writeOverviewRestoredToLocal(nextRestored);
+    writeOverviewItemsToLocal(nextItems);
+
+    updateAiWorkspace("overview",{
+      items:nextItems,
+      deletedItemIds:nextDeleted.ids,
+      deletedItemKeys:nextDeleted.keys,
+      restoredItemKeys:nextRestored.keys,
+      updatedAt:now,
+    });
+  };
+
   const addEcommerceCampaignToOverview = () => {
-    const builder = getEcommerceCampaignBuilder();
-    const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
-    addToOverview("E-commerce","Campaign Copy",getEcommerceCampaignCombinedOutput() || builder.generatedText || "",`${builder.platform} · ${theme}`, { tab:"ecommerce", type:"campaignCombined" });
+    const rows = getEcommerceCampaignRows().filter(
+      (row:any)=>
+        !!(
+          row?.product ||
+          row?.sku ||
+          row?.headline ||
+          row?.subheadline ||
+          row?.cta
+        )
+    );
+
+    upsertCampaignSharedRowsToOverview(
+      rows,
+      { refreshBase:true }
+    );
+
+    markActionDone(
+      "overview-campaign-shared-rows"
+    );
   };
 
   const getEcommerceCampaignCombinedOutput = () => {
@@ -14818,8 +15196,35 @@ ${slidesHtml}
         const headline = getAfter("Headline") || getPrefixed("Headline:");
         const subheadline = getAfter("Subheadline") || getPrefixed("Subheadline:");
         const cta = getAfter("CTA") || getPrefixed("CTA:");
+        const caption =
+          getAfter("Caption") ||
+          getPrefixed("Caption:");
+        const finalPreviewUrl =
+          getAfter("Final Preview Image URL") ||
+          getPrefixed("Final Preview Image URL:");
+        const finalAssetLink =
+          getAfter("Final Asset Link") ||
+          getPrefixed("Final Asset Link:");
+        const creativeStatus =
+          getAfter("Creative Status") ||
+          getPrefixed("Creative Status:");
         const hasCampaignFormat = !!(platform || brand || category || product || headline || subheadline || cta);
-        return { platform, brand, category, sku, product, productCount, headline, subheadline, cta, hasCampaignFormat };
+        return {
+          platform,
+          brand,
+          category,
+          sku,
+          product,
+          productCount,
+          headline,
+          subheadline,
+          cta,
+          caption,
+          finalPreviewUrl,
+          finalAssetLink,
+          creativeStatus,
+          hasCampaignFormat,
+        };
       };
       const replaceCampaignOverviewField = (
         content:any,
@@ -14923,14 +15328,29 @@ ${slidesHtml}
         );
       };
 
-      const campaignLinkSummaryItems =
-        overviewItems.filter(
-          (item:any)=>
-            String(
-              item?.sourceRef?.type ||
-              ""
-            )==="campaignCollateralSummary"
-        );
+      const campaignMarketingRowsForOverview =
+        getCampaignMarketingRowsWithBackup();
+
+      const campaignDigitalRowsForOverview =
+        getCampaignDigitalRowsWithBackup();
+
+      const campaignMarketingBySourceId = new Map(
+        campaignMarketingRowsForOverview.map((row:any)=>[
+          getCampaignSharedRowId(row),
+          row,
+        ])
+      );
+
+      const campaignDigitalBySourceId = new Map(
+        campaignDigitalRowsForOverview.map((row:any)=>[
+          getCampaignSharedRowId(row),
+          row,
+        ])
+      );
+
+      // Legacy Campaign summary cards are intentionally hidden.
+      // Marketing and Digital Creative now update the same E-commerce row.
+      const campaignLinkSummaryItems:any[] = [];
 
       const campaignOverviewRows = overviewItems
         .filter(
@@ -14940,7 +15360,49 @@ ${slidesHtml}
               ""
             )!=="campaignCollateralSummary"
         )
-        .map((item:any)=>({ item, row:parseCampaignOverviewCopy(item.content) }))
+        .map((item:any)=>{
+          const parsed = parseCampaignOverviewCopy(
+            item.content
+          );
+
+          const sourceRowId = String(
+            item?.sourceRef?.id ||
+            ""
+          );
+
+          const marketingRow =
+            campaignMarketingBySourceId.get(sourceRowId);
+
+          const digitalRow =
+            campaignDigitalBySourceId.get(sourceRowId);
+
+          return {
+            item,
+            row:{
+              ...parsed,
+              caption:String(
+                marketingRow?.caption ??
+                parsed.caption ??
+                ""
+              ),
+              finalPreviewUrl:String(
+                digitalRow?.finalPreviewUrl ??
+                parsed.finalPreviewUrl ??
+                ""
+              ),
+              finalAssetLink:String(
+                digitalRow?.finalAssetLink ??
+                parsed.finalAssetLink ??
+                ""
+              ),
+              creativeStatus:String(
+                digitalRow?.status ??
+                parsed.creativeStatus ??
+                ""
+              ),
+            },
+          };
+        })
         .filter(({row}:any)=>row.hasCampaignFormat);
       const campaignOverviewGroupBy = data.campaignOverviewGroupBy || "none";
       const campaignOverviewGroupedRows = (() => {
@@ -14988,15 +15450,15 @@ ${slidesHtml}
 
             {campaignOverviewRows.length===0 ? (
               <div style={{ minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:18 }}>
-                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No rows yet. Click Add to Overview from Campaign E-commerce or Campaign Digital Creative.</p>
+                <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.5 }}>No rows yet. Add the Campaign product rows from E-commerce. Marketing and Digital Creative will update those same rows.</p>
               </div>
             ) : (
               <div style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
                 <div style={{ overflowX:"auto",overflowY:"auto",WebkitOverflowScrolling:"touch",maxHeight:isMobile?430:620 }}>
-                  <table style={{ width:"100%",minWidth:1410,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
+                  <table style={{ width:"100%",minWidth:2180,borderCollapse:"collapse",fontSize:12.5,color:C.textSub }}>
                     <thead>
                       <tr style={{ background:C.surfaceAlt }}>
-                        {["Platform","Brand","Category","SKU","Product","Headline","Subheadline","CTA","Actions"].map((label:string)=>(
+                        {["Platform","Brand","Category","SKU","Product","Headline","Subheadline","CTA","Caption","Preview","Final Asset","Status","Actions"].map((label:string)=>(
                           <th key={label} style={{ position:"sticky",top:0,zIndex:2,background:C.surfaceAlt,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,textAlign:"left",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap" }}>{label}</th>
                         ))}
                       </tr>
@@ -15006,7 +15468,7 @@ ${slidesHtml}
                         <React.Fragment key={`${group.label || "all"}-${groupIndex}`}>
                           {campaignOverviewGroupBy!=="none"&&(
                             <tr>
-                              <td colSpan={9} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
+                              <td colSpan={13} style={{ position:"sticky",left:0,zIndex:1,padding:"8px 12px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`,fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>
                                 {group.label} <span style={{ color:C.faint,fontWeight:800,textTransform:"none",letterSpacing:0 }}>({group.rows.length} row{group.rows.length!==1?"s":""})</span>
                               </td>
                             </tr>
@@ -15127,6 +15589,85 @@ ${slidesHtml}
                                     outline:"none",
                                   }}
                                 />
+                              </td>
+
+                              <td
+                                style={{
+                                  padding:10,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"top",
+                                  minWidth:280,
+                                  whiteSpace:"pre-wrap",
+                                  lineHeight:1.45,
+                                }}
+                              >
+                                {row.caption || ""}
+                              </td>
+
+                              <td
+                                style={{
+                                  padding:10,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"top",
+                                  minWidth:130,
+                                }}
+                              >
+                                {row.finalPreviewUrl ? (
+                                  <a
+                                    href={row.finalPreviewUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      color:"#2563EB",
+                                      fontWeight:850,
+                                      textDecoration:"none",
+                                    }}
+                                  >
+                                    Open Preview
+                                  </a>
+                                ) : "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  padding:10,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"top",
+                                  minWidth:140,
+                                }}
+                              >
+                                {row.finalAssetLink ? (
+                                  <a
+                                    href={row.finalAssetLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      color:"#2563EB",
+                                      fontWeight:850,
+                                      textDecoration:"none",
+                                    }}
+                                  >
+                                    Open Final Asset
+                                  </a>
+                                ) : "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  padding:10,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  borderRight:`1px solid ${C.border}`,
+                                  verticalAlign:"top",
+                                  minWidth:110,
+                                  whiteSpace:"nowrap",
+                                  fontWeight:800,
+                                  color:C.textSub,
+                                }}
+                              >
+                                {row.creativeStatus || "—"}
                               </td>
 
                               <td
@@ -15499,6 +16040,15 @@ ${slidesHtml}
                           <textarea
                             value={String(row?.caption||"")}
                             onChange={(event:any)=>updateCampaignCaption(row?.sourceRowId||row?.id,event.target.value)}
+                            onBlur={(event:any)=>
+                              upsertCampaignSharedRowsToOverview(
+                                [{
+                                  ...row,
+                                  caption:event.target.value,
+                                }],
+                                { onlyExisting:true }
+                              )
+                            }
                             placeholder="Enter campaign caption for this row..."
                             rows={4}
                             style={{width:"100%",minHeight:82,boxSizing:"border-box",resize:"vertical",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11.5,lineHeight:1.45,outline:"none"}}
@@ -18721,48 +19271,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         });
       };
 
-      const addCampaignLinkSummaryToOverview=()=>{
+      const updateCampaignSharedRowsInOverview=()=>{
         if(!rows.length) return;
 
-        const summaryRows=rows.map((row:any,index:number)=>{
-          const rowId=String(row?.sourceRowId||row?.id||index);
-          const products=Array.isArray(row?.products)?row.products:[];
-          return {
-            rowId,
-            product:String(row?.product||row?.title||"Campaign Product Row"),
-            skuText:products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", "),
-            platform:String(row?.platform||""),
-            headline:String(row?.headline||""),
-            subheadline:String(row?.subheadline||""),
-            cta:String(row?.cta||""),
-            caption:String(captionBySourceId.get(rowId)||""),
-            finalPreviewUrl:String(row?.finalPreviewUrl||""),
-            finalAssetLink:String(row?.finalAssetLink||""),
-          };
-        });
-
-        const content:any={
-          campaignName:group?.groupName||"Campaign",
-          rows:summaryRows,
-        };
-
-        content.output=summaryRows.flatMap((row:any,index:number)=>[
-          `${index+1}. ${row.product}`,
-          row.skuText?`SKUs: ${row.skuText}`:"",
-          row.caption?`Caption: ${row.caption}`:"",
-          row.finalPreviewUrl?`Preview: ${row.finalPreviewUrl}`:"",
-          row.finalAssetLink?`Final Asset: ${row.finalAssetLink}`:"",
-          "",
-        ]).filter(Boolean).join("\n");
-
-        addToOverview(
-          "Digital Creative",
-          "Campaign Final Asset Links",
-          content,
-          `${content.campaignName} · Final Asset Summary`,
-          {tab:"digital",type:"campaignCollateralSummary",id:"campaign-collateral-summary"}
+        upsertCampaignSharedRowsToOverview(
+          rows,
+          { refreshBase:false }
         );
-        markActionDone("overview-campaign-collateral-summary");
+
+        markActionDone(
+          "overview-campaign-shared-row-links"
+        );
       };
 
       return (
@@ -18771,17 +19290,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             <div>
               <h3 style={{margin:0,fontSize:17,fontWeight:900,color:C.text}}>Campaign Digital Creative Links</h3>
               <p style={{margin:"5px 0 0",fontSize:12,lineHeight:1.5,color:C.muted}}>
-                Add the final preview and final asset links for every Campaign row sent from E-commerce.
+                Add the final preview and final asset links for each shared Campaign product row, then update those same rows in Overview.
               </p>
             </div>
             <Btn
               xs
               type="button"
-              variant={actionDone("overview-campaign-collateral-summary")?"primary":"outline"}
+              variant={actionDone("overview-campaign-shared-row-links")?"primary":"outline"}
               disabled={!rows.length}
-              onClick={addCampaignLinkSummaryToOverview}
+              onClick={updateCampaignSharedRowsInOverview}
             >
-              {actionDone("overview-campaign-collateral-summary")?"✓ Added":"Add Summary to Overview"}
+              {actionDone("overview-campaign-shared-row-links")?"✓ Updated":"Update Overview Rows"}
             </Btn>
           </div>
 
