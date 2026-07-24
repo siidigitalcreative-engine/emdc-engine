@@ -7402,9 +7402,543 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     );
   };
 
+  const getSpecialCampaignOverviewImagePreview = (
+    value:any
+  ) => {
+    const source = String(value || "").trim();
+    if(!source) return "";
+
+    const patterns = [
+      /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+      /drive\.google\.com\/open\?id=([^&#]+)/i,
+      /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&#]+)/i,
+      /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&#]+)/i,
+      /[?&]id=([^&#]+)/i,
+    ];
+
+    for(const pattern of patterns){
+      const match = source.match(pattern);
+      if(match?.[1]){
+        let driveId = match[1];
+        try {
+          driveId = decodeURIComponent(driveId);
+        } catch {}
+
+        return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+          driveId
+        )}&sz=w1600`;
+      }
+    }
+
+    return /^https?:\/\//i.test(source)
+      ? source
+      : "";
+  };
+
+  const formatSpecialCampaignOverviewRequirementOutput = (
+    content:any
+  ) => {
+    const statusId = String(content?.status || "requested");
+    const statusLabel =
+      statusId==="inprogress"
+        ? "In Progress"
+        : statusId==="review"
+          ? "For Review"
+          : statusId==="submitted"
+            ? "Submitted"
+            : "Requested";
+
+    return [
+      content?.assetName
+        ? `Asset Requirement: ${content.assetName}`
+        : "Asset Requirement: Untitled Requirement",
+      content?.skuText
+        ? `Included SKUs: ${content.skuText}`
+        : "Included SKUs: None selected",
+      content?.copyInstructions
+        ? `Copy / Headline Instructions: ${content.copyInstructions}`
+        : "",
+      content?.notes
+        ? `Notes: ${content.notes}`
+        : "",
+      content?.dimensions
+        ? `Dimensions: ${content.dimensions}`
+        : "Dimensions: Not added yet",
+      content?.finalPreviewUrl
+        ? `Final Preview Image URL: ${content.finalPreviewUrl}`
+        : "Final Preview Image URL: Not added yet",
+      content?.finalAssetLink
+        ? `Final Asset Link: ${content.finalAssetLink}`
+        : "Final Asset Link: Not added yet",
+      `Work Status: ${statusLabel}`,
+      content?.posted
+        ? "Posted / Published: Yes"
+        : "Posted / Published: No",
+    ].filter(Boolean).join("\n");
+  };
+
+  const updateSpecialCampaignOverviewRequirement = (
+    item:any,
+    patch:any
+  ) => {
+    const requirementId = String(
+      item?.sourceRef?.id ||
+      item?.content?.requirementId ||
+      ""
+    );
+
+    if(!requirementId) return;
+
+    const now = new Date().toISOString();
+    const currentContent =
+      item?.content && typeof item.content==="object"
+        ? item.content
+        : {};
+
+    const nextContent:any = {
+      ...currentContent,
+      ...patch,
+      requirementId,
+      updatedAt:now,
+    };
+
+    nextContent.output =
+      formatSpecialCampaignOverviewRequirementOutput(
+        nextContent
+      );
+
+    const currentItems = getOverviewItems();
+    const nextItems = currentItems.map((entry:any)=>
+      String(entry?.id || "")===String(item?.id || "")
+        ? {
+            ...entry,
+            content:nextContent,
+            updatedAt:now,
+          }
+        : entry
+    );
+
+    writeOverviewItemsToLocal(nextItems);
+    updateAiWorkspace("overview",{
+      items:nextItems,
+      updatedAt:now,
+    });
+
+    const persistedWorkspace =
+      (((getPersistedChecklistGroup() || {}).aiWorkspace || {})
+        .ecommerce || {}) as any;
+    const currentWorkspace =
+      (((group.aiWorkspace || {}).ecommerce || {}) as any);
+    const ecommerceWorkspace = {
+      ...persistedWorkspace,
+      ...currentWorkspace,
+    };
+    const currentTracker =
+      ecommerceWorkspace?.specialCampaignTracker &&
+      typeof ecommerceWorkspace.specialCampaignTracker==="object"
+        ? ecommerceWorkspace.specialCampaignTracker
+        : {};
+    const requirements = Array.isArray(
+      currentTracker.requirements
+    )
+      ? currentTracker.requirements
+      : [];
+
+    const nextRequirements = requirements.map((row:any)=>
+      String(row?.id || "")===requirementId
+        ? {
+            ...row,
+            ...patch,
+            updatedAt:now,
+          }
+        : row
+    );
+
+    updateAiWorkspace("ecommerce",{
+      specialCampaignTracker:{
+        ...currentTracker,
+        requirements:nextRequirements,
+        updatedAt:now,
+      },
+    });
+  };
+
   const renderOverviewContent = (item:any) => {
     const kind = String(item?.kind || "").toLowerCase();
     const structuredContent = item?.content && typeof item.content === "object" ? item.content : null;
+
+    const overviewSourceType = String(
+      item?.sourceRef?.type || ""
+    );
+
+    if(
+      structuredContent &&
+      overviewSourceType==="specialCampaignRequirement"
+    ){
+      const previewUrl =
+        getSpecialCampaignOverviewImagePreview(
+          structuredContent.finalPreviewUrl
+        );
+
+      const statusLabel =
+        structuredContent.status==="inprogress"
+          ? "In Progress"
+          : structuredContent.status==="review"
+            ? "For Review"
+            : structuredContent.status==="submitted"
+              ? "Submitted"
+              : "Requested";
+
+      return (
+        <div
+          style={{
+            display:"flex",
+            flexDirection:"column",
+            gap:12,
+          }}
+        >
+          <div
+            style={{
+              display:"grid",
+              gridTemplateColumns:isMobile
+                ? "1fr"
+                : "repeat(3,minmax(0,1fr))",
+              gap:8,
+            }}
+          >
+            <div
+              style={{
+                padding:"10px 11px",
+                borderRadius:9,
+                border:`1px solid ${C.border}`,
+                background:C.bg,
+              }}
+            >
+              <div
+                style={{
+                  marginBottom:4,
+                  fontSize:10,
+                  fontWeight:900,
+                  color:C.faint,
+                  textTransform:"uppercase",
+                  letterSpacing:".05em",
+                }}
+              >
+                Asset Requirement
+              </div>
+              <div
+                style={{
+                  fontSize:12.5,
+                  fontWeight:900,
+                  color:C.text,
+                }}
+              >
+                {structuredContent.assetName || "Untitled Requirement"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding:"10px 11px",
+                borderRadius:9,
+                border:`1px solid ${C.border}`,
+                background:C.bg,
+              }}
+            >
+              <div
+                style={{
+                  marginBottom:4,
+                  fontSize:10,
+                  fontWeight:900,
+                  color:C.faint,
+                  textTransform:"uppercase",
+                  letterSpacing:".05em",
+                }}
+              >
+                Included SKUs
+              </div>
+              <div
+                style={{
+                  fontSize:12,
+                  fontWeight:800,
+                  color:C.textSub,
+                  wordBreak:"break-word",
+                }}
+              >
+                {structuredContent.skuText || "None selected"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding:"10px 11px",
+                borderRadius:9,
+                border:`1px solid ${C.border}`,
+                background:C.bg,
+              }}
+            >
+              <div
+                style={{
+                  marginBottom:4,
+                  fontSize:10,
+                  fontWeight:900,
+                  color:C.faint,
+                  textTransform:"uppercase",
+                  letterSpacing:".05em",
+                }}
+              >
+                Work Status
+              </div>
+              <div
+                style={{
+                  fontSize:12.5,
+                  fontWeight:900,
+                  color:C.text,
+                }}
+              >
+                {statusLabel}
+              </div>
+            </div>
+          </div>
+
+          {(structuredContent.copyInstructions || structuredContent.notes)&&(
+            <div
+              style={{
+                display:"grid",
+                gridTemplateColumns:isMobile
+                  ? "1fr"
+                  : "repeat(2,minmax(0,1fr))",
+                gap:8,
+              }}
+            >
+              {structuredContent.copyInstructions&&(
+                <div
+                  style={{
+                    padding:"10px 11px",
+                    borderRadius:9,
+                    border:`1px solid ${C.border}`,
+                    background:C.bg,
+                  }}
+                >
+                  <div
+                    style={{
+                      marginBottom:4,
+                      fontSize:10,
+                      fontWeight:900,
+                      color:C.faint,
+                      textTransform:"uppercase",
+                      letterSpacing:".05em",
+                    }}
+                  >
+                    Copy / Headline Instructions
+                  </div>
+                  <div
+                    style={{
+                      whiteSpace:"pre-wrap",
+                      fontSize:12,
+                      lineHeight:1.5,
+                      color:C.textSub,
+                    }}
+                  >
+                    {structuredContent.copyInstructions}
+                  </div>
+                </div>
+              )}
+
+              {structuredContent.notes&&(
+                <div
+                  style={{
+                    padding:"10px 11px",
+                    borderRadius:9,
+                    border:`1px solid ${C.border}`,
+                    background:C.bg,
+                  }}
+                >
+                  <div
+                    style={{
+                      marginBottom:4,
+                      fontSize:10,
+                      fontWeight:900,
+                      color:C.faint,
+                      textTransform:"uppercase",
+                      letterSpacing:".05em",
+                    }}
+                  >
+                    Notes
+                  </div>
+                  <div
+                    style={{
+                      whiteSpace:"pre-wrap",
+                      fontSize:12,
+                      lineHeight:1.5,
+                      color:C.textSub,
+                    }}
+                  >
+                    {structuredContent.notes}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            style={{
+              padding:isMobile?12:14,
+              borderRadius:11,
+              border:"1.5px solid #BFDBFE",
+              background:"#EFF6FF",
+            }}
+          >
+            <div
+              style={{
+                display:"flex",
+                justifyContent:"space-between",
+                gap:10,
+                alignItems:"flex-start",
+                flexWrap:"wrap",
+                marginBottom:12,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize:13,
+                    fontWeight:900,
+                    color:"#1E3A8A",
+                  }}
+                >
+                  Final Collateral Details
+                </div>
+                <div
+                  style={{
+                    marginTop:3,
+                    fontSize:11,
+                    lineHeight:1.45,
+                    color:"#1D4ED8",
+                  }}
+                >
+                  Add the dimensions, preview image, and final Drive link here in Overview.
+                </div>
+              </div>
+              <span
+                style={{
+                  padding:"4px 8px",
+                  borderRadius:999,
+                  background:"#DBEAFE",
+                  border:"1px solid #93C5FD",
+                  color:"#1D4ED8",
+                  fontSize:10,
+                  fontWeight:900,
+                }}
+              >
+                Auto-saved
+              </span>
+            </div>
+
+            <div
+              style={{
+                display:"grid",
+                gridTemplateColumns:isMobile
+                  ? "1fr"
+                  : "repeat(3,minmax(0,1fr))",
+                gap:10,
+                alignItems:"start",
+              }}
+            >
+              <Field label="Dimensions">
+                <TI
+                  value={String(structuredContent.dimensions || "")}
+                  onChange={(value:any)=>
+                    updateSpecialCampaignOverviewRequirement(
+                      item,
+                      {dimensions:value}
+                    )
+                  }
+                  placeholder="e.g. 1200 × 400 px"
+                />
+              </Field>
+
+              <Field label="Final Preview Image URL">
+                <TI
+                  value={String(structuredContent.finalPreviewUrl || "")}
+                  onChange={(value:any)=>
+                    updateSpecialCampaignOverviewRequirement(
+                      item,
+                      {finalPreviewUrl:value}
+                    )
+                  }
+                  placeholder="Google Drive image link"
+                />
+              </Field>
+
+              <Field label="Final Asset Link">
+                <div
+                  style={{
+                    display:"flex",
+                    flexDirection:"column",
+                    gap:7,
+                  }}
+                >
+                  <TI
+                    value={String(structuredContent.finalAssetLink || "")}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignOverviewRequirement(
+                        item,
+                        {finalAssetLink:value}
+                      )
+                    }
+                    placeholder="Final Drive file or folder link"
+                  />
+                  <Btn
+                    xs
+                    variant="outline"
+                    disabled={
+                      !/^https?:\/\//i.test(
+                        String(
+                          structuredContent.finalAssetLink || ""
+                        )
+                      )
+                    }
+                    onClick={()=>
+                      window.open(
+                        String(structuredContent.finalAssetLink || ""),
+                        "_blank",
+                        "noopener,noreferrer"
+                      )
+                    }
+                    style={{alignSelf:"flex-start"}}
+                  >
+                    Open Final Asset
+                  </Btn>
+                </div>
+              </Field>
+            </div>
+
+            {previewUrl&&(
+              <img
+                src={previewUrl}
+                alt={
+                  structuredContent.assetName ||
+                  "Final collateral preview"
+                }
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                style={{
+                  display:"block",
+                  width:"100%",
+                  maxHeight:460,
+                  objectFit:"contain",
+                  marginTop:12,
+                  borderRadius:10,
+                  border:`1px solid ${C.border}`,
+                  background:C.surface,
+                }}
+              />
+            )}
+          </div>
+        </div>
+      );
+    }
 
     if(structuredContent && kind.includes("e-commerce generated output")){
       const output = String(structuredContent.output || "").trim();
@@ -14011,7 +14545,9 @@ ${slidesHtml}
                             Prepare Announcement
                           </button>
                         )}
-                        <button onClick={()=>openOverviewEdit(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"7px 11px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flex:isMobile?"1 1 0":"0 0 auto" }}>Edit</button>
+                        {String(item?.sourceRef?.type || "")!=="specialCampaignRequirement"&&(
+                          <button onClick={()=>openOverviewEdit(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"7px 11px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flex:isMobile?"1 1 0":"0 0 auto" }}>Edit</button>
+                        )}
                         <button onClick={()=>copyOverviewItem(item)} style={{ border:"none",background:C.surfaceAlt,color:C.textSub,borderRadius:7,padding:"7px 11px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flex:isMobile?"1 1 0":"0 0 auto" }}>Copy</button>
                         <button onClick={()=>deleteOverviewItem(item.id)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:7,padding:"7px 11px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flex:isMobile?"1 1 0":"0 0 auto" }}>Delete</button>
                       </div>
@@ -21223,7 +21759,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           });
         };
 
-        const specialCampaignChecklistSkus =
+        const specialCampaignChecklistSkuCodes =
           Array.from(
             new Set(
               productRows
@@ -21237,8 +21773,87 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 )
                 .filter(Boolean)
             )
-          )
-            .join(", ");
+          );
+
+        const specialCampaignChecklistSkus =
+          specialCampaignChecklistSkuCodes.join(", ");
+
+        const specialCampaignChecklistSkuIds =
+          (skuStorage || [])
+            .filter((sku:any)=>
+              specialCampaignChecklistSkuCodes.includes(
+                String(sku?.sku || "").trim()
+              )
+            )
+            .map((sku:any)=>sku.id)
+            .filter(Boolean);
+
+        const getSpecialCampaignRequirementSkuIds = (
+          row:any
+        ) => {
+          const savedIds = Array.isArray(row?.skuIds)
+            ? row.skuIds.map(String).filter(Boolean)
+            : [];
+
+          if(savedIds.length) return savedIds;
+
+          const savedCodes = String(row?.skuText || "")
+            .split(/[;,\n]/)
+            .map((value:string)=>value.trim())
+            .filter(Boolean);
+
+          if(!savedCodes.length) return [];
+
+          return (skuStorage || [])
+            .filter((sku:any)=>
+              savedCodes.includes(
+                String(sku?.sku || "").trim()
+              )
+            )
+            .map((sku:any)=>String(sku.id))
+            .filter(Boolean);
+        };
+
+        const getSpecialCampaignRequirementSelectedSkus = (
+          row:any
+        ) => {
+          const selectedIds = new Set(
+            getSpecialCampaignRequirementSkuIds(row)
+          );
+
+          return (skuStorage || []).filter((sku:any)=>
+            selectedIds.has(String(sku.id))
+          );
+        };
+
+        const toggleSpecialCampaignRequirementSku = (
+          row:any,
+          sku:any
+        ) => {
+          const currentIds =
+            getSpecialCampaignRequirementSkuIds(row);
+          const skuId = String(sku?.id || "");
+          if(!skuId) return;
+
+          const nextIds = currentIds.includes(skuId)
+            ? currentIds.filter((id:string)=>id!==skuId)
+            : [...currentIds,skuId];
+
+          const nextRows = (skuStorage || []).filter((item:any)=>
+            nextIds.includes(String(item.id))
+          );
+
+          updateSpecialCampaignRequirement(
+            row.id,
+            {
+              skuIds:nextIds,
+              skuText:nextRows
+                .map((item:any)=>String(item?.sku || "").trim())
+                .filter(Boolean)
+                .join(", "),
+            }
+          );
+        };
 
         const getSpecialCampaignDriveId = (
           value:any
@@ -21362,6 +21977,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 specialCampaignTracker.platform || "",
               store:
                 specialCampaignTracker.store || "",
+              skuIds:
+                specialCampaignChecklistSkuIds,
               skuText:
                 specialCampaignChecklistSkus,
               dimensions:"",
@@ -21520,12 +22137,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           "Untitled Asset"
                         ).trim()
                       }`,
-                      [
-                        row?.platform,
-                        row?.store,
-                      ]
-                        .filter(Boolean)
-                        .join(" · "),
                       row?.skuText
                         ? `SKUs: ${row.skuText}`
                         : "",
@@ -21618,6 +22229,141 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           markActionDone(
             "special-campaign-mark-all-submitted"
+          );
+        };
+
+        const buildSpecialCampaignBriefOverviewContent = () => {
+          const editableAssetLines =
+            specialCampaignTracker.editableAssets.length
+              ? specialCampaignTracker.editableAssets.flatMap(
+                  (row:any,index:number)=>[
+                    `${index+1}. ${String(
+                      row?.name || "Editable Asset"
+                    ).trim()}`,
+                    row?.link
+                      ? `Link: ${row.link}`
+                      : "Link: Not added",
+                    row?.notes
+                      ? `Notes: ${row.notes}`
+                      : "",
+                    "",
+                  ].filter(Boolean)
+                )
+              : ["No additional editable assets added."];
+
+          return [
+            `Campaign Name: ${
+              specialCampaignTracker.campaignName ||
+              group?.groupName ||
+              "Special Campaign"
+            }`,
+            specialCampaignTracker.platform
+              ? `Platform: ${specialCampaignTracker.platform}`
+              : "Platform: Not selected",
+            specialCampaignTracker.store
+              ? `Store / Account: ${specialCampaignTracker.store}`
+              : "Store / Account: Not selected",
+            specialCampaignDeadlineLabel
+              ? `Deadline: ${specialCampaignDeadlineLabel}`
+              : "Deadline: Not selected",
+            specialCampaignTracker.instructions
+              ? `Request Instructions:\n${specialCampaignTracker.instructions}`
+              : "Request Instructions: None added",
+            "",
+            "Seller Kit & Editable Assets",
+            specialCampaignTracker.sellerKitLink
+              ? `Main Seller Kit: ${specialCampaignTracker.sellerKitLink}`
+              : "Main Seller Kit: Not added",
+            "",
+            ...editableAssetLines,
+          ].join("\n");
+        };
+
+        const addSpecialCampaignBriefToOverview = () => {
+          const actionId =
+            "overview-special-campaign-brief-assets";
+
+          addToOverview(
+            "E-commerce",
+            `${
+              specialCampaignTracker.campaignName ||
+              group?.groupName ||
+              "Special Campaign"
+            } Campaign Brief & Seller Kit`,
+            buildSpecialCampaignBriefOverviewContent(),
+            "Special Campaign Brief & Seller Kit",
+            {
+              tab:"ecommerce",
+              type:"specialCampaignBriefAssets",
+              id:String(group?.id || "special-campaign"),
+            }
+          );
+
+          markActionDone(actionId);
+        };
+
+        const addSpecialCampaignRequirementsToOverview = () => {
+          if(!specialCampaignTracker.requirements.length) return;
+
+          specialCampaignTracker.requirements.forEach(
+            (row:any,index:number)=>{
+              const selectedSkus =
+                getSpecialCampaignRequirementSelectedSkus(row);
+              const skuText = selectedSkus.length
+                ? selectedSkus
+                    .map((sku:any)=>String(sku?.sku || "").trim())
+                    .filter(Boolean)
+                    .join(", ")
+                : String(row?.skuText || "").trim();
+
+              const content:any = {
+                requirementId:String(row?.id || ""),
+                assetName:String(
+                  row?.assetName ||
+                  `Untitled Requirement ${index+1}`
+                ),
+                skuIds:getSpecialCampaignRequirementSkuIds(row),
+                skuText,
+                copyInstructions:String(
+                  row?.copyInstructions || ""
+                ),
+                notes:String(row?.notes || ""),
+                status:String(row?.status || "requested"),
+                posted:!!row?.posted,
+                dimensions:String(row?.dimensions || ""),
+                finalPreviewUrl:String(
+                  row?.finalPreviewUrl || ""
+                ),
+                finalAssetLink:String(
+                  row?.finalAssetLink || ""
+                ),
+              };
+
+              content.output =
+                formatSpecialCampaignOverviewRequirementOutput(
+                  content
+                );
+
+              addToOverview(
+                "E-commerce",
+                `${
+                  specialCampaignTracker.campaignName ||
+                  group?.groupName ||
+                  "Special Campaign"
+                } · ${content.assetName}`,
+                content,
+                "Special Campaign Requirement",
+                {
+                  tab:"ecommerce",
+                  type:"specialCampaignRequirement",
+                  id:String(row?.id || index),
+                }
+              );
+            }
+          );
+
+          markActionDone(
+            "overview-special-campaign-requirements"
           );
         };
 
@@ -21806,240 +22552,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 borderRadius:12,
               }}
             >
-              <div style={{marginBottom:14}}>
-                <h4
-                  style={{
-                    margin:0,
-                    fontSize:14,
-                    fontWeight:900,
-                    color:C.text,
-                  }}
-                >
-                  1. Campaign Brief
-                </h4>
-                <p
-                  style={{
-                    margin:"4px 0 0",
-                    fontSize:11,
-                    lineHeight:1.45,
-                    color:C.muted,
-                  }}
-                >
-                  Record the campaign request exactly as received from
-                  E-commerce, including the store, campaign deadline,
-                  and required instructions.
-                </p>
-              </div>
-
-              <div
-                style={{
-                  display:"grid",
-                  gridTemplateColumns:isMobile
-                    ? "1fr"
-                    : "repeat(3,minmax(0,1fr))",
-                  gap:12,
-                }}
-              >
-                <Field label="Campaign Name">
-                  <TI
-                    value={specialCampaignTracker.campaignName}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignTracker({
-                        campaignName:value,
-                      })
-                    }
-                    placeholder="e.g. Lazada 6.6 BMO Banners"
-                  />
-                </Field>
-
-                <Field label="Platform">
-                  <TI
-                    value={specialCampaignTracker.platform}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignTracker({
-                        platform:value,
-                      })
-                    }
-                    placeholder="Lazada, Shopee, TikTok, Landers..."
-                  />
-                </Field>
-
-                <Field label="Store / Account">
-                  <div
-                    style={{
-                      display:"flex",
-                      flexDirection:"column",
-                      gap:8,
-                    }}
-                  >
-                    <Select
-                      value={
-                        specialCampaignTracker.storeMode==="custom"
-                          ? "__custom__"
-                          : specialCampaignTracker.store
-                      }
-                      onChange={(value:any)=>{
-                        if(value==="__custom__"){
-                          const currentCustom = String(
-                            specialCampaignTracker.customStore ||
-                            (
-                              !specialCampaignStoreOptions.includes(
-                                specialCampaignTracker.store
-                              )
-                                ? specialCampaignTracker.store
-                                : ""
-                            ) ||
-                            ""
-                          );
-
-                          updateSpecialCampaignTracker({
-                            storeMode:"custom",
-                            customStore:currentCustom,
-                            store:currentCustom,
-                          });
-                          return;
-                        }
-
-                        updateSpecialCampaignTracker({
-                          storeMode:"default",
-                          store:value,
-                          customStore:"",
-                        });
-                      }}
-                    >
-                      <option value="">Select store / account</option>
-                      {specialCampaignStoreOptions.map(
-                        (storeName:string)=>(
-                          <option
-                            key={storeName}
-                            value={storeName}
-                          >
-                            {storeName}
-                          </option>
-                        )
-                      )}
-                      <option value="__custom__">
-                        + Add custom store / account
-                      </option>
-                    </Select>
-
-                    {specialCampaignTracker.storeMode==="custom"&&(
-                      <TI
-                        value={
-                          specialCampaignTracker.customStore ||
-                          specialCampaignTracker.store ||
-                          ""
-                        }
-                        onChange={(value:any)=>
-                          updateSpecialCampaignTracker({
-                            storeMode:"custom",
-                            customStore:value,
-                            store:value,
-                          })
-                        }
-                        placeholder="Enter custom store or account"
-                      />
-                    )}
-                  </div>
-                </Field>
-              </div>
-
-              <div
-                style={{
-                  marginTop:12,
-                  display:"grid",
-                  gridTemplateColumns:isMobile
-                    ? "1fr"
-                    : "minmax(280px,.85fr) minmax(0,2.15fr)",
-                  gap:12,
-                  alignItems:"start",
-                }}
-              >
-                <Field label="Deadline">
-                  <div
-                    style={{
-                      display:"grid",
-                      gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
-                      gap:8,
-                    }}
-                  >
-                    <TI
-                      type="date"
-                      value={specialCampaignTracker.deadlineDate}
-                      onChange={(value:any)=>
-                        updateSpecialCampaignTracker({
-                          deadlineDate:value,
-                          deadline:"",
-                        })
-                      }
-                    />
-                    <TI
-                      type="time"
-                      value={specialCampaignTracker.deadlineTime}
-                      onChange={(value:any)=>
-                        updateSpecialCampaignTracker({
-                          deadlineTime:value,
-                          deadline:"",
-                        })
-                      }
-                    />
-                  </div>
-
-                  {specialCampaignDeadlineLabel&&(
-                    <div
-                      style={{
-                        marginTop:7,
-                        padding:"7px 9px",
-                        borderRadius:8,
-                        background:C.surfaceAlt,
-                        border:`1px solid ${C.border}`,
-                        color:C.textSub,
-                        fontSize:11,
-                        fontWeight:700,
-                        lineHeight:1.4,
-                      }}
-                    >
-                      {specialCampaignDeadlineLabel}
-                    </div>
-                  )}
-                </Field>
-
-                <Field label="Request Instructions">
-                  <textarea
-                    value={specialCampaignTracker.instructions}
-                    onChange={(event:any)=>
-                      updateSpecialCampaignTracker({
-                        instructions:event.target.value,
-                      })
-                    }
-                    placeholder="Campaign mechanics, required copy, font rules, dimensions, deadlines, or other instructions..."
-                    rows={7}
-                    style={{
-                      width:"100%",
-                      minHeight:150,
-                      resize:"vertical",
-                      padding:"10px 12px",
-                      borderRadius:9,
-                      border:`1.5px solid ${C.border}`,
-                      background:C.surface,
-                      color:C.text,
-                      fontSize:13,
-                      lineHeight:1.5,
-                      outline:"none",
-                    }}
-                  />
-                </Field>
-              </div>
-            </section>
-
-            <section
-              style={{
-                padding:isMobile?14:16,
-                background:C.surface,
-                border:`1.5px solid ${C.border}`,
-                borderRadius:12,
-              }}
-            >
               <div
                 style={{
                   display:"flex",
@@ -22059,7 +22571,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       color:C.text,
                     }}
                   >
-                    2. Seller Kit & Editable Assets
+                    1–2. Campaign Brief & Seller Kit
                   </h4>
                   <p
                     style={{
@@ -22069,172 +22581,465 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       color:C.muted,
                     }}
                   >
-                    Save the main seller kit and every downloadable
-                    editable template supplied by the platform.
+                    Keep the campaign details, deadline, seller kit, and editable source assets together before sending them to Overview.
                   </p>
                 </div>
+
                 <Btn
                   xs
-                  variant="outline"
-                  onClick={addEditableAsset}
+                  variant={
+                    actionDone(
+                      "overview-special-campaign-brief-assets"
+                    )
+                      ? "primary"
+                      : "outline"
+                  }
+                  onClick={addSpecialCampaignBriefToOverview}
+                  style={{
+                    transform:actionDone(
+                      "overview-special-campaign-brief-assets"
+                    )
+                      ? "scale(1.04)"
+                      : "scale(1)",
+                    boxShadow:actionDone(
+                      "overview-special-campaign-brief-assets"
+                    )
+                      ? "0 0 0 3px rgba(34,197,94,.14)"
+                      : "none",
+                    transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
+                  }}
                 >
-                  + Add Editable Asset
+                  {actionDone(
+                    "overview-special-campaign-brief-assets"
+                  )
+                    ? "✓ Added"
+                    : "Add to Overview"}
                 </Btn>
               </div>
 
-              <Field label="Main Seller Kit / Editable Folder">
+              <div
+                style={{
+                  paddingBottom:16,
+                  borderBottom:`1px solid ${C.border}`,
+                }}
+              >
+                <div style={{marginBottom:12}}>
+                  <div
+                    style={{
+                      fontSize:12,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    1. Campaign Brief
+                  </div>
+                  <div
+                    style={{
+                      marginTop:3,
+                      fontSize:11,
+                      color:C.muted,
+                    }}
+                  >
+                    Campaign, platform, store, deadline, and request instructions.
+                  </div>
+                </div>
+
                 <div
                   style={{
                     display:"grid",
                     gridTemplateColumns:isMobile
                       ? "1fr"
-                      : "minmax(0,1fr) auto",
-                    gap:8,
+                      : "repeat(3,minmax(0,1fr))",
+                    gap:12,
                   }}
                 >
-                  <TI
-                    value={specialCampaignTracker.sellerKitLink}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignTracker({
-                        sellerKitLink:value,
-                      })
-                    }
-                    placeholder="Paste Google Drive folder or file link"
-                  />
-                  <Btn
-                    xs
-                    variant="outline"
-                    disabled={
-                      !/^https?:\/\//i.test(
-                        specialCampaignTracker.sellerKitLink
-                      )
-                    }
-                    onClick={()=>
-                      openSpecialCampaignLink(
-                        specialCampaignTracker.sellerKitLink
-                      )
-                    }
-                  >
-                    Open Seller Kit
-                  </Btn>
-                </div>
-              </Field>
+                  <Field label="Campaign Name">
+                    <TI
+                      value={specialCampaignTracker.campaignName}
+                      onChange={(value:any)=>
+                        updateSpecialCampaignTracker({
+                          campaignName:value,
+                        })
+                      }
+                      placeholder="e.g. Lazada 6.6 BMO Banners"
+                    />
+                  </Field>
 
-              <div
-                style={{
-                  display:"flex",
-                  flexDirection:"column",
-                  gap:8,
-                  marginTop:12,
-                }}
-              >
-                {specialCampaignTracker.editableAssets.length===0&&(
-                  <div
-                    style={{
-                      padding:16,
-                      border:`1.5px dashed ${C.border}`,
-                      borderRadius:10,
-                      color:C.muted,
-                      fontSize:12,
-                      textAlign:"center",
-                    }}
-                  >
-                    No additional editable templates have been added.
-                  </div>
-                )}
+                  <Field label="Platform">
+                    <TI
+                      value={specialCampaignTracker.platform}
+                      onChange={(value:any)=>
+                        updateSpecialCampaignTracker({
+                          platform:value,
+                        })
+                      }
+                      placeholder="Lazada, Shopee, TikTok, Landers..."
+                    />
+                  </Field>
 
-                {specialCampaignTracker.editableAssets.map(
-                  (row:any,index:number)=>(
+                  <Field label="Store / Account">
                     <div
-                      key={row?.id || index}
+                      style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:8,
+                      }}
+                    >
+                      <Select
+                        value={
+                          specialCampaignTracker.storeMode==="custom"
+                            ? "__custom__"
+                            : specialCampaignTracker.store
+                        }
+                        onChange={(value:any)=>{
+                          if(value==="__custom__"){
+                            const currentCustom = String(
+                              specialCampaignTracker.customStore ||
+                              (
+                                !specialCampaignStoreOptions.includes(
+                                  specialCampaignTracker.store
+                                )
+                                  ? specialCampaignTracker.store
+                                  : ""
+                              ) ||
+                              ""
+                            );
+
+                            updateSpecialCampaignTracker({
+                              storeMode:"custom",
+                              customStore:currentCustom,
+                              store:currentCustom,
+                            });
+                            return;
+                          }
+
+                          updateSpecialCampaignTracker({
+                            storeMode:"default",
+                            store:value,
+                            customStore:"",
+                          });
+                        }}
+                      >
+                        <option value="">Select store / account</option>
+                        {specialCampaignStoreOptions.map(
+                          (storeName:string)=>(
+                            <option
+                              key={storeName}
+                              value={storeName}
+                            >
+                              {storeName}
+                            </option>
+                          )
+                        )}
+                        <option value="__custom__">
+                          + Add custom store / account
+                        </option>
+                      </Select>
+
+                      {specialCampaignTracker.storeMode==="custom"&&(
+                        <TI
+                          value={
+                            specialCampaignTracker.customStore ||
+                            specialCampaignTracker.store ||
+                            ""
+                          }
+                          onChange={(value:any)=>
+                            updateSpecialCampaignTracker({
+                              storeMode:"custom",
+                              customStore:value,
+                              store:value,
+                            })
+                          }
+                          placeholder="Enter custom store or account"
+                        />
+                      )}
+                    </div>
+                  </Field>
+                </div>
+
+                <div
+                  style={{
+                    marginTop:12,
+                    display:"grid",
+                    gridTemplateColumns:isMobile
+                      ? "1fr"
+                      : "minmax(280px,.85fr) minmax(0,2.15fr)",
+                    gap:12,
+                    alignItems:"start",
+                  }}
+                >
+                  <Field label="Deadline">
+                    <div
                       style={{
                         display:"grid",
-                        gridTemplateColumns:isMobile
-                          ? "1fr"
-                          : "180px minmax(0,1fr) minmax(180px,.7fr) auto",
+                        gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
                         gap:8,
-                        alignItems:"center",
-                        padding:10,
-                        border:`1px solid ${C.border}`,
-                        borderRadius:10,
-                        background:index%2
-                          ? C.bg
-                          : C.surface,
                       }}
                     >
                       <TI
-                        value={String(row?.name || "")}
+                        type="date"
+                        value={specialCampaignTracker.deadlineDate}
                         onChange={(value:any)=>
-                          updateEditableAsset(
-                            row.id,
-                            {name:value}
-                          )
+                          updateSpecialCampaignTracker({
+                            deadlineDate:value,
+                            deadline:"",
+                          })
                         }
-                        placeholder="Template / asset name"
                       />
-
                       <TI
-                        value={String(row?.link || "")}
+                        type="time"
+                        value={specialCampaignTracker.deadlineTime}
                         onChange={(value:any)=>
-                          updateEditableAsset(
-                            row.id,
-                            {link:value}
-                          )
+                          updateSpecialCampaignTracker({
+                            deadlineTime:value,
+                            deadline:"",
+                          })
                         }
-                        placeholder="Google Drive editable asset link"
                       />
+                    </div>
 
-                      <TI
-                        value={String(row?.notes || "")}
-                        onChange={(value:any)=>
-                          updateEditableAsset(
-                            row.id,
-                            {notes:value}
-                          )
-                        }
-                        placeholder="Notes"
-                      />
-
+                    {specialCampaignDeadlineLabel&&(
                       <div
                         style={{
-                          display:"flex",
-                          gap:6,
-                          justifyContent:isMobile
-                            ? "flex-start"
-                            : "flex-end",
+                          marginTop:7,
+                          padding:"7px 9px",
+                          borderRadius:8,
+                          background:C.surfaceAlt,
+                          border:`1px solid ${C.border}`,
+                          color:C.textSub,
+                          fontSize:11,
+                          fontWeight:700,
+                          lineHeight:1.4,
                         }}
                       >
-                        <Btn
-                          xs
-                          variant="outline"
-                          disabled={
-                            !/^https?:\/\//i.test(
-                              String(row?.link || "")
-                            )
-                          }
-                          onClick={()=>
-                            openSpecialCampaignLink(
-                              row?.link
-                            )
-                          }
-                        >
-                          Open
-                        </Btn>
-                        <Btn
-                          xs
-                          variant="danger"
-                          onClick={()=>
-                            deleteEditableAsset(
-                              row.id
-                            )
-                          }
-                        >
-                          Delete
-                        </Btn>
+                        {specialCampaignDeadlineLabel}
                       </div>
+                    )}
+                  </Field>
+
+                  <Field label="Request Instructions">
+                    <textarea
+                      value={specialCampaignTracker.instructions}
+                      onChange={(event:any)=>
+                        updateSpecialCampaignTracker({
+                          instructions:event.target.value,
+                        })
+                      }
+                      placeholder="Campaign mechanics, required copy, font rules, dimensions, deadlines, or other instructions..."
+                      rows={7}
+                      style={{
+                        width:"100%",
+                        minHeight:150,
+                        resize:"vertical",
+                        padding:"10px 12px",
+                        borderRadius:9,
+                        border:`1.5px solid ${C.border}`,
+                        background:C.surface,
+                        color:C.text,
+                        fontSize:13,
+                        lineHeight:1.5,
+                        outline:"none",
+                      }}
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              <div style={{paddingTop:16}}>
+                <div
+                  style={{
+                    display:"flex",
+                    justifyContent:"space-between",
+                    alignItems:"flex-start",
+                    gap:10,
+                    flexWrap:"wrap",
+                    marginBottom:12,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize:12,
+                        fontWeight:900,
+                        color:C.text,
+                      }}
+                    >
+                      2. Seller Kit & Editable Assets
                     </div>
-                  )
-                )}
+                    <div
+                      style={{
+                        marginTop:3,
+                        fontSize:11,
+                        color:C.muted,
+                      }}
+                    >
+                      Main seller kit and additional downloadable editable templates supplied by the platform.
+                    </div>
+                  </div>
+
+                  <Btn
+                    xs
+                    variant="outline"
+                    onClick={addEditableAsset}
+                  >
+                    + Add Editable Asset
+                  </Btn>
+                </div>
+
+                <Field label="Main Seller Kit / Editable Folder">
+                  <div
+                    style={{
+                      display:"grid",
+                      gridTemplateColumns:isMobile
+                        ? "1fr"
+                        : "minmax(0,1fr) auto",
+                      gap:8,
+                    }}
+                  >
+                    <TI
+                      value={specialCampaignTracker.sellerKitLink}
+                      onChange={(value:any)=>
+                        updateSpecialCampaignTracker({
+                          sellerKitLink:value,
+                        })
+                      }
+                      placeholder="Paste Google Drive folder or file link"
+                    />
+                    <Btn
+                      xs
+                      variant="outline"
+                      disabled={
+                        !/^https?:\/\//i.test(
+                          specialCampaignTracker.sellerKitLink
+                        )
+                      }
+                      onClick={()=>
+                        openSpecialCampaignLink(
+                          specialCampaignTracker.sellerKitLink
+                        )
+                      }
+                    >
+                      Open Seller Kit
+                    </Btn>
+                  </div>
+                </Field>
+
+                <div
+                  style={{
+                    display:"flex",
+                    flexDirection:"column",
+                    gap:8,
+                    marginTop:12,
+                  }}
+                >
+                  {specialCampaignTracker.editableAssets.length===0&&(
+                    <div
+                      style={{
+                        padding:16,
+                        border:`1.5px dashed ${C.border}`,
+                        borderRadius:10,
+                        color:C.muted,
+                        fontSize:12,
+                        textAlign:"center",
+                      }}
+                    >
+                      No additional editable templates have been added.
+                    </div>
+                  )}
+
+                  {specialCampaignTracker.editableAssets.map(
+                    (row:any,index:number)=>(
+                      <div
+                        key={row?.id || index}
+                        style={{
+                          display:"grid",
+                          gridTemplateColumns:isMobile
+                            ? "1fr"
+                            : "180px minmax(0,1fr) minmax(180px,.7fr) auto",
+                          gap:8,
+                          alignItems:"center",
+                          padding:10,
+                          border:`1px solid ${C.border}`,
+                          borderRadius:10,
+                          background:index%2
+                            ? C.bg
+                            : C.surface,
+                        }}
+                      >
+                        <TI
+                          value={String(row?.name || "")}
+                          onChange={(value:any)=>
+                            updateEditableAsset(
+                              row.id,
+                              {name:value}
+                            )
+                          }
+                          placeholder="Template / asset name"
+                        />
+
+                        <TI
+                          value={String(row?.link || "")}
+                          onChange={(value:any)=>
+                            updateEditableAsset(
+                              row.id,
+                              {link:value}
+                            )
+                          }
+                          placeholder="Google Drive editable asset link"
+                        />
+
+                        <TI
+                          value={String(row?.notes || "")}
+                          onChange={(value:any)=>
+                            updateEditableAsset(
+                              row.id,
+                              {notes:value}
+                            )
+                          }
+                          placeholder="Notes"
+                        />
+
+                        <div
+                          style={{
+                            display:"flex",
+                            gap:6,
+                            justifyContent:isMobile
+                              ? "flex-start"
+                              : "flex-end",
+                          }}
+                        >
+                          <Btn
+                            xs
+                            variant="outline"
+                            disabled={
+                              !/^https?:\/\//i.test(
+                                String(row?.link || "")
+                              )
+                            }
+                            onClick={()=>
+                              openSpecialCampaignLink(
+                                row?.link
+                              )
+                            }
+                          >
+                            Open
+                          </Btn>
+                          <Btn
+                            xs
+                            variant="danger"
+                            onClick={()=>
+                              deleteEditableAsset(
+                                row.id
+                              )
+                            }
+                          >
+                            Delete
+                          </Btn>
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
             </section>
 
@@ -22275,9 +23080,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       color:C.muted,
                     }}
                   >
-                    One row per required collateral. Keep the original
-                    template link, final preview, final asset link,
-                    submission status, and posting status together.
+                    Add each required collateral, assign its SKUs, and send it to Overview. Dimensions, the final preview image, and the final asset link are completed in Overview.
                   </p>
                 </div>
 
@@ -22290,6 +23093,42 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 >
                   <Btn
                     xs
+                    variant={
+                      actionDone(
+                        "overview-special-campaign-requirements"
+                      )
+                        ? "primary"
+                        : "outline"
+                    }
+                    disabled={
+                      !specialCampaignTracker.requirements.length
+                    }
+                    onClick={
+                      addSpecialCampaignRequirementsToOverview
+                    }
+                    style={{
+                      transform:actionDone(
+                        "overview-special-campaign-requirements"
+                      )
+                        ? "scale(1.04)"
+                        : "scale(1)",
+                      boxShadow:actionDone(
+                        "overview-special-campaign-requirements"
+                      )
+                        ? "0 0 0 3px rgba(34,197,94,.14)"
+                        : "none",
+                      transition:"transform .18s ease, box-shadow .18s ease, background .18s ease",
+                    }}
+                  >
+                    {actionDone(
+                      "overview-special-campaign-requirements"
+                    )
+                      ? "✓ Added"
+                      : "Add to Overview"}
+                  </Btn>
+
+                  <Btn
+                    xs
                     variant="outline"
                     disabled={
                       !specialCampaignTracker.requirements.length
@@ -22300,6 +23139,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   >
                     Mark All Submitted
                   </Btn>
+
                   <Btn
                     xs
                     onClick={
@@ -22337,8 +23177,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       color:C.muted,
                     }}
                   >
-                    Add the required banner, feed, story, marketplace,
-                    signage, or other campaign asset.
+                    Add the required banner, feed, story, marketplace, signage, or other campaign asset.
                   </p>
                   <Btn
                     sm
@@ -22363,11 +23202,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         getSpecialCampaignStatusMeta(
                           row?.status
                         );
-
-                      const finalPreview =
-                        getSpecialCampaignImagePreview(
-                          row?.finalPreviewUrl
-                        );
+                      const selectedSkuIds =
+                        getSpecialCampaignRequirementSkuIds(row);
+                      const selectedSkuRows =
+                        getSpecialCampaignRequirementSelectedSkus(row);
 
                       return (
                         <article
@@ -22443,8 +23281,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 style={{
                                   padding:"3px 8px",
                                   borderRadius:999,
-                                  background:
-                                    statusMeta.background,
+                                  background:statusMeta.background,
                                   color:statusMeta.color,
                                   border:`1px solid ${statusMeta.color}25`,
                                   fontSize:10,
@@ -22489,7 +23326,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               display:"grid",
                               gridTemplateColumns:isMobile
                                 ? "1fr"
-                                : "repeat(3,minmax(0,1fr))",
+                                : "minmax(0,1.4fr) minmax(220px,.6fr)",
                               gap:10,
                               padding:12,
                             }}
@@ -22504,58 +23341,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   )
                                 }
                                 placeholder="e.g. BMO Channel Sliding Banner"
-                              />
-                            </Field>
-
-                            <Field label="Platform">
-                              <TI
-                                value={String(row?.platform || "")}
-                                onChange={(value:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {platform:value}
-                                  )
-                                }
-                                placeholder="Lazada, Shopee, Landers..."
-                              />
-                            </Field>
-
-                            <Field label="Store">
-                              <TI
-                                value={String(row?.store || "")}
-                                onChange={(value:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {store:value}
-                                  )
-                                }
-                                placeholder="Store / account"
-                              />
-                            </Field>
-
-                            <Field label="Dimensions">
-                              <TI
-                                value={String(row?.dimensions || "")}
-                                onChange={(value:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {dimensions:value}
-                                  )
-                                }
-                                placeholder="e.g. 1200 × 400 px"
-                              />
-                            </Field>
-
-                            <Field label="Requirement Deadline">
-                              <TI
-                                value={String(row?.deadline || "")}
-                                onChange={(value:any)=>
-                                  updateSpecialCampaignRequirement(
-                                    row.id,
-                                    {deadline:value}
-                                  )
-                                }
-                                placeholder="Date and time"
                               />
                             </Field>
 
@@ -22574,10 +23359,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                       status:value,
                                       submittedAt:
                                         value==="submitted"
-                                          ? row?.submittedAt ||
-                                            now
-                                          : row?.submittedAt ||
-                                            "",
+                                          ? row?.submittedAt || now
+                                          : row?.submittedAt || "",
                                     }
                                   );
                                 }}
@@ -22604,6 +23387,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 : "minmax(0,1fr) minmax(0,1fr)",
                               gap:10,
                               padding:"0 12px 12px",
+                              alignItems:"start",
                             }}
                           >
                             <Field label="Included SKUs">
@@ -22611,52 +23395,101 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 style={{
                                   display:"flex",
                                   flexDirection:"column",
-                                  gap:7,
+                                  gap:8,
                                 }}
                               >
-                                <textarea
-                                  value={String(row?.skuText || "")}
-                                  onChange={(event:any)=>
-                                    updateSpecialCampaignRequirement(
-                                      row.id,
-                                      {skuText:event.target.value}
+                                {selectedSkuRows.length>0&&(
+                                  <div
+                                    style={{
+                                      display:"flex",
+                                      gap:6,
+                                      flexWrap:"wrap",
+                                      padding:"8px 9px",
+                                      border:`1px solid ${C.border}`,
+                                      borderRadius:9,
+                                      background:C.bg,
+                                    }}
+                                  >
+                                    {selectedSkuRows.map((sku:any)=>(
+                                      <span
+                                        key={sku.id}
+                                        style={{
+                                          display:"inline-flex",
+                                          alignItems:"center",
+                                          gap:6,
+                                          maxWidth:"100%",
+                                          padding:"4px 7px",
+                                          borderRadius:7,
+                                          border:`1px solid ${C.border}`,
+                                          background:C.surface,
+                                          color:C.textSub,
+                                          fontSize:11,
+                                          fontWeight:800,
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            overflow:"hidden",
+                                            textOverflow:"ellipsis",
+                                            whiteSpace:"nowrap",
+                                          }}
+                                        >
+                                          {sku.sku}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={()=>
+                                            toggleSpecialCampaignRequirementSku(
+                                              row,
+                                              sku
+                                            )
+                                          }
+                                          style={{
+                                            border:"none",
+                                            background:"transparent",
+                                            color:"#DC2626",
+                                            fontSize:13,
+                                            fontWeight:900,
+                                            cursor:"pointer",
+                                            padding:0,
+                                            lineHeight:1,
+                                          }}
+                                          aria-label={`Remove ${sku.sku}`}
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <SKUPicker
+                                  skuStorage={skuStorage}
+                                  brands={brands}
+                                  multiSelect
+                                  selectedIds={selectedSkuIds}
+                                  onSelect={(sku:any)=>
+                                    toggleSpecialCampaignRequirementSku(
+                                      row,
+                                      sku
                                     )
                                   }
-                                  placeholder="Comma-separated SKUs"
-                                  rows={4}
-                                  style={{
-                                    width:"100%",
-                                    resize:"vertical",
-                                    minHeight:88,
-                                    padding:"9px 11px",
-                                    borderRadius:8,
-                                    border:`1.5px solid ${C.border}`,
-                                    background:C.surface,
-                                    color:C.text,
-                                    fontSize:12,
-                                    lineHeight:1.45,
-                                    outline:"none",
-                                  }}
+                                  placeholder="Search and select SKUs..."
                                 />
-                                <Btn
-                                  xs
-                                  variant="outline"
-                                  disabled={
-                                    !specialCampaignChecklistSkus
-                                  }
-                                  onClick={()=>
-                                    updateSpecialCampaignRequirement(
-                                      row.id,
-                                      {
-                                        skuText:
-                                          specialCampaignChecklistSkus,
-                                      }
-                                    )
-                                  }
-                                  style={{alignSelf:"flex-start"}}
-                                >
-                                  Use Checklist SKUs
-                                </Btn>
+
+                                {selectedSkuRows.length===0&&(
+                                  <div
+                                    style={{
+                                      padding:"8px 9px",
+                                      borderRadius:8,
+                                      background:C.surfaceAlt,
+                                      color:C.muted,
+                                      fontSize:11,
+                                    }}
+                                  >
+                                    No SKUs selected yet.
+                                  </div>
+                                )}
                               </div>
                             </Field>
 
@@ -22675,11 +23508,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   )
                                 }
                                 placeholder="Required headline, promo mechanics, fonts, disclaimer, or copy..."
-                                rows={4}
+                                rows={5}
                                 style={{
                                   width:"100%",
                                   resize:"vertical",
-                                  minHeight:88,
+                                  minHeight:116,
                                   padding:"9px 11px",
                                   borderRadius:8,
                                   border:`1.5px solid ${C.border}`,
@@ -22690,144 +23523,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   outline:"none",
                                 }}
                               />
-                            </Field>
-                          </div>
-
-                          <div
-                            style={{
-                              display:"grid",
-                              gridTemplateColumns:isMobile
-                                ? "1fr"
-                                : "repeat(3,minmax(0,1fr))",
-                              gap:10,
-                              padding:"0 12px 12px",
-                            }}
-                          >
-                            <Field label="Editable Template Link">
-                              <div
-                                style={{
-                                  display:"flex",
-                                  flexDirection:"column",
-                                  gap:7,
-                                }}
-                              >
-                                <TI
-                                  value={String(
-                                    row?.templateLink || ""
-                                  )}
-                                  onChange={(value:any)=>
-                                    updateSpecialCampaignRequirement(
-                                      row.id,
-                                      {templateLink:value}
-                                    )
-                                  }
-                                  placeholder="Google Drive template link"
-                                />
-                                <Btn
-                                  xs
-                                  variant="outline"
-                                  disabled={
-                                    !/^https?:\/\//i.test(
-                                      String(
-                                        row?.templateLink || ""
-                                      )
-                                    )
-                                  }
-                                  onClick={()=>
-                                    openSpecialCampaignLink(
-                                      row?.templateLink
-                                    )
-                                  }
-                                  style={{alignSelf:"flex-start"}}
-                                >
-                                  Open Template
-                                </Btn>
-                              </div>
-                            </Field>
-
-                            <Field label="Final Preview Image URL">
-                              <div
-                                style={{
-                                  display:"flex",
-                                  flexDirection:"column",
-                                  gap:7,
-                                }}
-                              >
-                                <TI
-                                  value={String(
-                                    row?.finalPreviewUrl || ""
-                                  )}
-                                  onChange={(value:any)=>
-                                    updateSpecialCampaignRequirement(
-                                      row.id,
-                                      {finalPreviewUrl:value}
-                                    )
-                                  }
-                                  placeholder="Google Drive image link"
-                                />
-                                {finalPreview&&(
-                                  <img
-                                    src={finalPreview}
-                                    alt={
-                                      row?.assetName ||
-                                      "Final collateral preview"
-                                    }
-                                    loading="lazy"
-                                    referrerPolicy="no-referrer"
-                                    style={{
-                                      display:"block",
-                                      width:"100%",
-                                      height:150,
-                                      objectFit:"contain",
-                                      borderRadius:8,
-                                      border:`1px solid ${C.border}`,
-                                      background:C.surfaceAlt,
-                                    }}
-                                  />
-                                )}
-                              </div>
-                            </Field>
-
-                            <Field label="Final Asset Link">
-                              <div
-                                style={{
-                                  display:"flex",
-                                  flexDirection:"column",
-                                  gap:7,
-                                }}
-                              >
-                                <TI
-                                  value={String(
-                                    row?.finalAssetLink || ""
-                                  )}
-                                  onChange={(value:any)=>
-                                    updateSpecialCampaignRequirement(
-                                      row.id,
-                                      {finalAssetLink:value}
-                                    )
-                                  }
-                                  placeholder="Final Drive file or folder link"
-                                />
-                                <Btn
-                                  xs
-                                  variant="outline"
-                                  disabled={
-                                    !/^https?:\/\//i.test(
-                                      String(
-                                        row?.finalAssetLink || ""
-                                      )
-                                    )
-                                  }
-                                  onClick={()=>
-                                    openSpecialCampaignLink(
-                                      row?.finalAssetLink
-                                    )
-                                  }
-                                  style={{alignSelf:"flex-start"}}
-                                >
-                                  Open Final Asset
-                                </Btn>
-                              </div>
                             </Field>
                           </div>
 
