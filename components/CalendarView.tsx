@@ -6268,6 +6268,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [budgetClipboard,setBudgetClipboard] = useState<any>(null);
   const budgetImportInputRef = useRef<any>(null);
   const [budgetSkuPickerRowId,setBudgetSkuPickerRowId] = useState<string|null>(null);
+  const [specialCampaignSkuPickerRowId,setSpecialCampaignSkuPickerRowId] = useState<string|null>(null);
   const setActiveGroupTab = (nextTab:any) => {
     const safeTab = safeChecklistInnerTab(nextTab);
     setActiveGroupTabState(safeTab);
@@ -16756,8 +16757,174 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           (row:any)=>!!row?.sentToDigital
         );
 
+      const activeSpecialCampaignSkuRow =
+        tracker.requirements.find(
+          (row:any)=>
+            String(row?.id)===
+            String(specialCampaignSkuPickerRowId || "")
+        ) || null;
+
+      const activeSpecialCampaignSkuIds =
+        activeSpecialCampaignSkuRow
+          ? getSpecialCampaignRequirementSkuIds(
+              activeSpecialCampaignSkuRow
+            )
+          : [];
+
+      const activeSpecialCampaignSkuRows =
+        activeSpecialCampaignSkuRow
+          ? getSpecialCampaignSelectedSkuRows(
+              activeSpecialCampaignSkuRow
+            )
+          : [];
+
       return (
-        <section
+        <>
+          <Modal
+            open={!!specialCampaignSkuPickerRowId}
+            onClose={()=>setSpecialCampaignSkuPickerRowId(null)}
+            title="Select Featured SKUs"
+            width={720}
+          >
+            {activeSpecialCampaignSkuRow ? (
+              <div
+                style={{
+                  display:"flex",
+                  flexDirection:"column",
+                  gap:12,
+                }}
+              >
+                <div
+                  style={{
+                    padding:"10px 12px",
+                    borderRadius:9,
+                    border:`1px solid ${C.border}`,
+                    background:C.surfaceAlt,
+                  }}
+                >
+                  <div
+                    style={{
+                      color:C.faint,
+                      fontSize:9.5,
+                      fontWeight:900,
+                      letterSpacing:".05em",
+                      textTransform:"uppercase",
+                    }}
+                  >
+                    Asset Requirement
+                  </div>
+                  <div
+                    style={{
+                      marginTop:4,
+                      color:C.text,
+                      fontSize:13,
+                      fontWeight:900,
+                    }}
+                  >
+                    {activeSpecialCampaignSkuRow.assetName ||
+                      "Untitled Requirement"}
+                  </div>
+                </div>
+
+                <SKUPicker
+                  skuStorage={skuStorage}
+                  brands={brands}
+                  multiSelect
+                  selectedIds={activeSpecialCampaignSkuIds}
+                  onSelect={(sku:any)=>
+                    toggleSpecialCampaignRequirementSku(
+                      activeSpecialCampaignSkuRow,
+                      sku
+                    )
+                  }
+                  placeholder="Search SKU, product, brand, or collection..."
+                  autoOpen
+                />
+
+                <div
+                  style={{
+                    display:"flex",
+                    flexWrap:"wrap",
+                    gap:6,
+                    minHeight:34,
+                    padding:"10px",
+                    borderRadius:9,
+                    border:`1px solid ${C.border}`,
+                    background:C.bg,
+                  }}
+                >
+                  {activeSpecialCampaignSkuRows.length ? (
+                    activeSpecialCampaignSkuRows.map((sku:any)=>(
+                      <span
+                        key={sku.id}
+                        style={{
+                          display:"inline-flex",
+                          alignItems:"center",
+                          gap:6,
+                          padding:"5px 8px",
+                          borderRadius:7,
+                          border:`1px solid ${C.border}`,
+                          background:C.surface,
+                          color:C.textSub,
+                          fontSize:10.5,
+                          fontWeight:850,
+                        }}
+                      >
+                        {sku.sku}
+                        <button
+                          type="button"
+                          onClick={()=>
+                            toggleSpecialCampaignRequirementSku(
+                              activeSpecialCampaignSkuRow,
+                              sku
+                            )
+                          }
+                          style={{
+                            padding:0,
+                            border:"none",
+                            background:"transparent",
+                            color:"#DC2626",
+                            fontSize:14,
+                            fontWeight:900,
+                            lineHeight:1,
+                            cursor:"pointer",
+                          }}
+                          aria-label={`Remove ${sku.sku}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span
+                      style={{
+                        color:C.faint,
+                        fontSize:11,
+                      }}
+                    >
+                      No SKUs selected.
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    justifyContent:"flex-end",
+                  }}
+                >
+                  <Btn
+                    type="button"
+                    onClick={()=>setSpecialCampaignSkuPickerRowId(null)}
+                  >
+                    Done
+                  </Btn>
+                </div>
+              </div>
+            ) : null}
+          </Modal>
+
+          <section
           style={{
             padding:isMobile?14:16,
             background:C.surface,
@@ -16891,7 +17058,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <table
                 style={{
                   width:"100%",
-                  minWidth:1220,
+                  minWidth:1180,
                   borderCollapse:"separate",
                   borderSpacing:0,
                   fontSize:12,
@@ -17027,11 +17194,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           row
                         );
 
-                      const statusMeta =
-                        getSpecialCampaignStatusMeta(
-                          row?.status
-                        );
-
                       return (
                         <tr
                           key={row?.id || index}
@@ -17045,10 +17207,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{
                               width:220,
                               minWidth:220,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
                             <TI
@@ -17067,130 +17229,119 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{
                               width:330,
                               minWidth:330,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
-                            <div
+                            <button
+                              type="button"
+                              onClick={()=>
+                                setSpecialCampaignSkuPickerRowId(
+                                  String(row.id)
+                                )
+                              }
                               style={{
+                                width:"100%",
+                                minHeight:36,
                                 display:"flex",
-                                flexDirection:"column",
-                                gap:7,
+                                alignItems:"center",
+                                gap:5,
+                                padding:"6px 8px",
+                                overflow:"hidden",
+                                border:`1px solid ${C.border}`,
+                                borderRadius:8,
+                                background:C.surface,
+                                color:C.textSub,
+                                cursor:"pointer",
+                                textAlign:"left",
                               }}
+                              aria-label="Open SKU search"
                             >
-                              {selectedSkuRows.length>0&&(
-                                <div
-                                  style={{
-                                    display:"flex",
-                                    flexWrap:"wrap",
-                                    gap:5,
-                                  }}
-                                >
-                                  {selectedSkuRows.map((sku:any)=>(
-                                    <span
-                                      key={sku.id}
-                                      style={{
-                                        display:"inline-flex",
-                                        alignItems:"center",
-                                        gap:5,
-                                        maxWidth:145,
-                                        padding:"3px 6px",
-                                        borderRadius:6,
-                                        border:`1px solid ${C.border}`,
-                                        background:C.surface,
-                                        color:C.textSub,
-                                        fontSize:10,
-                                        fontWeight:800,
-                                      }}
-                                    >
+                              {selectedSkuRows.length ? (
+                                <>
+                                  {selectedSkuRows
+                                    .slice(0,3)
+                                    .map((sku:any)=>(
                                       <span
+                                        key={sku.id}
                                         style={{
+                                          flex:"0 0 auto",
+                                          maxWidth:108,
+                                          padding:"3px 6px",
                                           overflow:"hidden",
                                           textOverflow:"ellipsis",
                                           whiteSpace:"nowrap",
+                                          borderRadius:6,
+                                          border:`1px solid ${C.border}`,
+                                          background:C.surfaceAlt,
+                                          color:C.textSub,
+                                          fontSize:9.5,
+                                          fontWeight:850,
                                         }}
                                       >
                                         {sku.sku}
                                       </span>
-                                      <button
-                                        type="button"
-                                        onClick={()=>
-                                          toggleSpecialCampaignRequirementSku(
-                                            row,
-                                            sku
-                                          )
-                                        }
-                                        style={{
-                                          padding:0,
-                                          border:"none",
-                                          background:"transparent",
-                                          color:"#DC2626",
-                                          fontWeight:900,
-                                          cursor:"pointer",
-                                        }}
-                                        aria-label={`Remove ${sku.sku}`}
-                                      >
-                                        ×
-                                      </button>
+                                    ))}
+
+                                  {selectedSkuRows.length>3&&(
+                                    <span
+                                      style={{
+                                        flex:"0 0 auto",
+                                        color:C.muted,
+                                        fontSize:9.5,
+                                        fontWeight:900,
+                                      }}
+                                    >
+                                      +{selectedSkuRows.length-3}
                                     </span>
-                                  ))}
-                                </div>
+                                  )}
+                                </>
+                              ) : (
+                                <span
+                                  style={{
+                                    color:C.faint,
+                                    fontSize:10.5,
+                                    fontWeight:750,
+                                  }}
+                                >
+                                  Click to select SKUs
+                                </span>
                               )}
 
-                              <SKUPicker
-                                skuStorage={skuStorage}
-                                brands={brands}
-                                multiSelect
-                                selectedIds={selectedSkuIds}
-                                onSelect={(sku:any)=>
-                                  toggleSpecialCampaignRequirementSku(
-                                    row,
-                                    sku
-                                  )
-                                }
-                                placeholder="Search and select SKUs..."
-                              />
-                            </div>
+                              <span
+                                style={{
+                                  marginLeft:"auto",
+                                  flex:"0 0 auto",
+                                  color:C.faint,
+                                  fontSize:12,
+                                }}
+                              >
+                                ▾
+                              </span>
+                            </button>
                           </td>
 
                           <td
                             style={{
                               width:280,
                               minWidth:280,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
-                            <textarea
+                            <TI
                               value={String(row?.copyInstructions || "")}
-                              onChange={(event:any)=>
+                              onChange={(value:any)=>
                                 updateSpecialCampaignRequirementRow(
                                   row.id,
-                                  {
-                                    copyInstructions:
-                                      event.target.value,
-                                  }
+                                  {copyInstructions:value}
                                 )
                               }
-                              placeholder="Required headline, mechanics, font, disclaimer, or copy..."
-                              rows={4}
-                              style={{
-                                width:"100%",
-                                minHeight:84,
-                                resize:"vertical",
-                                padding:"8px 9px",
-                                border:`1px solid ${C.border}`,
-                                borderRadius:8,
-                                background:C.surface,
-                                color:C.text,
-                                fontSize:11.5,
-                                lineHeight:1.45,
-                                outline:"none",
-                              }}
+                              placeholder="Headline, mechanics, font, disclaimer, or copy..."
                             />
                           </td>
 
@@ -17198,35 +17349,21 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{
                               width:230,
                               minWidth:230,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
-                            <textarea
+                            <TI
                               value={String(row?.notes || "")}
-                              onChange={(event:any)=>
+                              onChange={(value:any)=>
                                 updateSpecialCampaignRequirementRow(
                                   row.id,
-                                  {notes:event.target.value}
+                                  {notes:value}
                                 )
                               }
                               placeholder="Additional notes..."
-                              rows={4}
-                              style={{
-                                width:"100%",
-                                minHeight:84,
-                                resize:"vertical",
-                                padding:"8px 9px",
-                                border:`1px solid ${C.border}`,
-                                borderRadius:8,
-                                background:C.surface,
-                                color:C.text,
-                                fontSize:11.5,
-                                lineHeight:1.45,
-                                outline:"none",
-                              }}
                             />
                           </td>
 
@@ -17234,10 +17371,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{
                               width:135,
                               minWidth:135,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
                             <Select
@@ -17270,31 +17407,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               )}
                             </Select>
 
-                            <div
-                              style={{
-                                marginTop:6,
-                                display:"inline-flex",
-                                padding:"3px 7px",
-                                borderRadius:999,
-                                background:statusMeta.background,
-                                color:statusMeta.color,
-                                fontSize:9.5,
-                                fontWeight:900,
-                              }}
-                            >
-                              {statusMeta.label}
-                            </div>
                           </td>
 
                           <td
                             style={{
                               width:85,
                               minWidth:85,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
                               textAlign:"center",
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
                             <input
@@ -17319,11 +17442,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{
                               width:92,
                               minWidth:92,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
                               textAlign:"center",
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
                             <span
@@ -17351,10 +17474,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             style={{
                               width:84,
                               minWidth:84,
-                              padding:8,
+                              padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               textAlign:"center",
-                              verticalAlign:"top",
+                              verticalAlign:"middle",
                             }}
                           >
                             <Btn
@@ -17376,7 +17499,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </table>
             </div>
           )}
-        </section>
+          </section>
+        </>
       );
     };
 
