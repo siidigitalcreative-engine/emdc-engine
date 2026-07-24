@@ -20551,37 +20551,64 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           <div
             style={{
               display:"flex",
+              flexDirection:isMobile?"column":"row",
               justifyContent:"space-between",
-              alignItems:"flex-start",
+              alignItems:isMobile?"stretch":"flex-start",
               gap:12,
-              flexWrap:"wrap",
+              flexWrap:isMobile?"nowrap":"wrap",
+              width:"100%",
+              maxWidth:"100%",
+              minWidth:0,
+              boxSizing:"border-box",
               padding:isMobile?14:16,
               background:C.surface,
               border:`1.5px solid ${C.border}`,
               borderRadius:12,
+              overflow:"hidden",
             }}
           >
-            <div style={{minWidth:0,flex:1}}>
+            <div
+              style={{
+                width:"100%",
+                maxWidth:"100%",
+                minWidth:0,
+                flex:isMobile?"0 0 auto":"1 1 420px",
+              }}
+            >
               <div
                 style={{
                   display:"flex",
-                  alignItems:"center",
-                  gap:8,
+                  flexDirection:isMobile?"column":"row",
+                  alignItems:isMobile?"flex-start":"center",
+                  gap:isMobile?7:8,
                   flexWrap:"wrap",
+                  width:"100%",
+                  maxWidth:"100%",
+                  minWidth:0,
                 }}
               >
                 <h3
                   style={{
                     margin:0,
-                    fontSize:17,
+                    width:"100%",
+                    maxWidth:"100%",
+                    minWidth:0,
+                    fontSize:isMobile?16:17,
                     fontWeight:900,
+                    lineHeight:1.25,
                     color:C.text,
+                    whiteSpace:"normal",
+                    wordBreak:"normal",
+                    overflowWrap:"break-word",
                   }}
                 >
                   Special Campaign Collateral Production
                 </h3>
                 <span
                   style={{
+                    display:"inline-flex",
+                    width:"fit-content",
+                    maxWidth:"100%",
                     padding:"3px 8px",
                     borderRadius:999,
                     background:"#F3E8FF",
@@ -20589,6 +20616,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     color:"#7E22CE",
                     fontSize:10,
                     fontWeight:900,
+                    whiteSpace:"nowrap",
                   }}
                 >
                   Digital Creative
@@ -20597,10 +20625,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               <p
                 style={{
                   margin:"6px 0 0",
+                  width:"100%",
+                  maxWidth:"100%",
+                  minWidth:0,
                   fontSize:12,
                   lineHeight:1.5,
                   color:C.muted,
-                  maxWidth:920,
+                  whiteSpace:"normal",
+                  wordBreak:"normal",
+                  overflowWrap:"break-word",
                 }}
               >
                 Complete the dimensions, preview image, and final asset
@@ -20611,14 +20644,28 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
             <div
               style={{
-                display:"flex",
+                display:isMobile?"grid":"flex",
+                gridTemplateColumns:isMobile
+                  ? "minmax(0,1fr)"
+                  : undefined,
                 alignItems:"center",
+                justifyContent:isMobile?"stretch":"flex-end",
                 gap:8,
-                flexWrap:"wrap",
+                flexWrap:isMobile?"nowrap":"wrap",
+                width:isMobile?"100%":"auto",
+                maxWidth:"100%",
+                minWidth:0,
+                flex:isMobile?"0 0 auto":"0 0 auto",
               }}
             >
               <span
                 style={{
+                  display:"inline-flex",
+                  alignItems:"center",
+                  justifyContent:isMobile?"center":"flex-start",
+                  width:isMobile?"100%":"auto",
+                  minWidth:0,
+                  boxSizing:"border-box",
                   padding:"5px 9px",
                   borderRadius:999,
                   background:C.surfaceAlt,
@@ -20626,6 +20673,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   color:C.muted,
                   fontSize:10.5,
                   fontWeight:850,
+                  whiteSpace:"normal",
+                  textAlign:"center",
                 }}
               >
                 {completedRows}/{digitalRows.length} final links added
@@ -20643,6 +20692,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 }
                 disabled={!digitalRows.length}
                 onClick={addDigitalRowsToOverview}
+                style={{
+                  width:isMobile?"100%":"auto",
+                  minWidth:0,
+                  whiteSpace:isMobile?"normal":"nowrap",
+                  textAlign:"center",
+                }}
               >
                 Update All Overview Rows
               </Btn>
@@ -28480,18 +28535,28 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     marginTop:12,
                     display:"grid",
                     gridTemplateColumns:isMobile
-                      ? "1fr"
+                      ? "minmax(0,1fr)"
                       : "minmax(280px,.85fr) minmax(0,2.15fr)",
                     gap:12,
                     alignItems:"start",
+                    width:"100%",
+                    maxWidth:"100%",
+                    minWidth:0,
+                    boxSizing:"border-box",
                   }}
                 >
                   <Field label="Deadline">
                     <div
                       style={{
                         display:"grid",
-                        gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
+                        gridTemplateColumns:isMobile
+                          ? "minmax(0,1fr)"
+                          : "minmax(0,1fr) minmax(0,1fr)",
                         gap:8,
+                        width:"100%",
+                        maxWidth:"100%",
+                        minWidth:0,
+                        boxSizing:"border-box",
                       }}
                     >
                       <TI
@@ -28503,6 +28568,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             deadline:"",
                           })
                         }
+                        style={{
+                          width:"100%",
+                          maxWidth:"100%",
+                          minWidth:0,
+                          boxSizing:"border-box",
+                        }}
                       />
                       <TI
                         type="time"
@@ -28513,6 +28584,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             deadline:"",
                           })
                         }
+                        style={{
+                          width:"100%",
+                          maxWidth:"100%",
+                          minWidth:0,
+                          boxSizing:"border-box",
+                        }}
                       />
                     </div>
 
@@ -28547,7 +28624,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       rows={7}
                       style={{
                         width:"100%",
+                        maxWidth:"100%",
+                        minWidth:0,
                         minHeight:150,
+                        boxSizing:"border-box",
                         resize:"vertical",
                         padding:"10px 12px",
                         borderRadius:9,
@@ -28556,6 +28636,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         color:C.text,
                         fontSize:13,
                         lineHeight:1.5,
+                        overflowWrap:"anywhere",
                         outline:"none",
                       }}
                     />
