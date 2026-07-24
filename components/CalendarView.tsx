@@ -21004,6 +21004,89 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             ? data.specialCampaignTracker
             : {};
 
+        const specialCampaignStoreOptions = [
+          "Sunbeams Lifestyle",
+          "Slique",
+          "Scrubz",
+          "Crysalis",
+          "Primeo",
+          "Fitspire",
+          "Quencha",
+          "Moderno",
+          "Gray Label",
+        ];
+
+        const legacySpecialCampaignDeadline = String(
+          rawSpecialCampaignTracker.deadline ||
+          group?.deadline ||
+          group?.date ||
+          ""
+        ).trim();
+
+        const parseSpecialCampaignDeadline = (
+          value:any
+        ) => {
+          const raw = String(value || "").trim();
+
+          if(!raw){
+            return {
+              date:"",
+              time:"",
+            };
+          }
+
+          const isoMatch = raw.match(
+            /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?/
+          );
+
+          if(isoMatch){
+            return {
+              date:isoMatch[1] || "",
+              time:isoMatch[2] || "",
+            };
+          }
+
+          const parsed = new Date(raw);
+
+          if(!Number.isNaN(parsed.getTime())){
+            return {
+              date:`${parsed.getFullYear()}-${pad(
+                parsed.getMonth()+1
+              )}-${pad(parsed.getDate())}`,
+              time:`${pad(parsed.getHours())}:${pad(
+                parsed.getMinutes()
+              )}`,
+            };
+          }
+
+          return {
+            date:"",
+            time:"",
+          };
+        };
+
+        const parsedSpecialCampaignDeadline =
+          parseSpecialCampaignDeadline(
+            legacySpecialCampaignDeadline
+          );
+
+        const savedSpecialCampaignStore = String(
+          rawSpecialCampaignTracker.store || ""
+        ).trim();
+
+        const savedSpecialCampaignStoreMode = String(
+          rawSpecialCampaignTracker.storeMode || ""
+        ).trim();
+
+        const isSavedSpecialCampaignCustomStore =
+          savedSpecialCampaignStoreMode==="custom" ||
+          (
+            !!savedSpecialCampaignStore &&
+            !specialCampaignStoreOptions.includes(
+              savedSpecialCampaignStore
+            )
+          );
+
         const specialCampaignTracker:any = {
           ...rawSpecialCampaignTracker,
           campaignName:String(
@@ -21013,16 +21096,32 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             ""
           ),
           platform:String(rawSpecialCampaignTracker.platform || ""),
-          store:String(rawSpecialCampaignTracker.store || ""),
+          store:savedSpecialCampaignStore,
+          storeMode:isSavedSpecialCampaignCustomStore
+            ? "custom"
+            : "default",
+          customStore:String(
+            rawSpecialCampaignTracker.customStore ||
+            (
+              isSavedSpecialCampaignCustomStore
+                ? savedSpecialCampaignStore
+                : ""
+            )
+          ),
           requester:String(rawSpecialCampaignTracker.requester || ""),
           submissionChannel:String(
             rawSpecialCampaignTracker.submissionChannel ||
             "Lark"
           ),
-          deadline:String(
-            rawSpecialCampaignTracker.deadline ||
-            group?.deadline ||
-            group?.date ||
+          deadline:legacySpecialCampaignDeadline,
+          deadlineDate:String(
+            rawSpecialCampaignTracker.deadlineDate ||
+            parsedSpecialCampaignDeadline.date ||
+            ""
+          ),
+          deadlineTime:String(
+            rawSpecialCampaignTracker.deadlineTime ||
+            parsedSpecialCampaignDeadline.time ||
             ""
           ),
           sellerKitLink:String(
@@ -21048,6 +21147,68 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             rawSpecialCampaignTracker.submissionMessage || ""
           ),
         };
+
+        const formatSpecialCampaignDeadline = () => {
+          const dateValue = String(
+            specialCampaignTracker.deadlineDate || ""
+          ).trim();
+
+          const timeValue = String(
+            specialCampaignTracker.deadlineTime || ""
+          ).trim();
+
+          if(/^\d{4}-\d{2}-\d{2}$/.test(dateValue)){
+            const dateObject = new Date(
+              `${dateValue}T00:00:00`
+            );
+
+            const dateLabel = Number.isNaN(
+              dateObject.getTime()
+            )
+              ? dateValue
+              : dateObject.toLocaleDateString(
+                  "en-US",
+                  {
+                    month:"long",
+                    day:"numeric",
+                    year:"numeric",
+                  }
+                );
+
+            if(/^\d{2}:\d{2}$/.test(timeValue)){
+              const [hours,minutes] =
+                timeValue.split(":").map(Number);
+
+              const timeObject = new Date(
+                2000,
+                0,
+                1,
+                hours || 0,
+                minutes || 0
+              );
+
+              const timeLabel =
+                timeObject.toLocaleTimeString(
+                  "en-US",
+                  {
+                    hour:"numeric",
+                    minute:"2-digit",
+                  }
+                );
+
+              return `${dateLabel} at ${timeLabel}`;
+            }
+
+            return dateLabel;
+          }
+
+          return String(
+            specialCampaignTracker.deadline || ""
+          ).trim();
+        };
+
+        const specialCampaignDeadlineLabel =
+          formatSpecialCampaignDeadline();
 
         const updateSpecialCampaignTracker = (
           patch:any
@@ -21206,7 +21367,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               dimensions:"",
               templateLink:"",
               deadline:
-                specialCampaignTracker.deadline || "",
+                specialCampaignDeadlineLabel || "",
               copyInstructions:"",
               notes:"",
               finalPreviewUrl:"",
@@ -21329,8 +21490,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             specialCampaignTracker.store
               ? `Store: ${specialCampaignTracker.store}`
               : "",
-            specialCampaignTracker.deadline
-              ? `Deadline: ${specialCampaignTracker.deadline}`
+            specialCampaignDeadlineLabel
+              ? `Deadline: ${specialCampaignDeadlineLabel}`
               : "",
             "",
             "Completed Collaterals",
@@ -21487,11 +21648,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             "special-campaign-overview-submission"
           );
         };
-
-        const requestReferencePreview =
-          getSpecialCampaignImagePreview(
-            specialCampaignTracker.requestReferenceImageUrl
-          );
 
         const summaryCards = [
           {
@@ -21670,7 +21826,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   }}
                 >
                   Record the campaign request exactly as received from
-                  E-commerce, including the deadline and submission channel.
+                  E-commerce, including the store, campaign deadline,
+                  and required instructions.
                 </p>
               </div>
 
@@ -21708,51 +21865,82 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 </Field>
 
                 <Field label="Store / Account">
-                  <TI
-                    value={specialCampaignTracker.store}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignTracker({
-                        store:value,
-                      })
-                    }
-                    placeholder="e.g. Sunbeams Lifestyle"
-                  />
-                </Field>
+                  <div
+                    style={{
+                      display:"flex",
+                      flexDirection:"column",
+                      gap:8,
+                    }}
+                  >
+                    <Select
+                      value={
+                        specialCampaignTracker.storeMode==="custom"
+                          ? "__custom__"
+                          : specialCampaignTracker.store
+                      }
+                      onChange={(value:any)=>{
+                        if(value==="__custom__"){
+                          const currentCustom = String(
+                            specialCampaignTracker.customStore ||
+                            (
+                              !specialCampaignStoreOptions.includes(
+                                specialCampaignTracker.store
+                              )
+                                ? specialCampaignTracker.store
+                                : ""
+                            ) ||
+                            ""
+                          );
 
-                <Field label="Requested By">
-                  <TI
-                    value={specialCampaignTracker.requester}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignTracker({
-                        requester:value,
-                      })
-                    }
-                    placeholder="Name or department"
-                  />
-                </Field>
+                          updateSpecialCampaignTracker({
+                            storeMode:"custom",
+                            customStore:currentCustom,
+                            store:currentCustom,
+                          });
+                          return;
+                        }
 
-                <Field label="Submission Channel">
-                  <TI
-                    value={specialCampaignTracker.submissionChannel}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignTracker({
-                        submissionChannel:value,
-                      })
-                    }
-                    placeholder="e.g. Lark"
-                  />
-                </Field>
+                        updateSpecialCampaignTracker({
+                          storeMode:"default",
+                          store:value,
+                          customStore:"",
+                        });
+                      }}
+                    >
+                      <option value="">Select store / account</option>
+                      {specialCampaignStoreOptions.map(
+                        (storeName:string)=>(
+                          <option
+                            key={storeName}
+                            value={storeName}
+                          >
+                            {storeName}
+                          </option>
+                        )
+                      )}
+                      <option value="__custom__">
+                        + Add custom store / account
+                      </option>
+                    </Select>
 
-                <Field label="Deadline">
-                  <TI
-                    value={specialCampaignTracker.deadline}
-                    onChange={(value:any)=>
-                      updateSpecialCampaignTracker({
-                        deadline:value,
-                      })
-                    }
-                    placeholder="e.g. June 26, 2026 at 4:00 PM"
-                  />
+                    {specialCampaignTracker.storeMode==="custom"&&(
+                      <TI
+                        value={
+                          specialCampaignTracker.customStore ||
+                          specialCampaignTracker.store ||
+                          ""
+                        }
+                        onChange={(value:any)=>
+                          updateSpecialCampaignTracker({
+                            storeMode:"custom",
+                            customStore:value,
+                            store:value,
+                          })
+                        }
+                        placeholder="Enter custom store or account"
+                      />
+                    )}
+                  </div>
                 </Field>
               </div>
 
@@ -21762,47 +21950,58 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   display:"grid",
                   gridTemplateColumns:isMobile
                     ? "1fr"
-                    : "minmax(0,1fr) minmax(0,1fr)",
+                    : "minmax(280px,.85fr) minmax(0,2.15fr)",
                   gap:12,
+                  alignItems:"start",
                 }}
               >
-                <Field label="Reference Image URL" hint="optional">
+                <Field label="Deadline">
                   <div
                     style={{
-                      display:"flex",
-                      flexDirection:"column",
+                      display:"grid",
+                      gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",
                       gap:8,
                     }}
                   >
                     <TI
-                      value={
-                        specialCampaignTracker.requestReferenceImageUrl
-                      }
+                      type="date"
+                      value={specialCampaignTracker.deadlineDate}
                       onChange={(value:any)=>
                         updateSpecialCampaignTracker({
-                          requestReferenceImageUrl:value,
+                          deadlineDate:value,
+                          deadline:"",
                         })
                       }
-                      placeholder="Google Drive image link or direct URL"
                     />
-                    {requestReferencePreview&&(
-                      <img
-                        src={requestReferencePreview}
-                        alt="Campaign request reference"
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        style={{
-                          display:"block",
-                          width:"100%",
-                          maxHeight:240,
-                          objectFit:"contain",
-                          borderRadius:9,
-                          border:`1px solid ${C.border}`,
-                          background:C.surfaceAlt,
-                        }}
-                      />
-                    )}
+                    <TI
+                      type="time"
+                      value={specialCampaignTracker.deadlineTime}
+                      onChange={(value:any)=>
+                        updateSpecialCampaignTracker({
+                          deadlineTime:value,
+                          deadline:"",
+                        })
+                      }
+                    />
                   </div>
+
+                  {specialCampaignDeadlineLabel&&(
+                    <div
+                      style={{
+                        marginTop:7,
+                        padding:"7px 9px",
+                        borderRadius:8,
+                        background:C.surfaceAlt,
+                        border:`1px solid ${C.border}`,
+                        color:C.textSub,
+                        fontSize:11,
+                        fontWeight:700,
+                        lineHeight:1.4,
+                      }}
+                    >
+                      {specialCampaignDeadlineLabel}
+                    </div>
+                  )}
                 </Field>
 
                 <Field label="Request Instructions">
