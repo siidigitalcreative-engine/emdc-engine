@@ -6343,6 +6343,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const closeDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: false }));
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
+  const [campaignRowSkuPickerId,setCampaignRowSkuPickerId] = useState<string|null>(null);
+  const [campaignRowSkuSearch,setCampaignRowSkuSearch] = useState("");
   useEffect(()=>{
     checklistBoardItemsRef.current = items;
   },[items]);
@@ -10608,6 +10610,67 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       (typeof rowIndex==="number" ? idx===rowIndex : row.id===rowId) ? { ...row, ...patch } : row
     ));
     saveEcommerceCampaignRows(rows);
+  };
+
+  const setEcommerceCampaignRowProductKeys = (
+    rowId:string,
+    nextKeys:any[]
+  ) => {
+    const cleanKeys = Array.from(
+      new Set(
+        (nextKeys || [])
+          .map((key:any)=>String(key || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    // Keep at least one mapped SKU in every Campaign row.
+    if(!cleanKeys.length) return;
+
+    const selectedItems = getCampaignItemsByKeys(cleanKeys);
+    if(!selectedItems.length) return;
+
+    const summary = summarizeCampaignItems(selectedItems);
+    const rows = getEcommerceCampaignRows().map((row:any)=>
+      String(row?.id)===String(rowId)
+        ? {
+            ...row,
+            productKey:cleanKeys.join("||"),
+            productKeys:cleanKeys,
+            product:summary.product,
+            sku:summary.sku,
+            brand:summary.brand,
+            collection:summary.collection,
+          }
+        : row
+    );
+
+    saveEcommerceCampaignRows(rows);
+  };
+
+  const toggleEcommerceCampaignRowProductKey = (
+    rowId:string,
+    productKey:string
+  ) => {
+    const row = getEcommerceCampaignRows().find(
+      (item:any)=>String(item?.id)===String(rowId)
+    );
+    if(!row) return;
+
+    const currentKeys = getCampaignRowProductKeys(row);
+    const isSelected = currentKeys.includes(productKey);
+
+    // Prevent the row from disappearing by removing its final SKU.
+    if(isSelected && currentKeys.length<=1) return;
+
+    const nextKeys = isSelected
+      ? currentKeys.filter((key:string)=>key!==productKey)
+      : [...currentKeys,productKey];
+
+    setEcommerceCampaignRowProductKeys(
+      rowId,
+      nextKeys
+    );
   };
 
   const deleteEcommerceCampaignRow = (rowId:string, rowIndex?:number) => {
@@ -23737,6 +23800,34 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const campaignTheme = getCampaignContextFromLinkedEvents() || "Campaign";
       const campaignSavedOutputs = Array.isArray(campaignBuilder.savedOutputs) ? campaignBuilder.savedOutputs : [];
       const campaignHasOutput = !!getEcommerceCampaignCombinedOutput().trim();
+      const activeCampaignRow = campaignRows.find(
+        (row:any)=>String(row?.id)===String(campaignRowSkuPickerId || "")
+      ) || null;
+      const activeCampaignRowProductKeys = activeCampaignRow
+        ? getCampaignRowProductKeys(activeCampaignRow)
+        : [];
+      const activeCampaignRowProducts = activeCampaignRow
+        ? getCampaignItemsByKeys(activeCampaignRowProductKeys)
+        : [];
+      const campaignRowSkuQuery = String(campaignRowSkuSearch || "")
+        .trim()
+        .toLowerCase();
+      const campaignRowSkuOptions = productRows.filter((row:any)=>{
+        if(!campaignRowSkuQuery) return true;
+        return [
+          row?.product,
+          row?.productName,
+          row?.skuCode,
+          row?.sku,
+          row?.brand,
+          row?.collection,
+          row?.category,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(campaignRowSkuQuery);
+      });
             const ecommerceTabMode = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
       const isCampaignChecklist = ecommerceTabMode.includes("campaign");
 
@@ -26064,6 +26155,302 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       return (
         <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
+          <Modal
+            open={!!campaignRowSkuPickerId}
+            onClose={()=>{
+              setCampaignRowSkuPickerId(null);
+              setCampaignRowSkuSearch("");
+            }}
+            title="Select Campaign SKU/s"
+            width={760}
+          >
+            {activeCampaignRow&&(
+              <div
+                style={{
+                  display:"flex",
+                  flexDirection:"column",
+                  gap:12,
+                }}
+              >
+                <div
+                  style={{
+                    padding:"10px 12px",
+                    border:`1px solid ${C.border}`,
+                    borderRadius:9,
+                    background:C.surfaceAlt,
+                  }}
+                >
+                  <div
+                    style={{
+                      color:C.faint,
+                      fontSize:9.5,
+                      fontWeight:900,
+                      letterSpacing:".05em",
+                      textTransform:"uppercase",
+                    }}
+                  >
+                    Campaign Product Row
+                  </div>
+                  <div
+                    style={{
+                      marginTop:4,
+                      color:C.text,
+                      fontSize:13,
+                      fontWeight:900,
+                    }}
+                  >
+                    {activeCampaignRow.product || "Select products / SKUs"}
+                  </div>
+                </div>
+
+                <div style={{position:"relative"}}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position:"absolute",
+                      left:11,
+                      top:"50%",
+                      transform:"translateY(-50%)",
+                      color:C.faint,
+                      fontSize:12,
+                      pointerEvents:"none",
+                    }}
+                  >
+                    ⌕
+                  </span>
+                  <input
+                    type="search"
+                    value={campaignRowSkuSearch}
+                    onChange={(event:any)=>
+                      setCampaignRowSkuSearch(event.target.value)
+                    }
+                    placeholder="Search product, SKU, brand, or collection..."
+                    autoFocus
+                    style={{
+                      width:"100%",
+                      minHeight:38,
+                      boxSizing:"border-box",
+                      padding:"8px 34px 8px 32px",
+                      border:`1.5px solid ${C.border}`,
+                      borderRadius:9,
+                      background:C.surface,
+                      color:C.text,
+                      fontSize:12,
+                      outline:"none",
+                    }}
+                  />
+                  {!!campaignRowSkuSearch&&(
+                    <button
+                      type="button"
+                      onClick={()=>setCampaignRowSkuSearch("")}
+                      aria-label="Clear SKU search"
+                      style={{
+                        position:"absolute",
+                        right:8,
+                        top:"50%",
+                        transform:"translateY(-50%)",
+                        width:22,
+                        height:22,
+                        padding:0,
+                        border:0,
+                        borderRadius:5,
+                        background:C.surfaceAlt,
+                        color:C.muted,
+                        cursor:"pointer",
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"space-between",
+                    gap:8,
+                    flexWrap:"wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      color:C.textSub,
+                      fontSize:10.5,
+                      fontWeight:850,
+                    }}
+                  >
+                    {activeCampaignRowProductKeys.length} selected SKU{activeCampaignRowProductKeys.length===1?"":"s"}
+                  </span>
+                  <span style={{color:C.faint,fontSize:10}}>
+                    At least one SKU must remain in the row.
+                  </span>
+                </div>
+
+                {!!activeCampaignRowProducts.length&&(
+                  <div
+                    style={{
+                      display:"flex",
+                      flexWrap:"wrap",
+                      gap:6,
+                      padding:"9px",
+                      border:`1px solid ${C.border}`,
+                      borderRadius:9,
+                      background:C.bg,
+                    }}
+                  >
+                    {activeCampaignRowProducts.map((item:any,index:number)=>{
+                      const originalIndex = productRows.indexOf(item);
+                      const key = getCampaignProductOptionKey(item,originalIndex);
+                      const skuLabel = item?.skuCode || item?.sku || item?.product || `SKU ${index+1}`;
+                      const canRemove = activeCampaignRowProductKeys.length>1;
+                      return (
+                        <span
+                          key={key}
+                          style={{
+                            display:"inline-flex",
+                            alignItems:"center",
+                            gap:6,
+                            padding:"5px 8px",
+                            border:`1px solid ${C.border}`,
+                            borderRadius:7,
+                            background:C.surface,
+                            color:C.textSub,
+                            fontSize:10.5,
+                            fontWeight:850,
+                          }}
+                        >
+                          {skuLabel}
+                          <button
+                            type="button"
+                            disabled={!canRemove}
+                            onClick={()=>
+                              toggleEcommerceCampaignRowProductKey(
+                                activeCampaignRow.id,
+                                key
+                              )
+                            }
+                            style={{
+                              padding:0,
+                              border:0,
+                              background:"transparent",
+                              color:canRemove?"#DC2626":C.faint,
+                              cursor:canRemove?"pointer":"not-allowed",
+                              fontSize:14,
+                              fontWeight:900,
+                              lineHeight:1,
+                            }}
+                            aria-label={`Remove ${skuLabel}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    maxHeight:330,
+                    overflowY:"auto",
+                    border:`1px solid ${C.border}`,
+                    borderRadius:9,
+                    background:C.surface,
+                  }}
+                >
+                  {campaignRowSkuOptions.map((item:any,index:number)=>{
+                    const originalIndex = productRows.indexOf(item);
+                    const key = getCampaignProductOptionKey(item,originalIndex);
+                    const checked = activeCampaignRowProductKeys.includes(key);
+                    const preventLastRemoval = checked && activeCampaignRowProductKeys.length===1;
+                    return (
+                      <label
+                        key={key}
+                        style={{
+                          display:"grid",
+                          gridTemplateColumns:"auto minmax(0,1fr)",
+                          gap:9,
+                          alignItems:"center",
+                          padding:"9px 10px",
+                          borderBottom:`1px solid ${C.border}`,
+                          background:checked?"#EEF2FF":index%2?C.surface:C.surfaceAlt,
+                          cursor:preventLastRemoval?"not-allowed":"pointer",
+                          opacity:preventLastRemoval?.78:1,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={preventLastRemoval}
+                          onChange={()=>
+                            toggleEcommerceCampaignRowProductKey(
+                              activeCampaignRow.id,
+                              key
+                            )
+                          }
+                        />
+                        <span style={{minWidth:0}}>
+                          <span
+                            style={{
+                              display:"block",
+                              color:C.text,
+                              fontSize:12,
+                              fontWeight:900,
+                              whiteSpace:"nowrap",
+                              overflow:"hidden",
+                              textOverflow:"ellipsis",
+                            }}
+                          >
+                            {item?.product || item?.productName || item?.skuCode || item?.sku || "Unnamed Product"}
+                          </span>
+                          <span
+                            style={{
+                              display:"block",
+                              marginTop:2,
+                              color:C.muted,
+                              fontSize:10.5,
+                              whiteSpace:"nowrap",
+                              overflow:"hidden",
+                              textOverflow:"ellipsis",
+                            }}
+                          >
+                            {item?.brand || "No brand"} · {item?.collection || item?.category || "No collection/category"} · {item?.skuCode || item?.sku || ""}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+
+                  {!campaignRowSkuOptions.length&&(
+                    <div
+                      style={{
+                        padding:"24px 12px",
+                        textAlign:"center",
+                        color:C.faint,
+                        fontSize:11.5,
+                      }}
+                    >
+                      No mapped products match “{campaignRowSkuSearch}”.
+                    </div>
+                  )}
+                </div>
+
+                <div style={{display:"flex",justifyContent:"flex-end"}}>
+                  <Btn
+                    type="button"
+                    onClick={()=>{
+                      setCampaignRowSkuPickerId(null);
+                      setCampaignRowSkuSearch("");
+                    }}
+                  >
+                    Done
+                  </Btn>
+                </div>
+              </div>
+            )}
+          </Modal>
+
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
             <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
               <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12 }}>
@@ -26075,7 +26462,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   <span style={{ gridColumn:isMobile?"1 / -1":"auto",textAlign:isMobile?"center":"left",fontSize:11,fontWeight:800,color:C.muted,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:999,padding:"6px 9px" }}>Headline · Subheadline · CTA</span>
                   <Btn xs variant="outline" onClick={openEcommerceCampaignInstructions}>AI Instructions</Btn>
                   <Btn xs variant="outline" onClick={saveEcommerceCampaignOutput} disabled={!campaignHasOutput}>Save All Outputs</Btn>
-                  <Btn xs onClick={generateEcommerceCampaignAssets} disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}>{aiBusy.ecommerceCampaign?"Generating All...":"Generate All Rows"}</Btn>
+
                 </div>
               </div>
 
@@ -26451,6 +26838,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                           <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{campaignRows.length} campaign product row{campaignRows.length!==1?"s":""}</span>
                           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                            <button
+                              className="emdc-date-display-v3"
+                              type="button"
+                              onClick={generateEcommerceCampaignAssets}
+                              disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}
+                              style={{
+                                border:"none",
+                                background:C.accent,
+                                color:"#fff",
+                                borderRadius:7,
+                                padding:"6px 9px",
+                                fontSize:10.5,
+                                fontWeight:850,
+                                cursor:(!!aiBusy.ecommerceCampaign || !campaignRows.length)?"not-allowed":"pointer",
+                                opacity:(!!aiBusy.ecommerceCampaign || !campaignRows.length)?.65:1,
+                              }}
+                            >
+                              {aiBusy.ecommerceCampaign?"Generating All...":"Generate All"}
+                            </button>
                             {campaignHasOutput&&<button className="emdc-date-display-v3" type="button" onClick={saveEcommerceCampaignOutput} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save Generated Outputs</button>}
                             {campaignRows.length>0&&<button className="emdc-date-display-v3" type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear Rows</button>}
                           </div>
@@ -26478,7 +26884,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             <table
                               style={{
                                 width:"100%",
-                                minWidth:1880,
+                                minWidth:1790,
                                 borderCollapse:"separate",
                                 borderSpacing:0,
                                 fontSize:11.5,
@@ -26487,7 +26893,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               <thead>
                                 <tr>
                                   {[
-                                    "Product / SKU",
+                                    "Product / SKU Selection",
                                     "Platform",
                                     "Discount / Offer",
                                     "Mechanics / Notes",
@@ -26531,6 +26937,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                     const productKeys =
                                       getCampaignRowProductKeys(row);
 
+                                    const selectedCampaignRowProducts =
+                                      getCampaignItemsByKeys(productKeys);
+
                                     const isGenerating =
                                       aiBusy.ecommerceCampaignRow===row.id;
 
@@ -26557,77 +26966,102 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                       >
                                         <td
                                           style={{
-                                            width:280,
-                                            minWidth:280,
-                                            padding:"9px 10px",
+                                            width:340,
+                                            minWidth:340,
+                                            padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
+                                            verticalAlign:"middle",
                                           }}
                                         >
-                                          <div
-                                            style={{
-                                              display:"flex",
-                                              flexDirection:"column",
-                                              gap:3,
-                                              minWidth:0,
+                                          <button
+                                            type="button"
+                                            onClick={()=>{
+                                              setCampaignRowSkuPickerId(String(row.id));
+                                              setCampaignRowSkuSearch("");
                                             }}
+                                            style={{
+                                              width:"100%",
+                                              minHeight:38,
+                                              display:"flex",
+                                              alignItems:"center",
+                                              gap:5,
+                                              padding:"6px 8px",
+                                              overflow:"hidden",
+                                              border:`1px solid ${C.border}`,
+                                              borderRadius:8,
+                                              background:C.surface,
+                                              color:C.textSub,
+                                              textAlign:"left",
+                                              cursor:"pointer",
+                                            }}
+                                            aria-label="Open Campaign SKU selection"
                                           >
-                                            <strong
-                                              style={{
-                                                color:C.text,
-                                                fontSize:11.5,
-                                                lineHeight:1.35,
-                                                wordBreak:"break-word",
-                                              }}
-                                            >
-                                              {row.product || "Product"}
-                                            </strong>
+                                            {selectedCampaignRowProducts.length ? (
+                                              <>
+                                                {selectedCampaignRowProducts
+                                                  .slice(0,3)
+                                                  .map((item:any,index:number)=>{
+                                                    const skuLabel = item?.skuCode || item?.sku || item?.product || `SKU ${index+1}`;
+                                                    return (
+                                                      <span
+                                                        key={`${skuLabel}-${index}`}
+                                                        style={{
+                                                          flex:"0 0 auto",
+                                                          maxWidth:112,
+                                                          padding:"3px 6px",
+                                                          overflow:"hidden",
+                                                          textOverflow:"ellipsis",
+                                                          whiteSpace:"nowrap",
+                                                          border:`1px solid ${C.border}`,
+                                                          borderRadius:6,
+                                                          background:C.surfaceAlt,
+                                                          color:C.textSub,
+                                                          fontSize:9.5,
+                                                          fontWeight:850,
+                                                        }}
+                                                      >
+                                                        {skuLabel}
+                                                      </span>
+                                                    );
+                                                  })}
 
-                                            <span
-                                              style={{
-                                                color:C.muted,
-                                                fontSize:9.5,
-                                                lineHeight:1.35,
-                                                wordBreak:"break-word",
-                                              }}
-                                            >
-                                              {row.brand || "No brand"} · {
-                                                row.collection ||
-                                                "No collection/category"
-                                              }
-                                            </span>
-
-                                            <span
-                                              style={{
-                                                color:C.textSub,
-                                                fontSize:9.5,
-                                                fontWeight:850,
-                                                lineHeight:1.35,
-                                                wordBreak:"break-word",
-                                              }}
-                                            >
-                                              {row.sku || "No SKU"}
-                                            </span>
-
-                                            {productKeys.length>1&&(
+                                                {selectedCampaignRowProducts.length>3&&(
+                                                  <span
+                                                    style={{
+                                                      flex:"0 0 auto",
+                                                      color:C.muted,
+                                                      fontSize:9.5,
+                                                      fontWeight:900,
+                                                    }}
+                                                  >
+                                                    +{selectedCampaignRowProducts.length-3}
+                                                  </span>
+                                                )}
+                                              </>
+                                            ) : (
                                               <span
                                                 style={{
-                                                  alignSelf:"flex-start",
-                                                  marginTop:2,
-                                                  padding:"3px 6px",
-                                                  borderRadius:999,
-                                                  background:"#EEF2FF",
-                                                  color:C.accent,
-                                                  fontSize:9,
-                                                  fontWeight:900,
+                                                  color:C.faint,
+                                                  fontSize:10.5,
+                                                  fontWeight:750,
                                                 }}
                                               >
-                                                {productKeys.length} products
-                                                in 1 row
+                                                Click to select SKU/s
                                               </span>
                                             )}
-                                          </div>
+
+                                            <span
+                                              style={{
+                                                marginLeft:"auto",
+                                                flex:"0 0 auto",
+                                                color:C.faint,
+                                                fontSize:12,
+                                              }}
+                                            >
+                                              ▾
+                                            </span>
+                                          </button>
                                         </td>
 
                                         <td
@@ -26761,52 +27195,84 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           style={{
                                             width:235,
                                             minWidth:235,
-                                            padding:"9px 10px",
+                                            padding:8,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
-                                            color:C.textSub,
-                                            lineHeight:1.4,
+                                            verticalAlign:"middle",
                                           }}
                                         >
-                                          {isGenerating&&!row.headline
-                                            ? "Generating..."
-                                            : row.headline || "No output yet"}
+                                          <TI
+                                            value={row.headline || ""}
+                                            onChange={(value:any)=>
+                                              updateEcommerceCampaignRow(
+                                                row.id,
+                                                {headline:value},
+                                                rowIndex
+                                              )
+                                            }
+                                            placeholder={isGenerating?"Generating...":"Enter headline or generate all..."}
+                                            disabled={isGenerating}
+                                            style={{
+                                              fontSize:10.5,
+                                              padding:"7px 8px",
+                                            }}
+                                          />
                                         </td>
 
                                         <td
                                           style={{
                                             width:300,
                                             minWidth:300,
-                                            padding:"9px 10px",
+                                            padding:8,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
-                                            color:C.textSub,
-                                            lineHeight:1.4,
+                                            verticalAlign:"middle",
                                           }}
                                         >
-                                          {isGenerating&&!row.subheadline
-                                            ? "Generating..."
-                                            : row.subheadline || "No output yet"}
+                                          <TI
+                                            value={row.subheadline || ""}
+                                            onChange={(value:any)=>
+                                              updateEcommerceCampaignRow(
+                                                row.id,
+                                                {subheadline:value},
+                                                rowIndex
+                                              )
+                                            }
+                                            placeholder={isGenerating?"Generating...":"Enter subheadline or generate all..."}
+                                            disabled={isGenerating}
+                                            style={{
+                                              fontSize:10.5,
+                                              padding:"7px 8px",
+                                            }}
+                                          />
                                         </td>
 
                                         <td
                                           style={{
                                             width:145,
                                             minWidth:145,
-                                            padding:"9px 10px",
+                                            padding:8,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"top",
-                                            color:C.textSub,
-                                            fontWeight:850,
-                                            lineHeight:1.4,
+                                            verticalAlign:"middle",
                                           }}
                                         >
-                                          {isGenerating&&!row.cta
-                                            ? "Generating..."
-                                            : row.cta || "No output yet"}
+                                          <TI
+                                            value={row.cta || ""}
+                                            onChange={(value:any)=>
+                                              updateEcommerceCampaignRow(
+                                                row.id,
+                                                {cta:value},
+                                                rowIndex
+                                              )
+                                            }
+                                            placeholder={isGenerating?"Generating...":"Enter CTA or generate all..."}
+                                            disabled={isGenerating}
+                                            style={{
+                                              fontSize:10.5,
+                                              padding:"7px 8px",
+                                            }}
+                                          />
                                         </td>
 
                                         <td
@@ -26826,47 +27292,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                               alignItems:"center",
                                             }}
                                           >
-                                            <button
-                                              className="emdc-date-display-v3"
-                                              type="button"
-                                              onClick={()=>
-                                                generateEcommerceCampaignRow(
-                                                  row.id
-                                                )
-                                              }
-                                              disabled={
-                                                !!aiBusy.ecommerceCampaign ||
-                                                isGenerating
-                                              }
-                                              style={{
-                                                border:"none",
-                                                background:C.accent,
-                                                color:"#fff",
-                                                borderRadius:7,
-                                                padding:"6px 8px",
-                                                fontSize:9.5,
-                                                fontWeight:850,
-                                                cursor:
-                                                  (
-                                                    !!aiBusy.ecommerceCampaign ||
-                                                    isGenerating
-                                                  )
-                                                    ? "not-allowed"
-                                                    : "pointer",
-                                                opacity:
-                                                  (
-                                                    !!aiBusy.ecommerceCampaign ||
-                                                    isGenerating
-                                                  )
-                                                    ? .65
-                                                    : 1,
-                                              }}
-                                            >
-                                              {isGenerating
-                                                ? "Generating"
-                                                : "Generate"}
-                                            </button>
-
                                             <button
                                               className="emdc-date-display-v3"
                                               type="button"
