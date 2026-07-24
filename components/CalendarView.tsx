@@ -16257,12 +16257,12 @@ ${slidesHtml}
           {rows.length===0 ? (
             <div style={{minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18,background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12}}>
               <p style={{margin:0,fontSize:13,color:C.muted,lineHeight:1.5}}>
-                No Campaign table has been sent yet. Open E-commerce and click Send Table to Marketing.
+                No Campaign table has been sent yet. Open E-commerce and click Send to Marketing.
               </p>
             </div>
           ) : (
-            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingBottom:6,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
-              <table style={{width:"max-content",minWidth:1690,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingRight:12,paddingBottom:6,boxSizing:"border-box",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
+              <table style={{width:"max-content",minWidth:1810,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
                 <thead>
                   <tr>
                     {["Product / SKU","Platform","Discount / Offer","Mechanics / Notes","Headline","Subheadline","CTA","Caption","Actions"].map((heading:string)=>(
@@ -16308,24 +16308,33 @@ ${slidesHtml}
 
                         <td
                           style={{
-                            width:190,
-                            minWidth:190,
+                            width:270,
+                            minWidth:270,
+                            maxWidth:270,
                             padding:8,
                             borderBottom:`1px solid ${C.border}`,
                             verticalAlign:"middle",
+                            overflow:"visible",
                           }}
                         >
                           <div
                             style={{
                               display:"flex",
                               alignItems:"center",
+                              justifyContent:"flex-start",
                               gap:6,
-                              flexWrap:"wrap",
+                              flexWrap:"nowrap",
+                              minWidth:"max-content",
+                              overflow:"visible",
                             }}
                           >
                             <Btn
                               xs
                               type="button"
+                              style={{
+                                flex:"0 0 auto",
+                                whiteSpace:"nowrap",
+                              }}
                               variant={
                                 isCampaignRowInOverview(row)
                                   ? "primary"
@@ -16337,23 +16346,17 @@ ${slidesHtml}
                                 )
                               }
                             >
-                              {actionDone(
-                                `overview-campaign-marketing-row-${
-                                  row?.sourceRowId ||
-                                  row?.id ||
-                                  ""
-                                }`
-                              )
-                                ? "✓ Added"
-                                : isCampaignRowInOverview(row)
-                                  ? "Update Overview"
-                                  : "Add to Overview"}
+                              Add to Overview
                             </Btn>
 
                             <Btn
                               xs
                               type="button"
                               variant="danger"
+                              style={{
+                                flex:"0 0 auto",
+                                whiteSpace:"nowrap",
+                              }}
                               onClick={()=>
                                 deleteCampaignMarketingRow(
                                   row
@@ -19765,12 +19768,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           {rows.length===0 ? (
             <div style={{minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18,background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12}}>
               <p style={{margin:0,fontSize:13,color:C.muted,lineHeight:1.5}}>
-                No Campaign table has been sent yet. Open E-commerce and click Send Table to DC.
+                No Campaign table has been sent yet. Open E-commerce and click Send to DC.
               </p>
             </div>
           ) : (
-            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingBottom:6,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
-              <table style={{width:"max-content",minWidth:1690,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingRight:12,paddingBottom:6,boxSizing:"border-box",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
+              <table style={{width:"max-content",minWidth:1810,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
                 <thead>
                   <tr>
                     {["Product / SKU","Platform","Caption","Final Preview Image URL","Final Asset Link","Status","Actions"].map((heading:string)=>(
@@ -19836,24 +19839,33 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                         <td
                           style={{
-                            width:190,
-                            minWidth:190,
+                            width:270,
+                            minWidth:270,
+                            maxWidth:270,
                             padding:8,
                             borderBottom:`1px solid ${C.border}`,
                             verticalAlign:"middle",
+                            overflow:"visible",
                           }}
                         >
                           <div
                             style={{
                               display:"flex",
                               alignItems:"center",
+                              justifyContent:"flex-start",
                               gap:6,
-                              flexWrap:"wrap",
+                              flexWrap:"nowrap",
+                              minWidth:"max-content",
+                              overflow:"visible",
                             }}
                           >
                             <Btn
                               xs
                               type="button"
+                              style={{
+                                flex:"0 0 auto",
+                                whiteSpace:"nowrap",
+                              }}
                               variant={
                                 isCampaignRowInOverview(row)
                                   ? "primary"
@@ -19865,19 +19877,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 )
                               }
                             >
-                              {actionDone(
-                                `overview-campaign-digital-row-${rowId}`
-                              )
-                                ? "✓ Added"
-                                : isCampaignRowInOverview(row)
-                                  ? "Update Overview"
-                                  : "Add to Overview"}
+                              Add to Overview
                             </Btn>
 
                             <Btn
                               xs
                               type="button"
                               variant="danger"
+                              style={{
+                                flex:"0 0 auto",
+                                whiteSpace:"nowrap",
+                              }}
                               onClick={()=>
                                 deleteCampaignDigitalRow(
                                   row
@@ -28605,7 +28615,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             onClick={sendEcommerceCampaignTableToMarketing}
                             disabled={!campaignRows.length}
                           >
-                            Send Table to Marketing
+                            Send to Marketing
                           </TransferBtn>
 
                           <TransferBtn
@@ -28614,7 +28624,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             onClick={sendEcommerceCampaignTableToDigitalCreative}
                             disabled={!campaignRows.length}
                           >
-                            Send Table to DC
+                            Send to DC
                           </TransferBtn>
 
                           <Btn
@@ -29190,7 +29200,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                                     )
                                                   }
                                                 >
-                                                  Marketing
+                                                  Send to Marketing
                                                 </TransferBtn>
 
                                                 <TransferBtn
@@ -29202,7 +29212,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                                     )
                                                   }
                                                 >
-                                                  DC
+                                                  Send to DC
                                                 </TransferBtn>
 
                                                 <TransferBtn
@@ -29230,9 +29240,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                                     )
                                                   }
                                                 >
-                                                  {overviewAdded
-                                                    ? "Added ✓"
-                                                    : "Overview"}
+                                                  Add to Overview
                                                 </Btn>
                                               </>
                                             )}
