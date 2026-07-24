@@ -7687,6 +7687,55 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
     if(
       structuredContent &&
+      overviewSourceType==="campaignCollateralSummary"
+    ){
+      const summaryRows=Array.isArray(structuredContent.rows)?structuredContent.rows:[];
+
+      return (
+        <div style={{overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:9}}>
+          <table style={{width:"100%",minWidth:980,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+            <thead>
+              <tr>
+                {["Product / SKU","Platform","Caption","Preview","Final Asset"].map((heading:string)=>(
+                  <th key={heading} style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,textAlign:"left",fontSize:9.5,fontWeight:900,textTransform:"uppercase",letterSpacing:".04em",whiteSpace:"nowrap"}}>
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {summaryRows.map((row:any,index:number)=>(
+                <tr key={row?.rowId||index} style={{background:index%2?C.surface:C.bg}}>
+                  <td style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                    <strong style={{display:"block",color:C.text}}>{row?.product||"Campaign Product Row"}</strong>
+                    <span style={{display:"block",marginTop:4,color:C.muted,fontSize:9.5}}>{row?.skuText||"—"}</span>
+                  </td>
+                  <td style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"nowrap"}}>
+                    {row?.platform||"—"}
+                  </td>
+                  <td style={{minWidth:300,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",lineHeight:1.45}}>
+                    {row?.caption||"—"}
+                  </td>
+                  <td style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                    {row?.finalPreviewUrl?(
+                      <a href={row.finalPreviewUrl} target="_blank" rel="noreferrer" style={{color:"#2563EB",fontWeight:800,textDecoration:"none"}}>Open Preview</a>
+                    ):"—"}
+                  </td>
+                  <td style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                    {row?.finalAssetLink?(
+                      <a href={row.finalAssetLink} target="_blank" rel="noreferrer" style={{color:"#2563EB",fontWeight:800,textDecoration:"none"}}>Open Final Asset</a>
+                    ):"—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if(
+      structuredContent &&
       overviewSourceType==="specialCampaignCollateralSummary"
     ){
       const summaryRows = Array.isArray(
@@ -10462,7 +10511,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         cta: row.cta || "",
         output: row.output || "",
       };
-    }).filter((row:any)=>row.product || row.sku);
+    }).filter(
+      (row:any)=>
+        !!row.id ||
+        !!row.product ||
+        !!row.sku
+    );
   };
 
   const saveEcommerceCampaignRows = (rows:any[]) => {
@@ -10548,6 +10602,31 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const rows = getEcommerceCampaignRows();
     const nextRows = [...rows,buildEcommerceCampaignProductRow(selected,selectedKey,builder)];
     saveCampaignRowsInOneUpdate(builder,nextRows,{ selectedProductKey:"" });
+  };
+
+  const addBlankEcommerceCampaignRow = () => {
+    const builder = getEcommerceCampaignBuilder();
+    const rows = getEcommerceCampaignRows();
+
+    saveEcommerceCampaignRows([
+      ...rows,
+      {
+        id:uid(),
+        productKey:"",
+        productKeys:[],
+        product:"",
+        sku:"",
+        brand:"",
+        collection:"",
+        platform:builder.platform || "All Platforms",
+        discount:getCampaignMainPromotionDefault(),
+        mechanics:"",
+        headline:"",
+        subheadline:"",
+        cta:"",
+        output:"",
+      },
+    ]);
   };
 
   const toggleSelectedCampaignProductKey = (key:string) => {
@@ -11076,6 +11155,173 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     });
     setCampaignDigitalSentIds((prev:string[])=>Array.from(new Set([...prev,item.sourceRowId])));
     window.setTimeout(()=>setCampaignDigitalSentIds((prev:string[])=>prev.filter((id:string)=>id!==item.sourceRowId)),1800);
+  };
+
+  const buildCampaignMarketingTransferRow = (
+    row:any,
+    existingRow:any = null
+  ) => {
+    const builder = getEcommerceCampaignBuilder();
+    const rowKey = String(
+      row?.id ||
+      row?.productKey ||
+      row?.product ||
+      uid()
+    );
+
+    const products = getEcommerceCampaignRowProducts(row).map(
+      (product:any)=>({
+        product:product.product || row.product || "",
+        productName:product.product || row.product || "",
+        sku:product.sku || row.sku || "",
+        skuCode:product.sku || row.sku || "",
+        brand:product.brand || row.brand || "",
+        collection:
+          product.collection ||
+          row.collection ||
+          row.category ||
+          "",
+        category:
+          product.collection ||
+          row.collection ||
+          row.category ||
+          "",
+      })
+    );
+
+    return {
+      ...(existingRow || {}),
+      id:existingRow?.id || rowKey,
+      sourceRowId:rowKey,
+      product:
+        row.product ||
+        existingRow?.product ||
+        "Campaign Product Row",
+      platform:
+        row.platform ||
+        builder.platform ||
+        "All Platforms",
+      discount:getCampaignRowDiscountValue(row) || "",
+      mechanics:row.mechanics || "",
+      headline:row.headline || "",
+      subheadline:row.subheadline || "",
+      cta:row.cta || "",
+      products,
+      caption:existingRow?.caption || "",
+      sentFromEcommerceAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+    };
+  };
+
+  const sendEcommerceCampaignTableToMarketing = () => {
+    const rows = getEcommerceCampaignRows();
+    if(!rows.length) return;
+
+    const existingRows = getCampaignMarketingRowsWithBackup();
+    const existingById = new Map(
+      existingRows.map((row:any)=>[
+        String(row?.sourceRowId || row?.id || ""),
+        row,
+      ])
+    );
+
+    const nextRows = rows.map((row:any)=>{
+      const rowKey = String(
+        row?.id ||
+        row?.productKey ||
+        row?.product ||
+        ""
+      );
+
+      return buildCampaignMarketingTransferRow(
+        row,
+        existingById.get(rowKey)
+      );
+    });
+
+    writeEcommerceTransferRowsBackup(
+      "marketing",
+      "campaign",
+      nextRows
+    );
+
+    updateAiWorkspace("marketing",{
+      campaignMarketingRows:nextRows,
+      generatedAt:new Date().toISOString(),
+    });
+
+    markActionDone("campaign-table-send-marketing");
+  };
+
+  const buildCampaignDigitalTransferRow = (
+    row:any,
+    existingRow:any = null
+  ) => {
+    const base = buildCampaignDigitalCreativeItem(row);
+
+    return {
+      ...(existingRow || {}),
+      ...base,
+      id:existingRow?.id || base.id,
+      sourceRowId:base.sourceRowId,
+      finalPreviewUrl:existingRow?.finalPreviewUrl || "",
+      finalAssetLink:existingRow?.finalAssetLink || "",
+      status:existingRow?.status || "inprogress",
+      sentFromEcommerceAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+    };
+  };
+
+  const sendEcommerceCampaignTableToDigitalCreative = () => {
+    const rows = getEcommerceCampaignRows();
+    if(!rows.length) return;
+
+    const digital =
+      ((group.aiWorkspace || {}).digital || {}) as any;
+
+    const existingRows = Array.isArray(
+      digital.campaignCreativeRows
+    )
+      ? digital.campaignCreativeRows
+      : [];
+
+    const existingById = new Map(
+      existingRows.map((row:any)=>[
+        String(row?.sourceRowId || row?.id || ""),
+        row,
+      ])
+    );
+
+    const nextRows = rows.map((row:any)=>{
+      const rowKey = String(
+        row?.id ||
+        row?.productKey ||
+        row?.product ||
+        ""
+      );
+
+      return buildCampaignDigitalTransferRow(
+        row,
+        existingById.get(rowKey)
+      );
+    });
+
+    writeMarketingDcTransferRowsBackup(
+      "campaign",
+      nextRows
+    );
+
+    updateAiWorkspace("digital",{
+      campaignCreativeRows:nextRows,
+      generatedText:nextRows
+        .map((entry:any)=>
+          formatCampaignDigitalCreativeItem(entry)
+        )
+        .join("\\n\\n---\\n\\n"),
+      generatedAt:new Date().toISOString(),
+    });
+
+    markActionDone("campaign-table-send-dc");
   };
 
   const addEcommerceCampaignToOverview = () => {
@@ -14657,7 +14903,23 @@ ${slidesHtml}
         );
       };
 
+      const campaignLinkSummaryItems =
+        overviewItems.filter(
+          (item:any)=>
+            String(
+              item?.sourceRef?.type ||
+              ""
+            )==="campaignCollateralSummary"
+        );
+
       const campaignOverviewRows = overviewItems
+        .filter(
+          (item:any)=>
+            String(
+              item?.sourceRef?.type ||
+              ""
+            )!=="campaignCollateralSummary"
+        )
         .map((item:any)=>({ item, row:parseCampaignOverviewCopy(item.content) }))
         .filter(({row}:any)=>row.hasCampaignFormat);
       const campaignOverviewGroupBy = data.campaignOverviewGroupBy || "none";
@@ -14853,6 +15115,25 @@ ${slidesHtml}
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {campaignLinkSummaryItems.length>0&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{padding:"12px 14px",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
+                  <h4 style={{margin:0,fontSize:14,fontWeight:900,color:C.text}}>Final Asset Link Summaries</h4>
+                  <p style={{margin:"4px 0 0",fontSize:11,color:C.muted}}>Added from Campaign Digital Creative.</p>
+                </div>
+
+                {campaignLinkSummaryItems.map((item:any)=>(
+                  <div key={item.id} style={{padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+                      <strong style={{color:C.text,fontSize:13}}>{item.title||"Campaign Final Asset Links"}</strong>
+                      <Btn xs variant="danger" onClick={()=>deleteOverviewItem(item.id)}>Delete</Btn>
+                    </div>
+                    {renderOverviewContent(item)}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -15096,6 +15377,102 @@ ${slidesHtml}
       workspaceTypeLabel.includes("special") &&
       workspaceTypeLabel.includes("campaign");
     const isProductIntroductionChecklist = workspaceTypeLabel.includes("product introduction") || workspaceTypeLabel.includes("product reactivation") || workspaceTypeLabel.includes("reactivation") || workspaceTypeLabel.includes("relaunch");
+
+    if(
+      tab==="marketing" &&
+      isCampaignChecklist &&
+      !isSpecialCampaignChecklist
+    ){
+      const rows = getCampaignMarketingRowsWithBackup();
+
+      const updateCampaignCaption = (
+        rowId:any,
+        caption:any
+      ) => {
+        const nextRows = rows.map((row:any)=>
+          String(row?.sourceRowId || row?.id || "")===
+          String(rowId)
+            ? {
+                ...row,
+                caption:String(caption || ""),
+                updatedAt:new Date().toISOString(),
+              }
+            : row
+        );
+
+        writeEcommerceTransferRowsBackup(
+          "marketing",
+          "campaign",
+          nextRows
+        );
+
+        updateAiWorkspace("marketing",{
+          campaignMarketingRows:nextRows,
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
+      return (
+        <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+          <div style={{padding:isMobile?14:16,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
+            <h3 style={{margin:0,fontSize:17,fontWeight:900,color:C.text}}>Campaign Marketing Captions</h3>
+            <p style={{margin:"5px 0 0",fontSize:12,lineHeight:1.5,color:C.muted}}>
+              Complete or revise the caption for each Campaign row sent from E-commerce. Caption fields auto-save.
+            </p>
+          </div>
+
+          {rows.length===0 ? (
+            <div style={{minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18,background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12}}>
+              <p style={{margin:0,fontSize:13,color:C.muted,lineHeight:1.5}}>
+                No Campaign table has been sent yet. Open E-commerce and click Send Table to Marketing.
+              </p>
+            </div>
+          ) : (
+            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingBottom:6,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
+              <table style={{width:"max-content",minWidth:1500,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+                <thead>
+                  <tr>
+                    {["Product / SKU","Platform","Discount / Offer","Mechanics / Notes","Headline","Subheadline","CTA","Caption"].map((heading:string)=>(
+                      <th key={heading} style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,textAlign:"left",fontSize:9.5,fontWeight:900,letterSpacing:".04em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row:any,index:number)=>{
+                    const products=Array.isArray(row?.products)?row.products:[];
+                    const skuText=products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", ");
+                    return (
+                      <tr key={row?.sourceRowId||row?.id||index} style={{background:index%2?C.surface:C.bg}}>
+                        <td style={{width:260,minWidth:260,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                          <strong style={{display:"block",color:C.text,fontSize:11.5}}>{row?.product||"Campaign Product Row"}</strong>
+                          <span style={{display:"block",marginTop:4,color:C.muted,fontSize:9.5,lineHeight:1.35}}>{skuText||"No SKU selected"}</span>
+                        </td>
+                        {[row?.platform||"",row?.discount||"",row?.mechanics||"",row?.headline||"",row?.subheadline||"",row?.cta||""].map((value:any,valueIndex:number)=>(
+                          <td key={valueIndex} style={{width:valueIndex===4?280:valueIndex===3?220:165,minWidth:valueIndex===4?280:valueIndex===3?220:165,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",color:C.textSub,lineHeight:1.4}}>
+                            {value||"—"}
+                          </td>
+                        ))}
+                        <td style={{width:360,minWidth:360,padding:8,borderBottom:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                          <textarea
+                            value={String(row?.caption||"")}
+                            onChange={(event:any)=>updateCampaignCaption(row?.sourceRowId||row?.id,event.target.value)}
+                            placeholder="Enter campaign caption for this row..."
+                            rows={4}
+                            style={{width:"100%",minHeight:82,boxSizing:"border-box",resize:"vertical",padding:"8px 9px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.text,fontSize:11.5,lineHeight:1.45,outline:"none"}}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     if(tab==="marketing" && (isCampaignChecklist || isProductIntroductionChecklist)){
       const productIntroMarketingRows = isProductIntroductionChecklist
@@ -18273,6 +18650,176 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
     if(tab==="digital" && isSpecialCampaignChecklist){
       return renderSpecialCampaignDigitalCreative();
+    }
+
+    if(
+      tab==="digital" &&
+      isCampaignChecklist &&
+      !isSpecialCampaignChecklist
+    ){
+      const digital=((group.aiWorkspace||{}).digital||{}) as any;
+      const rows=Array.isArray(digital.campaignCreativeRows)?digital.campaignCreativeRows:[];
+      const marketingRows=getCampaignMarketingRowsWithBackup();
+      const captionBySourceId=new Map(
+        marketingRows.map((row:any)=>[
+          String(row?.sourceRowId||row?.id||""),
+          String(row?.caption||""),
+        ])
+      );
+
+      const updateCampaignDigitalLinkRow=(rowId:any,patch:any)=>{
+        const nextRows=rows.map((row:any)=>
+          String(row?.sourceRowId||row?.id||"")===String(rowId)
+            ? {...row,...patch,updatedAt:new Date().toISOString()}
+            : row
+        );
+        writeMarketingDcTransferRowsBackup("campaign",nextRows);
+        updateAiWorkspace("digital",{
+          campaignCreativeRows:nextRows,
+          generatedAt:new Date().toISOString(),
+        });
+      };
+
+      const addCampaignLinkSummaryToOverview=()=>{
+        if(!rows.length) return;
+
+        const summaryRows=rows.map((row:any,index:number)=>{
+          const rowId=String(row?.sourceRowId||row?.id||index);
+          const products=Array.isArray(row?.products)?row.products:[];
+          return {
+            rowId,
+            product:String(row?.product||row?.title||"Campaign Product Row"),
+            skuText:products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", "),
+            platform:String(row?.platform||""),
+            headline:String(row?.headline||""),
+            subheadline:String(row?.subheadline||""),
+            cta:String(row?.cta||""),
+            caption:String(captionBySourceId.get(rowId)||""),
+            finalPreviewUrl:String(row?.finalPreviewUrl||""),
+            finalAssetLink:String(row?.finalAssetLink||""),
+          };
+        });
+
+        const content:any={
+          campaignName:group?.groupName||"Campaign",
+          rows:summaryRows,
+        };
+
+        content.output=summaryRows.flatMap((row:any,index:number)=>[
+          `${index+1}. ${row.product}`,
+          row.skuText?`SKUs: ${row.skuText}`:"",
+          row.caption?`Caption: ${row.caption}`:"",
+          row.finalPreviewUrl?`Preview: ${row.finalPreviewUrl}`:"",
+          row.finalAssetLink?`Final Asset: ${row.finalAssetLink}`:"",
+          "",
+        ]).filter(Boolean).join("\n");
+
+        addToOverview(
+          "Digital Creative",
+          "Campaign Final Asset Links",
+          content,
+          `${content.campaignName} · Final Asset Summary`,
+          {tab:"digital",type:"campaignCollateralSummary",id:"campaign-collateral-summary"}
+        );
+        markActionDone("overview-campaign-collateral-summary");
+      };
+
+      return (
+        <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+          <div style={{padding:isMobile?14:16,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+            <div>
+              <h3 style={{margin:0,fontSize:17,fontWeight:900,color:C.text}}>Campaign Digital Creative Links</h3>
+              <p style={{margin:"5px 0 0",fontSize:12,lineHeight:1.5,color:C.muted}}>
+                Add the final preview and final asset links for every Campaign row sent from E-commerce.
+              </p>
+            </div>
+            <Btn
+              xs
+              type="button"
+              variant={actionDone("overview-campaign-collateral-summary")?"primary":"outline"}
+              disabled={!rows.length}
+              onClick={addCampaignLinkSummaryToOverview}
+            >
+              {actionDone("overview-campaign-collateral-summary")?"✓ Added":"Add Summary to Overview"}
+            </Btn>
+          </div>
+
+          {rows.length===0 ? (
+            <div style={{minHeight:220,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",padding:18,background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12}}>
+              <p style={{margin:0,fontSize:13,color:C.muted,lineHeight:1.5}}>
+                No Campaign table has been sent yet. Open E-commerce and click Send Table to DC.
+              </p>
+            </div>
+          ) : (
+            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingBottom:6,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
+              <table style={{width:"max-content",minWidth:1500,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+                <thead>
+                  <tr>
+                    {["Product / SKU","Platform","Caption","Final Preview Image URL","Final Asset Link","Status"].map((heading:string)=>(
+                      <th key={heading} style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,textAlign:"left",fontSize:9.5,fontWeight:900,letterSpacing:".04em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row:any,index:number)=>{
+                    const rowId=String(row?.sourceRowId||row?.id||index);
+                    const products=Array.isArray(row?.products)?row.products:[];
+                    const skuText=products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", ");
+                    const caption=captionBySourceId.get(rowId)||"";
+                    return (
+                      <tr key={rowId} style={{background:index%2?C.surface:C.bg}}>
+                        <td style={{width:280,minWidth:280,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                          <strong style={{display:"block",color:C.text,fontSize:11.5}}>{row?.product||row?.title||"Campaign Product Row"}</strong>
+                          <span style={{display:"block",marginTop:4,color:C.muted,fontSize:9.5}}>{skuText||"No SKU selected"}</span>
+                        </td>
+                        <td style={{width:150,minWidth:150,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",color:C.textSub}}>
+                          {row?.platform||"—"}
+                        </td>
+                        <td style={{width:320,minWidth:320,padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top",color:C.textSub,lineHeight:1.45}}>
+                          {caption||"No caption added in Marketing yet."}
+                        </td>
+                        <td style={{width:300,minWidth:300,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                          <TI
+                            value={String(row?.finalPreviewUrl||"")}
+                            onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{finalPreviewUrl:value})}
+                            placeholder="Google Drive image link"
+                          />
+                        </td>
+                        <td style={{width:300,minWidth:300,padding:8,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                            <TI
+                              value={String(row?.finalAssetLink||"")}
+                              onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{finalAssetLink:value})}
+                              placeholder="Final Drive file or folder link"
+                            />
+                            {!!String(row?.finalAssetLink||"").trim()&&(
+                              <Btn xs type="button" variant="outline" onClick={()=>window.open(row.finalAssetLink,"_blank","noopener,noreferrer")}>
+                                Open Final Asset
+                              </Btn>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{width:145,minWidth:145,padding:8,borderBottom:`1px solid ${C.border}`,verticalAlign:"top"}}>
+                          <Select
+                            value={String(row?.status||"inprogress")}
+                            onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{status:value})}
+                          >
+                            <option value="inprogress">In Progress</option>
+                            <option value="review">For Review</option>
+                            <option value="submitted">Submitted</option>
+                          </Select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      );
     }
 
     if(tab==="digital" && isCampaignChecklist){
@@ -26523,9 +27070,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 </div>
 
                 <div>
-                  <Field label="Products / SKU">
+                  <Field label="Campaign Product Table">
                     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                      {productRows.length>0&&(
+                      {false&&productRows.length>0&&(
                         <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.surface,overflow:"hidden" }}>
                           <div style={{ padding:isMobile?"10px":"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
                             <div style={{ display:"flex",flexDirection:"column",gap:3 }}>
@@ -26835,9 +27382,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       )}
 
                       <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                        <div style={{ padding:"7px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                          <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>{campaignRows.length} campaign product row{campaignRows.length!==1?"s":""}</span>
-                          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                          <div>
+                            <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Campaign Product Table</span>
+                            <span style={{ display:"block",marginTop:2,fontSize:10,color:C.faint }}>{campaignRows.length} row{campaignRows.length!==1?"s":""}</span>
+                          </div>
+                          <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+                            <Btn xs type="button" variant="outline" onClick={addBlankEcommerceCampaignRow}>+ Add Row</Btn>
                             <button
                               className="emdc-date-display-v3"
                               type="button"
@@ -26857,8 +27408,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             >
                               {aiBusy.ecommerceCampaign?"Generating All...":"Generate All"}
                             </button>
-                            {campaignHasOutput&&<button className="emdc-date-display-v3" type="button" onClick={saveEcommerceCampaignOutput} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save Generated Outputs</button>}
-                            {campaignRows.length>0&&<button className="emdc-date-display-v3" type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:11,fontWeight:800,cursor:"pointer" }}>Clear Rows</button>}
+                            {campaignHasOutput&&<button className="emdc-date-display-v3" type="button" onClick={saveEcommerceCampaignOutput} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save All Outputs</button>}
+                            <TransferBtn xs id="campaign-table-send-marketing" onClick={sendEcommerceCampaignTableToMarketing} disabled={!campaignRows.length}>Send Table to Marketing</TransferBtn>
+                            <TransferBtn xs id="campaign-table-send-dc" onClick={sendEcommerceCampaignTableToDigitalCreative} disabled={!campaignRows.length}>Send Table to DC</TransferBtn>
+                            {campaignRows.length>0&&<button className="emdc-date-display-v3" type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Clear Rows</button>}
                           </div>
                         </div>
 
@@ -26877,13 +27430,20 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         ) : (
                           <div
                             style={{
+                              display:"block",
+                              width:"100%",
+                              maxWidth:"100%",
+                              minWidth:0,
                               overflowX:"auto",
+                              overflowY:"hidden",
                               WebkitOverflowScrolling:"touch",
+                              scrollbarGutter:"stable both-edges",
+                              paddingBottom:6,
                             }}
                           >
                             <table
                               style={{
-                                width:"100%",
+                                width:"max-content",
                                 minWidth:1790,
                                 borderCollapse:"separate",
                                 borderSpacing:0,
