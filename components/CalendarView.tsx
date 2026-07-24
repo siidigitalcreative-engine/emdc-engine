@@ -26457,83 +26457,527 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         </div>
 
                         {campaignRows.length===0 ? (
-                          <div style={{ padding:14,fontSize:12,color:C.muted,textAlign:"center" }}>No product row yet. Select mapped products above, then click Add Selected or Add All.</div>
+                          <div
+                            style={{
+                              padding:14,
+                              fontSize:12,
+                              color:C.muted,
+                              textAlign:"center",
+                            }}
+                          >
+                            No product row yet. Select mapped products above,
+                            then click Add Selected or Add All.
+                          </div>
                         ) : (
-                          <div style={{ overflowX:isMobile?"visible":"auto",WebkitOverflowScrolling:"touch" }}>
-                            <div style={{ minWidth:isMobile?0:760 }}>
-                              <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
-                                <span style={{ fontSize:10.5,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Campaign Product Rows</span>
-                              </div>
-                              {campaignRows.map((row:any,rowIndex:number)=>(
-                                <div key={`${row.id || row.productKey || "campaign-row"}-${rowIndex}`} style={{ margin:10,marginBottom:rowIndex===campaignRows.length-1?10:0,border:`1px solid ${C.border}`,borderRadius:12,background:C.surface,overflow:"hidden" }}>
-                                  <div style={{ padding:isMobile?10:12,display:"flex",flexDirection:"column",gap:10 }}>
-                                    <div style={{ display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap" }}>
-                                      <div style={{ minWidth:0,flex:"1 1 320px" }}>
-                                        <p style={{ margin:0,fontSize:12.5,fontWeight:900,color:C.text,lineHeight:1.35 }}>{row.product || "Product"}</p>
-                                        <p style={{ margin:"3px 0 0",fontSize:10.5,color:C.muted,lineHeight:1.35 }}>{row.brand || "No brand"} · {row.collection || "No collection/category"} · {row.sku || "No SKU"}</p>
-                                        {getCampaignRowProductKeys(row).length>1&&<p style={{ margin:"4px 0 0",fontSize:10.5,color:C.accent,fontWeight:850 }}>{getCampaignRowProductKeys(row).length} products inside this row</p>}
-                                      </div>
-                                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"auto auto",alignItems:"center",gap:6,justifyContent:"flex-end",width:isMobile?"100%":"auto" }}>
-                                        <button className="emdc-date-display-v3" type="button" onClick={()=>generateEcommerceCampaignRow(row.id)} disabled={!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?"not-allowed":"pointer",opacity:(!!aiBusy.ecommerceCampaign || aiBusy.ecommerceCampaignRow===row.id)?.65:1,width:"100%" }}>{aiBusy.ecommerceCampaignRow===row.id?"Generating":"Generate"}</button>
-                                        <button className="emdc-date-display-v3" type="button" onClick={()=>deleteEcommerceCampaignRow(row.id,rowIndex)} style={{ border:"none",background:"#FEF2F2",color:"#DC2626",borderRadius:8,padding:"8px 10px",fontSize:11,fontWeight:850,cursor:"pointer",width:"100%" }}>Delete</button>
-                                      </div>
-                                    </div>
-                                    <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(240px,.9fr) minmax(170px,.65fr) minmax(260px,1fr)",gap:10,alignItems:"end" }}>
-                                      <Field label="Platform">
-                                        <div style={{ minWidth:0,width:"100%" }}>
-                                          <Select value={row.platform || campaignBuilder.platform || "All Platforms"} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ platform:value },rowIndex)} style={{ width:"100%",minWidth:0,height:38,fontSize:12,padding:"8px 34px 8px 9px",lineHeight:"20px",borderRadius:8,background:C.surface }}>
-                                            {ecommerceCampaignPlatforms.map((platform:string)=><option key={platform} value={platform}>{platform}</option>)}
-                                          </Select>
-                                        </div>
-                                      </Field>
-                                      <Field label="Discount / Offer">
-                                        <div style={{ display:"flex",flexDirection:"column",gap:5 }}>
-                                          <TI value={getCampaignRowDiscountValue(row)} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ discount:value },rowIndex)} placeholder={getCampaignMainPromotionDefault() || "e.g. 20% OFF"} style={{ fontSize:12,padding:"8px 9px" }} />
-                                          {!!getCampaignMainPromotionDefault()&&String(row.discount || "").trim()===getCampaignMainPromotionDefault()&&(
-                                            <span style={{ fontSize:10.5,color:"#047857",fontWeight:800 }}>Using Main Promotion as default</span>
-                                          )}
-                                        </div>
-                                      </Field>
-                                      <Field label="Mechanics / Notes">
-                                        <TI value={row.mechanics || ""} onChange={(value)=>updateEcommerceCampaignRow(row.id,{ mechanics:value },rowIndex)} placeholder="e.g. Min spend ₱599" style={{ fontSize:12,padding:"8px 9px" }} />
-                                      </Field>
-                                    </div>
-                                  </div>
+                          <div
+                            style={{
+                              overflowX:"auto",
+                              WebkitOverflowScrolling:"touch",
+                            }}
+                          >
+                            <table
+                              style={{
+                                width:"100%",
+                                minWidth:1880,
+                                borderCollapse:"separate",
+                                borderSpacing:0,
+                                fontSize:11.5,
+                              }}
+                            >
+                              <thead>
+                                <tr>
+                                  {[
+                                    "Product / SKU",
+                                    "Platform",
+                                    "Discount / Offer",
+                                    "Mechanics / Notes",
+                                    "Headline",
+                                    "Subheadline",
+                                    "CTA",
+                                    "Actions",
+                                  ].map((heading:string)=>(
+                                    <th
+                                      key={heading}
+                                      style={{
+                                        padding:"9px 10px",
+                                        borderBottom:`1px solid ${C.border}`,
+                                        borderRight:`1px solid ${C.border}`,
+                                        background:C.surfaceAlt,
+                                        color:C.textSub,
+                                        textAlign:"left",
+                                        fontSize:9.5,
+                                        fontWeight:900,
+                                        letterSpacing:".04em",
+                                        textTransform:"uppercase",
+                                        whiteSpace:"nowrap",
+                                      }}
+                                    >
+                                      {heading}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
 
-                                  {(row.headline || row.subheadline || row.cta || aiBusy.ecommerceCampaignRow===row.id)&&(
-                                    <div style={{ margin:"0 10px 10px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                                      <div style={{ padding:"7px 9px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                                        <span style={{ fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>AI Output for this product</span>
-                                        {(row.headline || row.subheadline || row.cta)&&(
-                                          <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
-                                            <Btn xs onClick={()=>saveEcommerceCampaignRowOutput(row)}>Save Output</Btn>
-                                            <Btn xs variant="outline" onClick={()=>copyEcommerceCampaignRowOutput(row)}>Copy</Btn>
-                                            <TransferBtn xs id={`campaign-row-send-marketing-${row.id || row.productKey || row.product || "row"}`} onClick={()=>sendEcommerceCampaignRowToMarketing(row)}>Send to Marketing</TransferBtn>
-                                            <TransferBtn xs id={`campaign-row-send-dc-${row.id || row.productKey || row.product || "row"}`} onClick={()=>sendEcommerceCampaignRowToDigitalCreative(row)}>Send to DC</TransferBtn>
-                                            <TransferBtn xs id={`campaign-row-send-livestream-${row.id || row.productKey || row.product || "row"}`} onClick={()=>sendEcommerceCampaignRowToLivestream(row)}>Send to Livestream</TransferBtn>
-                                            <Btn xs variant={campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"default":"outline"} onClick={()=>addEcommerceCampaignRowToOverview(row)}>{campaignOverviewAddedIds.includes(String(row.id || row.productKey || row.product || ""))?"Added ✓":"Add to Overview"}</Btn>
+                              <tbody>
+                                {campaignRows.map(
+                                  (row:any,rowIndex:number)=>{
+                                    const rowKey = String(
+                                      row.id ||
+                                      row.productKey ||
+                                      row.product ||
+                                      rowIndex
+                                    );
+
+                                    const productKeys =
+                                      getCampaignRowProductKeys(row);
+
+                                    const isGenerating =
+                                      aiBusy.ecommerceCampaignRow===row.id;
+
+                                    const hasOutput =
+                                      !!(
+                                        row.headline ||
+                                        row.subheadline ||
+                                        row.cta
+                                      );
+
+                                    const overviewAdded =
+                                      campaignOverviewAddedIds.includes(
+                                        rowKey
+                                      );
+
+                                    return (
+                                      <tr
+                                        key={`${rowKey}-${rowIndex}`}
+                                        style={{
+                                          background:rowIndex%2
+                                            ? C.surface
+                                            : C.bg,
+                                        }}
+                                      >
+                                        <td
+                                          style={{
+                                            width:280,
+                                            minWidth:280,
+                                            padding:"9px 10px",
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              display:"flex",
+                                              flexDirection:"column",
+                                              gap:3,
+                                              minWidth:0,
+                                            }}
+                                          >
+                                            <strong
+                                              style={{
+                                                color:C.text,
+                                                fontSize:11.5,
+                                                lineHeight:1.35,
+                                                wordBreak:"break-word",
+                                              }}
+                                            >
+                                              {row.product || "Product"}
+                                            </strong>
+
+                                            <span
+                                              style={{
+                                                color:C.muted,
+                                                fontSize:9.5,
+                                                lineHeight:1.35,
+                                                wordBreak:"break-word",
+                                              }}
+                                            >
+                                              {row.brand || "No brand"} · {
+                                                row.collection ||
+                                                "No collection/category"
+                                              }
+                                            </span>
+
+                                            <span
+                                              style={{
+                                                color:C.textSub,
+                                                fontSize:9.5,
+                                                fontWeight:850,
+                                                lineHeight:1.35,
+                                                wordBreak:"break-word",
+                                              }}
+                                            >
+                                              {row.sku || "No SKU"}
+                                            </span>
+
+                                            {productKeys.length>1&&(
+                                              <span
+                                                style={{
+                                                  alignSelf:"flex-start",
+                                                  marginTop:2,
+                                                  padding:"3px 6px",
+                                                  borderRadius:999,
+                                                  background:"#EEF2FF",
+                                                  color:C.accent,
+                                                  fontSize:9,
+                                                  fontWeight:900,
+                                                }}
+                                              >
+                                                {productKeys.length} products
+                                                in 1 row
+                                              </span>
+                                            )}
                                           </div>
-                                        )}
-                                      </div>
-                                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,minmax(0,1fr))",gap:0 }}>
-                                        <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Headline</p>
-                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{aiBusy.ecommerceCampaignRow===row.id&&!row.headline?"Generating...":row.headline || "No output yet"}</p>
-                                        </div>
-                                        <div style={{ padding:10,borderRight:isMobile?"none":`1px solid ${C.border}`,borderBottom:isMobile?`1px solid ${C.border}`:"none" }}>
-                                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>Subheadline</p>
-                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub }}>{aiBusy.ecommerceCampaignRow===row.id&&!row.subheadline?"Generating...":row.subheadline || "No output yet"}</p>
-                                        </div>
-                                        <div style={{ padding:10 }}>
-                                          <p style={{ margin:"0 0 4px",fontSize:10.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".06em" }}>CTA</p>
-                                          <p style={{ margin:0,fontSize:12.5,lineHeight:1.4,color:C.textSub,fontWeight:800 }}>{aiBusy.ecommerceCampaignRow===row.id&&!row.cta?"Generating...":row.cta || "No output yet"}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:155,
+                                            minWidth:155,
+                                            padding:8,
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                          }}
+                                        >
+                                          <Select
+                                            value={
+                                              row.platform ||
+                                              campaignBuilder.platform ||
+                                              "All Platforms"
+                                            }
+                                            onChange={(value:any)=>
+                                              updateEcommerceCampaignRow(
+                                                row.id,
+                                                {platform:value},
+                                                rowIndex
+                                              )
+                                            }
+                                            style={{
+                                              width:"100%",
+                                              minWidth:0,
+                                              height:36,
+                                              padding:"7px 30px 7px 8px",
+                                              fontSize:10.5,
+                                              background:C.surface,
+                                            }}
+                                          >
+                                            {ecommerceCampaignPlatforms.map(
+                                              (platform:string)=>(
+                                                <option
+                                                  key={platform}
+                                                  value={platform}
+                                                >
+                                                  {platform}
+                                                </option>
+                                              )
+                                            )}
+                                          </Select>
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:180,
+                                            minWidth:180,
+                                            padding:8,
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              display:"flex",
+                                              flexDirection:"column",
+                                              gap:4,
+                                            }}
+                                          >
+                                            <TI
+                                              value={
+                                                getCampaignRowDiscountValue(row)
+                                              }
+                                              onChange={(value:any)=>
+                                                updateEcommerceCampaignRow(
+                                                  row.id,
+                                                  {discount:value},
+                                                  rowIndex
+                                                )
+                                              }
+                                              placeholder={
+                                                getCampaignMainPromotionDefault() ||
+                                                "e.g. 20% OFF"
+                                              }
+                                              style={{
+                                                fontSize:10.5,
+                                                padding:"7px 8px",
+                                              }}
+                                            />
+
+                                            {!!getCampaignMainPromotionDefault()&&
+                                              String(row.discount || "").trim()===
+                                                getCampaignMainPromotionDefault()&&(
+                                                <span
+                                                  style={{
+                                                    color:"#047857",
+                                                    fontSize:8.8,
+                                                    fontWeight:850,
+                                                    lineHeight:1.25,
+                                                  }}
+                                                >
+                                                  Using Main Promotion
+                                                </span>
+                                              )}
+                                          </div>
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:220,
+                                            minWidth:220,
+                                            padding:8,
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                          }}
+                                        >
+                                          <TI
+                                            value={row.mechanics || ""}
+                                            onChange={(value:any)=>
+                                              updateEcommerceCampaignRow(
+                                                row.id,
+                                                {mechanics:value},
+                                                rowIndex
+                                              )
+                                            }
+                                            placeholder="e.g. Min spend ₱599"
+                                            style={{
+                                              fontSize:10.5,
+                                              padding:"7px 8px",
+                                            }}
+                                          />
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:235,
+                                            minWidth:235,
+                                            padding:"9px 10px",
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                            color:C.textSub,
+                                            lineHeight:1.4,
+                                          }}
+                                        >
+                                          {isGenerating&&!row.headline
+                                            ? "Generating..."
+                                            : row.headline || "No output yet"}
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:300,
+                                            minWidth:300,
+                                            padding:"9px 10px",
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                            color:C.textSub,
+                                            lineHeight:1.4,
+                                          }}
+                                        >
+                                          {isGenerating&&!row.subheadline
+                                            ? "Generating..."
+                                            : row.subheadline || "No output yet"}
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:145,
+                                            minWidth:145,
+                                            padding:"9px 10px",
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                            color:C.textSub,
+                                            fontWeight:850,
+                                            lineHeight:1.4,
+                                          }}
+                                        >
+                                          {isGenerating&&!row.cta
+                                            ? "Generating..."
+                                            : row.cta || "No output yet"}
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:360,
+                                            minWidth:360,
+                                            padding:8,
+                                            borderBottom:`1px solid ${C.border}`,
+                                            verticalAlign:"top",
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              display:"flex",
+                                              flexWrap:"wrap",
+                                              gap:5,
+                                              alignItems:"center",
+                                            }}
+                                          >
+                                            <button
+                                              className="emdc-date-display-v3"
+                                              type="button"
+                                              onClick={()=>
+                                                generateEcommerceCampaignRow(
+                                                  row.id
+                                                )
+                                              }
+                                              disabled={
+                                                !!aiBusy.ecommerceCampaign ||
+                                                isGenerating
+                                              }
+                                              style={{
+                                                border:"none",
+                                                background:C.accent,
+                                                color:"#fff",
+                                                borderRadius:7,
+                                                padding:"6px 8px",
+                                                fontSize:9.5,
+                                                fontWeight:850,
+                                                cursor:
+                                                  (
+                                                    !!aiBusy.ecommerceCampaign ||
+                                                    isGenerating
+                                                  )
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                                opacity:
+                                                  (
+                                                    !!aiBusy.ecommerceCampaign ||
+                                                    isGenerating
+                                                  )
+                                                    ? .65
+                                                    : 1,
+                                              }}
+                                            >
+                                              {isGenerating
+                                                ? "Generating"
+                                                : "Generate"}
+                                            </button>
+
+                                            <button
+                                              className="emdc-date-display-v3"
+                                              type="button"
+                                              onClick={()=>
+                                                deleteEcommerceCampaignRow(
+                                                  row.id,
+                                                  rowIndex
+                                                )
+                                              }
+                                              style={{
+                                                border:"none",
+                                                background:"#FEF2F2",
+                                                color:"#DC2626",
+                                                borderRadius:7,
+                                                padding:"6px 8px",
+                                                fontSize:9.5,
+                                                fontWeight:850,
+                                                cursor:"pointer",
+                                              }}
+                                            >
+                                              Delete
+                                            </button>
+
+                                            {hasOutput&&(
+                                              <>
+                                                <Btn
+                                                  xs
+                                                  onClick={()=>
+                                                    saveEcommerceCampaignRowOutput(
+                                                      row
+                                                    )
+                                                  }
+                                                >
+                                                  Save
+                                                </Btn>
+
+                                                <Btn
+                                                  xs
+                                                  variant="outline"
+                                                  onClick={()=>
+                                                    copyEcommerceCampaignRowOutput(
+                                                      row
+                                                    )
+                                                  }
+                                                >
+                                                  Copy
+                                                </Btn>
+
+                                                <TransferBtn
+                                                  xs
+                                                  id={`campaign-row-send-marketing-${rowKey}`}
+                                                  onClick={()=>
+                                                    sendEcommerceCampaignRowToMarketing(
+                                                      row
+                                                    )
+                                                  }
+                                                >
+                                                  Marketing
+                                                </TransferBtn>
+
+                                                <TransferBtn
+                                                  xs
+                                                  id={`campaign-row-send-dc-${rowKey}`}
+                                                  onClick={()=>
+                                                    sendEcommerceCampaignRowToDigitalCreative(
+                                                      row
+                                                    )
+                                                  }
+                                                >
+                                                  DC
+                                                </TransferBtn>
+
+                                                <TransferBtn
+                                                  xs
+                                                  id={`campaign-row-send-livestream-${rowKey}`}
+                                                  onClick={()=>
+                                                    sendEcommerceCampaignRowToLivestream(
+                                                      row
+                                                    )
+                                                  }
+                                                >
+                                                  Livestream
+                                                </TransferBtn>
+
+                                                <Btn
+                                                  xs
+                                                  variant={
+                                                    overviewAdded
+                                                      ? "default"
+                                                      : "outline"
+                                                  }
+                                                  onClick={()=>
+                                                    addEcommerceCampaignRowToOverview(
+                                                      row
+                                                    )
+                                                  }
+                                                >
+                                                  {overviewAdded
+                                                    ? "Added ✓"
+                                                    : "Overview"}
+                                                </Btn>
+                                              </>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+                                )}
+                              </tbody>
+                            </table>
                           </div>
                         )}
                       </div>
