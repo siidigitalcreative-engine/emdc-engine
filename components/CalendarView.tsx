@@ -20992,6 +20992,1843 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             const ecommerceTabMode = String(lt?.label || group?.launchType || group?.type || "").toLowerCase();
       const isCampaignChecklist = ecommerceTabMode.includes("campaign");
 
+      const isSpecialCampaignChecklist =
+        ecommerceTabMode.includes("special") &&
+        ecommerceTabMode.includes("campaign");
+
+      if(isSpecialCampaignChecklist){
+        const rawSpecialCampaignTracker =
+          data?.specialCampaignTracker &&
+          typeof data.specialCampaignTracker==="object" &&
+          !Array.isArray(data.specialCampaignTracker)
+            ? data.specialCampaignTracker
+            : {};
+
+        const specialCampaignTracker:any = {
+          ...rawSpecialCampaignTracker,
+          campaignName:String(
+            rawSpecialCampaignTracker.campaignName ||
+            group?.groupName ||
+            group?.name ||
+            ""
+          ),
+          platform:String(rawSpecialCampaignTracker.platform || ""),
+          store:String(rawSpecialCampaignTracker.store || ""),
+          requester:String(rawSpecialCampaignTracker.requester || ""),
+          submissionChannel:String(
+            rawSpecialCampaignTracker.submissionChannel ||
+            "Lark"
+          ),
+          deadline:String(
+            rawSpecialCampaignTracker.deadline ||
+            group?.deadline ||
+            group?.date ||
+            ""
+          ),
+          sellerKitLink:String(
+            rawSpecialCampaignTracker.sellerKitLink || ""
+          ),
+          requestReferenceImageUrl:String(
+            rawSpecialCampaignTracker.requestReferenceImageUrl || ""
+          ),
+          instructions:String(
+            rawSpecialCampaignTracker.instructions || ""
+          ),
+          editableAssets:Array.isArray(
+            rawSpecialCampaignTracker.editableAssets
+          )
+            ? rawSpecialCampaignTracker.editableAssets
+            : [],
+          requirements:Array.isArray(
+            rawSpecialCampaignTracker.requirements
+          )
+            ? rawSpecialCampaignTracker.requirements
+            : [],
+          submissionMessage:String(
+            rawSpecialCampaignTracker.submissionMessage || ""
+          ),
+        };
+
+        const updateSpecialCampaignTracker = (
+          patch:any
+        ) => {
+          updateAiWorkspace("ecommerce",{
+            specialCampaignTracker:{
+              ...rawSpecialCampaignTracker,
+              ...specialCampaignTracker,
+              ...patch,
+              updatedAt:new Date().toISOString(),
+            },
+          });
+        };
+
+        const specialCampaignChecklistSkus =
+          Array.from(
+            new Set(
+              productRows
+                .map((row:any)=>
+                  String(
+                    row?.skuCode ||
+                    row?.sku ||
+                    row?.value ||
+                    ""
+                  ).trim()
+                )
+                .filter(Boolean)
+            )
+          )
+            .join(", ");
+
+        const getSpecialCampaignDriveId = (
+          value:any
+        ) => {
+          const source = String(value || "").trim();
+          if(!source) return "";
+
+          const patterns = [
+            /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+            /drive\.google\.com\/open\?id=([^&#]+)/i,
+            /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&#]+)/i,
+            /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&#]+)/i,
+            /[?&]id=([^&#]+)/i,
+          ];
+
+          for(const pattern of patterns){
+            const match = source.match(pattern);
+            if(match?.[1]){
+              try {
+                return decodeURIComponent(match[1]);
+              } catch {
+                return match[1];
+              }
+            }
+          }
+
+          return "";
+        };
+
+        const getSpecialCampaignImagePreview = (
+          value:any
+        ) => {
+          const source = String(value || "").trim();
+          if(!source) return "";
+
+          const driveId =
+            getSpecialCampaignDriveId(source);
+
+          if(driveId){
+            return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+              driveId
+            )}&sz=w1200`;
+          }
+
+          return /^https?:\/\//i.test(source)
+            ? source
+            : "";
+        };
+
+        const openSpecialCampaignLink = (
+          value:any
+        ) => {
+          const url = String(value || "").trim();
+          if(!/^https?:\/\//i.test(url)) return;
+          window.open(url,"_blank","noopener,noreferrer");
+        };
+
+        const saveEditableAssets = (
+          rows:any[]
+        ) => {
+          updateSpecialCampaignTracker({
+            editableAssets:rows,
+          });
+        };
+
+        const addEditableAsset = () => {
+          saveEditableAssets([
+            ...specialCampaignTracker.editableAssets,
+            {
+              id:uid(),
+              name:"",
+              link:"",
+              notes:"",
+            },
+          ]);
+        };
+
+        const updateEditableAsset = (
+          rowId:any,
+          patch:any
+        ) => {
+          saveEditableAssets(
+            specialCampaignTracker.editableAssets.map(
+              (row:any)=>
+                String(row?.id)===String(rowId)
+                  ? {
+                      ...row,
+                      ...patch,
+                    }
+                  : row
+            )
+          );
+        };
+
+        const deleteEditableAsset = (
+          rowId:any
+        ) => {
+          saveEditableAssets(
+            specialCampaignTracker.editableAssets.filter(
+              (row:any)=>
+                String(row?.id)!==String(rowId)
+            )
+          );
+        };
+
+        const saveSpecialCampaignRequirements = (
+          rows:any[]
+        ) => {
+          updateSpecialCampaignTracker({
+            requirements:rows,
+          });
+        };
+
+        const addSpecialCampaignRequirement = () => {
+          saveSpecialCampaignRequirements([
+            ...specialCampaignTracker.requirements,
+            {
+              id:uid(),
+              assetName:"",
+              platform:
+                specialCampaignTracker.platform || "",
+              store:
+                specialCampaignTracker.store || "",
+              skuText:
+                specialCampaignChecklistSkus,
+              dimensions:"",
+              templateLink:"",
+              deadline:
+                specialCampaignTracker.deadline || "",
+              copyInstructions:"",
+              notes:"",
+              finalPreviewUrl:"",
+              finalAssetLink:"",
+              status:"requested",
+              posted:false,
+              submittedAt:"",
+              postedAt:"",
+            },
+          ]);
+        };
+
+        const updateSpecialCampaignRequirement = (
+          rowId:any,
+          patch:any
+        ) => {
+          saveSpecialCampaignRequirements(
+            specialCampaignTracker.requirements.map(
+              (row:any)=>
+                String(row?.id)===String(rowId)
+                  ? {
+                      ...row,
+                      ...patch,
+                    }
+                  : row
+            )
+          );
+        };
+
+        const deleteSpecialCampaignRequirement = (
+          rowId:any
+        ) => {
+          saveSpecialCampaignRequirements(
+            specialCampaignTracker.requirements.filter(
+              (row:any)=>
+                String(row?.id)!==String(rowId)
+            )
+          );
+        };
+
+        const specialCampaignStatusOptions = [
+          {
+            id:"requested",
+            label:"Requested",
+            color:"#6B7280",
+            background:"#F3F4F6",
+          },
+          {
+            id:"inprogress",
+            label:"In Progress",
+            color:"#2563EB",
+            background:"#EFF6FF",
+          },
+          {
+            id:"review",
+            label:"For Review",
+            color:"#B45309",
+            background:"#FFF7ED",
+          },
+          {
+            id:"submitted",
+            label:"Submitted",
+            color:"#15803D",
+            background:"#F0FDF4",
+          },
+        ];
+
+        const getSpecialCampaignStatusMeta = (
+          statusId:any
+        ) =>
+          specialCampaignStatusOptions.find(
+            (status:any)=>
+              status.id===statusId
+          ) ||
+          specialCampaignStatusOptions[0];
+
+        const specialCampaignCounts = {
+          total:
+            specialCampaignTracker.requirements.length,
+          inProgress:
+            specialCampaignTracker.requirements.filter(
+              (row:any)=>
+                row?.status==="inprogress" ||
+                row?.status==="review"
+            ).length,
+          submitted:
+            specialCampaignTracker.requirements.filter(
+              (row:any)=>
+                row?.status==="submitted"
+            ).length,
+          posted:
+            specialCampaignTracker.requirements.filter(
+              (row:any)=>!!row?.posted
+            ).length,
+        };
+
+        const buildSpecialCampaignSubmissionMessage = () => {
+          const requirements =
+            specialCampaignTracker.requirements.filter(
+              (row:any)=>
+                String(
+                  row?.assetName ||
+                  row?.finalAssetLink ||
+                  row?.templateLink ||
+                  ""
+                ).trim()
+            );
+
+          const headerLines = [
+            String(
+              specialCampaignTracker.campaignName ||
+              group?.groupName ||
+              group?.name ||
+              "Special Campaign"
+            ).trim().toUpperCase(),
+            "",
+            specialCampaignTracker.platform
+              ? `Platform: ${specialCampaignTracker.platform}`
+              : "",
+            specialCampaignTracker.store
+              ? `Store: ${specialCampaignTracker.store}`
+              : "",
+            specialCampaignTracker.deadline
+              ? `Deadline: ${specialCampaignTracker.deadline}`
+              : "",
+            "",
+            "Completed Collaterals",
+          ].filter((line,index,rows)=>
+            line!=="" ||
+            (
+              index>0 &&
+              rows[index-1]!==""
+            )
+          );
+
+          const requirementLines =
+            requirements.length
+              ? requirements.flatMap(
+                  (row:any,index:number)=>{
+                    const status =
+                      getSpecialCampaignStatusMeta(
+                        row?.status
+                      ).label;
+
+                    return [
+                      "",
+                      `${index+1}. ${
+                        String(
+                          row?.assetName ||
+                          "Untitled Asset"
+                        ).trim()
+                      }`,
+                      [
+                        row?.platform,
+                        row?.store,
+                      ]
+                        .filter(Boolean)
+                        .join(" · "),
+                      row?.skuText
+                        ? `SKUs: ${row.skuText}`
+                        : "",
+                      row?.finalAssetLink
+                        ? `Final Asset: ${row.finalAssetLink}`
+                        : "",
+                      row?.finalPreviewUrl
+                        ? `Preview: ${row.finalPreviewUrl}`
+                        : "",
+                      `Status: ${status}${
+                        row?.posted
+                          ? " · Posted"
+                          : ""
+                      }`,
+                    ].filter(Boolean);
+                  }
+                )
+              : [
+                  "",
+                  "No completed collateral links have been added yet.",
+                ];
+
+          const footerLines = [
+            "",
+            specialCampaignTracker.sellerKitLink
+              ? `Seller Kit: ${specialCampaignTracker.sellerKitLink}`
+              : "",
+            "",
+            "Please review the submitted files and advise if revisions are required.",
+          ].filter((line,index,rows)=>
+            line!=="" ||
+            (
+              index>0 &&
+              rows[index-1]!==""
+            )
+          );
+
+          return [
+            ...headerLines,
+            ...requirementLines,
+            ...footerLines,
+          ].join("\n");
+        };
+
+        const prepareSpecialCampaignSubmission = () => {
+          updateSpecialCampaignTracker({
+            submissionMessage:
+              buildSpecialCampaignSubmissionMessage(),
+            submissionPreparedAt:
+              new Date().toISOString(),
+          });
+          markActionDone(
+            "special-campaign-prepare-submission"
+          );
+        };
+
+        const copySpecialCampaignSubmission = async () => {
+          const value = String(
+            specialCampaignTracker.submissionMessage ||
+            buildSpecialCampaignSubmissionMessage()
+          ).trim();
+
+          if(!value) return;
+
+          try {
+            await navigator.clipboard.writeText(
+              value
+            );
+            markActionDone(
+              "special-campaign-copy-submission"
+            );
+          } catch {}
+        };
+
+        const markAllSpecialCampaignSubmitted = () => {
+          const submittedAt =
+            new Date().toISOString();
+
+          saveSpecialCampaignRequirements(
+            specialCampaignTracker.requirements.map(
+              (row:any)=>({
+                ...row,
+                status:"submitted",
+                submittedAt:
+                  row?.submittedAt ||
+                  submittedAt,
+              })
+            )
+          );
+
+          markActionDone(
+            "special-campaign-mark-all-submitted"
+          );
+        };
+
+        const addSpecialCampaignSubmissionToOverview = () => {
+          const value = String(
+            specialCampaignTracker.submissionMessage ||
+            buildSpecialCampaignSubmissionMessage()
+          ).trim();
+
+          if(!value) return;
+
+          addToOverview(
+            "E-commerce",
+            `${
+              specialCampaignTracker.campaignName ||
+              group?.groupName ||
+              "Special Campaign"
+            } Collateral Submission`,
+            value,
+            "Special Campaign Submission",
+            {
+              tab:"ecommerce",
+              type:"specialCampaignSubmission",
+            }
+          );
+
+          markActionDone(
+            "special-campaign-overview-submission"
+          );
+        };
+
+        const requestReferencePreview =
+          getSpecialCampaignImagePreview(
+            specialCampaignTracker.requestReferenceImageUrl
+          );
+
+        const summaryCards = [
+          {
+            label:"Requirements",
+            value:specialCampaignCounts.total,
+          },
+          {
+            label:"In Progress",
+            value:specialCampaignCounts.inProgress,
+          },
+          {
+            label:"Submitted",
+            value:specialCampaignCounts.submitted,
+          },
+          {
+            label:"Posted",
+            value:specialCampaignCounts.posted,
+          },
+        ];
+
+        return (
+          <div
+            style={{
+              display:"flex",
+              flexDirection:"column",
+              gap:14,
+              minWidth:0,
+            }}
+          >
+            <div
+              style={{
+                display:"flex",
+                justifyContent:"space-between",
+                alignItems:"flex-start",
+                gap:12,
+                flexWrap:"wrap",
+                padding:isMobile?14:16,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <div style={{minWidth:0,flex:1}}>
+                <div
+                  style={{
+                    display:"flex",
+                    alignItems:"center",
+                    gap:8,
+                    flexWrap:"wrap",
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin:0,
+                      fontSize:17,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    Special Campaign Collateral Tracker
+                  </h3>
+                  <span
+                    style={{
+                      padding:"3px 8px",
+                      borderRadius:999,
+                      background:"#F5F3FF",
+                      border:"1px solid #DDD6FE",
+                      color:"#6D28D9",
+                      fontSize:10,
+                      fontWeight:900,
+                    }}
+                  >
+                    E-commerce
+                  </span>
+                </div>
+                <p
+                  style={{
+                    margin:"6px 0 0",
+                    fontSize:12,
+                    lineHeight:1.5,
+                    color:C.muted,
+                    maxWidth:900,
+                  }}
+                >
+                  Receive campaign seller kits and editable templates,
+                  assign the required collaterals, then track final
+                  submissions and posted assets in one place.
+                </p>
+              </div>
+
+              <span
+                style={{
+                  padding:"5px 10px",
+                  borderRadius:999,
+                  background:C.surfaceAlt,
+                  border:`1px solid ${C.border}`,
+                  color:C.muted,
+                  fontSize:11,
+                  fontWeight:800,
+                }}
+              >
+                Auto-saved
+              </span>
+            </div>
+
+            <div
+              style={{
+                display:"grid",
+                gridTemplateColumns:isMobile
+                  ? "repeat(2,minmax(0,1fr))"
+                  : "repeat(4,minmax(0,1fr))",
+                gap:10,
+              }}
+            >
+              {summaryCards.map((card:any)=>(
+                <div
+                  key={card.label}
+                  style={{
+                    padding:"13px 14px",
+                    background:C.surface,
+                    border:`1.5px solid ${C.border}`,
+                    borderRadius:11,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin:"0 0 5px",
+                      fontSize:10,
+                      fontWeight:900,
+                      color:C.faint,
+                      letterSpacing:".06em",
+                      textTransform:"uppercase",
+                    }}
+                  >
+                    {card.label}
+                  </p>
+                  <p
+                    style={{
+                      margin:0,
+                      fontSize:21,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    {card.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <section
+              style={{
+                padding:isMobile?14:16,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <div style={{marginBottom:14}}>
+                <h4
+                  style={{
+                    margin:0,
+                    fontSize:14,
+                    fontWeight:900,
+                    color:C.text,
+                  }}
+                >
+                  1. Campaign Brief
+                </h4>
+                <p
+                  style={{
+                    margin:"4px 0 0",
+                    fontSize:11,
+                    lineHeight:1.45,
+                    color:C.muted,
+                  }}
+                >
+                  Record the campaign request exactly as received from
+                  E-commerce, including the deadline and submission channel.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display:"grid",
+                  gridTemplateColumns:isMobile
+                    ? "1fr"
+                    : "repeat(3,minmax(0,1fr))",
+                  gap:12,
+                }}
+              >
+                <Field label="Campaign Name">
+                  <TI
+                    value={specialCampaignTracker.campaignName}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignTracker({
+                        campaignName:value,
+                      })
+                    }
+                    placeholder="e.g. Lazada 6.6 BMO Banners"
+                  />
+                </Field>
+
+                <Field label="Platform">
+                  <TI
+                    value={specialCampaignTracker.platform}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignTracker({
+                        platform:value,
+                      })
+                    }
+                    placeholder="Lazada, Shopee, TikTok, Landers..."
+                  />
+                </Field>
+
+                <Field label="Store / Account">
+                  <TI
+                    value={specialCampaignTracker.store}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignTracker({
+                        store:value,
+                      })
+                    }
+                    placeholder="e.g. Sunbeams Lifestyle"
+                  />
+                </Field>
+
+                <Field label="Requested By">
+                  <TI
+                    value={specialCampaignTracker.requester}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignTracker({
+                        requester:value,
+                      })
+                    }
+                    placeholder="Name or department"
+                  />
+                </Field>
+
+                <Field label="Submission Channel">
+                  <TI
+                    value={specialCampaignTracker.submissionChannel}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignTracker({
+                        submissionChannel:value,
+                      })
+                    }
+                    placeholder="e.g. Lark"
+                  />
+                </Field>
+
+                <Field label="Deadline">
+                  <TI
+                    value={specialCampaignTracker.deadline}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignTracker({
+                        deadline:value,
+                      })
+                    }
+                    placeholder="e.g. June 26, 2026 at 4:00 PM"
+                  />
+                </Field>
+              </div>
+
+              <div
+                style={{
+                  marginTop:12,
+                  display:"grid",
+                  gridTemplateColumns:isMobile
+                    ? "1fr"
+                    : "minmax(0,1fr) minmax(0,1fr)",
+                  gap:12,
+                }}
+              >
+                <Field label="Reference Image URL" hint="optional">
+                  <div
+                    style={{
+                      display:"flex",
+                      flexDirection:"column",
+                      gap:8,
+                    }}
+                  >
+                    <TI
+                      value={
+                        specialCampaignTracker.requestReferenceImageUrl
+                      }
+                      onChange={(value:any)=>
+                        updateSpecialCampaignTracker({
+                          requestReferenceImageUrl:value,
+                        })
+                      }
+                      placeholder="Google Drive image link or direct URL"
+                    />
+                    {requestReferencePreview&&(
+                      <img
+                        src={requestReferencePreview}
+                        alt="Campaign request reference"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        style={{
+                          display:"block",
+                          width:"100%",
+                          maxHeight:240,
+                          objectFit:"contain",
+                          borderRadius:9,
+                          border:`1px solid ${C.border}`,
+                          background:C.surfaceAlt,
+                        }}
+                      />
+                    )}
+                  </div>
+                </Field>
+
+                <Field label="Request Instructions">
+                  <textarea
+                    value={specialCampaignTracker.instructions}
+                    onChange={(event:any)=>
+                      updateSpecialCampaignTracker({
+                        instructions:event.target.value,
+                      })
+                    }
+                    placeholder="Campaign mechanics, required copy, font rules, dimensions, deadlines, or other instructions..."
+                    rows={7}
+                    style={{
+                      width:"100%",
+                      minHeight:150,
+                      resize:"vertical",
+                      padding:"10px 12px",
+                      borderRadius:9,
+                      border:`1.5px solid ${C.border}`,
+                      background:C.surface,
+                      color:C.text,
+                      fontSize:13,
+                      lineHeight:1.5,
+                      outline:"none",
+                    }}
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <section
+              style={{
+                padding:isMobile?14:16,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <div
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"flex-start",
+                  gap:10,
+                  flexWrap:"wrap",
+                  marginBottom:14,
+                }}
+              >
+                <div>
+                  <h4
+                    style={{
+                      margin:0,
+                      fontSize:14,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    2. Seller Kit & Editable Assets
+                  </h4>
+                  <p
+                    style={{
+                      margin:"4px 0 0",
+                      fontSize:11,
+                      lineHeight:1.45,
+                      color:C.muted,
+                    }}
+                  >
+                    Save the main seller kit and every downloadable
+                    editable template supplied by the platform.
+                  </p>
+                </div>
+                <Btn
+                  xs
+                  variant="outline"
+                  onClick={addEditableAsset}
+                >
+                  + Add Editable Asset
+                </Btn>
+              </div>
+
+              <Field label="Main Seller Kit / Editable Folder">
+                <div
+                  style={{
+                    display:"grid",
+                    gridTemplateColumns:isMobile
+                      ? "1fr"
+                      : "minmax(0,1fr) auto",
+                    gap:8,
+                  }}
+                >
+                  <TI
+                    value={specialCampaignTracker.sellerKitLink}
+                    onChange={(value:any)=>
+                      updateSpecialCampaignTracker({
+                        sellerKitLink:value,
+                      })
+                    }
+                    placeholder="Paste Google Drive folder or file link"
+                  />
+                  <Btn
+                    xs
+                    variant="outline"
+                    disabled={
+                      !/^https?:\/\//i.test(
+                        specialCampaignTracker.sellerKitLink
+                      )
+                    }
+                    onClick={()=>
+                      openSpecialCampaignLink(
+                        specialCampaignTracker.sellerKitLink
+                      )
+                    }
+                  >
+                    Open Seller Kit
+                  </Btn>
+                </div>
+              </Field>
+
+              <div
+                style={{
+                  display:"flex",
+                  flexDirection:"column",
+                  gap:8,
+                  marginTop:12,
+                }}
+              >
+                {specialCampaignTracker.editableAssets.length===0&&(
+                  <div
+                    style={{
+                      padding:16,
+                      border:`1.5px dashed ${C.border}`,
+                      borderRadius:10,
+                      color:C.muted,
+                      fontSize:12,
+                      textAlign:"center",
+                    }}
+                  >
+                    No additional editable templates have been added.
+                  </div>
+                )}
+
+                {specialCampaignTracker.editableAssets.map(
+                  (row:any,index:number)=>(
+                    <div
+                      key={row?.id || index}
+                      style={{
+                        display:"grid",
+                        gridTemplateColumns:isMobile
+                          ? "1fr"
+                          : "180px minmax(0,1fr) minmax(180px,.7fr) auto",
+                        gap:8,
+                        alignItems:"center",
+                        padding:10,
+                        border:`1px solid ${C.border}`,
+                        borderRadius:10,
+                        background:index%2
+                          ? C.bg
+                          : C.surface,
+                      }}
+                    >
+                      <TI
+                        value={String(row?.name || "")}
+                        onChange={(value:any)=>
+                          updateEditableAsset(
+                            row.id,
+                            {name:value}
+                          )
+                        }
+                        placeholder="Template / asset name"
+                      />
+
+                      <TI
+                        value={String(row?.link || "")}
+                        onChange={(value:any)=>
+                          updateEditableAsset(
+                            row.id,
+                            {link:value}
+                          )
+                        }
+                        placeholder="Google Drive editable asset link"
+                      />
+
+                      <TI
+                        value={String(row?.notes || "")}
+                        onChange={(value:any)=>
+                          updateEditableAsset(
+                            row.id,
+                            {notes:value}
+                          )
+                        }
+                        placeholder="Notes"
+                      />
+
+                      <div
+                        style={{
+                          display:"flex",
+                          gap:6,
+                          justifyContent:isMobile
+                            ? "flex-start"
+                            : "flex-end",
+                        }}
+                      >
+                        <Btn
+                          xs
+                          variant="outline"
+                          disabled={
+                            !/^https?:\/\//i.test(
+                              String(row?.link || "")
+                            )
+                          }
+                          onClick={()=>
+                            openSpecialCampaignLink(
+                              row?.link
+                            )
+                          }
+                        >
+                          Open
+                        </Btn>
+                        <Btn
+                          xs
+                          variant="danger"
+                          onClick={()=>
+                            deleteEditableAsset(
+                              row.id
+                            )
+                          }
+                        >
+                          Delete
+                        </Btn>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </section>
+
+            <section
+              style={{
+                padding:isMobile?14:16,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <div
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"flex-start",
+                  gap:10,
+                  flexWrap:"wrap",
+                  marginBottom:14,
+                }}
+              >
+                <div>
+                  <h4
+                    style={{
+                      margin:0,
+                      fontSize:14,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    3. Asset Requirements & Output Tracker
+                  </h4>
+                  <p
+                    style={{
+                      margin:"4px 0 0",
+                      fontSize:11,
+                      lineHeight:1.45,
+                      color:C.muted,
+                    }}
+                  >
+                    One row per required collateral. Keep the original
+                    template link, final preview, final asset link,
+                    submission status, and posting status together.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    gap:8,
+                    flexWrap:"wrap",
+                  }}
+                >
+                  <Btn
+                    xs
+                    variant="outline"
+                    disabled={
+                      !specialCampaignTracker.requirements.length
+                    }
+                    onClick={
+                      markAllSpecialCampaignSubmitted
+                    }
+                  >
+                    Mark All Submitted
+                  </Btn>
+                  <Btn
+                    xs
+                    onClick={
+                      addSpecialCampaignRequirement
+                    }
+                  >
+                    + Add Requirement
+                  </Btn>
+                </div>
+              </div>
+
+              {specialCampaignTracker.requirements.length===0 ? (
+                <div
+                  style={{
+                    padding:"30px 18px",
+                    border:`1.5px dashed ${C.border}`,
+                    borderRadius:10,
+                    textAlign:"center",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin:"0 0 5px",
+                      fontSize:13,
+                      fontWeight:800,
+                      color:C.textSub,
+                    }}
+                  >
+                    No collateral requirements yet
+                  </p>
+                  <p
+                    style={{
+                      margin:"0 0 14px",
+                      fontSize:12,
+                      color:C.muted,
+                    }}
+                  >
+                    Add the required banner, feed, story, marketplace,
+                    signage, or other campaign asset.
+                  </p>
+                  <Btn
+                    sm
+                    onClick={
+                      addSpecialCampaignRequirement
+                    }
+                  >
+                    Add First Requirement
+                  </Btn>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display:"flex",
+                    flexDirection:"column",
+                    gap:10,
+                  }}
+                >
+                  {specialCampaignTracker.requirements.map(
+                    (row:any,index:number)=>{
+                      const statusMeta =
+                        getSpecialCampaignStatusMeta(
+                          row?.status
+                        );
+
+                      const finalPreview =
+                        getSpecialCampaignImagePreview(
+                          row?.finalPreviewUrl
+                        );
+
+                      return (
+                        <article
+                          key={row?.id || index}
+                          style={{
+                            border:`1.5px solid ${C.border}`,
+                            borderRadius:11,
+                            overflow:"hidden",
+                            background:C.surface,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display:"flex",
+                              alignItems:"center",
+                              justifyContent:"space-between",
+                              gap:10,
+                              flexWrap:"wrap",
+                              padding:"10px 12px",
+                              background:C.surfaceAlt,
+                              borderBottom:`1px solid ${C.border}`,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                gap:8,
+                                minWidth:0,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width:26,
+                                  height:26,
+                                  borderRadius:7,
+                                  display:"inline-flex",
+                                  alignItems:"center",
+                                  justifyContent:"center",
+                                  background:C.accent,
+                                  color:"#fff",
+                                  fontSize:11,
+                                  fontWeight:900,
+                                  flexShrink:0,
+                                }}
+                              >
+                                {index+1}
+                              </span>
+                              <strong
+                                style={{
+                                  minWidth:0,
+                                  overflow:"hidden",
+                                  textOverflow:"ellipsis",
+                                  whiteSpace:"nowrap",
+                                  fontSize:13,
+                                  color:C.text,
+                                }}
+                              >
+                                {row?.assetName ||
+                                  "Untitled Requirement"}
+                              </strong>
+                            </div>
+
+                            <div
+                              style={{
+                                display:"flex",
+                                alignItems:"center",
+                                gap:7,
+                                flexWrap:"wrap",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  padding:"3px 8px",
+                                  borderRadius:999,
+                                  background:
+                                    statusMeta.background,
+                                  color:statusMeta.color,
+                                  border:`1px solid ${statusMeta.color}25`,
+                                  fontSize:10,
+                                  fontWeight:900,
+                                }}
+                              >
+                                {statusMeta.label}
+                              </span>
+
+                              {row?.posted&&(
+                                <span
+                                  style={{
+                                    padding:"3px 8px",
+                                    borderRadius:999,
+                                    background:"#ECFEFF",
+                                    color:"#0F766E",
+                                    border:"1px solid #A5F3FC",
+                                    fontSize:10,
+                                    fontWeight:900,
+                                  }}
+                                >
+                                  Posted
+                                </span>
+                              )}
+
+                              <Btn
+                                xs
+                                variant="danger"
+                                onClick={()=>
+                                  deleteSpecialCampaignRequirement(
+                                    row.id
+                                  )
+                                }
+                              >
+                                Delete
+                              </Btn>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:isMobile
+                                ? "1fr"
+                                : "repeat(3,minmax(0,1fr))",
+                              gap:10,
+                              padding:12,
+                            }}
+                          >
+                            <Field label="Asset Requirement">
+                              <TI
+                                value={String(row?.assetName || "")}
+                                onChange={(value:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {assetName:value}
+                                  )
+                                }
+                                placeholder="e.g. BMO Channel Sliding Banner"
+                              />
+                            </Field>
+
+                            <Field label="Platform">
+                              <TI
+                                value={String(row?.platform || "")}
+                                onChange={(value:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {platform:value}
+                                  )
+                                }
+                                placeholder="Lazada, Shopee, Landers..."
+                              />
+                            </Field>
+
+                            <Field label="Store">
+                              <TI
+                                value={String(row?.store || "")}
+                                onChange={(value:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {store:value}
+                                  )
+                                }
+                                placeholder="Store / account"
+                              />
+                            </Field>
+
+                            <Field label="Dimensions">
+                              <TI
+                                value={String(row?.dimensions || "")}
+                                onChange={(value:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {dimensions:value}
+                                  )
+                                }
+                                placeholder="e.g. 1200 × 400 px"
+                              />
+                            </Field>
+
+                            <Field label="Requirement Deadline">
+                              <TI
+                                value={String(row?.deadline || "")}
+                                onChange={(value:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {deadline:value}
+                                  )
+                                }
+                                placeholder="Date and time"
+                              />
+                            </Field>
+
+                            <Field label="Work Status">
+                              <Select
+                                value={String(
+                                  row?.status || "requested"
+                                )}
+                                onChange={(value:any)=>{
+                                  const now =
+                                    new Date().toISOString();
+
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {
+                                      status:value,
+                                      submittedAt:
+                                        value==="submitted"
+                                          ? row?.submittedAt ||
+                                            now
+                                          : row?.submittedAt ||
+                                            "",
+                                    }
+                                  );
+                                }}
+                              >
+                                {specialCampaignStatusOptions.map(
+                                  (status:any)=>(
+                                    <option
+                                      key={status.id}
+                                      value={status.id}
+                                    >
+                                      {status.label}
+                                    </option>
+                                  )
+                                )}
+                              </Select>
+                            </Field>
+                          </div>
+
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:isMobile
+                                ? "1fr"
+                                : "minmax(0,1fr) minmax(0,1fr)",
+                              gap:10,
+                              padding:"0 12px 12px",
+                            }}
+                          >
+                            <Field label="Included SKUs">
+                              <div
+                                style={{
+                                  display:"flex",
+                                  flexDirection:"column",
+                                  gap:7,
+                                }}
+                              >
+                                <textarea
+                                  value={String(row?.skuText || "")}
+                                  onChange={(event:any)=>
+                                    updateSpecialCampaignRequirement(
+                                      row.id,
+                                      {skuText:event.target.value}
+                                    )
+                                  }
+                                  placeholder="Comma-separated SKUs"
+                                  rows={4}
+                                  style={{
+                                    width:"100%",
+                                    resize:"vertical",
+                                    minHeight:88,
+                                    padding:"9px 11px",
+                                    borderRadius:8,
+                                    border:`1.5px solid ${C.border}`,
+                                    background:C.surface,
+                                    color:C.text,
+                                    fontSize:12,
+                                    lineHeight:1.45,
+                                    outline:"none",
+                                  }}
+                                />
+                                <Btn
+                                  xs
+                                  variant="outline"
+                                  disabled={
+                                    !specialCampaignChecklistSkus
+                                  }
+                                  onClick={()=>
+                                    updateSpecialCampaignRequirement(
+                                      row.id,
+                                      {
+                                        skuText:
+                                          specialCampaignChecklistSkus,
+                                      }
+                                    )
+                                  }
+                                  style={{alignSelf:"flex-start"}}
+                                >
+                                  Use Checklist SKUs
+                                </Btn>
+                              </div>
+                            </Field>
+
+                            <Field label="Copy / Headline Instructions">
+                              <textarea
+                                value={String(
+                                  row?.copyInstructions || ""
+                                )}
+                                onChange={(event:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {
+                                      copyInstructions:
+                                        event.target.value,
+                                    }
+                                  )
+                                }
+                                placeholder="Required headline, promo mechanics, fonts, disclaimer, or copy..."
+                                rows={4}
+                                style={{
+                                  width:"100%",
+                                  resize:"vertical",
+                                  minHeight:88,
+                                  padding:"9px 11px",
+                                  borderRadius:8,
+                                  border:`1.5px solid ${C.border}`,
+                                  background:C.surface,
+                                  color:C.text,
+                                  fontSize:12,
+                                  lineHeight:1.45,
+                                  outline:"none",
+                                }}
+                              />
+                            </Field>
+                          </div>
+
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:isMobile
+                                ? "1fr"
+                                : "repeat(3,minmax(0,1fr))",
+                              gap:10,
+                              padding:"0 12px 12px",
+                            }}
+                          >
+                            <Field label="Editable Template Link">
+                              <div
+                                style={{
+                                  display:"flex",
+                                  flexDirection:"column",
+                                  gap:7,
+                                }}
+                              >
+                                <TI
+                                  value={String(
+                                    row?.templateLink || ""
+                                  )}
+                                  onChange={(value:any)=>
+                                    updateSpecialCampaignRequirement(
+                                      row.id,
+                                      {templateLink:value}
+                                    )
+                                  }
+                                  placeholder="Google Drive template link"
+                                />
+                                <Btn
+                                  xs
+                                  variant="outline"
+                                  disabled={
+                                    !/^https?:\/\//i.test(
+                                      String(
+                                        row?.templateLink || ""
+                                      )
+                                    )
+                                  }
+                                  onClick={()=>
+                                    openSpecialCampaignLink(
+                                      row?.templateLink
+                                    )
+                                  }
+                                  style={{alignSelf:"flex-start"}}
+                                >
+                                  Open Template
+                                </Btn>
+                              </div>
+                            </Field>
+
+                            <Field label="Final Preview Image URL">
+                              <div
+                                style={{
+                                  display:"flex",
+                                  flexDirection:"column",
+                                  gap:7,
+                                }}
+                              >
+                                <TI
+                                  value={String(
+                                    row?.finalPreviewUrl || ""
+                                  )}
+                                  onChange={(value:any)=>
+                                    updateSpecialCampaignRequirement(
+                                      row.id,
+                                      {finalPreviewUrl:value}
+                                    )
+                                  }
+                                  placeholder="Google Drive image link"
+                                />
+                                {finalPreview&&(
+                                  <img
+                                    src={finalPreview}
+                                    alt={
+                                      row?.assetName ||
+                                      "Final collateral preview"
+                                    }
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer"
+                                    style={{
+                                      display:"block",
+                                      width:"100%",
+                                      height:150,
+                                      objectFit:"contain",
+                                      borderRadius:8,
+                                      border:`1px solid ${C.border}`,
+                                      background:C.surfaceAlt,
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </Field>
+
+                            <Field label="Final Asset Link">
+                              <div
+                                style={{
+                                  display:"flex",
+                                  flexDirection:"column",
+                                  gap:7,
+                                }}
+                              >
+                                <TI
+                                  value={String(
+                                    row?.finalAssetLink || ""
+                                  )}
+                                  onChange={(value:any)=>
+                                    updateSpecialCampaignRequirement(
+                                      row.id,
+                                      {finalAssetLink:value}
+                                    )
+                                  }
+                                  placeholder="Final Drive file or folder link"
+                                />
+                                <Btn
+                                  xs
+                                  variant="outline"
+                                  disabled={
+                                    !/^https?:\/\//i.test(
+                                      String(
+                                        row?.finalAssetLink || ""
+                                      )
+                                    )
+                                  }
+                                  onClick={()=>
+                                    openSpecialCampaignLink(
+                                      row?.finalAssetLink
+                                    )
+                                  }
+                                  style={{alignSelf:"flex-start"}}
+                                >
+                                  Open Final Asset
+                                </Btn>
+                              </div>
+                            </Field>
+                          </div>
+
+                          <div
+                            style={{
+                              display:"grid",
+                              gridTemplateColumns:isMobile
+                                ? "1fr"
+                                : "minmax(0,1fr) auto",
+                              gap:10,
+                              alignItems:"start",
+                              padding:"0 12px 12px",
+                            }}
+                          >
+                            <Field label="Notes">
+                              <textarea
+                                value={String(row?.notes || "")}
+                                onChange={(event:any)=>
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {notes:event.target.value}
+                                  )
+                                }
+                                placeholder="Revision notes, approvals, submission reference, or posting notes..."
+                                rows={3}
+                                style={{
+                                  width:"100%",
+                                  resize:"vertical",
+                                  minHeight:72,
+                                  padding:"9px 11px",
+                                  borderRadius:8,
+                                  border:`1.5px solid ${C.border}`,
+                                  background:C.surface,
+                                  color:C.text,
+                                  fontSize:12,
+                                  lineHeight:1.45,
+                                  outline:"none",
+                                }}
+                              />
+                            </Field>
+
+                            <label
+                              style={{
+                                minWidth:isMobile?0:170,
+                                display:"flex",
+                                alignItems:"center",
+                                gap:9,
+                                padding:"11px 12px",
+                                borderRadius:9,
+                                border:`1.5px solid ${
+                                  row?.posted
+                                    ? "#99F6E4"
+                                    : C.border
+                                }`,
+                                background:row?.posted
+                                  ? "#F0FDFA"
+                                  : C.surfaceAlt,
+                                color:row?.posted
+                                  ? "#0F766E"
+                                  : C.textSub,
+                                fontSize:12,
+                                fontWeight:850,
+                                cursor:"pointer",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!!row?.posted}
+                                onChange={(event:any)=>{
+                                  const checked =
+                                    event.target.checked;
+
+                                  updateSpecialCampaignRequirement(
+                                    row.id,
+                                    {
+                                      posted:checked,
+                                      postedAt:checked
+                                        ? row?.postedAt ||
+                                          new Date().toISOString()
+                                        : "",
+                                    }
+                                  );
+                                }}
+                              />
+                              Posted / Published
+                            </label>
+                          </div>
+                        </article>
+                      );
+                    }
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section
+              style={{
+                padding:isMobile?14:16,
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <div
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"flex-start",
+                  gap:10,
+                  flexWrap:"wrap",
+                  marginBottom:12,
+                }}
+              >
+                <div>
+                  <h4
+                    style={{
+                      margin:0,
+                      fontSize:14,
+                      fontWeight:900,
+                      color:C.text,
+                    }}
+                  >
+                    4. Submission Package
+                  </h4>
+                  <p
+                    style={{
+                      margin:"4px 0 0",
+                      fontSize:11,
+                      lineHeight:1.45,
+                      color:C.muted,
+                    }}
+                  >
+                    Generate the completed collateral message for
+                    E-commerce, Lark, email, or the Overview tab.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    gap:8,
+                    flexWrap:"wrap",
+                  }}
+                >
+                  <Btn
+                    xs
+                    variant="outline"
+                    onClick={prepareSpecialCampaignSubmission}
+                  >
+                    Prepare Submission
+                  </Btn>
+                  <Btn
+                    xs
+                    variant="outline"
+                    onClick={copySpecialCampaignSubmission}
+                  >
+                    Copy Message
+                  </Btn>
+                  <Btn
+                    xs
+                    onClick={
+                      addSpecialCampaignSubmissionToOverview
+                    }
+                  >
+                    Add to Overview
+                  </Btn>
+                </div>
+              </div>
+
+              <textarea
+                value={
+                  specialCampaignTracker.submissionMessage ||
+                  buildSpecialCampaignSubmissionMessage()
+                }
+                onChange={(event:any)=>
+                  updateSpecialCampaignTracker({
+                    submissionMessage:event.target.value,
+                  })
+                }
+                rows={16}
+                style={{
+                  width:"100%",
+                  minHeight:300,
+                  resize:"vertical",
+                  padding:"12px 14px",
+                  borderRadius:10,
+                  border:`1.5px solid ${C.border}`,
+                  background:C.bg,
+                  color:C.text,
+                  fontSize:12.5,
+                  lineHeight:1.55,
+                  outline:"none",
+                  whiteSpace:"pre-wrap",
+                }}
+              />
+            </section>
+          </div>
+        );
+      }
+
       if(!isCampaignChecklist){
         return (
                 <div style={{ display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1.1fr) minmax(0,.9fr)",gap:isMobile?10:14,width:"100%",maxWidth:"100%",minWidth:0,overflow:"hidden" }}>
