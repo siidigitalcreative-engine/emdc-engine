@@ -67,6 +67,26 @@ const GlobalStyles = () => {
       ::-webkit-scrollbar{width:12px;height:12px;}
       ::-webkit-scrollbar-track{background:#F1F5F9;border-radius:999px;}
       ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:999px;border:3px solid transparent;background-clip:content-box;}
+      .emdc-campaign-table-scroll{
+        scrollbar-width:auto!important;
+        scrollbar-color:#94A3B8 #E2E8F0!important;
+      }
+      .emdc-campaign-table-scroll::-webkit-scrollbar{
+        height:14px!important;
+      }
+      .emdc-campaign-table-scroll::-webkit-scrollbar-track{
+        background:#E2E8F0!important;
+        border-radius:999px!important;
+      }
+      .emdc-campaign-table-scroll::-webkit-scrollbar-thumb{
+        background:#94A3B8!important;
+        border:3px solid #E2E8F0!important;
+        border-radius:999px!important;
+        background-clip:border-box!important;
+      }
+      .emdc-campaign-table-scroll::-webkit-scrollbar-thumb:hover{
+        background:#64748B!important;
+      }
       .emdc-btn:hover{opacity:.85;}
       .emdc-row:hover{background:#F9FAFB;}
       .emdc-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.07);}
@@ -27054,7 +27074,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 )}
               </div>
 
-              <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10 }}>
+              <div
+                style={{
+                  display:"grid",
+                  gridTemplateColumns:"minmax(0,1fr)",
+                  gap:10,
+                  width:"100%",
+                  maxWidth:"100%",
+                  minWidth:0,
+                  overflow:"hidden",
+                }}
+              >
                 <div style={{ padding:isMobile?12:14,border:`1.5px solid ${C.border}`,borderRadius:12,background:C.bg }}>
                   <div style={{ display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start",flexWrap:"wrap" }}>
                     <div style={{ minWidth:0,flex:"1 1 280px" }}>
@@ -27069,7 +27099,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   </div>
                 </div>
 
-                <div>
+                <div
+                  style={{
+                    width:"100%",
+                    maxWidth:"100%",
+                    minWidth:0,
+                    overflow:"hidden",
+                  }}
+                >
                   <Field label="Campaign Product Table">
                     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                       {false&&productRows.length>0&&(
@@ -27381,19 +27418,115 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         </div>
                       )}
 
-                      <div style={{ border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,overflow:"hidden" }}>
-                        <div style={{ padding:"8px 10px",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-                          <div>
-                            <span style={{ display:"block",fontSize:11,fontWeight:900,color:C.textSub,textTransform:"uppercase",letterSpacing:".06em" }}>Campaign Product Table</span>
-                            <span style={{ display:"block",marginTop:2,fontSize:10,color:C.faint }}>{campaignRows.length} row{campaignRows.length!==1?"s":""}</span>
-                          </div>
-                          <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-                            <Btn xs type="button" variant="outline" onClick={addBlankEcommerceCampaignRow}>+ Add Row</Btn>
+                      <div
+                        style={{
+                          width:"100%",
+                          maxWidth:"100%",
+                          minWidth:0,
+                          border:`1px solid ${C.border}`,
+                          borderRadius:10,
+                          background:C.bg,
+                          overflow:"hidden",
+                          boxSizing:"border-box",
+                        }}
+                      >
+                        <div
+                          style={{
+                            padding:"9px 10px",
+                            background:C.surfaceAlt,
+                            borderBottom:`1px solid ${C.border}`,
+                          }}
+                        >
+                          <span
+                            style={{
+                              display:"block",
+                              fontSize:11,
+                              fontWeight:900,
+                              color:C.textSub,
+                              textTransform:"uppercase",
+                              letterSpacing:".06em",
+                            }}
+                          >
+                            Campaign Product Table
+                          </span>
+                          <span
+                            style={{
+                              display:"block",
+                              marginTop:2,
+                              fontSize:10,
+                              color:C.faint,
+                            }}
+                          >
+                            {campaignRows.length} row{campaignRows.length!==1?"s":""}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            width:"100%",
+                            maxWidth:"100%",
+                            minWidth:0,
+                            display:"flex",
+                            alignItems:"center",
+                            gap:6,
+                            flexWrap:"wrap",
+                            padding:"8px 10px",
+                            boxSizing:"border-box",
+                            background:C.surface,
+                            borderBottom:`1px solid ${C.border}`,
+                          }}
+                        >
+                          <Btn
+                            xs
+                            type="button"
+                            variant="outline"
+                            onClick={addBlankEcommerceCampaignRow}
+                          >
+                            + Add Row
+                          </Btn>
+
+                          <button
+                            className="emdc-date-display-v3"
+                            type="button"
+                            onClick={generateEcommerceCampaignAssets}
+                            disabled={
+                              !!aiBusy.ecommerceCampaign ||
+                              !campaignRows.length
+                            }
+                            style={{
+                              border:"none",
+                              background:C.accent,
+                              color:"#fff",
+                              borderRadius:7,
+                              padding:"6px 9px",
+                              fontSize:10.5,
+                              fontWeight:850,
+                              cursor:
+                                (
+                                  !!aiBusy.ecommerceCampaign ||
+                                  !campaignRows.length
+                                )
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity:
+                                (
+                                  !!aiBusy.ecommerceCampaign ||
+                                  !campaignRows.length
+                                )
+                                  ? .65
+                                  : 1,
+                            }}
+                          >
+                            {aiBusy.ecommerceCampaign
+                              ? "Generating All..."
+                              : "Generate All"}
+                          </button>
+
+                          {campaignHasOutput&&(
                             <button
                               className="emdc-date-display-v3"
                               type="button"
-                              onClick={generateEcommerceCampaignAssets}
-                              disabled={!!aiBusy.ecommerceCampaign || !campaignRows.length}
+                              onClick={saveEcommerceCampaignOutput}
                               style={{
                                 border:"none",
                                 background:C.accent,
@@ -27402,17 +27535,88 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 padding:"6px 9px",
                                 fontSize:10.5,
                                 fontWeight:850,
-                                cursor:(!!aiBusy.ecommerceCampaign || !campaignRows.length)?"not-allowed":"pointer",
-                                opacity:(!!aiBusy.ecommerceCampaign || !campaignRows.length)?.65:1,
+                                cursor:"pointer",
                               }}
                             >
-                              {aiBusy.ecommerceCampaign?"Generating All...":"Generate All"}
+                              Save All Outputs
                             </button>
-                            {campaignHasOutput&&<button className="emdc-date-display-v3" type="button" onClick={saveEcommerceCampaignOutput} style={{ border:"none",background:C.accent,color:"#fff",borderRadius:7,padding:"6px 9px",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Save All Outputs</button>}
-                            <TransferBtn xs id="campaign-table-send-marketing" onClick={sendEcommerceCampaignTableToMarketing} disabled={!campaignRows.length}>Send Table to Marketing</TransferBtn>
-                            <TransferBtn xs id="campaign-table-send-dc" onClick={sendEcommerceCampaignTableToDigitalCreative} disabled={!campaignRows.length}>Send Table to DC</TransferBtn>
-                            {campaignRows.length>0&&<button className="emdc-date-display-v3" type="button" onClick={clearEcommerceCampaignRows} style={{ border:"none",background:"transparent",color:"#DC2626",fontSize:10.5,fontWeight:850,cursor:"pointer" }}>Clear Rows</button>}
-                          </div>
+                          )}
+
+                          <TransferBtn
+                            xs
+                            id="campaign-table-send-marketing"
+                            onClick={sendEcommerceCampaignTableToMarketing}
+                            disabled={!campaignRows.length}
+                          >
+                            Send Table to Marketing
+                          </TransferBtn>
+
+                          <TransferBtn
+                            xs
+                            id="campaign-table-send-dc"
+                            onClick={sendEcommerceCampaignTableToDigitalCreative}
+                            disabled={!campaignRows.length}
+                          >
+                            Send Table to DC
+                          </TransferBtn>
+
+                          <Btn
+                            xs
+                            type="button"
+                            variant="outline"
+                            onClick={addEcommerceCampaignToOverview}
+                            disabled={!campaignHasOutput}
+                          >
+                            Add Copy to Overview
+                          </Btn>
+
+                          {campaignRows.length>0&&(
+                            <button
+                              className="emdc-date-display-v3"
+                              type="button"
+                              onClick={clearEcommerceCampaignRows}
+                              style={{
+                                marginLeft:isMobile?0:"auto",
+                                border:"none",
+                                background:"transparent",
+                                color:"#DC2626",
+                                fontSize:10.5,
+                                fontWeight:850,
+                                cursor:"pointer",
+                              }}
+                            >
+                              Clear Rows
+                            </button>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display:"flex",
+                            alignItems:"center",
+                            justifyContent:"space-between",
+                            gap:8,
+                            padding:"6px 10px",
+                            background:"#F8FAFC",
+                            borderBottom:`1px solid ${C.border}`,
+                            color:C.muted,
+                            fontSize:9.5,
+                            lineHeight:1.3,
+                          }}
+                        >
+                          <span>
+                            Scroll horizontally to view Subheadline, CTA, and row actions.
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              flex:"0 0 auto",
+                              fontWeight:900,
+                              color:C.textSub,
+                            }}
+                          >
+                            ← Scroll →
+                          </span>
                         </div>
 
                         {campaignRows.length===0 ? (
@@ -27424,27 +27628,33 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               textAlign:"center",
                             }}
                           >
-                            No product row yet. Select mapped products above,
-                            then click Add Selected or Add All.
+                            No Campaign row yet. Click “+ Add Row,” then select
+                            the SKU cell inside the new row.
                           </div>
                         ) : (
                           <div
+                            className="emdc-campaign-table-scroll"
                             style={{
+                              position:"relative",
                               display:"block",
                               width:"100%",
                               maxWidth:"100%",
                               minWidth:0,
-                              overflowX:"auto",
+                              overflowX:"scroll",
                               overflowY:"hidden",
                               WebkitOverflowScrolling:"touch",
-                              scrollbarGutter:"stable both-edges",
-                              paddingBottom:6,
+                              overscrollBehaviorX:"contain",
+                              touchAction:"pan-x",
+                              scrollbarGutter:"stable",
+                              paddingBottom:10,
+                              boxSizing:"border-box",
                             }}
                           >
                             <table
                               style={{
-                                width:"max-content",
+                                width:1790,
                                 minWidth:1790,
+                                maxWidth:"none",
                                 borderCollapse:"separate",
                                 borderSpacing:0,
                                 fontSize:11.5,
