@@ -33,9 +33,17 @@ const toneInstructions: Record<string, string> = {
   professional: "Use a professional but accessible English tone.",
   premium: "Use a premium, polished, lifestyle-brand tone.",
   casual: "Use a casual, friendly, easy-to-read tone.",
-  taglish: "Use natural Filipino Taglish where appropriate, but keep product details clear.",
+  taglish:
+    "Use natural Filipino Taglish where appropriate, but keep product details clear.",
   short: "Keep the output short, direct, and easy to copy.",
 };
+
+const selectableTextModels = new Set([
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.6-flash",
+]);
 
 function parseDataUrl(dataUrl: string) {
   const match = /^data:([^;,]+)?(;base64)?,(.*)$/i.exec(dataUrl || "");
@@ -55,8 +63,13 @@ function parseDataUrl(dataUrl: string) {
 
   const base64 = rawData.replace(/\s/g, "");
   let text = "";
+
   try {
-    if (mimeType.startsWith("text/") || mimeType.includes("json") || mimeType.includes("csv")) {
+    if (
+      mimeType.startsWith("text/") ||
+      mimeType.includes("json") ||
+      mimeType.includes("csv")
+    ) {
       text = Buffer.from(base64, "base64").toString("utf8");
     }
   } catch {}
@@ -65,12 +78,26 @@ function parseDataUrl(dataUrl: string) {
 }
 
 function fileParts(file: any) {
-  const name = typeof file?.name === "string" ? file.name : "uploaded reference";
-  const type = typeof file?.type === "string" ? file.type : "";
-  const parsed = parseDataUrl(String(file?.dataUrl || ""));
+  const name =
+    typeof file?.name === "string"
+      ? file.name
+      : "uploaded reference";
+
+  const type =
+    typeof file?.type === "string"
+      ? file.type
+      : "";
+
+  const parsed = parseDataUrl(
+    String(file?.dataUrl || "")
+  );
+
   if (!parsed) return [];
 
-  const mimeType = parsed.mimeType || type || "application/octet-stream";
+  const mimeType =
+    parsed.mimeType ||
+    type ||
+    "application/octet-stream";
 
   if (parsed.text) {
     return [
@@ -80,7 +107,7 @@ function fileParts(file: any) {
           `MIME type: ${mimeType}`,
           "",
           parsed.text,
-        ].join("\\n"),
+        ].join("\n"),
       },
     ];
   }
@@ -91,7 +118,7 @@ function fileParts(file: any) {
         `Uploaded catalog/reference image or PDF: ${name}`,
         `MIME type: ${mimeType}`,
         "Read this visual reference carefully. Extract visible product names, labels, material, sizes, capacity, colors, variants, care instructions, package inclusions, and any readable text. Use it as source material for the output.",
-      ].join("\\n"),
+      ].join("\n"),
     },
     {
       inlineData: {
@@ -103,33 +130,104 @@ function fileParts(file: any) {
 }
 
 export async function POST(req: NextRequest) {
+  let selectedModel = "";
+
   try {
     const body = await req.json();
 
-    const input = typeof body?.input === "string" ? body.input.trim() : "";
-    const task = typeof body?.task === "string" ? body.task : "product_description";
-    const tone = typeof body?.tone === "string" ? body.tone : "professional";
-    const customInstruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
-    const taskLabel = typeof body?.taskLabel === "string" ? body.taskLabel.trim() : "";
-    const maxOutputTokensRaw = Number(body?.maxOutputTokens || 1800);
-    const maxOutputTokens = Math.max(512, Math.min(8192, Number.isFinite(maxOutputTokensRaw) ? maxOutputTokensRaw : 1800));
+    const input =
+      typeof body?.input === "string"
+        ? body.input.trim()
+        : "";
+
+    const task =
+      typeof body?.task === "string"
+        ? body.task
+        : "product_description";
+
+    const tone =
+      typeof body?.tone === "string"
+        ? body.tone
+        : "professional";
+
+    const customInstruction =
+      typeof body?.instruction === "string"
+        ? body.instruction.trim()
+        : "";
+
+    const taskLabel =
+      typeof body?.taskLabel === "string"
+        ? body.taskLabel.trim()
+        : "";
+
+    const requestedModel =
+      typeof body?.model === "string"
+        ? body.model.trim()
+        : "";
+
+    const maxOutputTokensRaw = Number(
+      body?.maxOutputTokens || 1800
+    );
+
+    const maxOutputTokens = Math.max(
+      512,
+      Math.min(
+        8192,
+        Number.isFinite(maxOutputTokensRaw)
+          ? maxOutputTokensRaw
+          : 1800
+      )
+    );
 
     if (!input && !customInstruction) {
-      return NextResponse.json({ error: "Input is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Input is required." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      requestedModel &&
+      !selectableTextModels.has(requestedModel)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "The selected Gemini model is not allowed by this EMDC route.",
+          requestedModel,
+          allowedModels: Array.from(
+            selectableTextModels
+          ),
+        },
+        { status: 400 }
+      );
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
+
+    selectedModel =
+      requestedModel ||
+      process.env.GEMINI_TEXT_MODEL ||
+      "gemini-3.5-flash-lite";
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing GEMINI_API_KEY environment variable." },
+        {
+          error:
+            "Missing GEMINI_API_KEY environment variable.",
+        },
         { status: 500 }
       );
     }
 
-    const instruction = customInstruction || taskInstructions[task] || taskInstructions.product_description;
-    const toneInstruction = toneInstructions[tone] || toneInstructions.professional;
+    const instruction =
+      customInstruction ||
+      taskInstructions[task] ||
+      taskInstructions.product_description;
+
+    const toneInstruction =
+      toneInstructions[tone] ||
+      toneInstructions.professional;
 
     const prompt = [
       "You are EMDC's marketing and ecommerce copy assistant for product content.",
@@ -147,11 +245,17 @@ export async function POST(req: NextRequest) {
       "",
       "User input:",
       input,
-    ].filter(Boolean).join("\\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const uploadedFiles = [
-      ...(Array.isArray(body?.catalogFiles) ? body.catalogFiles : []),
-      ...(Array.isArray(body?.referenceImages) ? body.referenceImages : []),
+      ...(Array.isArray(body?.catalogFiles)
+        ? body.catalogFiles
+        : []),
+      ...(Array.isArray(body?.referenceImages)
+        ? body.referenceImages
+        : []),
     ];
 
     const attachedParts = uploadedFiles
@@ -160,7 +264,9 @@ export async function POST(req: NextRequest) {
       .filter(Boolean);
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        selectedModel
+      )}:generateContent`,
       {
         method: "POST",
         headers: {
@@ -180,7 +286,8 @@ export async function POST(req: NextRequest) {
           generationConfig: {
             temperature:
               task === "ecommerce_listing" ||
-              task === "asset_completion_announcement"
+              task ===
+                "asset_completion_announcement"
                 ? 0.45
                 : 0.7,
             topP: 0.9,
@@ -190,7 +297,9 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response
+      .json()
+      .catch(() => ({}));
 
     if (!response.ok) {
       return NextResponse.json(
@@ -199,22 +308,32 @@ export async function POST(req: NextRequest) {
             data?.error?.message ||
             data?.message ||
             "Gemini text generation failed.",
+          model: selectedModel,
           details: data,
         },
         { status: response.status }
       );
     }
 
-    const text =
+    const generatedText =
       data?.candidates?.[0]?.content?.parts
         ?.map((part: any) => part?.text || "")
         .join("")
         .trim() || "";
 
-    return NextResponse.json({ text, raw: data });
+    return NextResponse.json({
+      text: generatedText,
+      model: selectedModel,
+      raw: data,
+    });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error?.message || "Unexpected server error." },
+      {
+        error:
+          error?.message ||
+          "Unexpected server error.",
+        model: selectedModel || undefined,
+      },
       { status: 500 }
     );
   }
