@@ -14999,46 +14999,46 @@ ${sectionsHtml}
           if(!value) return "<div style='height:8px;line-height:8px'>&nbsp;</div>";
 
           if(isTrainingContentTitle(value)){
-            return `<h3 style='margin:17px 0 7px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:800;color:#0F172A'>${escapeTrainingHtml(
+            return `<h3 style='margin:17px 0 7px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:800;color:#000000'>${escapeTrainingHtml(
               value.replace(/[:：]\\s*$/,"")
             )}</h3>`;
           }
 
           if(/^[-•✓✔]\s+/.test(value)){
-            return `<div style='display:flex;gap:8px;margin:6px 0;font-size:13px;line-height:1.55'><span style='font-weight:900;color:#16A34A'>✓</span><div>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
+            return `<div style='display:flex;gap:8px;margin:6px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#222222'><span style='font-family:Arial,Helvetica,sans-serif;font-weight:900;color:#000000'>✓</span><div style='font-family:Arial,Helvetica,sans-serif'>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
           }
 
           const numberMatch = value.match(/^(\d+)[\.\)]\s+(.*)$/);
           if(numberMatch){
-            return `<div style='display:flex;gap:8px;margin:6px 0;font-size:13px;line-height:1.55'><strong style='min-width:22px;color:#0F172A'>${escapeTrainingHtml(numberMatch[1])}.</strong><div>${escapeTrainingHtml(numberMatch[2])}</div></div>`;
+            return `<div style='display:flex;gap:8px;margin:6px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#222222'><strong style='min-width:22px;font-family:Arial,Helvetica,sans-serif;color:#000000'>${escapeTrainingHtml(numberMatch[1])}.</strong><div style='font-family:Arial,Helvetica,sans-serif'>${escapeTrainingHtml(numberMatch[2])}</div></div>`;
           }
 
           const colonIndex = value.indexOf(":");
           if(colonIndex>0 && colonIndex<45){
-            return `<p style='margin:7px 0;font-size:13px;line-height:1.6;color:#334155'><strong style='color:#0F172A'>${escapeTrainingHtml(value.slice(0,colonIndex+1))}</strong> ${escapeTrainingHtml(value.slice(colonIndex+1).trim())}</p>`;
+            return `<p style='margin:7px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#222222'><strong style='font-family:Arial,Helvetica,sans-serif;color:#000000'>${escapeTrainingHtml(value.slice(0,colonIndex+1))}</strong> ${escapeTrainingHtml(value.slice(colonIndex+1).trim())}</p>`;
           }
 
-          return `<p style='margin:7px 0;font-size:13px;line-height:1.65;color:#334155'>${escapeTrainingHtml(value)}</p>`;
+          return `<p style='margin:7px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.65;color:#222222'>${escapeTrainingHtml(value)}</p>`;
         };
 
         const sectionHtml = trainingSections.map((section:any,index:number)=>[
-          "<section style='margin:0 0 24px'>",
-          `<h2 style='margin:0 0 12px;padding:0 0 8px;border-bottom:${index===0 ? "3px solid #0F172A" : "1px solid #CBD5E1"};font-family:Arial,Helvetica,sans-serif;font-size:${index===0 ? "24px" : "18px"};line-height:1.25;color:#0F172A'>${escapeTrainingHtml(section.title || `Section ${index+1}`)}</h2>`,
+          "<section style='margin:0 0 24px;font-family:Arial,Helvetica,sans-serif;color:#222222'>",
+          `<h2 style='margin:0 0 12px;padding:0 0 8px;border-bottom:${index===0 ? "3px solid #000000" : "1px solid #D1D5DB"};font-family:Arial,Helvetica,sans-serif;font-size:${index===0 ? "24px" : "18px"};line-height:1.25;color:#000000'>${escapeTrainingHtml(section.title || `Section ${index+1}`)}</h2>`,
           ...(section.lines || []).map(renderEmailLine),
           "</section>",
         ].join("")).join("");
 
         return [
-          "<div style='margin:0;padding:24px;background:#F1F5F9;font-family:Arial,Helvetica,sans-serif;color:#0F172A'>",
-          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #DCE3EC;border-radius:14px;overflow:hidden'>",
-          "<div style='padding:34px 30px;background:#0F172A;color:#FFFFFF;text-align:center'>",
-          `<h1 style='margin:0;font-size:28px;line-height:1.25'>${escapeTrainingHtml(title)}</h1>`,
-          "<p style='margin:10px 0 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#CBD5E1'>Promodiser Training Manual</p>",
+          "<div style='margin:0;padding:24px;background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;color:#222222'>",
+          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #D1D5DB;border-radius:14px;overflow:hidden;font-family:Arial,Helvetica,sans-serif'>",
+          "<div style='padding:34px 30px;background:#000000;color:#FFFFFF;text-align:center;font-family:Arial,Helvetica,sans-serif'>",
+          `<h1 style='margin:0;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:1.25;font-weight:700;color:#FFFFFF'>${escapeTrainingHtml(title)}</h1>`,
+          "<p style='margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#E5E7EB'>Promodiser Training Manual</p>",
           "</div>",
-          "<div style='padding:28px 30px'>",
+          "<div style='padding:28px 30px;font-family:Arial,Helvetica,sans-serif;color:#222222'>",
           sectionHtml,
           "</div>",
-          "<div style='padding:14px 30px;border-top:1px solid #E2E8F0;font-size:11px;color:#64748B;text-align:center'>Prepared through EMDC Training Materials</div>",
+          "<div style='padding:14px 30px;border-top:1px solid #E5E7EB;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#6B7280;text-align:center'>Prepared through EMDC Training Materials</div>",
           "</div>",
           "</div>",
         ].join("");
