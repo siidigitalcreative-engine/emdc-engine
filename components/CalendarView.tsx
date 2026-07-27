@@ -26190,7 +26190,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             hook:string;
           } | null = null;
 
-          let lastGeneratedTitle = "";
+          let lastValidGeneratedCopy:{
+            title:string;
+            description:string;
+            hook:string;
+          } | null = null;
 
           for(
             let attempt = 0;
@@ -26351,12 +26355,26 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 generatedHookKey
               );
 
-            lastGeneratedTitle =
-              normalizedTitle;
+            lastValidGeneratedCopy = {
+              title:
+                normalizedTitle ||
+                currentDraft.title ||
+                buildYoutubeTitle(),
+              description:
+                generated.description,
+              hook:
+                generatedHook ||
+                currentHook ||
+                "",
+            };
 
             if(
-              titleChanged &&
-              hookIsNew
+              generatedHookKey &&
+              hookIsNew &&
+              (
+                titleChanged ||
+                !currentHook
+              )
             ){
               acceptedCopy = {
                 title:
@@ -26379,11 +26397,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             }
           }
 
+          if(
+            !acceptedCopy &&
+            lastValidGeneratedCopy
+          ){
+            acceptedCopy =
+              lastValidGeneratedCopy;
+          }
+
           if(!acceptedCopy){
             throw new Error(
-              lastGeneratedTitle
-                ? "The AI repeated a previous benefit hook after several attempts. Please regenerate once more."
-                : "The AI did not return a new benefit hook. Please regenerate."
+              "The AI did not return usable YouTube copy. Please generate again."
             );
           }
 
@@ -26394,7 +26418,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   ...savedHookHistory,
                   currentHook,
                   acceptedCopy.hook,
-                ].filter(Boolean)
+                ]
+                  .map((item:any)=>
+                    String(item || "").trim()
+                  )
+                  .filter(Boolean)
               )
             ).slice(-12);
 
