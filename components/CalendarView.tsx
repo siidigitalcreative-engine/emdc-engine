@@ -14680,15 +14680,48 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         confirmedTrainingGuide || ""
       ).replace(/\r\n/g,"\n").split("\n");
 
+      const isTrainingCodeValue = (
+        value:any
+      ) => {
+        const cleanValue =
+          String(value || "").trim();
+
+        if(!cleanValue){
+          return false;
+        }
+
+        return (
+          /\d/.test(cleanValue) &&
+          /^[A-Z0-9]+(?:[-_/.][A-Z0-9]+)+$/i.test(
+            cleanValue
+          )
+        );
+      };
+
       const isTrainingHeading = (line:string) => {
         const value = String(line || "").trim();
-        if(!value) return false;
+
+        if(!value){
+          return false;
+        }
+
         const upper = value.toUpperCase();
-        return trainingKnownHeadings.includes(upper) || (
+
+        if(
+          trainingKnownHeadings.includes(
+            upper
+          )
+        ){
+          return true;
+        }
+
+        return (
           value===upper &&
           value.length>=4 &&
           value.length<=90 &&
-          /[A-Z]/.test(value)
+          /[A-Z]/.test(value) &&
+          /\s/.test(value) &&
+          !isTrainingCodeValue(value)
         );
       };
 
@@ -14839,9 +14872,10 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               key={`content-title-${index}`}
               style={{
                 margin:"16px 0 7px",
-                color:"#0F172A",
+                color:"#000000",
+                fontFamily:"Arial, Helvetica, sans-serif",
                 fontSize:isMobile?12.5:13.5,
-                fontWeight:900,
+                fontWeight:800,
                 lineHeight:1.35,
               }}
             >
@@ -15018,12 +15052,12 @@ ${sectionsHtml}
             return `<p style='margin:7px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#222222'><strong style='font-family:Arial,Helvetica,sans-serif;color:#000000'>${escapeTrainingHtml(value.slice(0,colonIndex+1))}</strong> ${escapeTrainingHtml(value.slice(colonIndex+1).trim())}</p>`;
           }
 
-          return `<p style='margin:7px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.65;color:#222222'>${escapeTrainingHtml(value)}</p>`;
+          return `<p style='margin:7px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:400;line-height:1.65;color:#222222'>${escapeTrainingHtml(value)}</p>`;
         };
 
         const sectionHtml = trainingSections.map((section:any,index:number)=>[
           "<section style='margin:0 0 24px;font-family:Arial,Helvetica,sans-serif;color:#222222'>",
-          `<h2 style='margin:0 0 12px;padding:0 0 8px;border-bottom:${index===0 ? "3px solid #000000" : "1px solid #D1D5DB"};font-family:Arial,Helvetica,sans-serif;font-size:${index===0 ? "24px" : "18px"};line-height:1.25;color:#000000'>${escapeTrainingHtml(section.title || `Section ${index+1}`)}</h2>`,
+          `<h2 style='margin:0 0 12px;padding:0 0 8px;border-bottom:${index===0 ? "3px solid #000000" : "1px solid #D1D5DB"};font-family:Arial,Helvetica,sans-serif;font-size:${index===0 ? "24px" : "18px"};font-weight:700;line-height:1.25;color:#000000'>${escapeTrainingHtml(section.title || `Section ${index+1}`)}</h2>`,
           ...(section.lines || []).map(renderEmailLine),
           "</section>",
         ].join("")).join("");
