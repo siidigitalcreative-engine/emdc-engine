@@ -24888,10 +24888,79 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .map((line:string)=>line.trim())
           .filter(Boolean)[0] || "";
 
-        const externalOverview = String(
+        const externalOverviewRaw = String(
           ecommerceSections["Product Overview"] ||
           ""
         ).trim();
+
+        const externalOverview =
+          externalOverviewRaw
+            .replace(
+              /(?:^|\s)(?:it is |they are )?available in (?:various|multiple|a variety of) (?:sizes|capacities|colors|colours|options|variants)[^.]*\.?/gi,
+              " "
+            )
+            .replace(/\s{2,}/g," ")
+            .trim();
+
+        const parseAnnouncementOptions = (
+          sourceValue:any
+        ) =>
+          Array.from(
+            new Set(
+              String(sourceValue || "")
+                .replace(/\r\n?/g,"\n")
+                .split("\n")
+                .map((line:string)=>
+                  line
+                    .trim()
+                    .replace(
+                      /^(?:[-*•]|\d+[.)])\s*/,
+                      ""
+                    )
+                    .replace(
+                      /^(?:variants? available|available variants?|color options?|colou?r options?)\s*[:\-]\s*/i,
+                      ""
+                    )
+                    .replace(/[.;]+$/,"")
+                    .trim()
+                )
+                .filter(Boolean)
+                .filter((line:string)=>
+                  !/^(?:not available|not specified|to be confirmed|tbc|tbd)$/i.test(
+                    line
+                  )
+                )
+            )
+          );
+
+        const confirmedVariantItems =
+          parseAnnouncementOptions(
+            ecommerceSections[
+              "Variants Available"
+            ]
+          );
+
+        const confirmedColorItems =
+          parseAnnouncementOptions(
+            ecommerceSections[
+              "Color Options"
+            ]
+          );
+
+        const externalVariantSummary = [
+          confirmedVariantItems.length
+            ? `Available variants: ${
+                confirmedVariantItems.join(", ")
+              }.`
+            : "",
+          confirmedColorItems.length
+            ? `Available colors: ${
+                confirmedColorItems.join(", ")
+              }.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
 
         const externalFeatures = String(
           ecommerceSections["Key Features"] ||
@@ -24909,7 +24978,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .join("\n");
 
         // Do not invent product details. The external announcement uses only
-        // the Product Overview and Key Features found in the E-commerce output.
+        // the Product Overview, Key Features, Variants Available, and Color
+        // Options found in the E-commerce output.
         const externalProductName =
           ecommerceProductName ||
           productName;
@@ -24917,12 +24987,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         const clientTemplates:any = {
           "Product Introduction":{
             subject:`[New Arrival] ${externalProductName} — Now Available`,
-            intro:`Exciting news—we’re delighted to introduce ${externalProductName}, our newest addition designed to bring more value to your customers and fresh opportunities to your product lineup.`,
+            intro:`Exciting news—we’re happy to introduce ${externalProductName}, a new addition designed for practical and stylish everyday use.`,
             action:"For inquiries, product details, or orders, please feel free to contact us.",
           },
           "Product Reactivation":{
             subject:`[Back in Stock] ${externalProductName}`,
-            intro:`Great news—we’re excited to share that ${externalProductName} is back in stock and ready to support your next sales push.`,
+            intro:`Great news—we’re happy to share that ${externalProductName} is available again.`,
             action:"Please feel free to contact us for updated product details, availability, or orders.",
           },
           "Campaign":{
@@ -25044,11 +25114,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           const externalIntroLine = (()=>{
             if(checklistAnnouncementType==="Product Reactivation"){
-              return `Great news—we’re excited to share that ${externalProductName} is back in stock and ready to support your next sales push.`;
+              return `Great news—we’re happy to share that ${externalProductName} is available again.`;
             }
 
             if(checklistAnnouncementType==="Product Introduction"){
-              return `Exciting news—we’re delighted to introduce ${externalProductName}, our newest addition designed to bring more value to your customers and fresh opportunities to your product lineup.`;
+              return `Exciting news—we’re happy to introduce ${externalProductName}, a new addition designed for practical and stylish everyday use.`;
             }
 
             return template.intro;
@@ -25078,11 +25148,20 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               "",
               externalOverview
             );
-          } else if(
+          }
+
+          if(externalVariantSummary){
+            externalBodyLines.push(
+              "",
+              externalVariantSummary
+            );
+          }
+
+          if(!externalOverview && (
             externalIntroLine &&
             checklistAnnouncementType!=="Product Introduction" &&
             checklistAnnouncementType!=="Product Reactivation"
-          ){
+          )){
             externalBodyLines.push(
               "",
               externalIntroLine
@@ -25102,7 +25181,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             "",
             checklistAnnouncementType==="Product Introduction" ||
             checklistAnnouncementType==="Product Reactivation"
-              ? `Ready to offer ${externalProductName} to your customers? Reply ORDER to confirm, or contact us for product details and assistance.`
+              ? `Interested in ordering ${externalProductName}? Reply ORDER to confirm, or contact us for product details and assistance.`
               : template.action,
             "",
             `Watch on YouTube: ${youtubeAsset?.link || "Not yet available"}`
