@@ -14873,7 +14873,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               style={{
                 margin:"16px 0 7px",
                 color:"#000000",
-                fontFamily:"Arial, sans-serif",
+                fontFamily:"Inter, system-ui, sans-serif",
                 fontSize:isMobile?12.5:13.5,
                 fontWeight:700,
                 lineHeight:1.35,
@@ -14893,7 +14893,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 gap:8,
                 alignItems:"flex-start",
                 margin:"5px 0",
-                fontFamily:"Arial, sans-serif",
+                fontFamily:"Inter, system-ui, sans-serif",
                 fontWeight:400,
                 lineHeight:1.55,
               }}
@@ -14901,7 +14901,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               <span
                 style={{
                   color:"#000000",
-                  fontFamily:"Arial, sans-serif",
+                  fontFamily:"Inter, system-ui, sans-serif",
                   fontWeight:700,
                 }}
               >
@@ -14909,7 +14909,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </span>
               <span
                 style={{
-                  fontFamily:"Arial, sans-serif",
+                  fontFamily:"Inter, system-ui, sans-serif",
                   fontWeight:400,
                 }}
               >
@@ -14929,7 +14929,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 gap:8,
                 alignItems:"flex-start",
                 margin:"5px 0",
-                fontFamily:"Arial, sans-serif",
+                fontFamily:"Inter, system-ui, sans-serif",
                 fontWeight:400,
                 lineHeight:1.55,
               }}
@@ -14938,7 +14938,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
                 style={{
                   minWidth:22,
                   color:"#000000",
-                  fontFamily:"Arial, sans-serif",
+                  fontFamily:"Inter, system-ui, sans-serif",
                   fontWeight:700,
                 }}
               >
@@ -14946,7 +14946,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               </strong>
               <span
                 style={{
-                  fontFamily:"Arial, sans-serif",
+                  fontFamily:"Inter, system-ui, sans-serif",
                   fontWeight:400,
                 }}
               >
@@ -14965,14 +14965,14 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               key={`label-${index}`}
               style={{
                 margin:"6px 0",
-                fontFamily:"Arial, sans-serif",
+                fontFamily:"Inter, system-ui, sans-serif",
                 fontWeight:400,
                 lineHeight:1.6,
               }}
             >
               <strong
                 style={{
-                  fontFamily:"Arial, sans-serif",
+                  fontFamily:"Inter, system-ui, sans-serif",
                   fontWeight:700,
                 }}
               >
@@ -14988,7 +14988,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             key={`paragraph-${index}`}
             style={{
               margin:"7px 0",
-              fontFamily:"Arial, sans-serif",
+              fontFamily:"Inter, system-ui, sans-serif",
               fontWeight:400,
               lineHeight:1.65,
             }}
@@ -15046,16 +15046,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 <title>${escapeTrainingHtml(title)}</title>
 <style>
 @page{size:A4;margin:18mm}
-*{box-sizing:border-box;font-family:Arial,sans-serif!important}
-html,body{font-family:Arial,sans-serif!important}
+*{box-sizing:border-box;font-family:Inter,Arial,sans-serif!important}
+html,body{font-family:Inter,Arial,sans-serif!important}
 body{color:#111111;margin:0;line-height:1.55}
 .cover{min-height:90vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;page-break-after:always}
 .cover h1{font-size:30px;margin:0 0 12px}
 .cover p{font-size:14px;color:#6B7280}
 section{page-break-inside:avoid;margin:0 0 24px}
-h2{font-family:Arial,sans-serif!important;font-size:19px;font-weight:700;border-bottom:2px solid #000000;padding-bottom:7px;margin:0 0 12px;color:#000000}
-h3{font-family:Arial,sans-serif!important;font-size:13px;font-weight:700;color:#000000;margin:15px 0 7px}
-p{font-family:Arial,sans-serif!important;font-size:12px;font-weight:400;margin:6px 0}
+h2{font-family:Inter,Arial,sans-serif!important;font-size:19px;font-weight:700;border-bottom:2px solid #000000;padding-bottom:7px;margin:0 0 12px;color:#000000}
+h3{font-family:Inter,Arial,sans-serif!important;font-size:13px;font-weight:700;color:#000000;margin:15px 0 7px}
+p{font-family:Inter,Arial,sans-serif!important;font-size:12px;font-weight:400;margin:6px 0}
 .bullet{display:flex;gap:8px;font-size:12px;margin:5px 0}
 .bullet span{font-weight:700}
 .meta{margin-top:22px;font-size:12px}
@@ -15084,46 +15084,46 @@ ${sectionsHtml}
           if(!value) return "<div style='height:8px;line-height:8px'>&nbsp;</div>";
 
           if(isTrainingContentTitle(value)){
-            return `<h3 style='margin:17px 0 7px;font-family:Arial,sans-serif!important;font-size:14px;line-height:1.35;font-weight:800;color:#000000'>${escapeTrainingHtml(
+            return `<h3 style='margin:17px 0 7px;font-family:Inter,Arial,sans-serif!important;font-size:14px;line-height:1.35;font-weight:800;color:#000000'>${escapeTrainingHtml(
               value.replace(/[:：]\\s*$/,"")
             )}</h3>`;
           }
 
           if(/^[-•✓✔]\s+/.test(value)){
-            return `<div style='display:flex;gap:8px;margin:6px 0;font-family:Arial,sans-serif!important;font-size:13px;line-height:1.55;color:#222222'><span style='font-family:Arial,sans-serif!important;font-weight:900;color:#000000'>✓</span><div style='font-family:Arial,sans-serif!important'>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
+            return `<div style='display:flex;gap:8px;margin:6px 0;font-family:Inter,Arial,sans-serif!important;font-size:13px;line-height:1.55;color:#222222'><span style='font-family:Inter,Arial,sans-serif!important;font-weight:900;color:#000000'>✓</span><div style='font-family:Inter,Arial,sans-serif!important'>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
           }
 
           const numberMatch = value.match(/^(\d+)[\.\)]\s+(.*)$/);
           if(numberMatch){
-            return `<div style='display:flex;gap:8px;margin:6px 0;font-family:Arial,sans-serif!important;font-size:13px;line-height:1.55;color:#222222'><strong style='min-width:22px;font-family:Arial,sans-serif!important;color:#000000'>${escapeTrainingHtml(numberMatch[1])}.</strong><div style='font-family:Arial,sans-serif!important'>${escapeTrainingHtml(numberMatch[2])}</div></div>`;
+            return `<div style='display:flex;gap:8px;margin:6px 0;font-family:Inter,Arial,sans-serif!important;font-size:13px;line-height:1.55;color:#222222'><strong style='min-width:22px;font-family:Inter,Arial,sans-serif!important;color:#000000'>${escapeTrainingHtml(numberMatch[1])}.</strong><div style='font-family:Inter,Arial,sans-serif!important'>${escapeTrainingHtml(numberMatch[2])}</div></div>`;
           }
 
           const colonIndex = value.indexOf(":");
           if(colonIndex>0 && colonIndex<45){
-            return `<p style='margin:7px 0;font-family:Arial,sans-serif!important;font-size:13px;line-height:1.6;color:#222222'><strong style='font-family:Arial,sans-serif!important;color:#000000'>${escapeTrainingHtml(value.slice(0,colonIndex+1))}</strong> ${escapeTrainingHtml(value.slice(colonIndex+1).trim())}</p>`;
+            return `<p style='margin:7px 0;font-family:Inter,Arial,sans-serif!important;font-size:13px;line-height:1.6;color:#222222'><strong style='font-family:Inter,Arial,sans-serif!important;color:#000000'>${escapeTrainingHtml(value.slice(0,colonIndex+1))}</strong> ${escapeTrainingHtml(value.slice(colonIndex+1).trim())}</p>`;
           }
 
-          return `<p style='margin:7px 0;font-family:Arial,sans-serif!important;font-size:13px;font-weight:400;line-height:1.65;color:#222222'>${escapeTrainingHtml(value)}</p>`;
+          return `<p style='margin:7px 0;font-family:Inter,Arial,sans-serif!important;font-size:13px;font-weight:400;line-height:1.65;color:#222222'>${escapeTrainingHtml(value)}</p>`;
         };
 
         const sectionHtml = trainingSections.map((section:any,index:number)=>[
-          "<section style='margin:0 0 24px;font-family:Arial,sans-serif!important;color:#222222'>",
-          `<h2 style='margin:0 0 12px;padding:0 0 8px;border-bottom:${index===0 ? "3px solid #000000" : "1px solid #D1D5DB"};font-family:Arial,sans-serif!important;font-size:${index===0 ? "24px" : "18px"};font-weight:700;line-height:1.25;color:#000000;font-family:Arial,sans-serif!important'>${escapeTrainingHtml(section.title || `Section ${index+1}`)}</h2>`,
+          "<section style='margin:0 0 24px;font-family:Inter,Arial,sans-serif!important;color:#222222'>",
+          `<h2 style='margin:0 0 12px;padding:0 0 8px;border-bottom:${index===0 ? "3px solid #000000" : "1px solid #D1D5DB"};font-family:Inter,Arial,sans-serif!important;font-size:${index===0 ? "24px" : "18px"};font-weight:700;line-height:1.25;color:#000000;font-family:Inter,Arial,sans-serif!important'>${escapeTrainingHtml(section.title || `Section ${index+1}`)}</h2>`,
           ...(section.lines || []).map(renderEmailLine),
           "</section>",
         ].join("")).join("");
 
         return [
-          "<div style='margin:0;padding:24px;background:#F3F4F6;font-family:Arial,sans-serif!important;color:#222222'>",
-          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #D1D5DB;border-radius:14px;overflow:hidden;font-family:Arial,sans-serif!important'>",
-          "<div style='padding:34px 30px;background:#000000;color:#FFFFFF;text-align:center;font-family:Arial,sans-serif!important'>",
-          `<h1 style='margin:0;font-family:Arial,sans-serif!important;font-size:28px;line-height:1.25;font-weight:700;color:#FFFFFF'>${escapeTrainingHtml(title)}</h1>`,
-          "<p style='margin:10px 0 0;font-family:Arial,sans-serif!important;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#E5E7EB'>Promodiser Training Manual</p>",
+          "<div style='margin:0;padding:24px;background:#F3F4F6;font-family:Inter,Arial,sans-serif!important;color:#222222'>",
+          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #D1D5DB;border-radius:14px;overflow:hidden;font-family:Inter,Arial,sans-serif!important'>",
+          "<div style='padding:34px 30px;background:#000000;color:#FFFFFF;text-align:center;font-family:Inter,Arial,sans-serif!important'>",
+          `<h1 style='margin:0;font-family:Inter,Arial,sans-serif!important;font-size:28px;line-height:1.25;font-weight:700;color:#FFFFFF'>${escapeTrainingHtml(title)}</h1>`,
+          "<p style='margin:10px 0 0;font-family:Inter,Arial,sans-serif!important;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#E5E7EB'>Promodiser Training Manual</p>",
           "</div>",
-          "<div style='padding:28px 30px;font-family:Arial,sans-serif!important;color:#222222'>",
+          "<div style='padding:28px 30px;font-family:Inter,Arial,sans-serif!important;color:#222222'>",
           sectionHtml,
           "</div>",
-          "<div style='padding:14px 30px;border-top:1px solid #E5E7EB;font-family:Arial,sans-serif!important;font-size:11px;color:#6B7280;text-align:center'>Prepared through EMDC Training Materials</div>",
+          "<div style='padding:14px 30px;border-top:1px solid #E5E7EB;font-family:Inter,Arial,sans-serif!important;font-size:11px;color:#6B7280;text-align:center'>Prepared through EMDC Training Materials</div>",
           "</div>",
           "</div>",
         ].join("");
@@ -15321,15 +15321,15 @@ xmlns="http://www.w3.org/TR/REC-html40">
 <meta name="ProgId" content="PowerPoint.Slide">
 <title>${escapeTrainingHtml(title)}</title>
 <style>
-*{font-family:Arial,sans-serif!important}
-html,body{font-family:Arial,sans-serif!important}
+*{font-family:Inter,Arial,sans-serif!important}
+html,body{font-family:Inter,Arial,sans-serif!important}
 body{margin:0;color:#111111}
 .slide{width:1280px;height:720px;padding:70px 85px;page-break-after:always;position:relative;overflow:hidden}
 .cover{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
 .cover h1{font-size:48px;margin:0 0 18px}
 .cover p{font-size:24px;color:#6B7280}
 h2{font-size:36px;margin:0 0 28px;border-bottom:4px solid #111827;padding-bottom:12px}
-h3{font-family:Arial,sans-serif!important;font-size:24px;line-height:1.35;margin:18px 0 10px;font-weight:700;color:#000000}
+h3{font-family:Inter,Arial,sans-serif!important;font-size:24px;line-height:1.35;margin:18px 0 10px;font-weight:700;color:#000000}
 p{font-size:22px;line-height:1.45;margin:9px 0}
 .slide-number{position:absolute;right:38px;bottom:28px;color:#9CA3AF;font-size:16px}
 </style>
@@ -15884,7 +15884,7 @@ ${slidesHtml}
             flexDirection:"column",
             gap:14,
             minWidth:0,
-            fontFamily:"Arial, sans-serif",
+            fontFamily:"Inter, system-ui, sans-serif",
           }}
         >
           <Modal
@@ -15970,7 +15970,7 @@ ${slidesHtml}
                     margin:0,
                     width:"100%",
                     maxWidth:760,
-                    fontFamily:"Arial, sans-serif",
+                    fontFamily:"Inter, system-ui, sans-serif",
                     fontSize:12,
                     fontWeight:400,
                     color:C.muted,
@@ -16213,7 +16213,7 @@ ${slidesHtml}
                   <h4
                     style={{
                       margin:0,
-                      fontFamily:"Arial, sans-serif",
+                      fontFamily:"Inter, system-ui, sans-serif",
                       fontSize:13,
                       fontWeight:700,
                       color:C.text,
@@ -16224,7 +16224,7 @@ ${slidesHtml}
                   <p
                     style={{
                       margin:"3px 0 0",
-                      fontFamily:"Arial, sans-serif",
+                      fontFamily:"Inter, system-ui, sans-serif",
                       fontSize:10.5,
                       fontWeight:400,
                       color:C.faint,
@@ -16277,7 +16277,7 @@ ${slidesHtml}
                     borderRadius:10,
                     background:C.bg,
                     color:C.text,
-                    fontFamily:"Arial, sans-serif",
+                    fontFamily:"Inter, system-ui, sans-serif",
                     fontSize:12.5,
                     fontWeight:400,
                     lineHeight:1.6,
@@ -16313,7 +16313,7 @@ ${slidesHtml}
                       <div
                         style={{
                           marginBottom:8,
-                          fontFamily:"Arial, sans-serif",
+                          fontFamily:"Inter, system-ui, sans-serif",
                           fontSize:11,
                           fontWeight:700,
                           color:C.text,
@@ -16344,7 +16344,7 @@ ${slidesHtml}
                                 background:"transparent",
                                 padding:0,
                                 color:C.textSub,
-                                fontFamily:"Arial, sans-serif",
+                                fontFamily:"Inter, system-ui, sans-serif",
                                 fontSize:10.5,
                                 fontWeight:400,
                                 lineHeight:1.35,
@@ -16368,7 +16368,7 @@ ${slidesHtml}
                       borderRadius:10,
                       background:"#FFFFFF",
                       color:C.text,
-                      fontFamily:"Arial, sans-serif",
+                      fontFamily:"Inter, system-ui, sans-serif",
                       fontSize:12.5,
                       fontWeight:400,
                       overflowWrap:"anywhere",
@@ -16410,7 +16410,7 @@ ${slidesHtml}
                                     ? "3px solid #111827"
                                     : `2px solid ${C.border}`,
                                 color:"#000000",
-                                fontFamily:"Arial, sans-serif",
+                                fontFamily:"Inter, system-ui, sans-serif",
                                 fontSize:
                                   index===0
                                     ? (isMobile?20:24)
@@ -16482,7 +16482,7 @@ ${slidesHtml}
                 <p
                   style={{
                     margin:0,
-                    fontFamily:"Arial, sans-serif",
+                    fontFamily:"Inter, system-ui, sans-serif",
                     fontSize:11.5,
                     fontWeight:400,
                     color:"#065F46",
@@ -16506,7 +16506,7 @@ ${slidesHtml}
                 <h4
                   style={{
                     margin:"0 0 8px",
-                    fontFamily:"Arial, sans-serif",
+                    fontFamily:"Inter, system-ui, sans-serif",
                     fontSize:13,
                     fontWeight:700,
                     color:C.text,
@@ -16518,7 +16518,7 @@ ${slidesHtml}
                   style={{
                     display:"grid",
                     gap:8,
-                    fontFamily:"Arial, sans-serif",
+                    fontFamily:"Inter, system-ui, sans-serif",
                     fontSize:11.5,
                     fontWeight:400,
                     color:C.textSub,
@@ -18054,7 +18054,7 @@ ${slidesHtml}
                   <h3
                     style={{
                       margin:"0 0 5px",
-                      fontFamily:"Arial, sans-serif",
+                      fontFamily:"Inter, system-ui, sans-serif",
                       fontSize:16,
                       fontWeight:700,
                       color:C.text,
