@@ -18822,7 +18822,7 @@ ${slidesHtml}
                                       resolvedAnnouncementType==="Product Introduction"
                                         ? "[New Arrival]"
                                         : resolvedAnnouncementType==="Product Reactivation"
-                                          ? "[Product Reactivation]"
+                                          ? "[Back in Stock]"
                                           : resolvedAnnouncementType==="Campaign"
                                             ? "[Campaign]"
                                             : resolvedAnnouncementType==="Special Campaign"
@@ -24250,7 +24250,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         checklistAnnouncementType==="Product Introduction"
           ? "[New Arrival]"
           : checklistAnnouncementType==="Product Reactivation"
-            ? "[Product Reactivation]"
+            ? "[Back in Stock]"
             : checklistAnnouncementType==="Campaign"
               ? "[Campaign]"
               : checklistAnnouncementType==="Special Campaign"
@@ -24272,12 +24272,30 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           defaultViberAnnouncementSubject
         ).trim();
 
-        return checklistAnnouncementType==="Product Introduction"
-          ? subject.replace(
-              /^\[Product Introduction\]\s*VIBER Message:/i,
-              "[New Arrival] VIBER Message:"
+        if(
+          checklistAnnouncementType==="Product Introduction"
+        ){
+          return subject.replace(
+            /^\[Product Introduction\]\s*VIBER Message:/i,
+            "[New Arrival] VIBER Message:"
+          );
+        }
+
+        if(
+          checklistAnnouncementType==="Product Reactivation"
+        ){
+          return subject
+            .replace(
+              /^\[Product Reactivation\]\s*VIBER Message:/i,
+              "[Back in Stock] VIBER Message:"
             )
-          : subject;
+            .replace(
+              /^\[Available Again\]\s*VIBER Message:/i,
+              "[Back in Stock] VIBER Message:"
+            );
+        }
+
+        return subject;
       };
 
       const syncedAssetAnnouncementEditor = {
@@ -24903,8 +24921,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             action:"For inquiries, product details, or orders, please feel free to contact us.",
           },
           "Product Reactivation":{
-            subject:`[Product Reactivation] ${externalProductName} — Available Again`,
-            intro:`We are pleased to reintroduce ${externalProductName}, now available again for ordering and promotion.`,
+            subject:`[Back in Stock] ${externalProductName}`,
+            intro:`We are pleased to share that ${externalProductName} is back in stock and available for ordering and promotion.`,
             action:"Please feel free to contact us for updated product details, availability, or orders.",
           },
           "Campaign":{
@@ -25098,7 +25116,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               checklistAnnouncementType==="Product Introduction"
                 ? "[New Arrival]"
                 : checklistAnnouncementType==="Product Reactivation"
-                  ? "[Product Reactivation]"
+                  ? "[Back in Stock]"
                   : checklistAnnouncementType==="Campaign"
                     ? "[Campaign]"
                     : checklistAnnouncementType==="Special Campaign"
