@@ -6320,6 +6320,12 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [trainingMaterialsDraft,setTrainingMaterialsDraft] = useState("");
   const [trainingMaterialsDraftSource,setTrainingMaterialsDraftSource] = useState("");
   const [trainingMaterialsEditMode,setTrainingMaterialsEditMode] = useState(false);
+  const [trainingEmailOpen,setTrainingEmailOpen] = useState(false);
+  const [trainingEmailTo,setTrainingEmailTo] = useState("");
+  const [trainingEmailCc,setTrainingEmailCc] = useState("");
+  const [trainingEmailSubject,setTrainingEmailSubject] = useState("");
+  const [trainingEmailBusy,setTrainingEmailBusy] = useState<""|"draft"|"send">("");
+  const [trainingEmailError,setTrainingEmailError] = useState("");
   const [editingEcommerceSection,setEditingEcommerceSection] = useState<any>(null);
   const [editingEcommerceSectionValue,setEditingEcommerceSectionValue] = useState("");
   const [editingEcommerceInstructionValue,setEditingEcommerceInstructionValue] = useState("");
@@ -14451,11 +14457,207 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         ""
       ).trim();
 
-      const storedTrainingOutput = String(
-        data?.generatedText ||
-        data?.trainingGuide ||
-        ""
-      );
+      const trainingKnownHeadings = [
+        "COLLECTION OVERVIEW",
+        "BRAND AND COLLECTION POSITIONING",
+        "TARGET CUSTOMERS",
+        "COLLECTION-WIDE KEY SELLING POINTS",
+        "VARIANTS AND DIFFERENCES",
+        "PRODUCT TRAINING GUIDES",
+        "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
+        "PRODUCT COMPARISON GUIDE",
+        "PROMODISER DEMONSTRATION FLOW",
+        "PROMODISER QUICK CHEAT SHEET",
+        "KNOWLEDGE CHECK QUIZ",
+        "ANSWER KEY",
+      ];
+
+      const trainingUnconfirmedPattern =
+        /\b(?:to be confirmed|tbc|tbd|to be determined|not yet confirmed|pending confirmation|requires confirmation|unconfirmed|not provided(?: in (?:the )?source)?|not specified(?: in (?:the )?source)?|information (?:unavailable|not available)|unknown(?: in (?:the )?source)?)\b/i;
+
+      const sanitizeTrainingMaterialsText = (
+        sourceValue:any
+      ) => {
+        const normalized = cleanReadyToUseOutput(
+          sourceValue || ""
+        )
+          .replace(/\r\n/g,"\n")
+          .replace(/\r/g,"\n");
+
+        const sourceLines = normalized.split("\n");
+
+        const isKnownHeadingLine = (
+          line:any
+        ) => trainingKnownHeadings.includes(
+          String(line || "").trim().toUpperCase()
+        );
+
+        const cleanGeneralLines = (
+          lines:string[]
+        ) => lines.filter(
+          (line:string)=>
+            !trainingUnconfirmedPattern.test(
+              String(line || "")
+            )
+        );
+
+        const quizHeadingIndex = sourceLines.findIndex(
+          (line:string)=>
+            String(line || "").trim().toUpperCase() ===
+            "KNOWLEDGE CHECK QUIZ"
+        );
+
+        const answerHeadingIndex = sourceLines.findIndex(
+          (line:string,index:number)=>
+            index > quizHeadingIndex &&
+            /^ANSWER KEY\b/i.test(
+              String(line || "").trim()
+            )
+        );
+
+        let resultLines:string[] = [];
+
+        if(quizHeadingIndex < 0){
+          resultLines = cleanGeneralLines(sourceLines);
+        } else {
+          resultLines.push(
+            ...cleanGeneralLines(
+              sourceLines.slice(0,quizHeadingIndex)
+            )
+          );
+
+          const quizEnd = answerHeadingIndex >= 0
+            ? answerHeadingIndex
+            : sourceLines.length;
+
+          const questionBlocks:any[] = [];
+          let currentBlock:any = null;
+
+          sourceLines
+            .slice(quizHeadingIndex + 1,quizEnd)
+            .forEach((line:string)=>{
+              const match = String(line || "").match(
+                /^\s*(\d+)[\.\)]\s+(.*)$/
+              );
+
+              if(match){
+                if(currentBlock){
+                  questionBlocks.push(currentBlock);
+                }
+                currentBlock = {
+                  originalNumber:Number(match[1]),
+                  firstText:String(match[2] || ""),
+                  continuation:[],
+                };
+                return;
+              }
+
+              if(currentBlock){
+                currentBlock.continuation.push(line);
+              }
+            });
+
+          if(currentBlock){
+            questionBlocks.push(currentBlock);
+          }
+
+          const keptBlocks = questionBlocks.filter(
+            (block:any)=>
+              !trainingUnconfirmedPattern.test(
+                [
+                  block.firstText,
+                  ...(block.continuation || []),
+                ].join("\n")
+              )
+          );
+
+          const numberMap = new Map<number,number>();
+          keptBlocks.forEach((block:any,index:number)=>{
+            numberMap.set(block.originalNumber,index+1);
+          });
+
+          if(keptBlocks.length){
+            resultLines.push("KNOWLEDGE CHECK QUIZ");
+
+            keptBlocks.forEach((block:any,index:number)=>{
+              resultLines.push(`${index+1}. ${block.firstText}`);
+              resultLines.push(
+                ...cleanGeneralLines(block.continuation || [])
+              );
+            });
+
+            if(answerHeadingIndex >= 0){
+              const answerSource = sourceLines
+                .slice(answerHeadingIndex)
+                .join(" ");
+
+              const answerEntries = Array.from(
+                answerSource.matchAll(
+                  /(\d+)\s*[\(\[]\s*([a-z])\s*[\)\]]/gi
+                )
+              )
+                .map((match:any)=>(
+                  {
+                    originalNumber:Number(match[1]),
+                    answer:String(match[2] || "").toLowerCase(),
+                  }
+                ))
+                .filter((entry:any)=>
+                  numberMap.has(entry.originalNumber)
+                )
+                .map((entry:any)=>
+                  `${numberMap.get(entry.originalNumber)}(${entry.answer})`
+                );
+
+              if(answerEntries.length){
+                resultLines.push(
+                  "",
+                  `ANSWER KEY: ${answerEntries.join(", ")}`
+                );
+              }
+            }
+          }
+        }
+
+        const compacted:string[] = [];
+        cleanGeneralLines(resultLines).forEach((line:string)=>{
+          const cleanLine = String(line || "").trimEnd();
+          if(
+            !cleanLine.trim() &&
+            !String(compacted[compacted.length-1] || "").trim()
+          ) return;
+          compacted.push(cleanLine);
+        });
+
+        const withoutEmptySections = compacted.filter(
+          (line:string,index:number)=>{
+            if(!isKnownHeadingLine(line)) return true;
+            let cursor = index + 1;
+            while(
+              cursor < compacted.length &&
+              !String(compacted[cursor] || "").trim()
+            ) cursor += 1;
+            return (
+              cursor < compacted.length &&
+              !isKnownHeadingLine(compacted[cursor])
+            );
+          }
+        );
+
+        return withoutEmptySections
+          .join("\n")
+          .replace(/\n{3,}/g,"\n\n")
+          .trim();
+      };
+
+      const storedTrainingOutput =
+        sanitizeTrainingMaterialsText(
+          String(
+            data?.generatedText ||
+            data?.trainingGuide ||
+            ""
+          )
+        );
 
       const trainingSourceSignature = [
         String(group?.id || ""),
@@ -14497,29 +14699,32 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         })
       );
 
+      const confirmedTrainingGuide =
+        sanitizeTrainingMaterialsText(
+          trainingMaterialsDraft || ""
+        );
+
+      if(
+        String(trainingMaterialsDraft || "").trim() &&
+        confirmedTrainingGuide !==
+          String(trainingMaterialsDraft || "").trim()
+      ){
+        window.setTimeout(()=>{
+          setTrainingMaterialsDraft(
+            confirmedTrainingGuide
+          );
+        },0);
+      }
+
       const trainingLines = String(
-        trainingMaterialsDraft || ""
+        confirmedTrainingGuide || ""
       ).replace(/\r\n/g,"\n").split("\n");
 
       const isTrainingHeading = (line:string) => {
         const value = String(line || "").trim();
         if(!value) return false;
         const upper = value.toUpperCase();
-        const known = [
-          "COLLECTION OVERVIEW",
-          "BRAND AND COLLECTION POSITIONING",
-          "TARGET CUSTOMERS",
-          "COLLECTION-WIDE KEY SELLING POINTS",
-          "VARIANTS AND DIFFERENCES",
-          "PRODUCT TRAINING GUIDES",
-          "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
-          "PRODUCT COMPARISON GUIDE",
-          "PROMODISER DEMONSTRATION FLOW",
-          "PROMODISER QUICK CHEAT SHEET",
-          "KNOWLEDGE CHECK QUIZ",
-          "ANSWER KEY",
-        ];
-        return known.includes(upper) || (
+        return trainingKnownHeadings.includes(upper) || (
           value===upper &&
           value.length>=4 &&
           value.length<=90 &&
@@ -14710,12 +14915,126 @@ ${sectionsHtml}
 </html>`;
       };
 
+      const getTrainingEmailHtml = () => {
+        const title = String(
+          group?.groupName ||
+          group?.name ||
+          "Product Training Manual"
+        ).trim();
+
+        const renderEmailLine = (line:string) => {
+          const value = String(line || "").trim();
+          if(!value) return "<div style='height:8px;line-height:8px'>&nbsp;</div>";
+
+          if(/^[-•✓✔]\s+/.test(value)){
+            return `<div style='display:flex;gap:8px;margin:6px 0;font-size:13px;line-height:1.55'><span style='font-weight:900;color:#16A34A'>✓</span><div>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
+          }
+
+          const numberMatch = value.match(/^(\d+)[\.\)]\s+(.*)$/);
+          if(numberMatch){
+            return `<div style='display:flex;gap:8px;margin:6px 0;font-size:13px;line-height:1.55'><strong style='min-width:22px;color:#0F172A'>${escapeTrainingHtml(numberMatch[1])}.</strong><div>${escapeTrainingHtml(numberMatch[2])}</div></div>`;
+          }
+
+          const colonIndex = value.indexOf(":");
+          if(colonIndex>0 && colonIndex<45){
+            return `<p style='margin:7px 0;font-size:13px;line-height:1.6;color:#334155'><strong style='color:#0F172A'>${escapeTrainingHtml(value.slice(0,colonIndex+1))}</strong> ${escapeTrainingHtml(value.slice(colonIndex+1).trim())}</p>`;
+          }
+
+          return `<p style='margin:7px 0;font-size:13px;line-height:1.65;color:#334155'>${escapeTrainingHtml(value)}</p>`;
+        };
+
+        const sectionHtml = trainingSections.map((section:any,index:number)=>[
+          "<section style='margin:0 0 24px'>",
+          `<h2 style='margin:0 0 12px;padding:0 0 8px;border-bottom:${index===0 ? "3px solid #0F172A" : "1px solid #CBD5E1"};font-family:Arial,Helvetica,sans-serif;font-size:${index===0 ? "24px" : "18px"};line-height:1.25;color:#0F172A'>${escapeTrainingHtml(section.title || `Section ${index+1}`)}</h2>`,
+          ...(section.lines || []).map(renderEmailLine),
+          "</section>",
+        ].join("")).join("");
+
+        return [
+          "<div style='margin:0;padding:24px;background:#F1F5F9;font-family:Arial,Helvetica,sans-serif;color:#0F172A'>",
+          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #DCE3EC;border-radius:14px;overflow:hidden'>",
+          "<div style='padding:34px 30px;background:#0F172A;color:#FFFFFF;text-align:center'>",
+          `<h1 style='margin:0;font-size:28px;line-height:1.25'>${escapeTrainingHtml(title)}</h1>`,
+          "<p style='margin:10px 0 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#CBD5E1'>Promodiser Training Manual</p>",
+          "</div>",
+          "<div style='padding:28px 30px'>",
+          sectionHtml,
+          "</div>",
+          "<div style='padding:14px 30px;border-top:1px solid #E2E8F0;font-size:11px;color:#64748B;text-align:center'>Prepared through EMDC Training Materials</div>",
+          "</div>",
+          "</div>",
+        ].join("");
+      };
+
+      const openTrainingEmailComposer = () => {
+        if(!confirmedTrainingGuide) return;
+        if(!String(trainingEmailSubject || "").trim()){
+          setTrainingEmailSubject(
+            `[Training Guide] ${String(group?.groupName || group?.name || "Product Training Manual").trim()}`
+          );
+        }
+        setTrainingEmailError("");
+        setTrainingEmailOpen(true);
+      };
+
+      const submitTrainingGuideEmail = async (action:"draft"|"send") => {
+        const guide = confirmedTrainingGuide;
+        const to = String(trainingEmailTo || "").trim();
+        const cc = String(trainingEmailCc || "").trim();
+        const subject = String(trainingEmailSubject || "").trim();
+
+        if(!guide){
+          setTrainingEmailError("Generate the training guide first.");
+          return;
+        }
+        if(!to){
+          setTrainingEmailError("Enter at least one email recipient.");
+          return;
+        }
+        if(!subject){
+          setTrainingEmailError("Enter an email subject.");
+          return;
+        }
+        if(action==="send" && typeof window!=="undefined" && !window.confirm("Send the full training guide now?")) return;
+
+        setTrainingEmailBusy(action);
+        setTrainingEmailError("");
+
+        try {
+          const response = await fetch("/api/communications/email",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+              action,
+              emailAudience:"internal",
+              to,
+              cc,
+              subject,
+              body:guide,
+              customHtmlBody:getTrainingEmailHtml(),
+              checklistTitle:String(group?.groupName || group?.name || "Training Materials").trim(),
+            }),
+          });
+          const payload = await response.json().catch(()=>null);
+          if(!response.ok || !payload?.ok){
+            throw new Error(payload?.error || "Unable to process the training guide email.");
+          }
+          markActionDone(action==="draft" ? "training-email-draft" : "training-email-send");
+          await logActivity({
+            action:action==="draft" ? "created a training guide email draft for" : "sent a training guide email for",
+            entityType:"checklist",
+            entityName:group?.groupName || group?.name || "Training Materials",
+            href:"/#/checklists",
+          });
+        } catch(error:any) {
+          setTrainingEmailError(error?.message || "Unable to process the training guide email.");
+        } finally {
+          setTrainingEmailBusy("");
+        }
+      };
+
       const exportTrainingPdf = () => {
-        if(
-          !String(
-            trainingMaterialsDraft || ""
-          ).trim()
-        ){
+        if(!String(confirmedTrainingGuide || "").trim()){
           return;
         }
 
@@ -14793,7 +15112,7 @@ ${sectionsHtml}
       };
 
       const exportTrainingPowerPoint = () => {
-        if(!String(trainingMaterialsDraft || "").trim()) return;
+        if(!String(confirmedTrainingGuide || "").trim()) return;
 
         const title = String(
           group?.groupName ||
@@ -14884,7 +15203,9 @@ ${slidesHtml}
           "You are creating an internal product training manual for retail promodisers in the Philippines.",
           "Use the supplied E-commerce generated output as the primary and authoritative product knowledge source.",
           "Do not invent exact specifications, claims, certifications, materials, capacities, dimensions, compatibility, or safety information that are not present in the source.",
-          "When information is missing, write: To be confirmed.",
+          "If information is missing, unsupported, uncertain, or not explicitly confirmed by the E-commerce source, omit that point entirely.",
+          "Never write placeholder phrases such as To be confirmed, TBC, TBD, Unknown, Not provided, Not specified, or Pending confirmation.",
+          "Do not create a quiz question, answer option, answer-key entry, specification, comparison, claim, or instruction unless its answer is directly supported by the supplied source.",
           "Write clear professional English that is easy for promodisers to understand, remember, and explain to customers.",
           "Avoid em dashes.",
           "Do not use markdown heading symbols such as ###.",
@@ -14921,7 +15242,7 @@ ${slidesHtml}
           "PROMODISER DEMONSTRATION FLOW",
           "PROMODISER QUICK CHEAT SHEET",
           "KNOWLEDGE CHECK QUIZ",
-          "Create 10 multiple-choice questions and include an answer key.",
+          "Create up to 10 multiple-choice questions using only facts explicitly supported by the supplied source, then include an answer key only for the questions created.",
           "",
           "Keep all claims grounded in the supplied E-commerce output.",
         ].join("\n");
@@ -14985,8 +15306,10 @@ ${slidesHtml}
           }
 
           const generatedText =
-            cleanReadyToUseOutput(
-              payload?.text || ""
+            sanitizeTrainingMaterialsText(
+              cleanReadyToUseOutput(
+                payload?.text || ""
+              )
             );
 
           setTrainingMaterialsDraft(
@@ -15032,11 +15355,14 @@ ${slidesHtml}
       };
 
       const saveTrainingMaterials = () => {
-        const cleanDraft = String(
-          trainingMaterialsDraft || ""
-        ).trim();
+        const cleanDraft =
+          sanitizeTrainingMaterialsText(
+            trainingMaterialsDraft || ""
+          );
 
         if(!cleanDraft) return;
+
+        setTrainingMaterialsDraft(cleanDraft);
 
         const savedAt =
           new Date().toISOString();
@@ -15066,9 +15392,10 @@ ${slidesHtml}
       };
 
       const copyTrainingMaterials = async () => {
-        const value = String(
-          trainingMaterialsDraft || ""
-        ).trim();
+        const value =
+          sanitizeTrainingMaterialsText(
+            trainingMaterialsDraft || ""
+          );
 
         if(!value) return;
 
@@ -15083,9 +15410,10 @@ ${slidesHtml}
       };
 
       const addTrainingMaterialsToOverview = () => {
-        const value = String(
-          trainingMaterialsDraft || ""
-        ).trim();
+        const value =
+          sanitizeTrainingMaterialsText(
+            trainingMaterialsDraft || ""
+          );
 
         if(!value) return;
 
@@ -15120,6 +15448,48 @@ ${slidesHtml}
             minWidth:0,
           }}
         >
+          <Modal
+            open={trainingEmailOpen}
+            onClose={()=>{
+              if(!trainingEmailBusy){
+                setTrainingEmailOpen(false);
+              }
+            }}
+            title="Email Full Training Guide"
+            width={760}
+          >
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surfaceAlt,color:C.textSub,fontSize:11.5,lineHeight:1.5}}>
+                The complete confirmed guide will be sent with the same section hierarchy, headings, bullets, numbered quiz, and answer-key formatting shown in Training Materials.
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr)",gap:10}}>
+                <Field label="To">
+                  <TI value={trainingEmailTo} onChange={(value:any)=>setTrainingEmailTo(value)} placeholder="Recipient email address" />
+                </Field>
+                <Field label="CC">
+                  <TI value={trainingEmailCc} onChange={(value:any)=>setTrainingEmailCc(value)} placeholder="Optional CC recipients" />
+                </Field>
+              </div>
+              <Field label="Subject">
+                <TI value={trainingEmailSubject} onChange={(value:any)=>setTrainingEmailSubject(value)} placeholder="[Training Guide] Product or Collection" />
+              </Field>
+              {!!trainingEmailError&&(
+                <div style={{padding:"9px 11px",border:"1px solid #FECACA",borderRadius:8,background:"#FEF2F2",color:"#B91C1C",fontSize:11,lineHeight:1.45}}>
+                  {trainingEmailError}
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}>
+                <Btn type="button" variant="outline" disabled={!!trainingEmailBusy} onClick={()=>setTrainingEmailOpen(false)}>Close</Btn>
+                <Btn type="button" variant="outline" disabled={!!trainingEmailBusy} onClick={()=>submitTrainingGuideEmail("draft")}>
+                  {trainingEmailBusy==="draft" ? "Creating..." : actionDone("training-email-draft") ? "✓ Draft Created" : "Create Gmail Draft"}
+                </Btn>
+                <Btn type="button" disabled={!!trainingEmailBusy} onClick={()=>submitTrainingGuideEmail("send")}>
+                  {trainingEmailBusy==="send" ? "Sending..." : actionDone("training-email-send") ? "✓ Sent" : "Send Email"}
+                </Btn>
+              </div>
+            </div>
+          </Modal>
+
           <div
             style={{
               padding:isMobile?12:16,
@@ -15197,7 +15567,7 @@ ${slidesHtml}
                   }
                   disabled={
                     !String(
-                      trainingMaterialsDraft || ""
+                      confirmedTrainingGuide || ""
                     ).trim()
                   }
                 >
@@ -15217,7 +15587,7 @@ ${slidesHtml}
                   }
                   disabled={
                     !String(
-                      trainingMaterialsDraft || ""
+                      confirmedTrainingGuide || ""
                     ).trim()
                   }
                 >
@@ -15233,7 +15603,7 @@ ${slidesHtml}
                   }
                   disabled={
                     !String(
-                      trainingMaterialsDraft || ""
+                      confirmedTrainingGuide || ""
                     ).trim()
                   }
                 >
@@ -15249,7 +15619,7 @@ ${slidesHtml}
                   onClick={exportTrainingPdf}
                   disabled={
                     !String(
-                      trainingMaterialsDraft || ""
+                      confirmedTrainingGuide || ""
                     ).trim()
                   }
                 >
@@ -15261,11 +15631,19 @@ ${slidesHtml}
                   onClick={exportTrainingPowerPoint}
                   disabled={
                     !String(
-                      trainingMaterialsDraft || ""
+                      confirmedTrainingGuide || ""
                     ).trim()
                   }
                 >
                   Export PowerPoint
+                </Btn>
+                <Btn
+                  sm
+                  variant="outline"
+                  onClick={openTrainingEmailComposer}
+                  disabled={!String(confirmedTrainingGuide || "").trim()}
+                >
+                  Email Full Guide
                 </Btn>
                 <Btn
                   sm
@@ -15281,7 +15659,7 @@ ${slidesHtml}
                   }
                   disabled={
                     !String(
-                      trainingMaterialsDraft || ""
+                      confirmedTrainingGuide || ""
                     ).trim()
                   }
                 >
@@ -15481,7 +15859,7 @@ ${slidesHtml}
                       overflowWrap:"anywhere",
                     }}
                   >
-                    {!String(trainingMaterialsDraft || "").trim() ? (
+                    {!String(confirmedTrainingGuide || "").trim() ? (
                       <div
                         style={{
                           minHeight:420,
