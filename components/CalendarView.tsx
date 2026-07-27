@@ -6384,6 +6384,8 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
   const [campaignOverviewImagePreview,setCampaignOverviewImagePreview] = useState<any>(null);
   const [campaignOverviewFullView,setCampaignOverviewFullView] = useState(false);
+  const [campaignMarketingFullView,setCampaignMarketingFullView] = useState(false);
+  const [campaignDigitalFullView,setCampaignDigitalFullView] = useState(false);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
   const [campaignRowSkuPickerId,setCampaignRowSkuPickerId] = useState<string|null>(null);
   const [campaignRowSkuSearch,setCampaignRowSkuSearch] = useState("");
@@ -19374,13 +19376,102 @@ ${slidesHtml}
         });
       };
 
+      const campaignMarketingTableColumns = [
+        {
+          heading:"SKU",
+          width:180,
+          left:0,
+          frozen:true,
+        },
+        {
+          heading:"Product",
+          width:280,
+          left:180,
+          frozen:true,
+        },
+        {
+          heading:"Platform",
+          width:165,
+        },
+        {
+          heading:"Discount / Offer",
+          width:165,
+        },
+        {
+          heading:"Mechanics / Notes",
+          width:165,
+        },
+        {
+          heading:"Headline",
+          width:220,
+        },
+        {
+          heading:"Subheadline",
+          width:280,
+        },
+        {
+          heading:"CTA",
+          width:165,
+        },
+        {
+          heading:"Caption",
+          width:360,
+        },
+        {
+          heading:"Actions",
+          width:270,
+        },
+      ];
+
       return (
         <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
-          <div style={{padding:isMobile?14:16,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
-            <h3 style={{margin:0,fontSize:17,fontWeight:900,color:C.text}}>Campaign Marketing Captions</h3>
-            <p style={{margin:"5px 0 0",fontSize:12,lineHeight:1.5,color:C.muted}}>
-              Complete or revise the caption for each Campaign row sent from E-commerce. Caption fields auto-save.
-            </p>
+          <div
+            style={{
+              padding:isMobile?14:16,
+              background:C.surface,
+              border:`1.5px solid ${C.border}`,
+              borderRadius:12,
+              display:"flex",
+              justifyContent:"space-between",
+              alignItems:"flex-start",
+              gap:12,
+              flexWrap:"wrap",
+            }}
+          >
+            <div style={{minWidth:0,flex:1}}>
+              <h3 style={{margin:0,fontSize:17,fontWeight:900,color:C.text}}>
+                Campaign Marketing Captions
+              </h3>
+              <p style={{margin:"5px 0 0",fontSize:12,lineHeight:1.5,color:C.muted}}>
+                Complete or revise the caption for each Campaign row sent from E-commerce. Caption fields auto-save.
+              </p>
+            </div>
+
+            <Btn
+              xs
+              type="button"
+              variant={
+                campaignMarketingFullView
+                  ? "primary"
+                  : "outline"
+              }
+              disabled={!rows.length}
+              onClick={()=>
+                setCampaignMarketingFullView(
+                  (previous:boolean)=>
+                    !previous
+                )
+              }
+              title={
+                campaignMarketingFullView
+                  ? "Return to compact rows"
+                  : "Expand rows and wrap all long field content"
+              }
+            >
+              {campaignMarketingFullView
+                ? "Compact View"
+                : "View Full"}
+            </Btn>
           </div>
 
           {rows.length===0 ? (
@@ -19390,15 +19481,74 @@ ${slidesHtml}
               </p>
             </div>
           ) : (
-            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingRight:12,paddingBottom:6,boxSizing:"border-box",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
-              <table style={{width:"max-content",minWidth:1810,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+            <div
+              style={{
+                display:"block",
+                width:"100%",
+                maxWidth:"100%",
+                minWidth:0,
+                maxHeight:
+                  campaignMarketingFullView
+                    ? isMobile
+                      ? 620
+                      : 760
+                    : isMobile
+                      ? 410
+                      : 560,
+                overflowX:"auto",
+                overflowY:"auto",
+                WebkitOverflowScrolling:"touch",
+                scrollbarGutter:"stable both-edges",
+                paddingRight:12,
+                paddingBottom:6,
+                boxSizing:"border-box",
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <table style={{width:"max-content",minWidth:2250,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
                 <thead>
                   <tr>
-                    {["Product / SKU","Platform","Discount / Offer","Mechanics / Notes","Headline","Subheadline","CTA","Caption","Actions"].map((heading:string)=>(
-                      <th key={heading} style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,textAlign:"left",fontSize:9.5,fontWeight:900,letterSpacing:".04em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
-                        {heading}
-                      </th>
-                    ))}
+                    {campaignMarketingTableColumns.map(
+                      (column:any,index:number)=>(
+                        <th
+                          key={column.heading}
+                          style={{
+                            position:"sticky",
+                            top:0,
+                            left:column.frozen
+                              ? column.left
+                              : undefined,
+                            zIndex:column.frozen
+                              ? 8
+                              : 5,
+                            width:column.width,
+                            minWidth:column.width,
+                            maxWidth:column.width,
+                            boxSizing:"border-box",
+                            padding:"9px 10px",
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            background:C.surfaceAlt,
+                            color:C.textSub,
+                            textAlign:"left",
+                            fontSize:9.5,
+                            fontWeight:900,
+                            letterSpacing:".04em",
+                            textTransform:"uppercase",
+                            whiteSpace:"nowrap",
+                            boxShadow:
+                              column.frozen &&
+                              column.heading==="Product"
+                                ? "6px 0 10px -8px rgba(15,23,42,.55)"
+                                : "none",
+                          }}
+                        >
+                          {column.heading}
+                        </th>
+                      )
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -19407,51 +19557,148 @@ ${slidesHtml}
                     const skuText=products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", ");
                     return (
                       <tr key={row?.sourceRowId||row?.id||index} style={{background:index%2?C.surface:C.bg}}>
-                        <td style={{width:260,minWidth:260,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                        <td
+                          style={{
+                            position:"sticky",
+                            left:0,
+                            zIndex:3,
+                            width:180,
+                            minWidth:180,
+                            maxWidth:180,
+                            boxSizing:"border-box",
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignMarketingFullView
+                                ? "top"
+                                : "middle",
+                            background:
+                              index%2
+                                ? C.surface
+                                : C.bg,
+                          }}
+                        >
                           <div
+                            title={skuText}
                             style={{
                               display:"flex",
-                              flexDirection:"column",
-                              justifyContent:"center",
-                              minHeight:38,
-                              padding:"4px 8px",
-                              overflow:"hidden",
+                              alignItems:
+                                campaignMarketingFullView
+                                  ? "flex-start"
+                                  : "center",
+                              width:"100%",
+                              minHeight:
+                                campaignMarketingFullView
+                                  ? 68
+                                  : 38,
+                              padding:"7px 8px",
+                              boxSizing:"border-box",
+                              overflow:
+                                campaignMarketingFullView
+                                  ? "visible"
+                                  : "hidden",
                               border:`1px solid ${C.border}`,
                               borderRadius:8,
                               background:C.surface,
+                              color:C.muted,
+                              fontFamily:"monospace",
+                              fontSize:9.5,
+                              lineHeight:1.35,
+                              whiteSpace:
+                                campaignMarketingFullView
+                                  ? "normal"
+                                  : "nowrap",
+                              wordBreak:
+                                campaignMarketingFullView
+                                  ? "break-word"
+                                  : "normal",
+                              overflowWrap:
+                                campaignMarketingFullView
+                                  ? "anywhere"
+                                  : "normal",
+                              textOverflow:
+                                campaignMarketingFullView
+                                  ? "clip"
+                                  : "ellipsis",
                             }}
                           >
-                            <strong
-                              title={String(row?.product||"Campaign Product Row")}
-                              style={{
-                                display:"block",
-                                overflow:"hidden",
-                                color:C.text,
-                                fontSize:10.5,
-                                lineHeight:1.25,
-                                textOverflow:"ellipsis",
-                                whiteSpace:"nowrap",
-                              }}
-                            >
-                              {row?.product||"Campaign Product Row"}
-                            </strong>
-                            <span
-                              title={skuText}
-                              style={{
-                                display:"block",
-                                marginTop:2,
-                                overflow:"hidden",
-                                color:C.muted,
-                                fontSize:9,
-                                lineHeight:1.2,
-                                textOverflow:"ellipsis",
-                                whiteSpace:"nowrap",
-                              }}
-                            >
-                              {skuText||"No SKU selected"}
-                            </span>
+                            {skuText||"No SKU selected"}
                           </div>
                         </td>
+
+                        <td
+                          style={{
+                            position:"sticky",
+                            left:180,
+                            zIndex:3,
+                            width:280,
+                            minWidth:280,
+                            maxWidth:280,
+                            boxSizing:"border-box",
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignMarketingFullView
+                                ? "top"
+                                : "middle",
+                            background:
+                              index%2
+                                ? C.surface
+                                : C.bg,
+                            boxShadow:
+                              "6px 0 10px -8px rgba(15,23,42,.55)",
+                          }}
+                        >
+                          <div
+                            title={String(row?.product||"Campaign Product Row")}
+                            style={{
+                              display:"flex",
+                              alignItems:
+                                campaignMarketingFullView
+                                  ? "flex-start"
+                                  : "center",
+                              width:"100%",
+                              minHeight:
+                                campaignMarketingFullView
+                                  ? 68
+                                  : 38,
+                              padding:"7px 8px",
+                              boxSizing:"border-box",
+                              overflow:
+                                campaignMarketingFullView
+                                  ? "visible"
+                                  : "hidden",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                              color:C.text,
+                              fontSize:10.5,
+                              fontWeight:700,
+                              lineHeight:1.35,
+                              whiteSpace:
+                                campaignMarketingFullView
+                                  ? "normal"
+                                  : "nowrap",
+                              wordBreak:
+                                campaignMarketingFullView
+                                  ? "break-word"
+                                  : "normal",
+                              overflowWrap:
+                                campaignMarketingFullView
+                                  ? "anywhere"
+                                  : "normal",
+                              textOverflow:
+                                campaignMarketingFullView
+                                  ? "clip"
+                                  : "ellipsis",
+                            }}
+                          >
+                            {row?.product||"Campaign Product Row"}
+                          </div>
+                        </td>
+
                         {[row?.platform||"",row?.discount||"",row?.mechanics||"",row?.headline||"",row?.subheadline||"",row?.cta||""].map((value:any,valueIndex:number)=>(
                           <td
                             key={valueIndex}
@@ -19461,7 +19708,10 @@ ${slidesHtml}
                               padding:6,
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
-                              verticalAlign:"middle",
+                              verticalAlign:
+                                campaignMarketingFullView
+                                  ? "top"
+                                  : "middle",
                               color:C.textSub,
                             }}
                           >
@@ -19469,24 +19719,59 @@ ${slidesHtml}
                               title={String(value || "")}
                               style={{
                                 display:"flex",
-                                alignItems:"center",
-                                minHeight:38,
-                                padding:"0 8px",
-                                overflow:"hidden",
+                                alignItems:
+                                  campaignMarketingFullView
+                                    ? "flex-start"
+                                    : "center",
+                                minHeight:
+                                  campaignMarketingFullView
+                                    ? 68
+                                    : 38,
+                                padding:"7px 8px",
+                                overflow:
+                                  campaignMarketingFullView
+                                    ? "visible"
+                                    : "hidden",
                                 border:`1px solid ${C.border}`,
                                 borderRadius:8,
                                 background:C.surface,
                                 fontSize:10.5,
                                 lineHeight:1.35,
-                                whiteSpace:"nowrap",
-                                textOverflow:"ellipsis",
+                                whiteSpace:
+                                  campaignMarketingFullView
+                                    ? "normal"
+                                    : "nowrap",
+                                wordBreak:
+                                  campaignMarketingFullView
+                                    ? "break-word"
+                                    : "normal",
+                                overflowWrap:
+                                  campaignMarketingFullView
+                                    ? "anywhere"
+                                    : "normal",
+                                textOverflow:
+                                  campaignMarketingFullView
+                                    ? "clip"
+                                    : "ellipsis",
                               }}
                             >
                               {value||"—"}
                             </div>
                           </td>
                         ))}
-                        <td style={{width:360,minWidth:360,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                        <td
+                          style={{
+                            width:360,
+                            minWidth:360,
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignMarketingFullView
+                                ? "top"
+                                : "middle",
+                          }}
+                        >
                           <textarea
                             value={String(row?.caption||"")}
                             onChange={(event:any)=>updateCampaignCaption(row?.sourceRowId||row?.id,event.target.value)}
@@ -19500,13 +19785,26 @@ ${slidesHtml}
                               )
                             }
                             placeholder="Enter campaign caption for this row..."
-                            rows={1}
+                            rows={
+                              campaignMarketingFullView
+                                ? 5
+                                : 1
+                            }
                             style={{
                               width:"100%",
-                              height:38,
-                              minHeight:38,
+                              height:
+                                campaignMarketingFullView
+                                  ? 104
+                                  : 38,
+                              minHeight:
+                                campaignMarketingFullView
+                                  ? 104
+                                  : 38,
                               boxSizing:"border-box",
-                              resize:"vertical",
+                              resize:
+                                campaignMarketingFullView
+                                  ? "vertical"
+                                  : "none",
                               padding:"8px 9px",
                               border:`1px solid ${C.border}`,
                               borderRadius:8,
@@ -19526,7 +19824,10 @@ ${slidesHtml}
                             maxWidth:270,
                             padding:8,
                             borderBottom:`1px solid ${C.border}`,
-                            verticalAlign:"middle",
+                            verticalAlign:
+                              campaignMarketingFullView
+                                ? "top"
+                                : "middle",
                             overflow:"visible",
                           }}
                         >
@@ -23253,6 +23554,45 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         );
       };
 
+      const campaignDigitalTableColumns = [
+        {
+          heading:"SKU",
+          width:180,
+          left:0,
+          frozen:true,
+        },
+        {
+          heading:"Product",
+          width:280,
+          left:180,
+          frozen:true,
+        },
+        {
+          heading:"Platform",
+          width:150,
+        },
+        {
+          heading:"Caption",
+          width:320,
+        },
+        {
+          heading:"Final Preview Image URL",
+          width:300,
+        },
+        {
+          heading:"Final Asset Link",
+          width:360,
+        },
+        {
+          heading:"Status",
+          width:145,
+        },
+        {
+          heading:"Actions",
+          width:270,
+        },
+      ];
+
       return (
         <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
           <div style={{padding:isMobile?14:16,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
@@ -23262,15 +23602,51 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 Add the final preview and final asset links for each shared Campaign product row, then update those same rows in Overview.
               </p>
             </div>
-            <Btn
-              xs
-              type="button"
-              variant={actionDone("overview-campaign-shared-row-links")?"primary":"outline"}
-              disabled={!rows.length}
-              onClick={updateCampaignSharedRowsInOverview}
+            <div
+              style={{
+                display:"flex",
+                alignItems:"center",
+                justifyContent:"flex-end",
+                gap:8,
+                flexWrap:"wrap",
+              }}
             >
-              {actionDone("overview-campaign-shared-row-links")?"✓ Updated":"Update All Overview Rows"}
-            </Btn>
+              <Btn
+                xs
+                type="button"
+                variant={
+                  campaignDigitalFullView
+                    ? "primary"
+                    : "outline"
+                }
+                disabled={!rows.length}
+                onClick={()=>
+                  setCampaignDigitalFullView(
+                    (previous:boolean)=>
+                      !previous
+                  )
+                }
+                title={
+                  campaignDigitalFullView
+                    ? "Return to compact rows"
+                    : "Expand rows and wrap all long field content"
+                }
+              >
+                {campaignDigitalFullView
+                  ? "Compact View"
+                  : "View Full"}
+              </Btn>
+
+              <Btn
+                xs
+                type="button"
+                variant={actionDone("overview-campaign-shared-row-links")?"primary":"outline"}
+                disabled={!rows.length}
+                onClick={updateCampaignSharedRowsInOverview}
+              >
+                {actionDone("overview-campaign-shared-row-links")?"✓ Updated":"Update All Overview Rows"}
+              </Btn>
+            </div>
           </div>
 
           {rows.length===0 ? (
@@ -23280,15 +23656,74 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </p>
             </div>
           ) : (
-            <div style={{display:"block",width:"100%",maxWidth:"100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarGutter:"stable both-edges",paddingRight:12,paddingBottom:6,boxSizing:"border-box",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12}}>
-              <table style={{width:"max-content",minWidth:1810,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
+            <div
+              style={{
+                display:"block",
+                width:"100%",
+                maxWidth:"100%",
+                minWidth:0,
+                maxHeight:
+                  campaignDigitalFullView
+                    ? isMobile
+                      ? 620
+                      : 760
+                    : isMobile
+                      ? 410
+                      : 560,
+                overflowX:"auto",
+                overflowY:"auto",
+                WebkitOverflowScrolling:"touch",
+                scrollbarGutter:"stable both-edges",
+                paddingRight:12,
+                paddingBottom:6,
+                boxSizing:"border-box",
+                background:C.surface,
+                border:`1.5px solid ${C.border}`,
+                borderRadius:12,
+              }}
+            >
+              <table style={{width:"max-content",minWidth:2020,borderCollapse:"separate",borderSpacing:0,fontSize:11.5}}>
                 <thead>
                   <tr>
-                    {["Product / SKU","Platform","Caption","Final Preview Image URL","Final Asset Link","Status","Actions"].map((heading:string)=>(
-                      <th key={heading} style={{padding:"9px 10px",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.textSub,textAlign:"left",fontSize:9.5,fontWeight:900,letterSpacing:".04em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
-                        {heading}
-                      </th>
-                    ))}
+                    {campaignDigitalTableColumns.map(
+                      (column:any)=>(
+                        <th
+                          key={column.heading}
+                          style={{
+                            position:"sticky",
+                            top:0,
+                            left:column.frozen
+                              ? column.left
+                              : undefined,
+                            zIndex:column.frozen
+                              ? 8
+                              : 5,
+                            width:column.width,
+                            minWidth:column.width,
+                            maxWidth:column.width,
+                            boxSizing:"border-box",
+                            padding:"9px 10px",
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            background:C.surfaceAlt,
+                            color:C.textSub,
+                            textAlign:"left",
+                            fontSize:9.5,
+                            fontWeight:900,
+                            letterSpacing:".04em",
+                            textTransform:"uppercase",
+                            whiteSpace:"nowrap",
+                            boxShadow:
+                              column.frozen &&
+                              column.heading==="Product"
+                                ? "6px 0 10px -8px rgba(15,23,42,.55)"
+                                : "none",
+                          }}
+                        >
+                          {column.heading}
+                        </th>
+                      )
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -23299,102 +23734,333 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     const caption=captionBySourceId.get(rowId)||"";
                     return (
                       <tr key={rowId} style={{background:index%2?C.surface:C.bg}}>
-                        <td style={{width:280,minWidth:280,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                        <td
+                          style={{
+                            position:"sticky",
+                            left:0,
+                            zIndex:3,
+                            width:180,
+                            minWidth:180,
+                            maxWidth:180,
+                            boxSizing:"border-box",
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
+                            background:
+                              index%2
+                                ? C.surface
+                                : C.bg,
+                          }}
+                        >
                           <div
+                            title={skuText}
                             style={{
                               display:"flex",
-                              flexDirection:"column",
-                              justifyContent:"center",
-                              minHeight:38,
-                              padding:"4px 8px",
-                              overflow:"hidden",
+                              alignItems:
+                                campaignDigitalFullView
+                                  ? "flex-start"
+                                  : "center",
+                              width:"100%",
+                              minHeight:
+                                campaignDigitalFullView
+                                  ? 68
+                                  : 38,
+                              padding:"7px 8px",
+                              boxSizing:"border-box",
+                              overflow:
+                                campaignDigitalFullView
+                                  ? "visible"
+                                  : "hidden",
                               border:`1px solid ${C.border}`,
                               borderRadius:8,
                               background:C.surface,
+                              color:C.muted,
+                              fontFamily:"monospace",
+                              fontSize:9.5,
+                              lineHeight:1.35,
+                              whiteSpace:
+                                campaignDigitalFullView
+                                  ? "normal"
+                                  : "nowrap",
+                              wordBreak:
+                                campaignDigitalFullView
+                                  ? "break-word"
+                                  : "normal",
+                              overflowWrap:
+                                campaignDigitalFullView
+                                  ? "anywhere"
+                                  : "normal",
+                              textOverflow:
+                                campaignDigitalFullView
+                                  ? "clip"
+                                  : "ellipsis",
                             }}
                           >
-                            <strong
-                              title={String(row?.product||row?.title||"Campaign Product Row")}
-                              style={{
-                                display:"block",
-                                overflow:"hidden",
-                                color:C.text,
-                                fontSize:10.5,
-                                lineHeight:1.25,
-                                textOverflow:"ellipsis",
-                                whiteSpace:"nowrap",
-                              }}
-                            >
-                              {row?.product||row?.title||"Campaign Product Row"}
-                            </strong>
-                            <span
-                              title={skuText}
-                              style={{
-                                display:"block",
-                                marginTop:2,
-                                overflow:"hidden",
-                                color:C.muted,
-                                fontSize:9,
-                                lineHeight:1.2,
-                                textOverflow:"ellipsis",
-                                whiteSpace:"nowrap",
-                              }}
-                            >
-                              {skuText||"No SKU selected"}
-                            </span>
+                            {skuText||"No SKU selected"}
                           </div>
                         </td>
-                        <td style={{width:150,minWidth:150,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",color:C.textSub}}>
+
+                        <td
+                          style={{
+                            position:"sticky",
+                            left:180,
+                            zIndex:3,
+                            width:280,
+                            minWidth:280,
+                            maxWidth:280,
+                            boxSizing:"border-box",
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
+                            background:
+                              index%2
+                                ? C.surface
+                                : C.bg,
+                            boxShadow:
+                              "6px 0 10px -8px rgba(15,23,42,.55)",
+                          }}
+                        >
                           <div
+                            title={String(row?.product||row?.title||"Campaign Product Row")}
                             style={{
                               display:"flex",
-                              alignItems:"center",
-                              minHeight:38,
-                              padding:"0 8px",
+                              alignItems:
+                                campaignDigitalFullView
+                                  ? "flex-start"
+                                  : "center",
+                              width:"100%",
+                              minHeight:
+                                campaignDigitalFullView
+                                  ? 68
+                                  : 38,
+                              padding:"7px 8px",
+                              boxSizing:"border-box",
+                              overflow:
+                                campaignDigitalFullView
+                                  ? "visible"
+                                  : "hidden",
                               border:`1px solid ${C.border}`,
                               borderRadius:8,
                               background:C.surface,
+                              color:C.text,
                               fontSize:10.5,
+                              fontWeight:700,
+                              lineHeight:1.35,
+                              whiteSpace:
+                                campaignDigitalFullView
+                                  ? "normal"
+                                  : "nowrap",
+                              wordBreak:
+                                campaignDigitalFullView
+                                  ? "break-word"
+                                  : "normal",
+                              overflowWrap:
+                                campaignDigitalFullView
+                                  ? "anywhere"
+                                  : "normal",
+                              textOverflow:
+                                campaignDigitalFullView
+                                  ? "clip"
+                                  : "ellipsis",
                             }}
                           >
-                            {row?.platform||"—"}
+                            {row?.product||row?.title||"Campaign Product Row"}
                           </div>
                         </td>
-                        <td style={{width:320,minWidth:320,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle",color:C.textSub}}>
+                        <td
+                          style={{
+                            width:150,
+                            minWidth:150,
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
+                            color:C.textSub,
+                          }}
+                        >
                           <div
-                            title={caption||"No caption added in Marketing yet."}
                             style={{
                               display:"flex",
-                              alignItems:"center",
-                              minHeight:38,
-                              padding:"0 8px",
-                              overflow:"hidden",
+                              alignItems:
+                                campaignDigitalFullView
+                                  ? "flex-start"
+                                  : "center",
+                              minHeight:
+                                campaignDigitalFullView
+                                  ? 68
+                                  : 38,
+                              padding:"7px 8px",
+                              overflow:
+                                campaignDigitalFullView
+                                  ? "visible"
+                                  : "hidden",
                               border:`1px solid ${C.border}`,
                               borderRadius:8,
                               background:C.surface,
                               fontSize:10.5,
                               lineHeight:1.35,
-                              whiteSpace:"nowrap",
-                              textOverflow:"ellipsis",
+                              whiteSpace:
+                                campaignDigitalFullView
+                                  ? "normal"
+                                  : "nowrap",
+                              wordBreak:
+                                campaignDigitalFullView
+                                  ? "break-word"
+                                  : "normal",
+                              overflowWrap:
+                                campaignDigitalFullView
+                                  ? "anywhere"
+                                  : "normal",
+                              textOverflow:
+                                campaignDigitalFullView
+                                  ? "clip"
+                                  : "ellipsis",
+                            }}
+                          >
+                            {row?.platform||"—"}
+                          </div>
+                        </td>
+                        <td
+                          style={{
+                            width:320,
+                            minWidth:320,
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
+                            color:C.textSub,
+                          }}
+                        >
+                          <div
+                            title={caption||"No caption added in Marketing yet."}
+                            style={{
+                              display:"flex",
+                              alignItems:
+                                campaignDigitalFullView
+                                  ? "flex-start"
+                                  : "center",
+                              minHeight:
+                                campaignDigitalFullView
+                                  ? 84
+                                  : 38,
+                              padding:"7px 8px",
+                              overflow:
+                                campaignDigitalFullView
+                                  ? "visible"
+                                  : "hidden",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                              fontSize:10.5,
+                              lineHeight:1.35,
+                              whiteSpace:
+                                campaignDigitalFullView
+                                  ? "normal"
+                                  : "nowrap",
+                              wordBreak:
+                                campaignDigitalFullView
+                                  ? "break-word"
+                                  : "normal",
+                              overflowWrap:
+                                campaignDigitalFullView
+                                  ? "anywhere"
+                                  : "normal",
+                              textOverflow:
+                                campaignDigitalFullView
+                                  ? "clip"
+                                  : "ellipsis",
                             }}
                           >
                             {caption||"No caption added in Marketing yet."}
                           </div>
                         </td>
-                        <td style={{width:300,minWidth:300,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
-                          <TI
+                        <td
+                          style={{
+                            width:300,
+                            minWidth:300,
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
+                          }}
+                        >
+                          <textarea
                             value={String(row?.finalPreviewUrl||"")}
-                            onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{finalPreviewUrl:value})}
+                            onChange={(event:any)=>
+                              updateCampaignDigitalLinkRow(
+                                rowId,
+                                {
+                                  finalPreviewUrl:
+                                    event.target.value,
+                                }
+                              )
+                            }
                             placeholder="Google Drive image link"
+                            rows={
+                              campaignDigitalFullView
+                                ? 4
+                                : 1
+                            }
                             style={{
-                              height:38,
-                              minHeight:38,
+                              width:"100%",
+                              height:
+                                campaignDigitalFullView
+                                  ? 84
+                                  : 38,
+                              minHeight:
+                                campaignDigitalFullView
+                                  ? 84
+                                  : 38,
                               boxSizing:"border-box",
+                              padding:"8px 9px",
+                              resize:
+                                campaignDigitalFullView
+                                  ? "vertical"
+                                  : "none",
+                              overflow:
+                                campaignDigitalFullView
+                                  ? "auto"
+                                  : "hidden",
+                              border:`1px solid ${C.border}`,
+                              borderRadius:8,
+                              background:C.surface,
+                              color:C.text,
                               fontSize:10.5,
+                              lineHeight:1.35,
+                              outline:"none",
                             }}
                           />
                         </td>
-                        <td style={{width:360,minWidth:360,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                        <td
+                          style={{
+                            width:360,
+                            minWidth:360,
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
+                          }}
+                        >
                           <div
                             style={{
                               display:"grid",
@@ -23403,15 +24069,50 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               gap:6,
                             }}
                           >
-                            <TI
+                            <textarea
                               value={String(row?.finalAssetLink||"")}
-                              onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{finalAssetLink:value})}
+                              onChange={(event:any)=>
+                                updateCampaignDigitalLinkRow(
+                                  rowId,
+                                  {
+                                    finalAssetLink:
+                                      event.target.value,
+                                  }
+                                )
+                              }
                               placeholder="Final Drive file or folder link"
+                              rows={
+                                campaignDigitalFullView
+                                  ? 4
+                                  : 1
+                              }
                               style={{
-                                height:38,
-                                minHeight:38,
+                                width:"100%",
+                                height:
+                                  campaignDigitalFullView
+                                    ? 84
+                                    : 38,
+                                minHeight:
+                                  campaignDigitalFullView
+                                    ? 84
+                                    : 38,
                                 boxSizing:"border-box",
+                                padding:"8px 9px",
+                                resize:
+                                  campaignDigitalFullView
+                                    ? "vertical"
+                                    : "none",
+                                overflow:
+                                  campaignDigitalFullView
+                                    ? "auto"
+                                    : "hidden",
+                                border:`1px solid ${C.border}`,
+                                borderRadius:8,
+                                background:C.surface,
+                                color:C.text,
                                 fontSize:10.5,
+                                lineHeight:1.35,
+                                outline:"none",
                               }}
                             />
                             <Btn
@@ -23427,8 +24128,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 )
                               }
                               style={{
-                                height:38,
-                                minHeight:38,
+                                height:
+                                  campaignDigitalFullView
+                                    ? 84
+                                    : 38,
+                                minHeight:
+                                  campaignDigitalFullView
+                                    ? 84
+                                    : 38,
+                                alignSelf:"stretch",
                                 whiteSpace:"nowrap",
                               }}
                             >
@@ -23436,7 +24144,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             </Btn>
                           </div>
                         </td>
-                        <td style={{width:145,minWidth:145,padding:6,borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,verticalAlign:"middle"}}>
+                        <td
+                          style={{
+                            width:145,
+                            minWidth:145,
+                            padding:6,
+                            borderBottom:`1px solid ${C.border}`,
+                            borderRight:`1px solid ${C.border}`,
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
+                          }}
+                        >
                           <Select
                             value={String(row?.status||"inprogress")}
                             onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{status:value})}
@@ -23458,7 +24178,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             maxWidth:270,
                             padding:8,
                             borderBottom:`1px solid ${C.border}`,
-                            verticalAlign:"middle",
+                            verticalAlign:
+                              campaignDigitalFullView
+                                ? "top"
+                                : "middle",
                             overflow:"visible",
                           }}
                         >
