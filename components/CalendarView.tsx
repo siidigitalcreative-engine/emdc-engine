@@ -26510,7 +26510,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         );
       };
 
-      const readYoutubeCopyDraft = () => {
+      const readYoutubeCopyDraft = (
+        options?:{
+          normalizeTitle?:boolean;
+        }
+      ) => {
         const titleInput =
           typeof document !== "undefined"
             ? document.getElementById(
@@ -26525,12 +26529,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               ) as HTMLTextAreaElement | null
             : null;
 
+        const rawTitle = String(
+          titleInput?.value ||
+          digitalData?.youtubeTitle ||
+          buildYoutubeTitle()
+        ).trim();
+
         return {
-          title:normalizeGeneratedYoutubeTitle(
-            titleInput?.value ||
-            digitalData?.youtubeTitle ||
-            buildYoutubeTitle()
-          ),
+          title:
+            options?.normalizeTitle
+              ? normalizeGeneratedYoutubeTitle(
+                  rawTitle
+                )
+              : rawTitle,
           description:String(
             descriptionInput?.value ||
             digitalData?.youtubeDescription ||
@@ -26539,7 +26550,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         };
       };
 
-      const saveYoutubeCopy = (
+      const saveYoutubeCopyEdits = (
         copy?:{
           title?:string;
           description?:string;
@@ -26550,12 +26561,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           readYoutubeCopyDraft();
 
         const nextCopy = {
-          title:normalizeGeneratedYoutubeTitle(
-            draft?.title
-          ),
+          title:String(
+            draft?.title || ""
+          ).trim(),
           description:String(
-            draft?.description ||
-            ""
+            draft?.description || ""
           ).trim(),
         };
 
@@ -26564,6 +26574,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           youtubeDescription:
             nextCopy.description,
           youtubeCopySavedAt:
+            new Date().toISOString(),
+          youtubeCopyManualSavedAt:
             new Date().toISOString(),
         });
 
@@ -26624,7 +26636,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
         try {
           const currentDraft =
-            readYoutubeCopyDraft();
+            readYoutubeCopyDraft({
+              normalizeTitle:true,
+            });
 
           const currentHook =
             extractYoutubeBenefitHook(
@@ -27012,7 +27026,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const addYoutubeCopyToOverview = () => {
         const saved =
-          saveYoutubeCopy();
+          saveYoutubeCopyEdits();
 
         if(
           !saved.title &&
@@ -27360,29 +27374,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     xs
                     variant={
                       actionDone(
-                        "save-youtube-copy"
-                      )
-                        ? "primary"
-                        : "outline"
-                    }
-                    onClick={()=>{
-                      saveYoutubeCopy();
-                      markActionDone(
-                        "save-youtube-copy"
-                      );
-                    }}
-                  >
-                    {actionDone(
-                      "save-youtube-copy"
-                    )
-                      ? "✓ Saved"
-                      : "Save Copy"}
-                  </Btn>
-
-                  <Btn
-                    xs
-                    variant={
-                      actionDone(
                         "overview-youtube-copy"
                       )
                         ? "primary"
@@ -27423,9 +27414,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       digitalData?.youtubeTitle ||
                       buildYoutubeTitle()
                     }
-                    onBlur={()=>
-                      saveYoutubeCopy()
-                    }
                     placeholder="YouTube title"
                     style={{
                       width:"100%",
@@ -27455,9 +27443,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     defaultValue={
                       digitalData?.youtubeDescription ||
                       ""
-                    }
-                    onBlur={()=>
-                      saveYoutubeCopy()
                     }
                     placeholder={
                       youtubeEcommerceSource
@@ -27520,8 +27505,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     }}
                   >
                     {youtubeEcommerceSource
-                      ? "E-commerce product details are ready as the description source."
-                      : "No E-commerce output detected. The generator will use selected SKU information only."}
+                      ? "E-commerce product details are ready as the description source. Manual title and description changes are saved only when Save Edits is clicked."
+                      : "No E-commerce output detected. The generator will use selected SKU information only. Manual changes are saved only when Save Edits is clicked."}
                   </span>
 
                   <div
@@ -27531,6 +27516,31 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                       flexWrap:"wrap",
                     }}
                   >
+                    <Btn
+                      xs
+                      variant={
+                        actionDone(
+                          "save-youtube-edits"
+                        )
+                          ? "primary"
+                          : "outline"
+                      }
+                      onClick={()=>{
+                        saveYoutubeCopyEdits();
+
+                        markActionDone(
+                          "save-youtube-edits"
+                        );
+                      }}
+                      title="Save only the current YouTube title and description edits."
+                    >
+                      {actionDone(
+                        "save-youtube-edits"
+                      )
+                        ? "✓ Edits Saved"
+                        : "Save Edits"}
+                    </Btn>
+
                     <Btn
                       xs
                       variant="outline"
