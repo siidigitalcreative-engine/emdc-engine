@@ -24567,10 +24567,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         >
                           <Select
                             value={String(row?.status||"inprogress")}
-                            onChange={(value:any)=>updateCampaignDigitalLinkRow(rowId,{status:value})}
+                            onChange={(value:any)=>
+                              updateCampaignDigitalLinkRow(
+                                rowId,
+                                {
+                                  status:value,
+                                }
+                              )
+                            }
                             style={{
+                              width:"100%",
                               height:38,
                               minHeight:38,
+                              boxSizing:"border-box",
+                              padding:"7px 28px 7px 8px",
+                              fontFamily:
+                                "Inter, system-ui, sans-serif",
+                              fontSize:10.5,
+                              fontWeight:500,
+                              lineHeight:1.25,
                             }}
                           >
                             <option value="inprogress">In Progress</option>
