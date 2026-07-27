@@ -6386,6 +6386,111 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const [campaignOverviewFullView,setCampaignOverviewFullView] = useState(false);
   const [campaignMarketingFullView,setCampaignMarketingFullView] = useState(false);
   const [campaignDigitalFullView,setCampaignDigitalFullView] = useState(false);
+  const [campaignEcommerceFullView,setCampaignEcommerceFullView] = useState(false);
+  const [campaignTableTextPreview,setCampaignTableTextPreview] = useState<any>(null);
+
+  const openCampaignTableTextPreview = (
+    label:any,
+    value:any
+  ) => {
+    const cleanValue = String(
+      value || ""
+    ).trim();
+
+    if(!cleanValue){
+      return;
+    }
+
+    setCampaignTableTextPreview({
+      label:String(
+        label || "Full Content"
+      ).trim(),
+      value:cleanValue,
+    });
+  };
+
+  const renderCampaignTableTextPreview = () => (
+    <Modal
+      open={!!campaignTableTextPreview}
+      onClose={()=>
+        setCampaignTableTextPreview(null)
+      }
+      title={
+        campaignTableTextPreview?.label ||
+        "Full Content"
+      }
+      width={720}
+    >
+      {campaignTableTextPreview&&(
+        <div
+          style={{
+            display:"flex",
+            flexDirection:"column",
+            gap:14,
+          }}
+        >
+          <div
+            style={{
+              maxHeight:"55vh",
+              overflow:"auto",
+              padding:14,
+              border:`1px solid ${C.border}`,
+              borderRadius:10,
+              background:C.bg,
+              color:C.text,
+              fontFamily:
+                "Inter, system-ui, sans-serif",
+              fontSize:13,
+              fontWeight:400,
+              lineHeight:1.65,
+              whiteSpace:"pre-wrap",
+              wordBreak:"break-word",
+              overflowWrap:"anywhere",
+            }}
+          >
+            {campaignTableTextPreview.value}
+          </div>
+
+          <div
+            style={{
+              display:"flex",
+              justifyContent:"flex-end",
+              gap:8,
+              flexWrap:"wrap",
+            }}
+          >
+            <Btn
+              sm
+              variant="outline"
+              onClick={async()=>{
+                try {
+                  await navigator.clipboard.writeText(
+                    String(
+                      campaignTableTextPreview
+                        ?.value ||
+                      ""
+                    )
+                  );
+                } catch {}
+              }}
+            >
+              Copy
+            </Btn>
+
+            <Btn
+              sm
+              onClick={()=>
+                setCampaignTableTextPreview(null)
+              }
+            >
+              Close
+            </Btn>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
   const [campaignRowSkuPickerId,setCampaignRowSkuPickerId] = useState<string|null>(null);
   const [campaignRowSkuSearch,setCampaignRowSkuSearch] = useState("");
@@ -19580,7 +19685,30 @@ ${slidesHtml}
                           }}
                         >
                           <div
-                            title={skuText}
+                            title="Click to view full SKU list"
+                            role="button"
+                            tabIndex={0}
+                            aria-label="View full SKU list"
+                            onClick={()=>
+                              openCampaignTableTextPreview(
+                                "SKU",
+                                skuText ||
+                                "No SKU selected"
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignTableTextPreview(
+                                  "SKU",
+                                  skuText ||
+                                  "No SKU selected"
+                                );
+                              }
+                            }}
                             style={{
                               display:"flex",
                               alignItems:
@@ -19601,10 +19729,14 @@ ${slidesHtml}
                               border:`1px solid ${C.border}`,
                               borderRadius:8,
                               background:C.surface,
-                              color:C.muted,
-                              fontFamily:"monospace",
-                              fontSize:9.5,
+                              color:C.textSub,
+                              fontFamily:
+                                "Inter, system-ui, sans-serif",
+                              fontSize:10.5,
+                              fontWeight:500,
+                              letterSpacing:"normal",
                               lineHeight:1.35,
+                              cursor:"pointer",
                               whiteSpace:
                                 campaignMarketingFullView
                                   ? "normal"
@@ -19652,7 +19784,30 @@ ${slidesHtml}
                           }}
                         >
                           <div
-                            title={String(row?.product||"Campaign Product Row")}
+                            title="Click to view full product name"
+                            role="button"
+                            tabIndex={0}
+                            aria-label="View full product name"
+                            onClick={()=>
+                              openCampaignTableTextPreview(
+                                "Product",
+                                row?.product ||
+                                "Campaign Product Row"
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignTableTextPreview(
+                                  "Product",
+                                  row?.product ||
+                                  "Campaign Product Row"
+                                );
+                              }
+                            }}
                             style={{
                               display:"flex",
                               alignItems:
@@ -19677,6 +19832,8 @@ ${slidesHtml}
                               fontSize:10.5,
                               fontWeight:700,
                               lineHeight:1.35,
+                              cursor:"pointer",
+                              cursor:"pointer",
                               whiteSpace:
                                 campaignMarketingFullView
                                   ? "normal"
@@ -19716,7 +19873,38 @@ ${slidesHtml}
                             }}
                           >
                             <div
-                              title={String(value || "")}
+                              title={`Click to view full ${
+                                campaignMarketingTableColumns[
+                                  valueIndex+2
+                                ]?.heading ||
+                                "content"
+                              }`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={()=>
+                                openCampaignTableTextPreview(
+                                  campaignMarketingTableColumns[
+                                    valueIndex+2
+                                  ]?.heading ||
+                                  "Full Content",
+                                  value || "—"
+                                )
+                              }
+                              onKeyDown={(event:any)=>{
+                                if(
+                                  event.key==="Enter" ||
+                                  event.key===" "
+                                ){
+                                  event.preventDefault();
+                                  openCampaignTableTextPreview(
+                                    campaignMarketingTableColumns[
+                                      valueIndex+2
+                                    ]?.heading ||
+                                    "Full Content",
+                                    value || "—"
+                                  );
+                                }
+                              }}
                               style={{
                                 display:"flex",
                                 alignItems:
@@ -19753,6 +19941,7 @@ ${slidesHtml}
                                   campaignMarketingFullView
                                     ? "clip"
                                     : "ellipsis",
+                                cursor:"pointer",
                               }}
                             >
                               {value||"—"}
@@ -19888,6 +20077,8 @@ ${slidesHtml}
               </table>
             </div>
           )}
+
+          {renderCampaignTableTextPreview()}
         </div>
       );
     }
@@ -23757,7 +23948,30 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           }}
                         >
                           <div
-                            title={skuText}
+                            title="Click to view full SKU list"
+                            role="button"
+                            tabIndex={0}
+                            aria-label="View full SKU list"
+                            onClick={()=>
+                              openCampaignTableTextPreview(
+                                "SKU",
+                                skuText ||
+                                "No SKU selected"
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignTableTextPreview(
+                                  "SKU",
+                                  skuText ||
+                                  "No SKU selected"
+                                );
+                              }
+                            }}
                             style={{
                               display:"flex",
                               alignItems:
@@ -23778,10 +23992,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               border:`1px solid ${C.border}`,
                               borderRadius:8,
                               background:C.surface,
-                              color:C.muted,
-                              fontFamily:"monospace",
-                              fontSize:9.5,
+                              color:C.textSub,
+                              fontFamily:
+                                "Inter, system-ui, sans-serif",
+                              fontSize:10.5,
+                              fontWeight:500,
+                              letterSpacing:"normal",
                               lineHeight:1.35,
+                              cursor:"pointer",
                               whiteSpace:
                                 campaignDigitalFullView
                                   ? "normal"
@@ -23829,7 +24047,32 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           }}
                         >
                           <div
-                            title={String(row?.product||row?.title||"Campaign Product Row")}
+                            title="Click to view full product name"
+                            role="button"
+                            tabIndex={0}
+                            aria-label="View full product name"
+                            onClick={()=>
+                              openCampaignTableTextPreview(
+                                "Product",
+                                row?.product ||
+                                row?.title ||
+                                "Campaign Product Row"
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignTableTextPreview(
+                                  "Product",
+                                  row?.product ||
+                                  row?.title ||
+                                  "Campaign Product Row"
+                                );
+                              }
+                            }}
                             style={{
                               display:"flex",
                               alignItems:
@@ -23890,6 +24133,27 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           }}
                         >
                           <div
+                            title="Click to view full Platform"
+                            role="button"
+                            tabIndex={0}
+                            onClick={()=>
+                              openCampaignTableTextPreview(
+                                "Platform",
+                                row?.platform || "—"
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignTableTextPreview(
+                                  "Platform",
+                                  row?.platform || "—"
+                                );
+                              }
+                            }}
                             style={{
                               display:"flex",
                               alignItems:
@@ -23926,6 +24190,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 campaignDigitalFullView
                                   ? "clip"
                                   : "ellipsis",
+                              cursor:"pointer",
                             }}
                           >
                             {row?.platform||"—"}
@@ -23946,7 +24211,29 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           }}
                         >
                           <div
-                            title={caption||"No caption added in Marketing yet."}
+                            title="Click to view full Caption"
+                            role="button"
+                            tabIndex={0}
+                            onClick={()=>
+                              openCampaignTableTextPreview(
+                                "Caption",
+                                caption ||
+                                "No caption added in Marketing yet."
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignTableTextPreview(
+                                  "Caption",
+                                  caption ||
+                                  "No caption added in Marketing yet."
+                                );
+                              }
+                            }}
                             style={{
                               display:"flex",
                               alignItems:
@@ -23983,6 +24270,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 campaignDigitalFullView
                                   ? "clip"
                                   : "ellipsis",
+                              cursor:"pointer",
                             }}
                           >
                             {caption||"No caption added in Marketing yet."}
@@ -24246,6 +24534,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </table>
             </div>
           )}
+
+          {renderCampaignTableTextPreview()}
         </div>
       );
     }
@@ -30113,6 +30403,49 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const campaignTheme = getCampaignContextFromLinkedEvents() || "Campaign";
       const campaignSavedOutputs = Array.isArray(campaignBuilder.savedOutputs) ? campaignBuilder.savedOutputs : [];
       const campaignHasOutput = !!getEcommerceCampaignCombinedOutput().trim();
+
+      const campaignEcommerceTableColumns = [
+        {
+          heading:"SKU",
+          width:180,
+          left:0,
+          frozen:true,
+        },
+        {
+          heading:"Product",
+          width:280,
+          left:180,
+          frozen:true,
+        },
+        {
+          heading:"Platform",
+          width:155,
+        },
+        {
+          heading:"Discount / Offer",
+          width:180,
+        },
+        {
+          heading:"Mechanics / Notes",
+          width:220,
+        },
+        {
+          heading:"Headline",
+          width:235,
+        },
+        {
+          heading:"Subheadline",
+          width:300,
+        },
+        {
+          heading:"CTA",
+          width:145,
+        },
+        {
+          heading:"Actions",
+          width:520,
+        },
+      ];
       const activeCampaignRow = campaignRows.find(
         (row:any)=>String(row?.id)===String(campaignRowSkuPickerId || "")
       ) || null;
@@ -33464,6 +33797,32 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             + Add Row
                           </Btn>
 
+                          <Btn
+                            xs
+                            type="button"
+                            variant={
+                              campaignEcommerceFullView
+                                ? "primary"
+                                : "outline"
+                            }
+                            disabled={!campaignRows.length}
+                            onClick={()=>
+                              setCampaignEcommerceFullView(
+                                (previous:boolean)=>
+                                  !previous
+                              )
+                            }
+                            title={
+                              campaignEcommerceFullView
+                                ? "Return to compact rows"
+                                : "Expand SKU and Product content"
+                            }
+                          >
+                            {campaignEcommerceFullView
+                              ? "Compact View"
+                              : "View Full"}
+                          </Btn>
+
                           <Select
                             value={campaignBuilder.textModel || ""}
                             onChange={(value:any)=>
@@ -33652,8 +34011,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               width:"100%",
                               maxWidth:"100%",
                               minWidth:0,
+                              maxHeight:
+                                campaignEcommerceFullView
+                                  ? isMobile
+                                    ? 620
+                                    : 760
+                                  : isMobile
+                                    ? 410
+                                    : 560,
                               overflowX:"scroll",
-                              overflowY:"hidden",
+                              overflowY:"auto",
                               WebkitOverflowScrolling:"touch",
                               overscrollBehaviorX:"contain",
                               touchAction:"pan-x",
@@ -33664,8 +34031,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           >
                             <table
                               style={{
-                                width:1890,
-                                minWidth:1890,
+                                width:2280,
+                                minWidth:2280,
                                 maxWidth:"none",
                                 borderCollapse:"separate",
                                 borderSpacing:0,
@@ -33674,35 +34041,45 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                             >
                               <thead>
                                 <tr>
-                                  {[
-                                    "Product / SKU Selection",
-                                    "Platform",
-                                    "Discount / Offer",
-                                    "Mechanics / Notes",
-                                    "Headline",
-                                    "Subheadline",
-                                    "CTA",
-                                    "Actions",
-                                  ].map((heading:string)=>(
-                                    <th
-                                      key={heading}
-                                      style={{
-                                        padding:"9px 10px",
-                                        borderBottom:`1px solid ${C.border}`,
-                                        borderRight:`1px solid ${C.border}`,
-                                        background:C.surfaceAlt,
-                                        color:C.textSub,
-                                        textAlign:"left",
-                                        fontSize:9.5,
-                                        fontWeight:900,
-                                        letterSpacing:".04em",
-                                        textTransform:"uppercase",
-                                        whiteSpace:"nowrap",
-                                      }}
-                                    >
-                                      {heading}
-                                    </th>
-                                  ))}
+                                  {campaignEcommerceTableColumns.map(
+                                    (column:any)=>(
+                                      <th
+                                        key={column.heading}
+                                        style={{
+                                          position:"sticky",
+                                          top:0,
+                                          left:column.frozen
+                                            ? column.left
+                                            : undefined,
+                                          zIndex:column.frozen
+                                            ? 8
+                                            : 5,
+                                          width:column.width,
+                                          minWidth:column.width,
+                                          maxWidth:column.width,
+                                          boxSizing:"border-box",
+                                          padding:"9px 10px",
+                                          borderBottom:`1px solid ${C.border}`,
+                                          borderRight:`1px solid ${C.border}`,
+                                          background:C.surfaceAlt,
+                                          color:C.textSub,
+                                          textAlign:"left",
+                                          fontSize:9.5,
+                                          fontWeight:900,
+                                          letterSpacing:".04em",
+                                          textTransform:"uppercase",
+                                          whiteSpace:"nowrap",
+                                          boxShadow:
+                                            column.frozen &&
+                                            column.heading==="Product"
+                                              ? "6px 0 10px -8px rgba(15,23,42,.55)"
+                                              : "none",
+                                        }}
+                                      >
+                                        {column.heading}
+                                      </th>
+                                    )
+                                  )}
                                 </tr>
                               </thead>
 
@@ -33721,6 +34098,36 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                                     const selectedCampaignRowProducts =
                                       getCampaignItemsByKeys(productKeys);
+
+                                    const campaignRowSkuText =
+                                      Array.from(
+                                        new Set(
+                                          selectedCampaignRowProducts
+                                            .map((item:any)=>
+                                              String(
+                                                item?.skuCode ||
+                                                item?.sku ||
+                                                ""
+                                              ).trim()
+                                            )
+                                            .filter(Boolean)
+                                        )
+                                      ).join(", ");
+
+                                    const campaignRowProductText =
+                                      Array.from(
+                                        new Set(
+                                          selectedCampaignRowProducts
+                                            .map((item:any)=>
+                                              String(
+                                                item?.product ||
+                                                item?.productName ||
+                                                ""
+                                              ).trim()
+                                            )
+                                            .filter(Boolean)
+                                        )
+                                      ).join(", ");
 
                                     const isGenerating =
                                       aiBusy.ecommerceCampaignRow===row.id;
@@ -33748,101 +34155,223 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                       >
                                         <td
                                           style={{
-                                            width:340,
-                                            minWidth:340,
+                                            position:"sticky",
+                                            left:0,
+                                            zIndex:3,
+                                            width:180,
+                                            minWidth:180,
+                                            maxWidth:180,
+                                            boxSizing:"border-box",
                                             padding:6,
                                             borderBottom:`1px solid ${C.border}`,
                                             borderRight:`1px solid ${C.border}`,
-                                            verticalAlign:"middle",
+                                            verticalAlign:
+                                              campaignEcommerceFullView
+                                                ? "top"
+                                                : "middle",
+                                            background:
+                                              rowIndex%2
+                                                ? C.surface
+                                                : C.bg,
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              display:"flex",
+                                              flexDirection:"column",
+                                              gap:5,
+                                            }}
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={()=>{
+                                                if(campaignRowSkuText){
+                                                  openCampaignTableTextPreview(
+                                                    "SKU",
+                                                    campaignRowSkuText
+                                                  );
+                                                } else {
+                                                  setCampaignRowSkuPickerId(
+                                                    String(row.id)
+                                                  );
+                                                  setCampaignRowSkuSearch("");
+                                                }
+                                              }}
+                                              title={
+                                                campaignRowSkuText
+                                                  ? "Click to view full SKU list"
+                                                  : "Click to select SKUs"
+                                              }
+                                              style={{
+                                                width:"100%",
+                                                minHeight:
+                                                  campaignEcommerceFullView
+                                                    ? 68
+                                                    : 38,
+                                                display:"flex",
+                                                alignItems:
+                                                  campaignEcommerceFullView
+                                                    ? "flex-start"
+                                                    : "center",
+                                                padding:"7px 8px",
+                                                overflow:
+                                                  campaignEcommerceFullView
+                                                    ? "visible"
+                                                    : "hidden",
+                                                border:`1px solid ${C.border}`,
+                                                borderRadius:8,
+                                                background:C.surface,
+                                                color:campaignRowSkuText
+                                                  ? C.textSub
+                                                  : C.faint,
+                                                fontFamily:
+                                                  "Inter, system-ui, sans-serif",
+                                                fontSize:10.5,
+                                                fontWeight:500,
+                                                lineHeight:1.35,
+                                                textAlign:"left",
+                                                whiteSpace:
+                                                  campaignEcommerceFullView
+                                                    ? "normal"
+                                                    : "nowrap",
+                                                wordBreak:
+                                                  campaignEcommerceFullView
+                                                    ? "break-word"
+                                                    : "normal",
+                                                overflowWrap:
+                                                  campaignEcommerceFullView
+                                                    ? "anywhere"
+                                                    : "normal",
+                                                textOverflow:
+                                                  campaignEcommerceFullView
+                                                    ? "clip"
+                                                    : "ellipsis",
+                                                cursor:"pointer",
+                                              }}
+                                            >
+                                              {campaignRowSkuText ||
+                                                "Click to select SKU/s"}
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={()=>{
+                                                setCampaignRowSkuPickerId(
+                                                  String(row.id)
+                                                );
+                                                setCampaignRowSkuSearch("");
+                                              }}
+                                              style={{
+                                                alignSelf:"flex-start",
+                                                border:0,
+                                                background:"transparent",
+                                                color:C.accent,
+                                                fontFamily:
+                                                  "Inter, system-ui, sans-serif",
+                                                fontSize:9.5,
+                                                fontWeight:800,
+                                                cursor:"pointer",
+                                                padding:"1px 2px",
+                                              }}
+                                            >
+                                              Edit SKUs
+                                            </button>
+                                          </div>
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            position:"sticky",
+                                            left:180,
+                                            zIndex:3,
+                                            width:280,
+                                            minWidth:280,
+                                            maxWidth:280,
+                                            boxSizing:"border-box",
+                                            padding:6,
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:
+                                              campaignEcommerceFullView
+                                                ? "top"
+                                                : "middle",
+                                            background:
+                                              rowIndex%2
+                                                ? C.surface
+                                                : C.bg,
+                                            boxShadow:
+                                              "6px 0 10px -8px rgba(15,23,42,.55)",
                                           }}
                                         >
                                           <button
                                             type="button"
                                             onClick={()=>{
-                                              setCampaignRowSkuPickerId(String(row.id));
-                                              setCampaignRowSkuSearch("");
+                                              if(campaignRowProductText){
+                                                openCampaignTableTextPreview(
+                                                  "Product",
+                                                  campaignRowProductText
+                                                );
+                                              } else {
+                                                setCampaignRowSkuPickerId(
+                                                  String(row.id)
+                                                );
+                                                setCampaignRowSkuSearch("");
+                                              }
                                             }}
+                                            title={
+                                              campaignRowProductText
+                                                ? "Click to view full product list"
+                                                : "Click to select products"
+                                            }
                                             style={{
                                               width:"100%",
-                                              minHeight:38,
+                                              minHeight:
+                                                campaignEcommerceFullView
+                                                  ? 68
+                                                  : 38,
                                               display:"flex",
-                                              alignItems:"center",
-                                              gap:5,
-                                              padding:"6px 8px",
-                                              overflow:"hidden",
+                                              alignItems:
+                                                campaignEcommerceFullView
+                                                  ? "flex-start"
+                                                  : "center",
+                                              padding:"7px 8px",
+                                              overflow:
+                                                campaignEcommerceFullView
+                                                  ? "visible"
+                                                  : "hidden",
                                               border:`1px solid ${C.border}`,
                                               borderRadius:8,
                                               background:C.surface,
-                                              color:C.textSub,
+                                              color:campaignRowProductText
+                                                ? C.text
+                                                : C.faint,
+                                              fontFamily:
+                                                "Inter, system-ui, sans-serif",
+                                              fontSize:10.5,
+                                              fontWeight:700,
+                                              lineHeight:1.35,
                                               textAlign:"left",
+                                              whiteSpace:
+                                                campaignEcommerceFullView
+                                                  ? "normal"
+                                                  : "nowrap",
+                                              wordBreak:
+                                                campaignEcommerceFullView
+                                                  ? "break-word"
+                                                  : "normal",
+                                              overflowWrap:
+                                                campaignEcommerceFullView
+                                                  ? "anywhere"
+                                                  : "normal",
+                                              textOverflow:
+                                                campaignEcommerceFullView
+                                                  ? "clip"
+                                                  : "ellipsis",
                                               cursor:"pointer",
                                             }}
-                                            aria-label="Open Campaign SKU selection"
                                           >
-                                            {selectedCampaignRowProducts.length ? (
-                                              <>
-                                                {selectedCampaignRowProducts
-                                                  .slice(0,3)
-                                                  .map((item:any,index:number)=>{
-                                                    const skuLabel = item?.skuCode || item?.sku || item?.product || `SKU ${index+1}`;
-                                                    return (
-                                                      <span
-                                                        key={`${skuLabel}-${index}`}
-                                                        style={{
-                                                          flex:"0 0 auto",
-                                                          maxWidth:112,
-                                                          padding:"3px 6px",
-                                                          overflow:"hidden",
-                                                          textOverflow:"ellipsis",
-                                                          whiteSpace:"nowrap",
-                                                          border:`1px solid ${C.border}`,
-                                                          borderRadius:6,
-                                                          background:C.surfaceAlt,
-                                                          color:C.textSub,
-                                                          fontSize:9.5,
-                                                          fontWeight:850,
-                                                        }}
-                                                      >
-                                                        {skuLabel}
-                                                      </span>
-                                                    );
-                                                  })}
-
-                                                {selectedCampaignRowProducts.length>3&&(
-                                                  <span
-                                                    style={{
-                                                      flex:"0 0 auto",
-                                                      color:C.muted,
-                                                      fontSize:9.5,
-                                                      fontWeight:900,
-                                                    }}
-                                                  >
-                                                    +{selectedCampaignRowProducts.length-3}
-                                                  </span>
-                                                )}
-                                              </>
-                                            ) : (
-                                              <span
-                                                style={{
-                                                  color:C.faint,
-                                                  fontSize:10.5,
-                                                  fontWeight:750,
-                                                }}
-                                              >
-                                                Click to select SKU/s
-                                              </span>
-                                            )}
-
-                                            <span
-                                              style={{
-                                                marginLeft:"auto",
-                                                flex:"0 0 auto",
-                                                color:C.faint,
-                                                fontSize:12,
-                                              }}
-                                            >
-                                              ▾
-                                            </span>
+                                            {campaignRowProductText ||
+                                              "No product selected"}
                                           </button>
                                         </td>
 
@@ -33910,6 +34439,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                             }}
                                           >
                                             <TI
+                                              title="Double-click to view full Discount / Offer"
+                                              onDoubleClick={()=>
+                                                openCampaignTableTextPreview(
+                                                  "Discount / Offer",
+                                                  getCampaignRowDiscountValue(
+                                                    row
+                                                  ) || "—"
+                                                )
+                                              }
                                               value={
                                                 getCampaignRowDiscountValue(row)
                                               }
@@ -33958,6 +34496,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           }}
                                         >
                                           <TI
+                                            title="Double-click to view full Mechanics / Notes"
+                                            onDoubleClick={()=>
+                                              openCampaignTableTextPreview(
+                                                "Mechanics / Notes",
+                                                row.mechanics || "—"
+                                              )
+                                            }
                                             value={row.mechanics || ""}
                                             onChange={(value:any)=>
                                               updateEcommerceCampaignRow(
@@ -33988,6 +34533,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           }}
                                         >
                                           <TI
+                                            title="Double-click to view full Headline"
+                                            onDoubleClick={()=>
+                                              openCampaignTableTextPreview(
+                                                "Headline",
+                                                row.headline || "—"
+                                              )
+                                            }
                                             value={row.headline || ""}
                                             onChange={(value:any)=>
                                               updateEcommerceCampaignRow(
@@ -34019,6 +34571,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           }}
                                         >
                                           <TI
+                                            title="Double-click to view full Subheadline"
+                                            onDoubleClick={()=>
+                                              openCampaignTableTextPreview(
+                                                "Subheadline",
+                                                row.subheadline || "—"
+                                              )
+                                            }
                                             value={row.subheadline || ""}
                                             onChange={(value:any)=>
                                               updateEcommerceCampaignRow(
@@ -34050,6 +34609,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                           }}
                                         >
                                           <TI
+                                            title="Double-click to view full CTA"
+                                            onDoubleClick={()=>
+                                              openCampaignTableTextPreview(
+                                                "CTA",
+                                                row.cta || "—"
+                                              )
+                                            }
                                             value={row.cta || ""}
                                             onChange={(value:any)=>
                                               updateEcommerceCampaignRow(
@@ -34088,6 +34654,63 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                               alignItems:"center",
                                             }}
                                           >
+                                            <button
+                                              className="emdc-date-display-v3"
+                                              type="button"
+                                              onClick={()=>
+                                                openCampaignTableTextPreview(
+                                                  "Campaign E-commerce Row",
+                                                  [
+                                                    `SKU: ${
+                                                      campaignRowSkuText ||
+                                                      "None selected"
+                                                    }`,
+                                                    `Product: ${
+                                                      campaignRowProductText ||
+                                                      "None selected"
+                                                    }`,
+                                                    `Platform: ${
+                                                      row.platform ||
+                                                      campaignBuilder.platform ||
+                                                      "All Platforms"
+                                                    }`,
+                                                    `Discount / Offer: ${
+                                                      getCampaignRowDiscountValue(
+                                                        row
+                                                      ) || "—"
+                                                    }`,
+                                                    `Mechanics / Notes: ${
+                                                      row.mechanics || "—"
+                                                    }`,
+                                                    `Headline: ${
+                                                      row.headline || "—"
+                                                    }`,
+                                                    `Subheadline: ${
+                                                      row.subheadline || "—"
+                                                    }`,
+                                                    `CTA: ${
+                                                      row.cta || "—"
+                                                    }`,
+                                                  ].join("\n\n")
+                                                )
+                                              }
+                                              style={{
+                                                border:`1px solid ${C.border}`,
+                                                background:C.surfaceAlt,
+                                                color:C.textSub,
+                                                borderRadius:7,
+                                                padding:"6px 8px",
+                                                fontFamily:
+                                                  "Inter, system-ui, sans-serif",
+                                                fontSize:9.5,
+                                                fontWeight:850,
+                                                cursor:"pointer",
+                                                whiteSpace:"nowrap",
+                                              }}
+                                            >
+                                              View Row
+                                            </button>
+
                                             <button
                                               className="emdc-date-display-v3"
                                               type="button"
@@ -34344,6 +34967,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               </div>
               <pre style={{ margin:0,padding:14,border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",fontSize:13,lineHeight:1.55,color:C.textSub,maxHeight:"60vh",overflowY:"auto" }}>{savedEcommercePreview?.text || ""}</pre>
             </Modal>
+
+            {renderCampaignTableTextPreview()}
 
           </div>
 
