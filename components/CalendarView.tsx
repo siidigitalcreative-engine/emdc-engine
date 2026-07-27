@@ -14659,6 +14659,27 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         })
       );
 
+      const trainingVariantGroupingPolicy = {
+        separateGuideWhenDifferent:[
+          "size",
+          "capacity",
+          "dimensions",
+          "model",
+          "shape",
+          "material",
+          "feature set",
+          "intended use",
+        ],
+        combineWhenColorOnly:true,
+        combinedGuideRequirements:[
+          "Use one shared product guide when the only confirmed difference is color or finish.",
+          "List every confirmed color and its corresponding SKU under Color Variants.",
+          "Write the shared features, benefits, specifications, care instructions, selling pitches, and demonstration steps once.",
+        ],
+        uncertaintyRule:
+          "When the source does not clearly confirm that the variants differ only by color, keep the variants as separate product guides.",
+      };
+
       const confirmedTrainingGuide =
         sanitizeTrainingMaterialsText(
           trainingMaterialsDraft || ""
@@ -14760,13 +14781,16 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         "PROMODISER DEMONSTRATION FLOW",
         "PROMODISER QUICK CHEAT SHEET",
         "MATERIAL",
-        "CAPACITY",
         "OPERATIONAL TYPE",
         "COMPATIBILITY",
         "FEATURES",
         "BENEFITS",
         "VARIANTS",
+        "COLOR VARIANTS",
         "COLOR OPTIONS",
+        "SIZE",
+        "SIZE OR CAPACITY",
+        "CAPACITY",
         "PACKAGE INCLUDES",
         "MAINTENANCE",
         "SAFETY NOTES",
@@ -15554,7 +15578,14 @@ ${slidesHtml}
           "Avoid em dashes.",
           "Do not use markdown heading symbols such as ###.",
           "Do not number the main section titles.",
-          "Create one comprehensive collection guide plus a clear product guide for every listed SKU.",
+          "Create one comprehensive collection guide, then organize the product guides by confirmed size or capacity variant.",
+          "Different sizes or capacities must always have separate product guides, even when their features are otherwise the same.",
+          "When several SKUs are the same product, same size or capacity, same dimensions, same material, and same confirmed features, and the only confirmed difference is color or finish, combine them into one product guide.",
+          "For a combined color-only guide, add a Color Variants subsection that lists each confirmed color or finish together with its corresponding SKU.",
+          "Write shared features, benefits, specifications, care instructions, selling pitches, customer questions, and demonstration steps only once for a combined color-only guide.",
+          "Every listed SKU must still appear at least once, either in its own size or capacity guide or in the Color Variants list of a combined guide.",
+          "Do not infer a color, size, capacity, or variant difference from the SKU code alone. Use only confirmed information from the supplied source.",
+          "When it is not clearly confirmed that the only difference is color or finish, keep the variants separate.",
           "",
           "Use this exact output structure:",
           "TRAINING MANUAL TITLE",
@@ -15564,9 +15595,10 @@ ${slidesHtml}
           "COLLECTION-WIDE KEY SELLING POINTS",
           "VARIANTS AND DIFFERENCES",
           "PRODUCT TRAINING GUIDES",
-          "For every product or SKU include:",
+          "For every separate size or capacity guide include:",
           "Product Name",
-          "SKU",
+          "Size or Capacity, when confirmed",
+          "SKU, or Color Variants with each color and corresponding SKU when color-only variants are combined",
           "Product Overview",
           "Top Selling Points",
           "Key Features and Customer Benefits",
@@ -15612,6 +15644,8 @@ ${slidesHtml}
                 },
                 products:
                   trainingProductRows,
+                variantGroupingPolicy:
+                  trainingVariantGroupingPolicy,
                 ecommerceGeneratedOutput:
                   ecommerceSourceText,
               },
@@ -15642,14 +15676,16 @@ ${slidesHtml}
               "Continue an existing internal promodiser training manual.",
               "Do not repeat the title, collection overview, or any product guide that is already complete.",
               "Continue immediately from the point where the existing guide stopped.",
-              "Generate only the missing product or SKU guides and the missing final sections listed below.",
+              "Generate only the missing size or capacity guides, missing color-variant SKU entries, and missing final sections listed below.",
+              "If a missing SKU differs only by confirmed color or finish from an existing guide of the same size or capacity, add it to that guide's Color Variants list instead of creating a duplicate full guide.",
+              "Different sizes or capacities must remain separate guides.",
               "Use the same formatting, terminology, section hierarchy, and level of detail as the existing guide.",
               "Use only facts supported by the supplied E-commerce output.",
               "Do not invent specifications, claims, comparisons, objections, demonstration steps, or care instructions.",
               "Never write To be confirmed, TBC, TBD, Unknown, Not provided, Not specified, or Pending confirmation.",
               "When an individual fact is unsupported, omit only that point.",
               completion.missingSkuCodes.length
-                ? `Missing SKU guides: ${completion.missingSkuCodes.join(", ")}`
+                ? `Missing SKU references or color-variant entries: ${completion.missingSkuCodes.join(", ")}`
                 : "All SKU headings are already present. Complete only unfinished product subsections and final guide sections.",
               completion.missingSections.length
                 ? `Missing final sections: ${completion.missingSections.join(" | ")}`
@@ -15674,6 +15710,8 @@ ${slidesHtml}
                       completion.missingSections,
                     products:
                       trainingProductRows,
+                    variantGroupingPolicy:
+                      trainingVariantGroupingPolicy,
                     ecommerceGeneratedOutput:
                       ecommerceSourceText,
                   },
@@ -15756,7 +15794,7 @@ ${slidesHtml}
                     finalCompletion
                       .missingSkuCodes
                       .length
-                      ? `${finalCompletion.missingSkuCodes.length} SKU guide(s)`
+                      ? `${finalCompletion.missingSkuCodes.length} SKU reference(s)`
                       : "",
                     finalCompletion
                       .missingSections
@@ -16602,7 +16640,7 @@ ${slidesHtml}
                   }}
                 >
                   {
-                    "Collection overview\nProduct guide per SKU\nSelling pitches\nCare & Use Instructions\nHow-to-Use\nDemonstration steps\nObjection handling\nFAQ and suggested answers\nComparison guide\nPromodiser cheat sheet"
+                    "Collection overview\nSeparate guide per size or capacity\nColor-only variants combined with SKU list\nSelling pitches\nCare & Use Instructions\nHow-to-Use\nDemonstration steps\nObjection handling\nFAQ and suggested answers\nComparison guide\nPromodiser cheat sheet"
                   }
                 </p>
               </div>
