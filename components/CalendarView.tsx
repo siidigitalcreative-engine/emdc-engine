@@ -24917,7 +24917,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         const clientTemplates:any = {
           "Product Introduction":{
             subject:`[New Arrival] ${externalProductName} — Now Available`,
-            intro:`We are pleased to introduce ${externalProductName}, now available for ordering.`,
+            intro:`Exciting news—we’re delighted to introduce ${externalProductName}, our newest addition designed to bring more value to your customers and fresh opportunities to your product lineup.`,
             action:"For inquiries, product details, or orders, please feel free to contact us.",
           },
           "Product Reactivation":{
@@ -25048,7 +25048,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             }
 
             if(checklistAnnouncementType==="Product Introduction"){
-              return `${externalProductName} is now available for ordering.`;
+              return `Exciting news—we’re delighted to introduce ${externalProductName}, our newest addition designed to bring more value to your customers and fresh opportunities to your product lineup.`;
             }
 
             return template.intro;
@@ -25061,7 +25061,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ];
 
           if(
-            checklistAnnouncementType==="Product Reactivation" &&
+            (
+              checklistAnnouncementType==="Product Introduction" ||
+              checklistAnnouncementType==="Product Reactivation"
+            ) &&
             externalIntroLine
           ){
             externalBodyLines.push(
@@ -25077,6 +25080,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             );
           } else if(
             externalIntroLine &&
+            checklistAnnouncementType!=="Product Introduction" &&
             checklistAnnouncementType!=="Product Reactivation"
           ){
             externalBodyLines.push(
