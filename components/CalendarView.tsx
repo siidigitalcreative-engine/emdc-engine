@@ -25067,11 +25067,46 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             )
           );
 
+        const cleanAnnouncementVariantName = (
+          value:any
+        ) =>
+          String(value || "")
+            .trim()
+            .replace(
+              /\s*\((?:SKU|SKUS)\s*:\s*[^)]*\)\s*/gi,
+              " "
+            )
+            .replace(
+              /\s*[-–—,;]?\s*(?:SKU|SKUS)\s*:\s*[A-Z0-9_./-]+(?:\s*[,;/|]\s*[A-Z0-9_./-]+)*\s*$/gi,
+              ""
+            )
+            .replace(
+              /\s{2,}/g,
+              " "
+            )
+            .replace(
+              /\s+([,.;:])/g,
+              "$1"
+            )
+            .replace(
+              /[,;:\-–—\s]+$/g,
+              ""
+            )
+            .trim();
+
         const confirmedVariantItems =
-          parseAnnouncementOptions(
-            ecommerceSections[
-              "Variants Available"
-            ]
+          Array.from(
+            new Set(
+              parseAnnouncementOptions(
+                ecommerceSections[
+                  "Variants Available"
+                ]
+              )
+                .map(
+                  cleanAnnouncementVariantName
+                )
+                .filter(Boolean)
+            )
           );
 
         const cleanAnnouncementColorName = (
@@ -25079,6 +25114,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         ) =>
           String(value || "")
             .trim()
+            .replace(
+              /\s*\((?:SKU|SKUS)\s*:\s*[^)]*\)\s*/gi,
+              " "
+            )
+            .replace(
+              /\s*[-–—,;]?\s*(?:SKU|SKUS)\s*:\s*[A-Z0-9_./-]+(?:\s*[,;/|]\s*[A-Z0-9_./-]+)*\s*$/gi,
+              ""
+            )
             .replace(
               /\s*\((?:[A-Z0-9]{1,6})(?:\s*\/\s*[A-Z0-9]{1,6})*\)\s*$/i,
               ""
