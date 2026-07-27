@@ -24922,7 +24922,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           },
           "Product Reactivation":{
             subject:`[Back in Stock] ${externalProductName}`,
-            intro:`We are pleased to share that ${externalProductName} is back in stock and available for ordering and promotion.`,
+            intro:`Great news—we’re excited to share that ${externalProductName} is back in stock and ready to support your next sales push.`,
             action:"Please feel free to contact us for updated product details, availability, or orders.",
           },
           "Campaign":{
@@ -24969,7 +24969,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           const buildReadyMessageHeadline = () => {
             if(checklistAnnouncementType==="Product Reactivation"){
-              return `${externalProductName} Is Available Again`;
+              return `${externalProductName} Is Back in Stock!`;
             }
 
             if(checklistAnnouncementType==="Campaign"){
@@ -25044,7 +25044,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           const externalIntroLine = (()=>{
             if(checklistAnnouncementType==="Product Reactivation"){
-              return `${externalProductName} is available again and ready for your next product push.`;
+              return `Great news—we’re excited to share that ${externalProductName} is back in stock and ready to support your next sales push.`;
             }
 
             if(checklistAnnouncementType==="Product Introduction"){
@@ -25060,12 +25060,25 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             externalHeadline,
           ];
 
+          if(
+            checklistAnnouncementType==="Product Reactivation" &&
+            externalIntroLine
+          ){
+            externalBodyLines.push(
+              "",
+              externalIntroLine
+            );
+          }
+
           if(externalOverview){
             externalBodyLines.push(
               "",
               externalOverview
             );
-          } else if(externalIntroLine){
+          } else if(
+            externalIntroLine &&
+            checklistAnnouncementType!=="Product Reactivation"
+          ){
             externalBodyLines.push(
               "",
               externalIntroLine
