@@ -6391,7 +6391,10 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
   const openCampaignTableTextPreview = (
     label:any,
-    value:any
+    value:any,
+    options?:{
+      editSkuRowId?:string;
+    }
   ) => {
     const cleanValue = String(
       value || ""
@@ -6406,6 +6409,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
         label || "Full Content"
       ).trim(),
       value:cleanValue,
+      editSkuRowId:String(
+        options?.editSkuRowId || ""
+      ).trim(),
     });
   };
 
@@ -6459,6 +6465,34 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
               flexWrap:"wrap",
             }}
           >
+            {!!campaignTableTextPreview
+              ?.editSkuRowId&&(
+              <Btn
+                sm
+                variant="outline"
+                onClick={()=>{
+                  const targetRowId =
+                    String(
+                      campaignTableTextPreview
+                        ?.editSkuRowId ||
+                      ""
+                    );
+
+                  setCampaignTableTextPreview(
+                    null
+                  );
+                  setCampaignRowSkuPickerId(
+                    targetRowId
+                  );
+                  setCampaignRowSkuSearch(
+                    ""
+                  );
+                }}
+              >
+                Edit SKUs
+              </Btn>
+            )}
+
             <Btn
               sm
               variant="outline"
@@ -17503,7 +17537,6 @@ ${slidesHtml}
                                 {
                                   ...campaignOverviewFrozenColumns[3],
                                   value:row.sku || "",
-                                  monospace:true,
                                 },
                                 {
                                   ...campaignOverviewFrozenColumns[4],
@@ -17545,7 +17578,33 @@ ${slidesHtml}
                                   }}
                                 >
                                   <div
-                                    title={String(field.value || "")}
+                                    title={`Click to view full ${
+                                      field.label ||
+                                      "content"
+                                    }`}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={()=>
+                                      openCampaignTableTextPreview(
+                                        field.label ||
+                                        "Full Content",
+                                        field.value || "—"
+                                      )
+                                    }
+                                    onKeyDown={(event:any)=>{
+                                      if(
+                                        event.key==="Enter" ||
+                                        event.key===" "
+                                      ){
+                                        event.preventDefault();
+
+                                        openCampaignTableTextPreview(
+                                          field.label ||
+                                          "Full Content",
+                                          field.value || "—"
+                                        );
+                                      }
+                                    }}
                                     style={{
                                       display:"flex",
                                       alignItems:
@@ -17570,17 +17629,14 @@ ${slidesHtml}
                                       border:`1px solid ${C.border}`,
                                       borderRadius:8,
                                       background:C.surface,
-                                      color:field.monospace
-                                        ? C.muted
-                                        : C.textSub,
-                                      fontFamily:field.monospace
-                                        ? "monospace"
-                                        : "inherit",
-                                      fontSize:field.monospace
-                                        ? 9.5
-                                        : 10.5,
-                                      fontWeight:field.weight || 500,
+                                      color:C.textSub,
+                                      fontFamily:
+                                        "Inter, system-ui, sans-serif",
+                                      fontSize:10.5,
+                                      fontWeight:
+                                        field.weight || 500,
                                       lineHeight:1.35,
+                                      cursor:"pointer",
                                       whiteSpace:
                                         campaignOverviewFullView
                                           ? "normal"
@@ -17637,7 +17693,13 @@ ${slidesHtml}
                                     }
                                   }}
                                   aria-label="Edit headline"
-                                  title={row.headline || ""}
+                                  title="Double-click to view full Headline"
+                                  onDoubleClick={()=>
+                                    openCampaignTableTextPreview(
+                                      "Headline",
+                                      row.headline || "—"
+                                    )
+                                  }
                                   style={{
                                     width:"100%",
                                     height:
@@ -17702,7 +17764,13 @@ ${slidesHtml}
                                     }
                                   }}
                                   aria-label="Edit subheadline"
-                                  title={row.subheadline || ""}
+                                  title="Double-click to view full Subheadline"
+                                  onDoubleClick={()=>
+                                    openCampaignTableTextPreview(
+                                      "Subheadline",
+                                      row.subheadline || "—"
+                                    )
+                                  }
                                   style={{
                                     width:"100%",
                                     height:
@@ -17763,7 +17831,13 @@ ${slidesHtml}
                                     }
                                   }}
                                   aria-label="Edit CTA"
-                                  title={row.cta || ""}
+                                  title="Double-click to view full CTA"
+                                  onDoubleClick={()=>
+                                    openCampaignTableTextPreview(
+                                      "CTA",
+                                      row.cta || "—"
+                                    )
+                                  }
                                   style={{
                                     width:"100%",
                                     height:38,
@@ -17792,7 +17866,28 @@ ${slidesHtml}
                                 }}
                               >
                                 <div
-                                  title={row.caption || ""}
+                                  title="Click to view full Caption"
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={()=>
+                                    openCampaignTableTextPreview(
+                                      "Caption",
+                                      row.caption || "—"
+                                    )
+                                  }
+                                  onKeyDown={(event:any)=>{
+                                    if(
+                                      event.key==="Enter" ||
+                                      event.key===" "
+                                    ){
+                                      event.preventDefault();
+
+                                      openCampaignTableTextPreview(
+                                        "Caption",
+                                        row.caption || "—"
+                                      );
+                                    }
+                                  }}
                                   style={{
                                     display:"flex",
                                     alignItems:
@@ -17836,6 +17931,7 @@ ${slidesHtml}
                                       campaignOverviewFullView
                                         ? "clip"
                                         : "ellipsis",
+                                    cursor:"pointer",
                                   }}
                                 >
                                   {row.caption || "—"}
@@ -17960,7 +18056,28 @@ ${slidesHtml}
                                 }}
                               >
                                 <div
-                                  title={row.creativeStatus || ""}
+                                  title="Click to view full Status"
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={()=>
+                                    openCampaignTableTextPreview(
+                                      "Status",
+                                      row.creativeStatus || "—"
+                                    )
+                                  }
+                                  onKeyDown={(event:any)=>{
+                                    if(
+                                      event.key==="Enter" ||
+                                      event.key===" "
+                                    ){
+                                      event.preventDefault();
+
+                                      openCampaignTableTextPreview(
+                                        "Status",
+                                        row.creativeStatus || "—"
+                                      );
+                                    }
+                                  }}
                                   style={{
                                     display:"flex",
                                     alignItems:
@@ -18001,6 +18118,7 @@ ${slidesHtml}
                                       campaignOverviewFullView
                                         ? "clip"
                                         : "ellipsis",
+                                    cursor:"pointer",
                                   }}
                                 >
                                   {row.creativeStatus || "—"}
@@ -18049,6 +18167,8 @@ ${slidesHtml}
                 </div>
               </div>
             )}
+
+            {renderCampaignTableTextPreview()}
 
             {campaignLinkSummaryItems.length>0&&(
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -34188,7 +34308,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                                 if(campaignRowSkuText){
                                                   openCampaignTableTextPreview(
                                                     "SKU",
-                                                    campaignRowSkuText
+                                                    campaignRowSkuText,
+                                                    {
+                                                      editSkuRowId:
+                                                        String(
+                                                          row.id
+                                                        ),
+                                                    }
                                                   );
                                                 } else {
                                                   setCampaignRowSkuPickerId(
@@ -34255,7 +34381,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
                                             <button
                                               type="button"
-                                              onClick={()=>{
+                                              onClick={(event:any)=>{
+                                                event.preventDefault();
+                                                event.stopPropagation();
+
+                                                setCampaignTableTextPreview(
+                                                  null
+                                                );
                                                 setCampaignRowSkuPickerId(
                                                   String(row.id)
                                                 );
