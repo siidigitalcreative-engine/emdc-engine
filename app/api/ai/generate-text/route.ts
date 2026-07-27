@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
     const maxOutputTokens = Math.max(
       512,
       Math.min(
-        8192,
+        65536,
         Number.isFinite(maxOutputTokensRaw)
           ? maxOutputTokensRaw
           : 1800
@@ -284,13 +284,6 @@ export async function POST(req: NextRequest) {
             },
           ],
           generationConfig: {
-            temperature:
-              task === "ecommerce_listing" ||
-              task ===
-                "asset_completion_announcement"
-                ? 0.45
-                : 0.7,
-            topP: 0.9,
             maxOutputTokens,
           },
         }),
@@ -324,6 +317,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       text: generatedText,
       model: selectedModel,
+      finishReason:String(
+        data?.candidates?.[0]
+          ?.finishReason ||
+        ""
+      ),
       raw: data,
     });
   } catch (error: any) {
