@@ -24940,11 +24940,38 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             ]
           );
 
+        const cleanAnnouncementColorName = (
+          value:any
+        ) =>
+          String(value || "")
+            .trim()
+            .replace(
+              /\s*\((?:[A-Z0-9]{1,6})(?:\s*\/\s*[A-Z0-9]{1,6})*\)\s*$/i,
+              ""
+            )
+            .replace(
+              /\s*[-–—]\s*[A-Z0-9]{1,6}\s*$/i,
+              ""
+            )
+            .trim();
+
         const confirmedColorItems =
-          parseAnnouncementOptions(
-            ecommerceSections[
-              "Color Options"
-            ]
+          Array.from(
+            new Set(
+              parseAnnouncementOptions(
+                ecommerceSections[
+                  "Color Options"
+                ]
+              )
+                .flatMap((item:string)=>
+                  String(item || "")
+                    .split(/\s*[,;|]\s*/)
+                )
+                .map(
+                  cleanAnnouncementColorName
+                )
+                .filter(Boolean)
+            )
           );
 
         const externalVariantSummary = [
