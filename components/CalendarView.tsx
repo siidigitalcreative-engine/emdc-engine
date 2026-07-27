@@ -14692,6 +14692,93 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         );
       };
 
+      const trainingContentTitleLabels = new Set([
+        "PRODUCT NAME",
+        "SKU",
+        "PRODUCT OVERVIEW",
+        "TOP SELLING POINTS",
+        "KEY FEATURES AND CUSTOMER BENEFITS",
+        "KEY FEATURES & CUSTOMER BENEFITS",
+        "SPECIFICATIONS",
+        "BEST USE CASES",
+        "HOW TO DEMONSTRATE THE PRODUCT",
+        "HOW TO DEMONSTRATE",
+        "DEMONSTRATION STEPS",
+        "15-SECOND SELLING PITCH",
+        "30-SECOND SELLING PITCH",
+        "SELLING PITCH",
+        "QUESTIONS TO ASK THE CUSTOMER",
+        "SUGGESTED ADD-ON OR CROSS-SELL PRODUCTS",
+        "SUGGESTED ADD-ON PRODUCTS",
+        "CROSS-SELL PRODUCTS",
+        "CARE & USE INSTRUCTIONS",
+        "CARE AND USE INSTRUCTIONS",
+        "HOW-TO-USE",
+        "HOW TO USE",
+        "IMPORTANT DO'S AND DON'TS",
+        "IMPORTANT DOS AND DON'TS",
+        "LIKELY CUSTOMER QUESTIONS AND SUGGESTED ANSWERS",
+        "COMMON CUSTOMER QUESTIONS AND ANSWERS",
+        "CUSTOMER QUESTIONS AND SUGGESTED ANSWERS",
+        "CUSTOMER OBJECTIONS AND RESPONSES",
+        "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
+        "PRODUCT COMPARISON",
+        "PRODUCT COMPARISON GUIDE",
+        "PROMODISER DEMONSTRATION FLOW",
+        "PROMODISER QUICK CHEAT SHEET",
+        "MATERIAL",
+        "CAPACITY",
+        "OPERATIONAL TYPE",
+        "COMPATIBILITY",
+        "FEATURES",
+        "BENEFITS",
+        "VARIANTS",
+        "COLOR OPTIONS",
+        "PACKAGE INCLUDES",
+        "MAINTENANCE",
+        "SAFETY NOTES",
+        "KEY REMINDERS",
+      ]);
+
+      const normalizeTrainingContentTitle = (
+        value:any
+      ) =>
+        String(value || "")
+          .trim()
+          .replace(/[:：]\s*$/,"")
+          .replace(/\s+/g," ")
+          .toUpperCase();
+
+      const isTrainingContentTitle = (
+        line:any
+      ) => {
+        const value =
+          String(line || "").trim();
+
+        if(
+          !value ||
+          value.length > 90 ||
+          /[.!?]$/.test(value)
+        ){
+          return false;
+        }
+
+        const normalized =
+          normalizeTrainingContentTitle(value);
+
+        if(
+          trainingContentTitleLabels.has(
+            normalized
+          )
+        ){
+          return true;
+        }
+
+        return /^(?:\d+[- ]SECOND SELLING PITCH|PRODUCT (?:OVERVIEW|FEATURES|BENEFITS|SPECIFICATIONS|COMPARISON)|TOP SELLING POINTS|KEY FEATURES(?: AND| &)? CUSTOMER BENEFITS|BEST USE CASES|HOW TO (?:DEMONSTRATE|USE)|CARE (?:&|AND) USE INSTRUCTIONS|QUESTIONS TO ASK|SUGGESTED (?:ADD-ON|CROSS-SELL)|IMPORTANT DO'?S AND DON'?TS|LIKELY CUSTOMER QUESTIONS|COMMON CUSTOMER (?:QUESTIONS|OBJECTIONS)|PROMODISER (?:DEMONSTRATION FLOW|QUICK CHEAT SHEET))$/i.test(
+          value
+        );
+      };
+
       const trainingSections = (() => {
         const sections:any[] = [];
         let current:any = {
@@ -14742,6 +14829,25 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
         if(!value){
           return <div key={`space-${index}`} style={{height:7}} />;
+        }
+
+        if(
+          isTrainingContentTitle(value)
+        ){
+          return (
+            <h3
+              key={`content-title-${index}`}
+              style={{
+                margin:"16px 0 7px",
+                color:"#0F172A",
+                fontSize:isMobile?12.5:13.5,
+                fontWeight:900,
+                lineHeight:1.35,
+              }}
+            >
+              {value.replace(/[:：]\s*$/,"")}
+            </h3>
+          );
         }
 
         if(/^[-•✓✔]\s+/.test(value)){
@@ -14827,6 +14933,11 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
               .map((line:string)=>{
                 const value = String(line || "").trim();
                 if(!value) return "<div style='height:8px'></div>";
+                if(isTrainingContentTitle(value)){
+                  return `<h3>${escapeTrainingHtml(
+                    value.replace(/[:：]\\s*$/,"")
+                  )}</h3>`;
+                }
                 if(/^[-•✓✔]\s+/.test(value)){
                   return `<div class="bullet"><span>✓</span><div>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
                 }
@@ -14858,6 +14969,7 @@ body{font-family:Arial,Helvetica,sans-serif;color:#111827;margin:0;line-height:1
 .cover p{font-size:14px;color:#6B7280}
 section{page-break-inside:avoid;margin:0 0 24px}
 h2{font-size:19px;border-bottom:2px solid #111827;padding-bottom:7px;margin:0 0 12px}
+h3{font-size:13px;font-weight:800;color:#0F172A;margin:15px 0 7px}
 p{font-size:12px;margin:6px 0}
 .bullet{display:flex;gap:8px;font-size:12px;margin:5px 0}
 .bullet span{font-weight:700}
@@ -14885,6 +14997,12 @@ ${sectionsHtml}
         const renderEmailLine = (line:string) => {
           const value = String(line || "").trim();
           if(!value) return "<div style='height:8px;line-height:8px'>&nbsp;</div>";
+
+          if(isTrainingContentTitle(value)){
+            return `<h3 style='margin:17px 0 7px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:800;color:#0F172A'>${escapeTrainingHtml(
+              value.replace(/[:：]\\s*$/,"")
+            )}</h3>`;
+          }
 
           if(/^[-•✓✔]\s+/.test(value)){
             return `<div style='display:flex;gap:8px;margin:6px 0;font-size:13px;line-height:1.55'><span style='font-weight:900;color:#16A34A'>✓</span><div>${escapeTrainingHtml(value.replace(/^[-•✓✔]\s+/,""))}</div></div>`;
@@ -15085,7 +15203,20 @@ ${sectionsHtml}
             const body = section.lines
               .filter((line:string)=>String(line).trim())
               .slice(0,14)
-              .map((line:string)=>`<p>${escapeTrainingHtml(line)}</p>`)
+              .map((line:string)=>{
+                const value =
+                  String(line || "").trim();
+
+                if(
+                  isTrainingContentTitle(value)
+                ){
+                  return `<h3>${escapeTrainingHtml(
+                    value.replace(/[:：]\\s*$/,"")
+                  )}</h3>`;
+                }
+
+                return `<p>${escapeTrainingHtml(value)}</p>`;
+              })
               .join("");
 
             return `<section class="slide">
@@ -15111,6 +15242,7 @@ body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#111827}
 .cover h1{font-size:48px;margin:0 0 18px}
 .cover p{font-size:24px;color:#6B7280}
 h2{font-size:36px;margin:0 0 28px;border-bottom:4px solid #111827;padding-bottom:12px}
+h3{font-size:24px;line-height:1.35;margin:18px 0 10px;font-weight:800;color:#0F172A}
 p{font-size:22px;line-height:1.45;margin:9px 0}
 .slide-number{position:absolute;right:38px;bottom:28px;color:#9CA3AF;font-size:16px}
 </style>
@@ -15720,13 +15852,21 @@ ${slidesHtml}
             <div
               style={{
                 display:"flex",
-                justifyContent:"space-between",
-                alignItems:"flex-start",
+                flexDirection:"column",
+                alignItems:"stretch",
                 gap:12,
-                flexWrap:"wrap",
+                width:"100%",
+                maxWidth:"100%",
+                minWidth:0,
               }}
             >
-              <div style={{minWidth:0,flex:1}}>
+              <div
+                style={{
+                  width:"100%",
+                  maxWidth:"100%",
+                  minWidth:0,
+                }}
+              >
                 <h3
                   style={{
                     margin:"0 0 5px",
@@ -15740,10 +15880,14 @@ ${slidesHtml}
                 <p
                   style={{
                     margin:0,
+                    width:"100%",
+                    maxWidth:760,
                     fontSize:12,
                     color:C.muted,
-                    lineHeight:1.5,
-                    maxWidth:920,
+                    lineHeight:1.55,
+                    whiteSpace:"normal",
+                    wordBreak:"normal",
+                    overflowWrap:"break-word",
                   }}
                 >
                   Generate a comprehensive product and
@@ -15757,9 +15901,15 @@ ${slidesHtml}
               <div
                 style={{
                   display:"flex",
+                  alignItems:"center",
+                  justifyContent:"flex-start",
                   gap:8,
                   flexWrap:"wrap",
-                  width:isMobile?"100%":"auto",
+                  width:"100%",
+                  maxWidth:"100%",
+                  minWidth:0,
+                  paddingTop:10,
+                  borderTop:`1px solid ${C.border}`,
                 }}
               >
                 <Select
