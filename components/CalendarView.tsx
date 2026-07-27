@@ -14481,8 +14481,6 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         "PRODUCT COMPARISON GUIDE",
         "PROMODISER DEMONSTRATION FLOW",
         "PROMODISER QUICK CHEAT SHEET",
-        "KNOWLEDGE CHECK QUIZ",
-        "ANSWER KEY",
       ];
 
       const trainingMandatoryConfirmedSections = [
@@ -14520,123 +14518,42 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
             )
         );
 
-        const quizHeadingIndex = sourceLines.findIndex(
-          (line:string)=>
-            String(line || "").trim().toUpperCase() ===
-            "KNOWLEDGE CHECK QUIZ"
-        );
+        let removingQuizSection = false;
 
-        const answerHeadingIndex = sourceLines.findIndex(
-          (line:string,index:number)=>
-            index > quizHeadingIndex &&
-            /^ANSWER KEY\b/i.test(
-              String(line || "").trim()
-            )
-        );
+        const resultLines = cleanGeneralLines(
+          sourceLines.filter((line:string)=>{
+            const normalizedLine =
+              String(line || "")
+                .trim()
+                .toUpperCase();
 
-        let resultLines:string[] = [];
+            const startsQuizSection =
+              normalizedLine ===
+              "KNOWLEDGE CHECK QUIZ";
 
-        if(quizHeadingIndex < 0){
-          resultLines = cleanGeneralLines(sourceLines);
-        } else {
-          resultLines.push(
-            ...cleanGeneralLines(
-              sourceLines.slice(0,quizHeadingIndex)
-            )
-          );
-
-          const quizEnd = answerHeadingIndex >= 0
-            ? answerHeadingIndex
-            : sourceLines.length;
-
-          const questionBlocks:any[] = [];
-          let currentBlock:any = null;
-
-          sourceLines
-            .slice(quizHeadingIndex + 1,quizEnd)
-            .forEach((line:string)=>{
-              const match = String(line || "").match(
-                /^\s*(\d+)[\.\)]\s+(.*)$/
+            const startsAnswerKey =
+              /^ANSWER KEY\b/i.test(
+                String(line || "").trim()
               );
 
-              if(match){
-                if(currentBlock){
-                  questionBlocks.push(currentBlock);
-                }
-                currentBlock = {
-                  originalNumber:Number(match[1]),
-                  firstText:String(match[2] || ""),
-                  continuation:[],
-                };
-                return;
-              }
-
-              if(currentBlock){
-                currentBlock.continuation.push(line);
-              }
-            });
-
-          if(currentBlock){
-            questionBlocks.push(currentBlock);
-          }
-
-          const keptBlocks = questionBlocks.filter(
-            (block:any)=>
-              !trainingUnconfirmedPattern.test(
-                [
-                  block.firstText,
-                  ...(block.continuation || []),
-                ].join("\n")
-              )
-          );
-
-          const numberMap = new Map<number,number>();
-          keptBlocks.forEach((block:any,index:number)=>{
-            numberMap.set(block.originalNumber,index+1);
-          });
-
-          if(keptBlocks.length){
-            resultLines.push("KNOWLEDGE CHECK QUIZ");
-
-            keptBlocks.forEach((block:any,index:number)=>{
-              resultLines.push(`${index+1}. ${block.firstText}`);
-              resultLines.push(
-                ...cleanGeneralLines(block.continuation || [])
-              );
-            });
-
-            if(answerHeadingIndex >= 0){
-              const answerSource = sourceLines
-                .slice(answerHeadingIndex)
-                .join(" ");
-
-              const answerEntries = Array.from(
-                answerSource.matchAll(
-                  /(\d+)\s*[\(\[]\s*([a-z])\s*[\)\]]/gi
-                )
-              )
-                .map((match:any)=>(
-                  {
-                    originalNumber:Number(match[1]),
-                    answer:String(match[2] || "").toLowerCase(),
-                  }
-                ))
-                .filter((entry:any)=>
-                  numberMap.has(entry.originalNumber)
-                )
-                .map((entry:any)=>
-                  `${numberMap.get(entry.originalNumber)}(${entry.answer})`
-                );
-
-              if(answerEntries.length){
-                resultLines.push(
-                  "",
-                  `ANSWER KEY: ${answerEntries.join(", ")}`
-                );
-              }
+            if(
+              startsQuizSection ||
+              startsAnswerKey
+            ){
+              removingQuizSection = true;
+              return false;
             }
-          }
-        }
+
+            if(
+              removingQuizSection &&
+              isKnownHeadingLine(line)
+            ){
+              removingQuizSection = false;
+            }
+
+            return !removingQuizSection;
+          })
+        );
 
         const compacted:string[] = [];
         cleanGeneralLines(resultLines).forEach((line:string)=>{
@@ -15228,8 +15145,6 @@ ${slidesHtml}
         "PRODUCT COMPARISON GUIDE",
         "PROMODISER DEMONSTRATION FLOW",
         "PROMODISER QUICK CHEAT SHEET",
-        "KNOWLEDGE CHECK QUIZ",
-        "ANSWER KEY",
       ];
 
       const getTrainingGuideCompletion = (
@@ -15415,7 +15330,7 @@ ${slidesHtml}
           "If an individual point is missing, unsupported, uncertain, or not explicitly confirmed by the E-commerce source, omit only that individual point. Do not remove an otherwise required section.",
           "Never write placeholder phrases such as To be confirmed, TBC, TBD, Unknown, Not provided, Not specified, or Pending confirmation.",
           "Keep the guide comprehensive by fully developing every supported product fact, feature, benefit, use case, care instruction, variant difference, and selling point from the source.",
-          "Do not create a quiz question, answer option, answer-key entry, specification, comparison, objection response, claim, demonstration step, or instruction unless it is directly supported by the supplied source.",
+          "Do not create a specification, comparison, objection response, claim, demonstration step, or instruction unless it is directly supported by the supplied source.",
           "Write clear professional English that is easy for promodisers to understand, remember, and explain to customers.",
           "Avoid em dashes.",
           "Do not use markdown heading symbols such as ###.",
@@ -15454,8 +15369,6 @@ ${slidesHtml}
           "PROMODISER DEMONSTRATION FLOW",
           "Always include this section. Create a clear step-by-step demonstration using only confirmed product operation, setup, feature, care, and use information from the source. Skip unsupported steps instead of adding assumptions.",
           "PROMODISER QUICK CHEAT SHEET",
-          "KNOWLEDGE CHECK QUIZ",
-          "Create up to 10 multiple-choice questions using only facts explicitly supported by the supplied source, then include an answer key only for the questions created.",
           "",
           "Keep all claims grounded in the supplied E-commerce output.",
           "The Common Customer Objections and Responses, Product Comparison Guide, and Promodiser Demonstration Flow sections are required. Remove only unsupported points inside them, never the entire section.",
@@ -15513,7 +15426,7 @@ ${slidesHtml}
               "Generate only the missing product or SKU guides and the missing final sections listed below.",
               "Use the same formatting, terminology, section hierarchy, and level of detail as the existing guide.",
               "Use only facts supported by the supplied E-commerce output.",
-              "Do not invent specifications, claims, comparisons, objections, demonstration steps, care instructions, or quiz answers.",
+              "Do not invent specifications, claims, comparisons, objections, demonstration steps, or care instructions.",
               "Never write To be confirmed, TBC, TBD, Unknown, Not provided, Not specified, or Pending confirmation.",
               "When an individual fact is unsupported, omit only that point.",
               completion.missingSkuCodes.length
@@ -15522,7 +15435,7 @@ ${slidesHtml}
               completion.missingSections.length
                 ? `Missing final sections: ${completion.missingSections.join(" | ")}`
                 : "All final section headings are present. Complete any unfinished content after the existing guide tail.",
-              "The final continuation must include Common Customer Objections and Responses, Product Comparison Guide, Promodiser Demonstration Flow, Promodiser Quick Cheat Sheet, Knowledge Check Quiz, and Answer Key when they are still missing.",
+              "The final continuation must include Common Customer Objections and Responses, Product Comparison Guide, Promodiser Demonstration Flow, and Promodiser Quick Cheat Sheet when they are still missing.",
               "Return continuation text only. Do not restart the guide.",
             ].join("\n");
 
@@ -15766,7 +15679,7 @@ ${slidesHtml}
           >
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surfaceAlt,color:C.textSub,fontSize:11.5,lineHeight:1.5}}>
-                The complete confirmed guide will be sent with the same section hierarchy, headings, bullets, numbered quiz, and answer-key formatting shown in Training Materials.
+                The complete confirmed guide will be sent with the same section hierarchy, headings, bullets, product guides, comparison content, and demonstration formatting shown in Training Materials.
               </div>
               <div style={{display:"grid",gridTemplateColumns:isMobile?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr)",gap:10}}>
                 <Field label="To">
@@ -16433,7 +16346,7 @@ ${slidesHtml}
                   }}
                 >
                   {
-                    "Collection overview\nProduct guide per SKU\nSelling pitches\nCare & Use Instructions\nHow-to-Use\nDemonstration steps\nObjection handling\nFAQ and suggested answers\nComparison guide\nPromodiser cheat sheet\nKnowledge-check quiz"
+                    "Collection overview\nProduct guide per SKU\nSelling pitches\nCare & Use Instructions\nHow-to-Use\nDemonstration steps\nObjection handling\nFAQ and suggested answers\nComparison guide\nPromodiser cheat sheet"
                   }
                 </p>
               </div>
