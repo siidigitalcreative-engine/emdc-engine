@@ -6383,6 +6383,7 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
   const closeDcProductRefEdit = (key:string) => setDcProductRefEditKeys(prev=>({ ...prev, [key]: false }));
   const [campaignDcPreview,setCampaignDcPreview] = useState<any>(null);
   const [campaignOverviewImagePreview,setCampaignOverviewImagePreview] = useState<any>(null);
+  const [campaignOverviewFullView,setCampaignOverviewFullView] = useState(false);
   const [selectedCampaignProductKeys,setSelectedCampaignProductKeys] = useState<string[]>([]);
   const [campaignRowSkuPickerId,setCampaignRowSkuPickerId] = useState<string|null>(null);
   const [campaignRowSkuSearch,setCampaignRowSkuSearch] = useState("");
@@ -17041,27 +17042,29 @@ ${slidesHtml}
         {
           label:"Platform",
           width:125,
-          left:0,
+          frozen:false,
         },
         {
           label:"Brand",
           width:135,
-          left:125,
+          frozen:false,
         },
         {
           label:"Category",
           width:190,
-          left:260,
+          frozen:false,
         },
         {
           label:"SKU",
           width:175,
-          left:450,
+          left:0,
+          frozen:true,
         },
         {
           label:"Product",
           width:285,
-          left:625,
+          left:175,
+          frozen:true,
         },
       ];
 
@@ -17198,7 +17201,41 @@ ${slidesHtml}
                     <option value="brand">Group by Brand</option>
                     <option value="platform">Group by Platform</option>
                   </Select>
-                  <Btn sm variant="outline" onClick={copyAllOverviewItems} disabled={!campaignOverviewRows.length}>Copy All</Btn>
+                  <Btn
+                    sm
+                    variant={
+                      campaignOverviewFullView
+                        ? "primary"
+                        : "outline"
+                    }
+                    onClick={()=>
+                      setCampaignOverviewFullView(
+                        (previous:boolean)=>
+                          !previous
+                      )
+                    }
+                    disabled={
+                      !campaignOverviewRows.length
+                    }
+                    title={
+                      campaignOverviewFullView
+                        ? "Return to compact rows"
+                        : "Expand rows and wrap all long field content"
+                    }
+                  >
+                    {campaignOverviewFullView
+                      ? "Compact View"
+                      : "View Full"}
+                  </Btn>
+
+                  <Btn
+                    sm
+                    variant="outline"
+                    onClick={copyAllOverviewItems}
+                    disabled={!campaignOverviewRows.length}
+                  >
+                    Copy All
+                  </Btn>
                 </div>
               </div>
             </div>
@@ -17228,7 +17265,14 @@ ${slidesHtml}
                     width:"100%",
                     maxWidth:"100%",
                     minWidth:0,
-                    maxHeight:isMobile?410:560,
+                    maxHeight:
+                      campaignOverviewFullView
+                        ? isMobile
+                          ? 620
+                          : 760
+                        : isMobile
+                          ? 410
+                          : 560,
                     overflowX:"scroll",
                     overflowY:"auto",
                     WebkitOverflowScrolling:"touch",
@@ -17256,7 +17300,10 @@ ${slidesHtml}
                           ...campaignOverviewFrozenColumns.map(
                             (column:any)=>({
                               ...column,
-                              frozen:true,
+                              frozen:
+                                Boolean(
+                                  column.frozen
+                                ),
                             })
                           ),
                           ...campaignOverviewTrailingColumns.map(
@@ -17359,9 +17406,15 @@ ${slidesHtml}
                                 <td
                                   key={`overview-field-${fieldIndex}`}
                                   style={{
-                                    position:"sticky",
-                                    left:field.left,
-                                    zIndex:3,
+                                    position:field.frozen
+                                      ? "sticky"
+                                      : "relative",
+                                    left:field.frozen
+                                      ? field.left
+                                      : undefined,
+                                    zIndex:field.frozen
+                                      ? 3
+                                      : 1,
                                     width:field.width,
                                     minWidth:field.width,
                                     maxWidth:field.width,
@@ -17369,14 +17422,17 @@ ${slidesHtml}
                                     padding:6,
                                     borderBottom:`1px solid ${C.border}`,
                                     borderRight:`1px solid ${C.border}`,
-                                    verticalAlign:"middle",
+                                    verticalAlign:
+                                      campaignOverviewFullView
+                                        ? "top"
+                                        : "middle",
                                     background:
                                       idx%2
                                         ? C.surface
                                         : C.bg,
                                     boxShadow:
-                                      fieldIndex===
-                                      campaignOverviewFrozenColumns.length-1
+                                      field.frozen &&
+                                      field.label==="Product"
                                         ? "6px 0 10px -8px rgba(15,23,42,.55)"
                                         : "none",
                                   }}
@@ -17385,13 +17441,25 @@ ${slidesHtml}
                                     title={String(field.value || "")}
                                     style={{
                                       display:"flex",
-                                      alignItems:"center",
+                                      alignItems:
+                                        campaignOverviewFullView
+                                          ? "flex-start"
+                                          : "center",
                                       width:"100%",
-                                      height:38,
-                                      minHeight:38,
+                                      height:
+                                        campaignOverviewFullView
+                                          ? "auto"
+                                          : 38,
+                                      minHeight:
+                                        campaignOverviewFullView
+                                          ? 68
+                                          : 38,
                                       boxSizing:"border-box",
                                       padding:"7px 8px",
-                                      overflow:"hidden",
+                                      overflow:
+                                        campaignOverviewFullView
+                                          ? "visible"
+                                          : "hidden",
                                       border:`1px solid ${C.border}`,
                                       borderRadius:8,
                                       background:C.surface,
@@ -17405,9 +17473,23 @@ ${slidesHtml}
                                         ? 9.5
                                         : 10.5,
                                       fontWeight:field.weight || 500,
-                                      lineHeight:1.25,
-                                      whiteSpace:"nowrap",
-                                      textOverflow:"ellipsis",
+                                      lineHeight:1.35,
+                                      whiteSpace:
+                                        campaignOverviewFullView
+                                          ? "normal"
+                                          : "nowrap",
+                                      wordBreak:
+                                        campaignOverviewFullView
+                                          ? "break-word"
+                                          : "normal",
+                                      overflowWrap:
+                                        campaignOverviewFullView
+                                          ? "anywhere"
+                                          : "normal",
+                                      textOverflow:
+                                        campaignOverviewFullView
+                                          ? "clip"
+                                          : "ellipsis",
                                     }}
                                   >
                                     {field.value || "—"}
@@ -17425,8 +17507,12 @@ ${slidesHtml}
                                   verticalAlign:"middle",
                                 }}
                               >
-                                <input
-                                  type="text"
+                                <textarea
+                                  rows={
+                                    campaignOverviewFullView
+                                      ? 4
+                                      : 1
+                                  }
                                   defaultValue={row.headline || ""}
                                   onBlur={(event:any)=>{
                                     const nextValue =
@@ -17447,8 +17533,14 @@ ${slidesHtml}
                                   title={row.headline || ""}
                                   style={{
                                     width:"100%",
-                                    height:38,
-                                    minHeight:38,
+                                    height:
+                                      campaignOverviewFullView
+                                        ? 84
+                                        : 38,
+                                    minHeight:
+                                      campaignOverviewFullView
+                                        ? 84
+                                        : 38,
                                     boxSizing:"border-box",
                                     padding:"7px 8px",
                                     border:`1px solid ${C.border}`,
@@ -17456,7 +17548,15 @@ ${slidesHtml}
                                     background:C.surface,
                                     color:C.text,
                                     fontSize:10.5,
-                                    lineHeight:1.25,
+                                    lineHeight:1.35,
+                                    resize:
+                                      campaignOverviewFullView
+                                        ? "vertical"
+                                        : "none",
+                                    overflow:
+                                      campaignOverviewFullView
+                                        ? "auto"
+                                        : "hidden",
                                     outline:"none",
                                   }}
                                 />
@@ -17472,8 +17572,12 @@ ${slidesHtml}
                                   verticalAlign:"middle",
                                 }}
                               >
-                                <input
-                                  type="text"
+                                <textarea
+                                  rows={
+                                    campaignOverviewFullView
+                                      ? 4
+                                      : 1
+                                  }
                                   defaultValue={row.subheadline || ""}
                                   onBlur={(event:any)=>{
                                     const nextValue =
@@ -17494,8 +17598,14 @@ ${slidesHtml}
                                   title={row.subheadline || ""}
                                   style={{
                                     width:"100%",
-                                    height:38,
-                                    minHeight:38,
+                                    height:
+                                      campaignOverviewFullView
+                                        ? 84
+                                        : 38,
+                                    minHeight:
+                                      campaignOverviewFullView
+                                        ? 84
+                                        : 38,
                                     boxSizing:"border-box",
                                     padding:"7px 8px",
                                     border:`1px solid ${C.border}`,
@@ -17503,7 +17613,15 @@ ${slidesHtml}
                                     background:C.surface,
                                     color:C.text,
                                     fontSize:10.5,
-                                    lineHeight:1.25,
+                                    lineHeight:1.35,
+                                    resize:
+                                      campaignOverviewFullView
+                                        ? "vertical"
+                                        : "none",
+                                    overflow:
+                                      campaignOverviewFullView
+                                        ? "auto"
+                                        : "hidden",
                                     outline:"none",
                                   }}
                                 />
@@ -17570,21 +17688,47 @@ ${slidesHtml}
                                   title={row.caption || ""}
                                   style={{
                                     display:"flex",
-                                    alignItems:"center",
+                                    alignItems:
+                                      campaignOverviewFullView
+                                        ? "flex-start"
+                                        : "center",
                                     width:"100%",
-                                    height:38,
-                                    minHeight:38,
+                                    height:
+                                      campaignOverviewFullView
+                                        ? "auto"
+                                        : 38,
+                                    minHeight:
+                                      campaignOverviewFullView
+                                        ? 84
+                                        : 38,
                                     boxSizing:"border-box",
                                     padding:"7px 8px",
-                                    overflow:"hidden",
+                                    overflow:
+                                      campaignOverviewFullView
+                                        ? "visible"
+                                        : "hidden",
                                     border:`1px solid ${C.border}`,
                                     borderRadius:8,
                                     background:C.surface,
                                     color:C.textSub,
                                     fontSize:10.5,
-                                    lineHeight:1.25,
-                                    whiteSpace:"nowrap",
-                                    textOverflow:"ellipsis",
+                                    lineHeight:1.35,
+                                    whiteSpace:
+                                      campaignOverviewFullView
+                                        ? "normal"
+                                        : "nowrap",
+                                    wordBreak:
+                                      campaignOverviewFullView
+                                        ? "break-word"
+                                        : "normal",
+                                    overflowWrap:
+                                      campaignOverviewFullView
+                                        ? "anywhere"
+                                        : "normal",
+                                    textOverflow:
+                                      campaignOverviewFullView
+                                        ? "clip"
+                                        : "ellipsis",
                                   }}
                                 >
                                   {row.caption || "—"}
@@ -17712,21 +17856,44 @@ ${slidesHtml}
                                   title={row.creativeStatus || ""}
                                   style={{
                                     display:"flex",
-                                    alignItems:"center",
+                                    alignItems:
+                                      campaignOverviewFullView
+                                        ? "flex-start"
+                                        : "center",
                                     width:"100%",
-                                    height:38,
-                                    minHeight:38,
+                                    height:
+                                      campaignOverviewFullView
+                                        ? "auto"
+                                        : 38,
+                                    minHeight:
+                                      campaignOverviewFullView
+                                        ? 68
+                                        : 38,
                                     boxSizing:"border-box",
                                     padding:"7px 8px",
-                                    overflow:"hidden",
+                                    overflow:
+                                      campaignOverviewFullView
+                                        ? "visible"
+                                        : "hidden",
                                     border:`1px solid ${C.border}`,
                                     borderRadius:8,
                                     background:C.surface,
                                     color:C.textSub,
                                     fontSize:10.5,
                                     fontWeight:750,
-                                    whiteSpace:"nowrap",
-                                    textOverflow:"ellipsis",
+                                    lineHeight:1.35,
+                                    whiteSpace:
+                                      campaignOverviewFullView
+                                        ? "normal"
+                                        : "nowrap",
+                                    wordBreak:
+                                      campaignOverviewFullView
+                                        ? "break-word"
+                                        : "normal",
+                                    textOverflow:
+                                      campaignOverviewFullView
+                                        ? "clip"
+                                        : "ellipsis",
                                   }}
                                 >
                                   {row.creativeStatus || "—"}
