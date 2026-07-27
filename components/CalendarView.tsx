@@ -18856,17 +18856,34 @@ ${slidesHtml}
 
                               setAssetAnnouncementEditor({
                                 client:{
-                                  subject:String(
-                                    overviewDigitalData
-                                      ?.assetAnnouncementDrafts
-                                      ?.client
-                                      ?.subject ||
-                                    overviewDigitalData
-                                      ?.assetAnnouncementDrafts
-                                      ?.email
-                                      ?.subject ||
-                                    ""
-                                  ),
+                                  subject:
+                                    resolvedAnnouncementType==="Product Introduction"
+                                      ? `[New Arrival] ${
+                                          String(
+                                            group.groupName ||
+                                            group.name ||
+                                            "Checklist"
+                                          ).trim()
+                                        }`
+                                      : resolvedAnnouncementType==="Product Reactivation"
+                                        ? `[Back in Stock] ${
+                                            String(
+                                              group.groupName ||
+                                              group.name ||
+                                              "Checklist"
+                                            ).trim()
+                                          }`
+                                        : String(
+                                            overviewDigitalData
+                                              ?.assetAnnouncementDrafts
+                                              ?.client
+                                              ?.subject ||
+                                            overviewDigitalData
+                                              ?.assetAnnouncementDrafts
+                                              ?.email
+                                              ?.subject ||
+                                            ""
+                                          ),
                                   body:String(
                                     overviewDigitalData
                                       ?.assetAnnouncementDrafts
@@ -24347,6 +24364,41 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         ).trim()
       }`;
 
+      const exactChecklistTitle = String(
+        group.groupName ||
+        group.name ||
+        "Checklist"
+      ).trim();
+
+      const getExactClientAnnouncementSubject = () => {
+        if(
+          checklistAnnouncementType==="Product Introduction"
+        ){
+          return `[New Arrival] ${exactChecklistTitle}`;
+        }
+
+        if(
+          checklistAnnouncementType==="Product Reactivation"
+        ){
+          return `[Back in Stock] ${exactChecklistTitle}`;
+        }
+
+        return "";
+      };
+
+      const normalizeClientAnnouncementSubject = (
+        value:any
+      ) => {
+        const exactSubject =
+          getExactClientAnnouncementSubject();
+
+        if(exactSubject){
+          return exactSubject;
+        }
+
+        return String(value || "").trim();
+      };
+
       const normalizeViberAnnouncementSubject = (
         value:any
       ) => {
@@ -24384,8 +24436,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const syncedAssetAnnouncementEditor = {
         ...(assetAnnouncementEditor || {}),
         client:{
-          subject:String(
-            assetAnnouncementEditor?.client?.subject || ""
+          subject:normalizeClientAnnouncementSubject(
+            assetAnnouncementEditor?.client?.subject
           ),
           body:String(
             assetAnnouncementEditor?.client?.body || ""
@@ -24433,10 +24485,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ? syncedAssetAnnouncementEditor
           : {
               client:{
-                subject:String(
+                subject:normalizeClientAnnouncementSubject(
                   digitalData.assetAnnouncementDrafts?.client?.subject ||
-                  digitalData.assetAnnouncementDrafts?.email?.subject ||
-                  ""
+                  digitalData.assetAnnouncementDrafts?.email?.subject
                 ),
                 body:String(
                   digitalData.assetAnnouncementDrafts?.client?.body ||
@@ -25096,12 +25147,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
         const clientTemplates:any = {
           "Product Introduction":{
-            subject:`[New Arrival] ${externalProductName} — Now Available`,
+            subject:`[New Arrival] ${checklistName}`,
             intro:`Exciting news—we’re happy to introduce ${externalProductName}, a new addition designed for practical and stylish everyday use.`,
             action:"For inquiries, product details, or orders, please feel free to contact us.",
           },
           "Product Reactivation":{
-            subject:`[Back in Stock] ${externalProductName}`,
+            subject:`[Back in Stock] ${checklistName}`,
             intro:`Great news—we’re happy to share that ${externalProductName} is available again.`,
             action:"Please feel free to contact us for updated product details, availability, or orders.",
           },
@@ -25328,7 +25379,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     : checklistAnnouncementType==="Special Campaign"
                       ? "[Special Campaign]"
                       : `[${checklistAnnouncementType}]`
-            } VIBER Message: ${externalProductName}`,
+            } VIBER Message: ${checklistName}`,
             body:clientDraft.body,
           };
         }
