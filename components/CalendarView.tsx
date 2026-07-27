@@ -10385,6 +10385,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           task:"ecommerce_prompt_from_catalog",
           taskLabel:"E-commerce Prompt from Catalog",
           tone:"professional",
+          model:String(
+            data?.textModel || ""
+          ).trim(),
           instruction,
           input:JSON.stringify({
             group:{
@@ -10407,8 +10410,47 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const raw = await res.text();
       let payload:any = {};
       try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "Prompt generation failed."); }
-      if(!res.ok) throw new Error(payload?.error || payload?.message || "Prompt generation failed.");
-      updateAiWorkspace(tab,{ textPrompt:cleanReadyToUseOutput(payload?.text || "") });
+      if(!res.ok){
+        const selectedModelLabel =
+          getEmdcTextModelLabel(
+            data?.textModel
+          );
+
+        const message = String(
+          payload?.error ||
+          payload?.message ||
+          "Prompt generation failed."
+        );
+
+        if(
+          /high demand|overload|unavailable|capacity|503/i.test(
+            message
+          )
+        ){
+          throw new Error(
+            `${selectedModelLabel} is temporarily experiencing high demand. Select another model and generate again.`
+          );
+        }
+
+        if(
+          /quota|resource exhausted|rate limit|429/i.test(
+            message
+          )
+        ){
+          throw new Error(
+            `${selectedModelLabel} has reached its current quota or rate limit. Select another model and generate again.`
+          );
+        }
+
+        throw new Error(message);
+      }
+
+      updateAiWorkspace(tab,{
+        textPrompt:
+          cleanReadyToUseOutput(
+            payload?.text || ""
+          ),
+      });
     } catch(err:any) {
       setAiError((p:any)=>({...p,[tab]:err?.message || "Prompt generation failed."}));
     } finally {
@@ -10476,6 +10518,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           task:"ecommerce_listing",
           taskLabel:"E-commerce Listing Generator",
           tone:"professional",
+          model:String(
+            data?.textModel || ""
+          ).trim(),
           instruction,
           input:JSON.stringify({
             prompt,
@@ -10500,13 +10545,51 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       const raw = await res.text();
       let payload:any = {};
       try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "E-commerce generation failed."); }
-      if(!res.ok) throw new Error(payload?.error || payload?.message || "E-commerce generation failed.");
+      if(!res.ok){
+        const selectedModelLabel =
+          getEmdcTextModelLabel(
+            data?.textModel
+          );
+
+        const message = String(
+          payload?.error ||
+          payload?.message ||
+          "E-commerce generation failed."
+        );
+
+        if(
+          /high demand|overload|unavailable|capacity|503/i.test(
+            message
+          )
+        ){
+          throw new Error(
+            `${selectedModelLabel} is temporarily experiencing high demand. Select another model and generate again.`
+          );
+        }
+
+        if(
+          /quota|resource exhausted|rate limit|429/i.test(
+            message
+          )
+        ){
+          throw new Error(
+            `${selectedModelLabel} has reached its current quota or rate limit. Select another model and generate again.`
+          );
+        }
+
+        throw new Error(message);
+      }
 
       updateAiWorkspace(tab,{
         textPrompt:prompt,
         generatedText:cleanReadyToUseOutput(payload?.text || ""),
         generatedProductRows:promptProductRows,
         generatedAt:new Date().toISOString(),
+        generatedModel:String(
+          payload?.model ||
+          data?.textModel ||
+          ""
+        ).trim(),
       });
     } catch (err:any) {
       setAiError((p:any)=>({...p,[tab]:err?.message || "E-commerce generation failed."}));
@@ -30716,9 +30799,118 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     </div>
 
                     <div style={{ padding:14,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12 }}>
-                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap" }}>
-                        <h4 style={{ margin:0,fontSize:13,fontWeight:900,color:C.text }}>AI E-commerce Prompt</h4>
-                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Use Listing Template</Btn>
+                      <div
+                        style={{
+                          display:"flex",
+                          justifyContent:"space-between",
+                          alignItems:"center",
+                          gap:8,
+                          marginBottom:8,
+                          flexWrap:"wrap",
+                        }}
+                      >
+                        <h4
+                          style={{
+                            margin:0,
+                            fontSize:13,
+                            fontWeight:900,
+                            color:C.text,
+                          }}
+                        >
+                          AI E-commerce Prompt
+                        </h4>
+
+                        <div
+                          style={{
+                            display:"flex",
+                            alignItems:"center",
+                            justifyContent:"flex-end",
+                            gap:8,
+                            flexWrap:"wrap",
+                            width:isMobile
+                              ? "100%"
+                              : "auto",
+                          }}
+                        >
+                          {(
+                            lt.label==="Product Introduction" ||
+                            lt.label==="Product Reactivation"
+                          )&&(
+                            <Select
+                              value={String(
+                                data?.textModel || ""
+                              )}
+                              onChange={(value:any)=>
+                                updateAiWorkspace(
+                                  tab,
+                                  {
+                                    textModel:value,
+                                  }
+                                )
+                              }
+                              title="Switch models when the selected model is overloaded or has reached its quota."
+                              aria-label="E-commerce Listing Gemini model"
+                              style={{
+                                width:isMobile
+                                  ? "100%"
+                                  : 220,
+                                minWidth:isMobile
+                                  ? 0
+                                  : 220,
+                                height:34,
+                                minHeight:34,
+                                padding:
+                                  "5px 30px 5px 9px",
+                                borderRadius:7,
+                                fontSize:10.5,
+                                fontWeight:750,
+                                background:C.surface,
+                              }}
+                            >
+                              {emdcTextModelOptions.map(
+                                (model:any)=>(
+                                  <option
+                                    key={
+                                      model.value ||
+                                      "default"
+                                    }
+                                    value={model.value}
+                                  >
+                                    {model.label}
+                                  </option>
+                                )
+                              )}
+                            </Select>
+                          )}
+
+                          <Btn
+                            sm
+                            variant="outline"
+                            onClick={()=>
+                              updateAiWorkspace(
+                                tab,
+                                {
+                                  textPrompt:
+                                    buildEcommercePrompt(
+                                      ecommerceOutputSections,
+                                      selectedSections,
+                                      sectionInstructions,
+                                      getEcommercePromptProductRows(
+                                        data
+                                      )
+                                    ),
+                                }
+                              )
+                            }
+                            style={{
+                              width:isMobile
+                                ? "100%"
+                                : "auto",
+                            }}
+                          >
+                            Use Listing Template
+                          </Btn>
+                        </div>
                       </div>
                       <div
                         tabIndex={0}
@@ -30766,9 +30958,89 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         </div>
                       )}
                       {aiError[tab]&&<div style={{ marginTop:8,padding:"8px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C",fontWeight:700 }}>{aiError[tab]}</div>}
-                      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"auto auto",gap:8,justifyContent:isMobile?"stretch":"flex-end",marginTop:10 }}>
-                        <Btn sm variant="outline" onClick={()=>updateAiWorkspace(tab,{ textPrompt:data.textPrompt || buildEcommercePrompt(ecommerceOutputSections,selectedSections,sectionInstructions,getEcommercePromptProductRows(data)) })}>Save Prompt</Btn>
-                        <Btn sm onClick={generateEcommerceListing} disabled={!!aiBusy[tab]}>{aiBusy[tab]?"Generating...":"Generate E-commerce Listing"}</Btn>
+                      <div
+                        style={{
+                          display:"flex",
+                          alignItems:"center",
+                          justifyContent:isMobile
+                            ? "stretch"
+                            : "flex-end",
+                          gap:8,
+                          flexWrap:"wrap",
+                          marginTop:10,
+                        }}
+                      >
+                        {(
+                          lt.label==="Product Introduction" ||
+                          lt.label==="Product Reactivation"
+                        )&&(
+                          <span
+                            style={{
+                              marginRight:isMobile?0:"auto",
+                              width:isMobile
+                                ? "100%"
+                                : "auto",
+                              fontSize:10.5,
+                              color:C.muted,
+                              lineHeight:1.35,
+                            }}
+                          >
+                            Active model:{" "}
+                            <strong
+                              style={{
+                                color:C.textSub,
+                              }}
+                            >
+                              {getEmdcTextModelLabel(
+                                data?.textModel
+                              )}
+                            </strong>
+                          </span>
+                        )}
+
+                        <Btn
+                          sm
+                          variant="outline"
+                          onClick={()=>
+                            updateAiWorkspace(
+                              tab,
+                              {
+                                textPrompt:
+                                  data.textPrompt ||
+                                  buildEcommercePrompt(
+                                    ecommerceOutputSections,
+                                    selectedSections,
+                                    sectionInstructions,
+                                    getEcommercePromptProductRows(
+                                      data
+                                    )
+                                  ),
+                              }
+                            )
+                          }
+                          style={{
+                            width:isMobile
+                              ? "100%"
+                              : "auto",
+                          }}
+                        >
+                          Save Prompt
+                        </Btn>
+
+                        <Btn
+                          sm
+                          onClick={generateEcommerceListing}
+                          disabled={!!aiBusy[tab]}
+                          style={{
+                            width:isMobile
+                              ? "100%"
+                              : "auto",
+                          }}
+                        >
+                          {aiBusy[tab]
+                            ? "Generating..."
+                            : "Generate E-commerce Listing"}
+                        </Btn>
                       </div>
                     </div>
 
