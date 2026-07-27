@@ -1093,6 +1093,10 @@ export async function POST(
       requestBody?.body || ""
     ).trim();
 
+    const customHtmlBody = String(
+      requestBody?.customHtmlBody || ""
+    ).trim();
+
     const checklistTitle = String(
       requestBody?.checklistTitle || ""
     ).trim();
@@ -1152,13 +1156,13 @@ export async function POST(
     if (
       !to ||
       !subject ||
-      !messageBody
+      (!messageBody && !customHtmlBody)
     ) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            "To, subject, and body are required.",
+            "To, subject, and an email body are required.",
         },
         { status: 400 }
       );
@@ -1286,7 +1290,13 @@ export async function POST(
     const youtubeThumbnailContentId =
       "emdc-youtube-thumbnail";
 
-    const htmlBody = buildHtmlEmail({
+    const safeCustomHtmlBody = customHtmlBody
+      .replace(/<script[\s\S]*?<\/script>/gi,"")
+      .replace(/<iframe[\s\S]*?<\/iframe>/gi,"")
+      .replace(/\son[a-z]+\s*=\s*(["'])[\s\S]*?\1/gi,"")
+      .replace(/javascript:/gi,"");
+
+    const htmlBody = safeCustomHtmlBody || buildHtmlEmail({
       subject,
       body: messageBody,
       headerImageSource:
