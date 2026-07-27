@@ -14472,6 +14472,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         "ANSWER KEY",
       ];
 
+      const trainingMandatoryConfirmedSections = [
+        "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
+        "PRODUCT COMPARISON GUIDE",
+        "PROMODISER DEMONSTRATION FLOW",
+      ];
+
       const trainingUnconfirmedPattern =
         /\b(?:to be confirmed|tbc|tbd|to be determined|not yet confirmed|pending confirmation|requires confirmation|unconfirmed|not provided(?: in (?:the )?source)?|not specified(?: in (?:the )?source)?|information (?:unavailable|not available)|unknown(?: in (?:the )?source)?)\b/i;
 
@@ -14631,15 +14637,39 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
         const withoutEmptySections = compacted.filter(
           (line:string,index:number)=>{
-            if(!isKnownHeadingLine(line)) return true;
+            if(!isKnownHeadingLine(line)){
+              return true;
+            }
+
+            const normalizedHeading =
+              String(line || "")
+                .trim()
+                .toUpperCase();
+
+            if(
+              trainingMandatoryConfirmedSections.includes(
+                normalizedHeading
+              )
+            ){
+              return true;
+            }
+
             let cursor = index + 1;
+
             while(
               cursor < compacted.length &&
-              !String(compacted[cursor] || "").trim()
-            ) cursor += 1;
+              !String(
+                compacted[cursor] || ""
+              ).trim()
+            ){
+              cursor += 1;
+            }
+
             return (
               cursor < compacted.length &&
-              !isKnownHeadingLine(compacted[cursor])
+              !isKnownHeadingLine(
+                compacted[cursor]
+              )
             );
           }
         );
@@ -15203,9 +15233,10 @@ ${slidesHtml}
           "You are creating an internal product training manual for retail promodisers in the Philippines.",
           "Use the supplied E-commerce generated output as the primary and authoritative product knowledge source.",
           "Do not invent exact specifications, claims, certifications, materials, capacities, dimensions, compatibility, or safety information that are not present in the source.",
-          "If information is missing, unsupported, uncertain, or not explicitly confirmed by the E-commerce source, omit that point entirely.",
+          "If an individual point is missing, unsupported, uncertain, or not explicitly confirmed by the E-commerce source, omit only that individual point. Do not remove an otherwise required section.",
           "Never write placeholder phrases such as To be confirmed, TBC, TBD, Unknown, Not provided, Not specified, or Pending confirmation.",
-          "Do not create a quiz question, answer option, answer-key entry, specification, comparison, claim, or instruction unless its answer is directly supported by the supplied source.",
+          "Keep the guide comprehensive by fully developing every supported product fact, feature, benefit, use case, care instruction, variant difference, and selling point from the source.",
+          "Do not create a quiz question, answer option, answer-key entry, specification, comparison, objection response, claim, demonstration step, or instruction unless it is directly supported by the supplied source.",
           "Write clear professional English that is easy for promodisers to understand, remember, and explain to customers.",
           "Avoid em dashes.",
           "Do not use markdown heading symbols such as ###.",
@@ -15238,13 +15269,17 @@ ${slidesHtml}
           "Important Do's and Don'ts",
           "Likely Customer Questions and Suggested Answers",
           "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
+          "Always include this section. Build objections only around confirmed product details, buying considerations, use cases, care requirements, sizes, materials, capacities, features, or variant differences found in the source. Provide practical responses grounded only in those confirmed facts.",
           "PRODUCT COMPARISON GUIDE",
+          "Always include this section. Compare only products, SKUs, sizes, capacities, materials, features, colors, intended uses, or care requirements explicitly confirmed in the source. Do not imply that one product is better unless the source clearly supports the distinction.",
           "PROMODISER DEMONSTRATION FLOW",
+          "Always include this section. Create a clear step-by-step demonstration using only confirmed product operation, setup, feature, care, and use information from the source. Skip unsupported steps instead of adding assumptions.",
           "PROMODISER QUICK CHEAT SHEET",
           "KNOWLEDGE CHECK QUIZ",
           "Create up to 10 multiple-choice questions using only facts explicitly supported by the supplied source, then include an answer key only for the questions created.",
           "",
           "Keep all claims grounded in the supplied E-commerce output.",
+          "The Common Customer Objections and Responses, Product Comparison Guide, and Promodiser Demonstration Flow sections are required. Remove only unsupported points inside them, never the entire section.",
         ].join("\n");
 
         try {
