@@ -17037,6 +17037,45 @@ ${slidesHtml}
         })
         .filter(({row}:any)=>row.hasCampaignFormat);
       const campaignOverviewGroupBy = data.campaignOverviewGroupBy || "none";
+      const campaignOverviewFrozenColumns = [
+        {
+          label:"Platform",
+          width:125,
+          left:0,
+        },
+        {
+          label:"Brand",
+          width:135,
+          left:125,
+        },
+        {
+          label:"Category",
+          width:190,
+          left:260,
+        },
+        {
+          label:"SKU",
+          width:175,
+          left:450,
+        },
+        {
+          label:"Product",
+          width:285,
+          left:625,
+        },
+      ];
+
+      const campaignOverviewTrailingColumns = [
+        "Headline",
+        "Subheadline",
+        "CTA",
+        "Caption",
+        "Preview",
+        "Final Asset",
+        "Status",
+        "Actions",
+      ];
+
       const campaignOverviewGroupedRows = (() => {
         if(campaignOverviewGroupBy==="brand"){
           const groups:any = {};
@@ -17213,13 +17252,35 @@ ${slidesHtml}
                   >
                     <thead>
                       <tr style={{ background:C.surfaceAlt }}>
-                        {["Platform","Brand","Category","SKU","Product","Headline","Subheadline","CTA","Caption","Preview","Final Asset","Status","Actions"].map((label:string)=>(
+                        {[
+                          ...campaignOverviewFrozenColumns.map(
+                            (column:any)=>({
+                              ...column,
+                              frozen:true,
+                            })
+                          ),
+                          ...campaignOverviewTrailingColumns.map(
+                            (label:string)=>({
+                              label,
+                              frozen:false,
+                            })
+                          ),
+                        ].map((column:any,index:number)=>(
                           <th
-                            key={label}
+                            key={column.label}
                             style={{
                               position:"sticky",
                               top:0,
-                              zIndex:2,
+                              left:column.frozen
+                                ? column.left
+                                : undefined,
+                              zIndex:column.frozen
+                                ? 8
+                                : 5,
+                              width:column.width,
+                              minWidth:column.width,
+                              maxWidth:column.width,
+                              boxSizing:"border-box",
                               padding:"9px 10px",
                               borderBottom:`1px solid ${C.border}`,
                               borderRight:`1px solid ${C.border}`,
@@ -17231,9 +17292,15 @@ ${slidesHtml}
                               letterSpacing:".04em",
                               textTransform:"uppercase",
                               whiteSpace:"nowrap",
+                              boxShadow:
+                                column.frozen &&
+                                index===
+                                  campaignOverviewFrozenColumns.length-1
+                                  ? "6px 0 10px -8px rgba(15,23,42,.55)"
+                                  : "none",
                             }}
                           >
-                            {label}
+                            {column.label}
                           </th>
                         ))}
                       </tr>
@@ -17248,7 +17315,7 @@ ${slidesHtml}
                                 style={{
                                   position:"sticky",
                                   left:0,
-                                  zIndex:1,
+                                  zIndex:9,
                                   padding:"7px 10px",
                                   background:"#F8FAFC",
                                   borderBottom:`1px solid ${C.border}`,
@@ -17267,37 +17334,51 @@ ${slidesHtml}
                             <tr key={item.id} style={{ background:idx%2?C.surface:C.bg }}>
                               {[
                                 {
+                                  ...campaignOverviewFrozenColumns[0],
                                   value:row.platform || "",
-                                  width:125,
                                   weight:750,
                                 },
                                 {
+                                  ...campaignOverviewFrozenColumns[1],
                                   value:row.brand || "",
-                                  width:135,
                                 },
                                 {
+                                  ...campaignOverviewFrozenColumns[2],
                                   value:row.category || "",
-                                  width:190,
                                 },
                                 {
+                                  ...campaignOverviewFrozenColumns[3],
                                   value:row.sku || "",
-                                  width:175,
                                   monospace:true,
                                 },
                                 {
+                                  ...campaignOverviewFrozenColumns[4],
                                   value:row.product || "",
-                                  width:285,
                                 },
                               ].map((field:any,fieldIndex:number)=>(
                                 <td
                                   key={`overview-field-${fieldIndex}`}
                                   style={{
+                                    position:"sticky",
+                                    left:field.left,
+                                    zIndex:3,
                                     width:field.width,
                                     minWidth:field.width,
+                                    maxWidth:field.width,
+                                    boxSizing:"border-box",
                                     padding:6,
                                     borderBottom:`1px solid ${C.border}`,
                                     borderRight:`1px solid ${C.border}`,
                                     verticalAlign:"middle",
+                                    background:
+                                      idx%2
+                                        ? C.surface
+                                        : C.bg,
+                                    boxShadow:
+                                      fieldIndex===
+                                      campaignOverviewFrozenColumns.length-1
+                                        ? "6px 0 10px -8px rgba(15,23,42,.55)"
+                                        : "none",
                                   }}
                                 >
                                   <div
