@@ -10552,6 +10552,19 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     },
   ];
 
+  const emdcTextModelOptions =
+    ecommerceCampaignTextModels;
+
+  const getEmdcTextModelLabel = (
+    modelValue:any
+  ) =>
+    emdcTextModelOptions.find(
+      (model:any)=>
+        model.value ===
+        String(modelValue || "")
+    )?.label ||
+    "Default Model (Vercel)";
+
   const getCampaignProductKey = (item:any) => String(item?.sourceId || item?.id || item?.skuCode || item?.sku || item?.product || item?.productName || "").trim();
   const getCampaignProductOptionKey = (item:any,idx:number) => `${getCampaignProductKey(item) || "mapped-product"}__${idx}`;
   const getCampaignProductByOptionKey = (key:string) => {
@@ -15210,6 +15223,172 @@ ${slidesHtml}
         markActionDone("training-materials-export-ppt");
       };
 
+      const trainingRequiredClosingSections = [
+        "COMMON CUSTOMER OBJECTIONS AND RESPONSES",
+        "PRODUCT COMPARISON GUIDE",
+        "PROMODISER DEMONSTRATION FLOW",
+        "PROMODISER QUICK CHEAT SHEET",
+        "KNOWLEDGE CHECK QUIZ",
+        "ANSWER KEY",
+      ];
+
+      const getTrainingGuideCompletion = (
+        sourceValue:any
+      ) => {
+        const source =
+          sanitizeTrainingMaterialsText(
+            sourceValue || ""
+          );
+
+        const normalizedSource =
+          source
+            .toUpperCase()
+            .replace(/\s+/g," ");
+
+        const requiredSkuCodes =
+          Array.from(
+            new Set(
+              trainingProductRows
+                .map((row:any)=>
+                  String(
+                    row?.sku || ""
+                  ).trim()
+                )
+                .filter(Boolean)
+            )
+          );
+
+        const missingSkuCodes =
+          requiredSkuCodes.filter(
+            (sku:string)=>
+              !normalizedSource.includes(
+                sku
+                  .toUpperCase()
+                  .replace(/\s+/g," ")
+              )
+          );
+
+        const missingSections =
+          trainingRequiredClosingSections.filter(
+            (section:string)=>
+              !normalizedSource.includes(
+                section
+              )
+          );
+
+        return {
+          source,
+          requiredSkuCodes,
+          missingSkuCodes,
+          missingSections,
+          complete:
+            missingSkuCodes.length===0 &&
+            missingSections.length===0,
+        };
+      };
+
+      const requestTrainingMaterialsPass = async ({
+        instruction,
+        input,
+        maxOutputTokens,
+      }:{
+        instruction:string;
+        input:any;
+        maxOutputTokens:number;
+      }) => {
+        const response = await fetch(
+          "/api/ai/generate-text",
+          {
+            method:"POST",
+            headers:{
+              "Content-Type":"application/json",
+            },
+            body:JSON.stringify({
+              task:"promodiser_training_materials",
+              taskLabel:
+                "Promodiser Training Materials",
+              tone:"professional and practical",
+              model:String(
+                data?.textModel || ""
+              ).trim(),
+              instruction,
+              input:JSON.stringify(
+                input,
+                null,
+                2
+              ),
+              maxOutputTokens,
+            }),
+          }
+        );
+
+        const raw = await response.text();
+        let payload:any = {};
+
+        try {
+          payload = raw
+            ? JSON.parse(raw)
+            : {};
+        } catch {
+          throw new Error(
+            raw ||
+            "Training material generation failed."
+          );
+        }
+
+        if(!response.ok){
+          const selectedModelLabel =
+            getEmdcTextModelLabel(
+              data?.textModel
+            );
+
+          const message = String(
+            payload?.error ||
+            payload?.message ||
+            "Training material generation failed."
+          );
+
+          if(
+            /high demand|overload|unavailable|capacity|503/i.test(
+              message
+            )
+          ){
+            throw new Error(
+              `${selectedModelLabel} is temporarily overloaded. Select another model and generate again.`
+            );
+          }
+
+          if(
+            /quota|resource exhausted|rate limit|429/i.test(
+              message
+            )
+          ){
+            throw new Error(
+              `${selectedModelLabel} has reached its current quota or rate limit. Select another model and generate again.`
+            );
+          }
+
+          throw new Error(message);
+        }
+
+        return {
+          text:
+            sanitizeTrainingMaterialsText(
+              cleanReadyToUseOutput(
+                payload?.text || ""
+              )
+            ),
+          finishReason:String(
+            payload?.finishReason || ""
+          ),
+          model:String(
+            payload?.model ||
+            data?.textModel ||
+            ""
+          ),
+        };
+      };
+
       const generateTrainingMaterials = async () => {
         if(!ecommerceSourceText){
           setAiError((previous:any)=>({
@@ -15283,68 +15462,124 @@ ${slidesHtml}
         ].join("\n");
 
         try {
-          const response = await fetch(
-            "/api/ai/generate-text",
-            {
-              method:"POST",
-              headers:{
-                "Content-Type":"application/json",
+          const initialPass =
+            await requestTrainingMaterialsPass({
+              instruction,
+              input:{
+                checklist:{
+                  title:String(
+                    group?.groupName ||
+                    group?.name ||
+                    ""
+                  ),
+                  operationalType:String(
+                    lt?.label ||
+                    group?.launchType ||
+                    ""
+                  ),
+                },
+                products:
+                  trainingProductRows,
+                ecommerceGeneratedOutput:
+                  ecommerceSourceText,
               },
-              body:JSON.stringify({
-                task:"promodiser_training_materials",
-                taskLabel:
-                  "Promodiser Training Materials",
-                tone:"professional and practical",
-                instruction,
-                input:JSON.stringify({
-                  checklist:{
-                    title:String(
-                      group?.groupName ||
-                      group?.name ||
-                      ""
-                    ),
-                    operationalType:String(
-                      lt?.label ||
-                      group?.launchType ||
-                      ""
-                    ),
-                  },
-                  products:trainingProductRows,
-                  ecommerceGeneratedOutput:
-                    ecommerceSourceText,
-                },null,2),
-                maxOutputTokens:10000,
-              }),
+              maxOutputTokens:24000,
+            });
+
+          let generatedText =
+            initialPass.text;
+
+          let generationPasses = 1;
+          let continuationWarning = "";
+
+          for(
+            let continuationIndex = 0;
+            continuationIndex < 2;
+            continuationIndex += 1
+          ){
+            const completion =
+              getTrainingGuideCompletion(
+                generatedText
+              );
+
+            if(completion.complete){
+              break;
             }
-          );
 
-          const raw = await response.text();
-          let payload:any = {};
+            const continuationInstruction = [
+              "Continue an existing internal promodiser training manual.",
+              "Do not repeat the title, collection overview, or any product guide that is already complete.",
+              "Continue immediately from the point where the existing guide stopped.",
+              "Generate only the missing product or SKU guides and the missing final sections listed below.",
+              "Use the same formatting, terminology, section hierarchy, and level of detail as the existing guide.",
+              "Use only facts supported by the supplied E-commerce output.",
+              "Do not invent specifications, claims, comparisons, objections, demonstration steps, care instructions, or quiz answers.",
+              "Never write To be confirmed, TBC, TBD, Unknown, Not provided, Not specified, or Pending confirmation.",
+              "When an individual fact is unsupported, omit only that point.",
+              completion.missingSkuCodes.length
+                ? `Missing SKU guides: ${completion.missingSkuCodes.join(", ")}`
+                : "All SKU headings are already present. Complete only unfinished product subsections and final guide sections.",
+              completion.missingSections.length
+                ? `Missing final sections: ${completion.missingSections.join(" | ")}`
+                : "All final section headings are present. Complete any unfinished content after the existing guide tail.",
+              "The final continuation must include Common Customer Objections and Responses, Product Comparison Guide, Promodiser Demonstration Flow, Promodiser Quick Cheat Sheet, Knowledge Check Quiz, and Answer Key when they are still missing.",
+              "Return continuation text only. Do not restart the guide.",
+            ].join("\n");
 
-          try {
-            payload = raw
-              ? JSON.parse(raw)
-              : {};
-          } catch {
-            throw new Error(
-              raw ||
-              "Training material generation failed."
-            );
+            try {
+              const continuationPass =
+                await requestTrainingMaterialsPass({
+                  instruction:
+                    continuationInstruction,
+                  input:{
+                    existingGuideTail:
+                      generatedText.slice(
+                        -32000
+                      ),
+                    missingSkuCodes:
+                      completion.missingSkuCodes,
+                    missingSections:
+                      completion.missingSections,
+                    products:
+                      trainingProductRows,
+                    ecommerceGeneratedOutput:
+                      ecommerceSourceText,
+                  },
+                  maxOutputTokens:18000,
+                });
+
+              if(
+                !String(
+                  continuationPass.text || ""
+                ).trim()
+              ){
+                break;
+              }
+
+              generatedText =
+                sanitizeTrainingMaterialsText(
+                  [
+                    generatedText,
+                    continuationPass.text,
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n")
+                );
+
+              generationPasses += 1;
+            } catch(
+              continuationError:any
+            ) {
+              continuationWarning =
+                continuationError?.message ||
+                "The continuation pass could not finish.";
+              break;
+            }
           }
 
-          if(!response.ok){
-            throw new Error(
-              payload?.error ||
-              payload?.message ||
-              "Training material generation failed."
-            );
-          }
-
-          const generatedText =
-            sanitizeTrainingMaterialsText(
-              cleanReadyToUseOutput(
-                payload?.text || ""
-              )
+          const finalCompletion =
+            getTrainingGuideCompletion(
+              generatedText
             );
 
           setTrainingMaterialsDraft(
@@ -15365,7 +15600,43 @@ ${slidesHtml}
               "",
             coveredSkuCount:
               trainingProductRows.length,
+            textModel:String(
+              data?.textModel || ""
+            ).trim(),
+            generationPasses,
+            missingSkuCodes:
+              finalCompletion.missingSkuCodes,
+            missingSections:
+              finalCompletion.missingSections,
+            guideComplete:
+              finalCompletion.complete,
           });
+
+          if(
+            !finalCompletion.complete
+          ){
+            setAiError((previous:any)=>({
+              ...previous,
+              training:
+                continuationWarning ||
+                `The guide was generated but is still missing ${
+                  [
+                    finalCompletion
+                      .missingSkuCodes
+                      .length
+                      ? `${finalCompletion.missingSkuCodes.length} SKU guide(s)`
+                      : "",
+                    finalCompletion
+                      .missingSections
+                      .length
+                      ? `${finalCompletion.missingSections.length} final section(s)`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" and ")
+                }. Select another model and regenerate to complete it.`,
+            }));
+          }
 
           setTrainingMaterialsDraftSource(
             [
@@ -15578,6 +15849,52 @@ ${slidesHtml}
                   width:isMobile?"100%":"auto",
                 }}
               >
+                <Select
+                  value={String(
+                    data?.textModel || ""
+                  )}
+                  onChange={(value:any)=>
+                    updateAiWorkspace(
+                      "training",
+                      {
+                        textModel:value,
+                      }
+                    )
+                  }
+                  title="Switch models when the selected model is overloaded or has reached its quota."
+                  aria-label="Training Materials Gemini model"
+                  style={{
+                    width:isMobile
+                      ? "100%"
+                      : 220,
+                    minWidth:isMobile
+                      ? 0
+                      : 220,
+                    height:34,
+                    minHeight:34,
+                    padding:
+                      "5px 30px 5px 9px",
+                    borderRadius:7,
+                    fontSize:10.5,
+                    fontWeight:750,
+                    background:C.surface,
+                  }}
+                >
+                  {emdcTextModelOptions.map(
+                    (model:any)=>(
+                      <option
+                        key={
+                          model.value ||
+                          "default"
+                        }
+                        value={model.value}
+                      >
+                        {model.label}
+                      </option>
+                    )
+                  )}
+                </Select>
+
                 <Btn
                   sm
                   onClick={
@@ -26229,6 +26546,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   taskLabel:
                     `${checklistAnnouncementType} YouTube Title and Description Variation ${attempt + 1}`,
                   tone:"premium",
+                  model:String(
+                    digitalData
+                      ?.youtubeTextModel ||
+                    ""
+                  ).trim(),
                   maxOutputTokens:1800,
                   instruction:[
                     `Create one YouTube title and one YouTube description for a ${checklistAnnouncementType} checklist.`,
@@ -26308,11 +26630,39 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 .catch(()=>null);
 
             if(!response.ok){
-              throw new Error(
+              const selectedModelLabel =
+                getEmdcTextModelLabel(
+                  digitalData
+                    ?.youtubeTextModel
+                );
+
+              const message = String(
                 json?.error ||
                 json?.message ||
                 "Unable to generate YouTube copy."
               );
+
+              if(
+                /high demand|overload|unavailable|capacity|503/i.test(
+                  message
+                )
+              ){
+                throw new Error(
+                  `${selectedModelLabel} is temporarily overloaded. Select another model and generate again.`
+                );
+              }
+
+              if(
+                /quota|resource exhausted|rate limit|429/i.test(
+                  message
+                )
+              ){
+                throw new Error(
+                  `${selectedModelLabel} has reached its current quota or rate limit. Select another model and generate again.`
+                );
+              }
+
+              throw new Error(message);
             }
 
             const generated =
@@ -26755,6 +27105,55 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                     flexWrap:"wrap",
                   }}
                 >
+                  <Select
+                    value={String(
+                      digitalData
+                        ?.youtubeTextModel ||
+                      ""
+                    )}
+                    onChange={(value:any)=>
+                      updateAiWorkspace(
+                        "digital",
+                        {
+                          youtubeTextModel:
+                            value,
+                        }
+                      )
+                    }
+                    title="Switch models when the selected model is overloaded or has reached its quota."
+                    aria-label="YouTube Copy Gemini model"
+                    style={{
+                      width:isMobile
+                        ? "100%"
+                        : 205,
+                      minWidth:isMobile
+                        ? 0
+                        : 205,
+                      height:32,
+                      minHeight:32,
+                      padding:
+                        "4px 29px 4px 8px",
+                      borderRadius:7,
+                      fontSize:10.25,
+                      fontWeight:750,
+                      background:C.surface,
+                    }}
+                  >
+                    {emdcTextModelOptions.map(
+                      (model:any)=>(
+                        <option
+                          key={
+                            model.value ||
+                            "default"
+                          }
+                          value={model.value}
+                        >
+                          {model.label}
+                        </option>
+                      )
+                    )}
+                  </Select>
+
                   <Btn
                     xs
                     variant={
