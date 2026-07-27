@@ -25164,7 +25164,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             : "",
         ]
           .filter(Boolean)
-          .join(" ");
+          .join("\n");
 
         const externalFeatures = String(
           ecommerceSections["Key Features"] ||
