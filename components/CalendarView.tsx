@@ -36268,7 +36268,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
     .replace(/\s+/g," ")
     .trim();
 
-  const isSpecialCampaignEdit =
+  const specialCampaignAllowsEmptySku =
     (
       specialCampaignEditFingerprint.includes(
         "special"
@@ -36286,7 +36286,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const canSave =
     !!groupName.trim() &&
     (
-      isSpecialCampaignEdit ||
+      specialCampaignAllowsEmptySku ||
       finalSkus.length>0
     );
 
@@ -36368,7 +36368,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
         <Field
           label="SKU Source"
           hint={
-            isSpecialCampaignEdit
+            specialCampaignAllowsEmptySku
               ? "optional for Special Campaign"
               : undefined
           }
@@ -36458,7 +36458,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
-        {isSpecialCampaignEdit&&(
+        {specialCampaignAllowsEmptySku&&(
           <div
             style={{
               padding:"9px 11px",
