@@ -10823,6 +10823,185 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     links:[item.imageLink || item.imageUrl || item.extraFields?.["Image Link"] || item.extraFields?.imageLink || item.extraFields?.imagelink || ""].filter(Boolean),
   }));
 
+  const normalizeCampaignSkuCode = (
+    value:any
+  ) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g,"");
+
+  const splitCampaignSkuCodes = (
+    value:any
+  ) =>
+    Array.from(
+      new Set(
+        String(value || "")
+          .split(/\s*[,;\n]+\s*/)
+          .map((sku:string)=>
+            sku.trim()
+          )
+          .filter(Boolean)
+      )
+    );
+
+  const getCampaignSkuImageLink = (
+    skuCode:any,
+    preferredProducts:any[] = []
+  ) => {
+    const normalizedSku =
+      normalizeCampaignSkuCode(
+        skuCode
+      );
+
+    if(!normalizedSku){
+      return "";
+    }
+
+    const sourceProducts = [
+      ...(Array.isArray(preferredProducts)
+        ? preferredProducts
+        : []),
+      ...productRows,
+    ];
+
+    const matchedProduct =
+      sourceProducts.find((item:any)=>
+        normalizeCampaignSkuCode(
+          item?.sku ||
+          item?.skuCode ||
+          item?.value
+        )===normalizedSku
+      );
+
+    return matchedProduct
+      ? getChecklistProductImageLink(
+          matchedProduct
+        )
+      : "";
+  };
+
+  const renderCampaignSkuImageLinks = (
+    skuValue:any,
+    preferredProducts:any[] = [],
+    fullView:boolean = false
+  ) => {
+    const skuCodes =
+      splitCampaignSkuCodes(
+        skuValue
+      );
+
+    if(!skuCodes.length){
+      return (
+        <span style={{color:C.faint}}>
+          No SKU selected
+        </span>
+      );
+    }
+
+    return (
+      <span
+        style={{
+          display:"flex",
+          alignItems:"flex-start",
+          flexWrap:fullView
+            ? "wrap"
+            : "nowrap",
+          gap:fullView
+            ? "3px 0"
+            : 0,
+          minWidth:0,
+          maxWidth:"100%",
+          overflow:fullView
+            ? "visible"
+            : "hidden",
+          whiteSpace:fullView
+            ? "normal"
+            : "nowrap",
+          textOverflow:fullView
+            ? "clip"
+            : "ellipsis",
+        }}
+      >
+        {skuCodes.map(
+          (
+            skuCode:string,
+            skuIndex:number
+          ) => {
+            const imageLink =
+              getCampaignSkuImageLink(
+                skuCode,
+                preferredProducts
+              );
+
+            return (
+              <React.Fragment
+                key={`${skuCode}-${skuIndex}`}
+              >
+                {imageLink
+                  ? (
+                    <a
+                      href={imageLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Open image for ${skuCode}`}
+                      onClick={(event:any)=>
+                        event.stopPropagation()
+                      }
+                      style={{
+                        color:C.accent,
+                        fontFamily:
+                          "Inter, system-ui, sans-serif",
+                        fontSize:"inherit",
+                        fontWeight:700,
+                        lineHeight:"inherit",
+                        textDecoration:"underline",
+                        textUnderlineOffset:2,
+                        cursor:"pointer",
+                        flex:"0 0 auto",
+                      }}
+                    >
+                      {skuCode}
+                    </a>
+                  )
+                  : (
+                    <span
+                      title={`${skuCode} has no image link`}
+                      style={{
+                        color:C.textSub,
+                        fontFamily:
+                          "Inter, system-ui, sans-serif",
+                        fontSize:"inherit",
+                        fontWeight:500,
+                        lineHeight:"inherit",
+                        flex:"0 0 auto",
+                      }}
+                    >
+                      {skuCode}
+                    </span>
+                  )}
+
+                {skuIndex<
+                  skuCodes.length-1&&(
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      color:C.muted,
+                      marginRight:4,
+                      flex:"0 0 auto",
+                    }}
+                  >
+                    ,&nbsp;
+                  </span>
+                )}
+              </React.Fragment>
+            );
+          }
+        )}
+      </span>
+    );
+  };
+
   const getCampaignLinkedEventItems = () => (linkedEvents || []).map((ev:any)=>({
     id:ev.id || "",
     title:ev.title || ev.name || ev.eventName || "Linked Event",
@@ -17577,86 +17756,147 @@ ${slidesHtml}
                                         : "none",
                                   }}
                                 >
-                                  <div
-                                    title={`Click to view full ${
-                                      field.label ||
-                                      "content"
-                                    }`}
-                                    role="button"
-                                    tabIndex={0}
-                                    onClick={()=>
-                                      openCampaignTableTextPreview(
-                                        field.label ||
-                                        "Full Content",
-                                        field.value || "—"
-                                      )
-                                    }
-                                    onKeyDown={(event:any)=>{
-                                      if(
-                                        event.key==="Enter" ||
-                                        event.key===" "
-                                      ){
-                                        event.preventDefault();
-
-                                        openCampaignTableTextPreview(
+                                  {field.label==="SKU"
+                                    ? (
+                                      <div
+                                        title="SKUs with image links are clickable"
+                                        style={{
+                                          display:"flex",
+                                          alignItems:
+                                            campaignOverviewFullView
+                                              ? "flex-start"
+                                              : "center",
+                                          width:"100%",
+                                          height:
+                                            campaignOverviewFullView
+                                              ? "auto"
+                                              : 38,
+                                          minHeight:
+                                            campaignOverviewFullView
+                                              ? 68
+                                              : 38,
+                                          boxSizing:"border-box",
+                                          padding:"7px 8px",
+                                          overflow:
+                                            campaignOverviewFullView
+                                              ? "visible"
+                                              : "hidden",
+                                          border:`1px solid ${C.border}`,
+                                          borderRadius:8,
+                                          background:C.surface,
+                                          color:C.textSub,
+                                          fontFamily:
+                                            "Inter, system-ui, sans-serif",
+                                          fontSize:10.5,
+                                          fontWeight:500,
+                                          lineHeight:1.35,
+                                          whiteSpace:
+                                            campaignOverviewFullView
+                                              ? "normal"
+                                              : "nowrap",
+                                          wordBreak:
+                                            campaignOverviewFullView
+                                              ? "break-word"
+                                              : "normal",
+                                          overflowWrap:
+                                            campaignOverviewFullView
+                                              ? "anywhere"
+                                              : "normal",
+                                          textOverflow:
+                                            campaignOverviewFullView
+                                              ? "clip"
+                                              : "ellipsis",
+                                        }}
+                                      >
+                                        {renderCampaignSkuImageLinks(
+                                          field.value,
+                                          [],
+                                          campaignOverviewFullView
+                                        )}
+                                      </div>
+                                    )
+                                    : (
+                                      <div
+                                        title={`Click to view full ${
                                           field.label ||
-                                          "Full Content",
-                                          field.value || "—"
-                                        );
-                                      }
-                                    }}
-                                    style={{
-                                      display:"flex",
-                                      alignItems:
-                                        campaignOverviewFullView
-                                          ? "flex-start"
-                                          : "center",
-                                      width:"100%",
-                                      height:
-                                        campaignOverviewFullView
-                                          ? "auto"
-                                          : 38,
-                                      minHeight:
-                                        campaignOverviewFullView
-                                          ? 68
-                                          : 38,
-                                      boxSizing:"border-box",
-                                      padding:"7px 8px",
-                                      overflow:
-                                        campaignOverviewFullView
-                                          ? "visible"
-                                          : "hidden",
-                                      border:`1px solid ${C.border}`,
-                                      borderRadius:8,
-                                      background:C.surface,
-                                      color:C.textSub,
-                                      fontFamily:
-                                        "Inter, system-ui, sans-serif",
-                                      fontSize:10.5,
-                                      fontWeight:
-                                        field.weight || 500,
-                                      lineHeight:1.35,
-                                      cursor:"pointer",
-                                      whiteSpace:
-                                        campaignOverviewFullView
-                                          ? "normal"
-                                          : "nowrap",
-                                      wordBreak:
-                                        campaignOverviewFullView
-                                          ? "break-word"
-                                          : "normal",
-                                      overflowWrap:
-                                        campaignOverviewFullView
-                                          ? "anywhere"
-                                          : "normal",
-                                      textOverflow:
-                                        campaignOverviewFullView
-                                          ? "clip"
-                                          : "ellipsis",
-                                    }}
-                                  >
-                                    {field.value || "—"}
-                                  </div>
+                                          "content"
+                                        }`}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={()=>
+                                          openCampaignTableTextPreview(
+                                            field.label ||
+                                            "Full Content",
+                                            field.value || "—"
+                                          )
+                                        }
+                                        onKeyDown={(event:any)=>{
+                                          if(
+                                            event.key==="Enter" ||
+                                            event.key===" "
+                                          ){
+                                            event.preventDefault();
+
+                                            openCampaignTableTextPreview(
+                                              field.label ||
+                                              "Full Content",
+                                              field.value || "—"
+                                            );
+                                          }
+                                        }}
+                                        style={{
+                                          display:"flex",
+                                          alignItems:
+                                            campaignOverviewFullView
+                                              ? "flex-start"
+                                              : "center",
+                                          width:"100%",
+                                          height:
+                                            campaignOverviewFullView
+                                              ? "auto"
+                                              : 38,
+                                          minHeight:
+                                            campaignOverviewFullView
+                                              ? 68
+                                              : 38,
+                                          boxSizing:"border-box",
+                                          padding:"7px 8px",
+                                          overflow:
+                                            campaignOverviewFullView
+                                              ? "visible"
+                                              : "hidden",
+                                          border:`1px solid ${C.border}`,
+                                          borderRadius:8,
+                                          background:C.surface,
+                                          color:C.textSub,
+                                          fontFamily:
+                                            "Inter, system-ui, sans-serif",
+                                          fontSize:10.5,
+                                          fontWeight:
+                                            field.weight || 500,
+                                          lineHeight:1.35,
+                                          cursor:"pointer",
+                                          whiteSpace:
+                                            campaignOverviewFullView
+                                              ? "normal"
+                                              : "nowrap",
+                                          wordBreak:
+                                            campaignOverviewFullView
+                                              ? "break-word"
+                                              : "normal",
+                                          overflowWrap:
+                                            campaignOverviewFullView
+                                              ? "anywhere"
+                                              : "normal",
+                                          textOverflow:
+                                            campaignOverviewFullView
+                                              ? "clip"
+                                              : "ellipsis",
+                                        }}
+                                      >
+                                        {field.value || "—"}
+                                      </div>
+                                    )}
                                 </td>
                               ))}
 
@@ -19805,30 +20045,7 @@ ${slidesHtml}
                           }}
                         >
                           <div
-                            title="Click to view full SKU list"
-                            role="button"
-                            tabIndex={0}
-                            aria-label="View full SKU list"
-                            onClick={()=>
-                              openCampaignTableTextPreview(
-                                "SKU",
-                                skuText ||
-                                "No SKU selected"
-                              )
-                            }
-                            onKeyDown={(event:any)=>{
-                              if(
-                                event.key==="Enter" ||
-                                event.key===" "
-                              ){
-                                event.preventDefault();
-                                openCampaignTableTextPreview(
-                                  "SKU",
-                                  skuText ||
-                                  "No SKU selected"
-                                );
-                              }
-                            }}
+                            title="SKUs with image links are clickable"
                             style={{
                               display:"flex",
                               alignItems:
@@ -19856,7 +20073,6 @@ ${slidesHtml}
                               fontWeight:500,
                               letterSpacing:"normal",
                               lineHeight:1.35,
-                              cursor:"pointer",
                               whiteSpace:
                                 campaignMarketingFullView
                                   ? "normal"
@@ -19875,7 +20091,11 @@ ${slidesHtml}
                                   : "ellipsis",
                             }}
                           >
-                            {skuText||"No SKU selected"}
+                            {renderCampaignSkuImageLinks(
+                              skuText,
+                              products,
+                              campaignMarketingFullView
+                            )}
                           </div>
                         </td>
 
@@ -24068,30 +24288,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           }}
                         >
                           <div
-                            title="Click to view full SKU list"
-                            role="button"
-                            tabIndex={0}
-                            aria-label="View full SKU list"
-                            onClick={()=>
-                              openCampaignTableTextPreview(
-                                "SKU",
-                                skuText ||
-                                "No SKU selected"
-                              )
-                            }
-                            onKeyDown={(event:any)=>{
-                              if(
-                                event.key==="Enter" ||
-                                event.key===" "
-                              ){
-                                event.preventDefault();
-                                openCampaignTableTextPreview(
-                                  "SKU",
-                                  skuText ||
-                                  "No SKU selected"
-                                );
-                              }
-                            }}
+                            title="SKUs with image links are clickable"
                             style={{
                               display:"flex",
                               alignItems:
@@ -24119,7 +24316,6 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               fontWeight:500,
                               letterSpacing:"normal",
                               lineHeight:1.35,
-                              cursor:"pointer",
                               whiteSpace:
                                 campaignDigitalFullView
                                   ? "normal"
@@ -24138,7 +24334,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                   : "ellipsis",
                             }}
                           >
-                            {skuText||"No SKU selected"}
+                            {renderCampaignSkuImageLinks(
+                              skuText,
+                              products,
+                              campaignDigitalFullView
+                            )}
                           </div>
                         </td>
 
