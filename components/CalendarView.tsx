@@ -17141,6 +17141,67 @@ ${slidesHtml}
         );
       };
 
+      const getSpecialCampaignGoogleDriveFolderId = (
+        value:any
+      ) => {
+        const link = String(
+          value || ""
+        ).trim();
+
+        if(!link){
+          return "";
+        }
+
+        const folderMatch = link.match(
+          /\/folders\/([A-Za-z0-9_-]+)/i
+        );
+
+        if(folderMatch?.[1]){
+          return folderMatch[1];
+        }
+
+        try {
+          const parsedUrl = new URL(link);
+          return String(
+            parsedUrl.searchParams.get("id") ||
+            ""
+          ).trim();
+        } catch {
+          return "";
+        }
+      };
+
+      const startSpecialCampaignFolderDownload = () => {
+        const link = String(
+          specialCampaignOverviewMainFolderLink ||
+          ""
+        ).trim();
+
+        if(!link){
+          return;
+        }
+
+        const folderId =
+          getSpecialCampaignGoogleDriveFolderId(
+            link
+          );
+
+        // Google Drive does not expose a stable direct-download URL
+        // for shared folders. Open the folder in Drive so the signed-in
+        // user can use Drive's Download action and receive the ZIP file.
+        const driveFolderLink = folderId
+          ? `https://drive.google.com/drive/folders/${encodeURIComponent(
+              folderId
+            )}`
+          : link;
+
+        window.open(
+          driveFolderLink,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      };
+
       const isSpecialCampaignOverview =
         (
           overviewChecklistTypeLabel.includes("special") &&
@@ -19116,7 +19177,7 @@ ${slidesHtml}
                       display:"grid",
                       gridTemplateColumns:isMobile
                         ? "1fr"
-                        : "minmax(0,1fr) auto",
+                        : "minmax(0,1fr) auto auto",
                       gap:8,
                       alignItems:"stretch",
                     }}
@@ -19178,7 +19239,42 @@ ${slidesHtml}
                     >
                       Open Folder
                     </Btn>
+
+                    <Btn
+                      sm
+                      disabled={
+                        !String(
+                          specialCampaignOverviewMainFolderLink ||
+                          ""
+                        ).trim()
+                      }
+                      onClick={
+                        startSpecialCampaignFolderDownload
+                      }
+                      title="Open the folder in Google Drive and use Drive's Download action to prepare a ZIP file."
+                      style={{
+                        width:isMobile
+                          ? "100%"
+                          : "auto",
+                        whiteSpace:"nowrap",
+                      }}
+                    >
+                      Download Folder
+                    </Btn>
                   </div>
+
+                  <p
+                    style={{
+                      margin:"7px 0 0",
+                      color:C.muted,
+                      fontSize:10,
+                      lineHeight:1.4,
+                    }}
+                  >
+                    Download Folder opens the folder in Google Drive.
+                    Use Drive's Download action to prepare the folder as
+                    a ZIP file; Google may request sign-in or confirmation.
+                  </p>
                 </div>
 
                 <div
@@ -36010,14 +36106,7 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
         <Field label="Color">
           <ColorPicker value={calendarColor} onChange={setCalendarColor} palette={EVENT_COLORS} />
         </Field>
-        <Field
-          label="SKU Source"
-          hint={
-            isSpecialCampaignEdit
-              ? "optional for Special Campaign"
-              : undefined
-          }
-        >
+        <Field label="SKU Source">
           <div style={{ display:"flex",gap:8 }}>
             {["manual","storage"].map(m=>(<button key={m} onClick={()=>setSkuMode(m)} style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background:skuMode===m?C.accent:C.surface,color:skuMode===m?"#fff":C.muted,border:`1.5px solid ${skuMode===m?C.accent:C.border}` }}>{m==="manual"?"Enter Manually":"From SKU Storage"}</button>))}
           </div>
@@ -36276,7 +36365,14 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
         <Field label="Color">
           <ColorPicker value={calendarColor} onChange={setCalendarColor} palette={EVENT_COLORS} />
         </Field>
-        <Field label="SKU Source">
+        <Field
+          label="SKU Source"
+          hint={
+            isSpecialCampaignEdit
+              ? "optional for Special Campaign"
+              : undefined
+          }
+        >
           <div style={{ display:"flex",gap:8 }}>
             {["manual","storage"].map(m=>(<button key={m} onClick={()=>setSkuMode(m)} style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background:skuMode===m?C.accent:C.surface,color:skuMode===m?"#fff":C.muted,border:`1.5px solid ${skuMode===m?C.accent:C.border}` }}>{m==="manual"?"Enter Manually":"From SKU Storage"}</button>))}
           </div>
