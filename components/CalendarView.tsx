@@ -35851,7 +35851,14 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
         <Field label="Color">
           <ColorPicker value={calendarColor} onChange={setCalendarColor} palette={EVENT_COLORS} />
         </Field>
-        <Field label="SKU Source">
+        <Field
+          label="SKU Source"
+          hint={
+            isSpecialCampaignEdit
+              ? "optional for Special Campaign"
+              : undefined
+          }
+        >
           <div style={{ display:"flex",gap:8 }}>
             {["manual","storage"].map(m=>(<button key={m} onClick={()=>setSkuMode(m)} style={{ flex:1,padding:"8px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background:skuMode===m?C.accent:C.surface,color:skuMode===m?"#fff":C.muted,border:`1.5px solid ${skuMode===m?C.accent:C.border}` }}>{m==="manual"?"Enter Manually":"From SKU Storage"}</button>))}
           </div>
@@ -35985,7 +35992,56 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
         };
       });
   const isPhaseoutType = launchType==="phaseout" || (launchTypes?.[launchType]?.label || "").toLowerCase().includes("phase-out");
-  const canSave = finalSkus.length>0 && groupName.trim();
+
+  const specialCampaignEditFingerprint = [
+    launchTypes?.[launchType]?.label,
+    launchTypes?.[launchType]?.tag,
+    launchType,
+    group?.launchType,
+    group?.type,
+    group?.checklistType,
+    group?.groupType,
+    group?.templateType,
+    group?.category,
+    group?.groupName,
+    group?.name,
+    (
+      ((group?.aiWorkspace || {}) as any)
+        ?.ecommerce
+        ?.specialCampaignTracker
+    )
+      ? "special campaign"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[_-]+/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+
+  const isSpecialCampaignEdit =
+    (
+      specialCampaignEditFingerprint.includes(
+        "special"
+      ) &&
+      specialCampaignEditFingerprint.includes(
+        "campaign"
+      )
+    ) ||
+    !!(
+      ((group?.aiWorkspace || {}) as any)
+        ?.ecommerce
+        ?.specialCampaignTracker
+    );
+
+  const canSave =
+    !!groupName.trim() &&
+    (
+      isSpecialCampaignEdit ||
+      finalSkus.length>0
+    );
+
   const onCalendarTypeChange = (id:any) => {
     if (id === "__none__" || id === "") {
       setCalendarType("");
@@ -36147,6 +36203,22 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
         )}
+        {isSpecialCampaignEdit&&(
+          <div
+            style={{
+              padding:"9px 11px",
+              border:`1px solid ${C.border}`,
+              borderRadius:8,
+              background:C.surfaceAlt,
+              color:C.muted,
+              fontSize:11,
+              lineHeight:1.45,
+            }}
+          >
+            SKUs are optional for Special Campaign. You can save changes to the group title and other settings without adding a SKU.
+          </div>
+        )}
+
         <Btn full onClick={()=>{ onSave({groupName:groupName.trim(),arrivalStatus,productsArrived:arrivalStatus==="arrived",arrivedAt:arrivalStatus==="arrived"?(group?.arrivedAt || new Date().toISOString()):"",deadline:monthOnlyMonths.length?"":deadline,deadlineEnd:monthOnlyMonths.length?"":deadlineEnd,dateMode:monthOnlyMonths.length?"months":((deadline||deadlineEnd)?"specific":"none"),monthOnlyMonths:monthOnlyMonths.length?monthOnlyMonths:[],calendarType:calendarType || "",calendarColor,launchType,skus:finalSkus,linkedEventIds}); onClose(); }} disabled={!canSave}>Save Changes</Btn>
       </div>
     </Modal>
