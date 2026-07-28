@@ -17115,6 +17115,32 @@ ${slidesHtml}
               requirements:[],
             };
 
+      const specialCampaignOverviewMainFolderLink =
+        String(
+          overviewSpecialCampaignTracker
+            ?.mainGoogleDriveFolderLink ||
+          overviewSpecialCampaignTracker
+            ?.mainDriveFolderLink ||
+          ""
+        );
+
+      const updateSpecialCampaignOverviewMainFolderLink = (
+        value:any
+      ) => {
+        updateAiWorkspace(
+          "ecommerce",
+          {
+            specialCampaignTracker:{
+              ...overviewSpecialCampaignTracker,
+              mainGoogleDriveFolderLink:String(
+                value || ""
+              ),
+              updatedAt:new Date().toISOString(),
+            },
+          }
+        );
+      };
+
       const isSpecialCampaignOverview =
         (
           overviewChecklistTypeLabel.includes("special") &&
@@ -19024,6 +19050,134 @@ ${slidesHtml}
                       Each row is the same requirement record updated
                       by E-commerce and Digital Creative.
                     </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginBottom:12,
+                    padding:12,
+                    border:`1px solid ${C.border}`,
+                    borderRadius:10,
+                    background:C.surfaceAlt,
+                  }}
+                >
+                  <div
+                    style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      alignItems:"flex-start",
+                      gap:10,
+                      flexWrap:"wrap",
+                      marginBottom:7,
+                    }}
+                  >
+                    <div>
+                      <label
+                        htmlFor="special-campaign-main-google-drive-folder"
+                        style={{
+                          display:"block",
+                          color:C.textSub,
+                          fontSize:10,
+                          fontWeight:900,
+                          letterSpacing:".04em",
+                          textTransform:"uppercase",
+                        }}
+                      >
+                        Main Google Drive Folder
+                      </label>
+
+                      <p
+                        style={{
+                          margin:"3px 0 0",
+                          color:C.muted,
+                          fontSize:10.5,
+                          lineHeight:1.4,
+                        }}
+                      >
+                        Add the main folder containing the completed
+                        campaign collaterals.
+                      </p>
+                    </div>
+
+                    <span
+                      style={{
+                        color:C.muted,
+                        fontSize:10,
+                        fontWeight:700,
+                      }}
+                    >
+                      Auto-saved
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display:"grid",
+                      gridTemplateColumns:isMobile
+                        ? "1fr"
+                        : "minmax(0,1fr) auto",
+                      gap:8,
+                      alignItems:"stretch",
+                    }}
+                  >
+                    <TI
+                      id="special-campaign-main-google-drive-folder"
+                      value={
+                        specialCampaignOverviewMainFolderLink
+                      }
+                      onChange={(value:any)=>
+                        updateSpecialCampaignOverviewMainFolderLink(
+                          value
+                        )
+                      }
+                      placeholder="Paste Google Drive folder link"
+                      style={{
+                        width:"100%",
+                        minWidth:0,
+                        height:38,
+                        minHeight:38,
+                        boxSizing:"border-box",
+                        fontFamily:
+                          "Inter, system-ui, sans-serif",
+                        fontSize:10.5,
+                      }}
+                    />
+
+                    <Btn
+                      sm
+                      variant="outline"
+                      disabled={
+                        !String(
+                          specialCampaignOverviewMainFolderLink ||
+                          ""
+                        ).trim()
+                      }
+                      onClick={()=>{
+                        const link = String(
+                          specialCampaignOverviewMainFolderLink ||
+                          ""
+                        ).trim();
+
+                        if(!link){
+                          return;
+                        }
+
+                        window.open(
+                          link,
+                          "_blank",
+                          "noopener,noreferrer"
+                        );
+                      }}
+                      style={{
+                        width:isMobile
+                          ? "100%"
+                          : "auto",
+                        whiteSpace:"nowrap",
+                      }}
+                    >
+                      Open Folder
+                    </Btn>
                   </div>
                 </div>
 
@@ -30995,6 +31149,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ),
           sellerKitLink:String(
             rawSpecialCampaignTracker.sellerKitLink || ""
+          ),
+          mainGoogleDriveFolderLink:String(
+            rawSpecialCampaignTracker.mainGoogleDriveFolderLink ||
+            rawSpecialCampaignTracker.mainDriveFolderLink ||
+            ""
           ),
           requestReferenceImageUrl:String(
             rawSpecialCampaignTracker.requestReferenceImageUrl || ""
