@@ -20815,12 +20815,19 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       <div
         aria-label="Checklist type filters"
         style={{
+          width:"100%",
           display:"flex",
-          gap:7,
+          alignItems:"center",
+          gap:4,
           overflowX:"auto",
-          padding:"2px 1px 10px",
-          marginBottom:10,
-          scrollbarWidth:"thin",
+          padding:"6px 8px",
+          marginBottom:18,
+          background:C.surface,
+          border:`1px solid ${C.border}`,
+          borderRadius:16,
+          scrollbarWidth:"none",
+          WebkitOverflowScrolling:"touch",
+          boxShadow:"0 1px 2px rgba(15,23,42,.02)",
         }}
       >
         {checklistTypeTabs.map((typeTab:any)=>{
@@ -20832,37 +20839,42 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
               onClick={()=>setChecklistTypeFilter(typeTab.key)}
               style={{
                 flex:"0 0 auto",
-                minHeight:34,
-                border:selected
-                  ? `1.5px solid ${typeTab.color}`
-                  : `1px solid ${C.border}`,
-                borderRadius:999,
-                padding:"6px 11px",
-                background:selected ? `${typeTab.color}12` : C.surface,
-                color:selected ? typeTab.color : C.textSub,
-                fontSize:11.5,
-                fontWeight:selected ? 800 : 700,
+                minHeight:44,
+                border:"none",
+                borderRadius:12,
+                padding:"0 13px",
+                background:selected ? typeTab.color : "transparent",
+                color:selected ? "#FFFFFF" : C.textSub,
+                fontSize:13,
+                fontWeight:800,
                 cursor:"pointer",
                 whiteSpace:"nowrap",
                 display:"inline-flex",
                 alignItems:"center",
-                gap:6,
+                justifyContent:"center",
+                gap:9,
+                transition:"background .15s ease, color .15s ease, transform .15s ease",
               }}
             >
               <span>{typeTab.label}</span>
               <span
                 style={{
-                  minWidth:19,
-                  height:19,
-                  padding:"0 5px",
+                  minWidth:24,
+                  height:24,
+                  padding:"0 7px",
                   borderRadius:999,
                   display:"inline-flex",
                   alignItems:"center",
                   justifyContent:"center",
-                  background:selected ? typeTab.color : C.surfaceAlt,
-                  color:selected ? "#FFFFFF" : C.muted,
-                  fontSize:9.5,
+                  background:selected
+                    ? "rgba(255,255,255,.16)"
+                    : C.surfaceAlt,
+                  color:selected
+                    ? "#FFFFFF"
+                    : C.muted,
+                  fontSize:10.5,
                   fontWeight:900,
+                  lineHeight:1,
                 }}
               >
                 {typeTab.count}
