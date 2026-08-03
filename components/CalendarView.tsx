@@ -93,7 +93,7 @@ const GlobalStyles = () => {
       @media(max-width:759px){
         .emdc-top-nav{
           position:fixed!important;
-          top:0!important;
+          top:var(--emdc-announcement-offset, 0px)!important;
           left:0!important;
           right:0!important;
           width:100%!important;
@@ -102,9 +102,29 @@ const GlobalStyles = () => {
         }
         .emdc-top-nav-spacer{
           display:block!important;
-          height:52px!important;
-          min-height:52px!important;
+          height:calc(52px + var(--emdc-announcement-offset, 0px))!important;
+          min-height:calc(52px + var(--emdc-announcement-offset, 0px))!important;
           width:100%!important;
+        }
+        .emdc-global-announcement{
+          position:fixed!important;
+          top:0!important;
+          left:0!important;
+          right:0!important;
+          height:44px!important;
+          min-height:44px!important;
+          z-index:9200!important;
+        }
+        .emdc-global-announcement-inner{
+          height:44px!important;
+          min-height:44px!important;
+          padding-left:12px!important;
+          padding-right:12px!important;
+        }
+        .emdc-global-announcement-message{
+          white-space:nowrap!important;
+          overflow:hidden!important;
+          text-overflow:ellipsis!important;
         }
       }
       @media(max-width:759px){
@@ -19383,6 +19403,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   const [editingGroup,setEditingGroup] = useState(null);
   const [trashOpen,setTrashOpen] = useState(false);
   const [arrivalFilter,setArrivalFilter] = useState<"all"|"arrived"|"arriving"|"waiting">("all");
+  const [checklistTypeFilter,setChecklistTypeFilter] = useState("all");
 
   const persistChecklistItemsNow = (nextItems:any) => {
     if (typeof window === "undefined") return;
@@ -19491,6 +19512,215 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   });
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
+
+  const getChecklistGroupTypeMeta = (group:any) => {
+    const launchTypeKey = String(group?.launchType || "").trim();
+    const configuredType =
+      launchTypes?.[launchTypeKey] ||
+      (LAUNCH_TYPES as any)?.[launchTypeKey] ||
+      null;
+
+    const explicitLabel = String(
+      configuredType?.label ||
+      group?.launchTypeLabel ||
+      group?.checklistType ||
+      group?.type ||
+      ""
+    ).trim();
+
+    const typeFingerprint = [
+      launchTypeKey,
+      explicitLabel,
+      configuredType?.tag,
+      group?.groupType,
+      group?.category,
+    ]
+      .map((value:any)=>String(value || "").trim().toLowerCase())
+      .filter(Boolean)
+      .join(" ");
+
+    const hasSpecialCampaignWorkspace = !!(
+      group?.aiWorkspace?.ecommerce?.specialCampaignTracker ||
+      group?.specialCampaignTracker
+    );
+
+    if(
+      hasSpecialCampaignWorkspace ||
+      (
+        typeFingerprint.includes("special") &&
+        typeFingerprint.includes("campaign")
+      )
+    ){
+      return {
+        key:"special-campaign",
+        label:"Special Campaign",
+        color:configuredType?.color || group?.calendarColor || "#F97316",
+        canCreateDynamicTab:false,
+      };
+    }
+
+    if(
+      typeFingerprint.includes("reactivation") ||
+      typeFingerprint.includes("relaunch") ||
+      typeFingerprint.includes("back in stock")
+    ){
+      return {
+        key:"product-reactivation",
+        label:"Product Reactivation",
+        color:configuredType?.color || group?.calendarColor || LAUNCH_TYPES.reactivation.color,
+        canCreateDynamicTab:false,
+      };
+    }
+
+    if(
+      launchTypeKey==="introduction" ||
+      typeFingerprint.includes("product introduction") ||
+      typeFingerprint.includes("new launch") ||
+      typeFingerprint.includes("new arrival")
+    ){
+      return {
+        key:"product-introduction",
+        label:"Product Introduction",
+        color:configuredType?.color || group?.calendarColor || LAUNCH_TYPES.introduction.color,
+        canCreateDynamicTab:false,
+      };
+    }
+
+    if(
+      launchTypeKey==="campaign" ||
+      typeFingerprint.includes("campaign")
+    ){
+      return {
+        key:"campaign",
+        label:"Campaign",
+        color:configuredType?.color || group?.calendarColor || LAUNCH_TYPES.campaign.color,
+        canCreateDynamicTab:false,
+      };
+    }
+
+    const normalizedCustomLabel = explicitLabel.replace(/\s+/g," ").trim();
+    const labelMatchesOpaqueId =
+      !!launchTypeKey &&
+      normalizedCustomLabel.toLowerCase()===launchTypeKey.toLowerCase();
+    const meaningfulCustomLabel =
+      !!normalizedCustomLabel &&
+      !labelMatchesOpaqueId &&
+      /[a-z]/i.test(normalizedCustomLabel);
+
+    if(configuredType && meaningfulCustomLabel){
+      const safeCustomKey = String(launchTypeKey || normalizedCustomLabel)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g,"-")
+        .replace(/^-+|-+$/g,"") || "custom";
+
+      return {
+        key:`custom-${safeCustomKey}`,
+        label:normalizedCustomLabel,
+        color:configuredType?.color || group?.calendarColor || C.accent,
+        canCreateDynamicTab:true,
+      };
+    }
+
+    // Never expose opaque launch-type IDs as tabs. Unknown legacy rows share
+    // one clear fallback tab and their underlying records remain unchanged.
+    return {
+      key:"other-checklists",
+      label:"Other Checklists",
+      color:group?.calendarColor || C.muted,
+      canCreateDynamicTab:true,
+    };
+  };
+
+  const standardChecklistTypeTabs = [
+    {
+      key:"product-introduction",
+      label:"Product Introduction",
+      color:launchTypes?.introduction?.color || LAUNCH_TYPES.introduction.color,
+    },
+    {
+      key:"product-reactivation",
+      label:"Product Reactivation",
+      color:launchTypes?.reactivation?.color || LAUNCH_TYPES.reactivation.color,
+    },
+    {
+      key:"campaign",
+      label:"Campaign",
+      color:launchTypes?.campaign?.color || LAUNCH_TYPES.campaign.color,
+    },
+    {
+      key:"special-campaign",
+      label:"Special Campaign",
+      color:"#F97316",
+    },
+  ];
+
+  const standardChecklistTypeKeys = new Set(
+    standardChecklistTypeTabs.map((tab:any)=>tab.key)
+  );
+
+  const dynamicChecklistTypeTabMap = new Map<string,any>();
+  (groups || []).forEach((group:any)=>{
+    const meta = getChecklistGroupTypeMeta(group);
+    if(
+      meta.canCreateDynamicTab &&
+      meta.key &&
+      !standardChecklistTypeKeys.has(meta.key) &&
+      !dynamicChecklistTypeTabMap.has(meta.key)
+    ){
+      dynamicChecklistTypeTabMap.set(meta.key,meta);
+    }
+  });
+
+  const checklistTypeTabs = [
+    { key:"all",label:"All Checklists",color:C.text },
+    ...standardChecklistTypeTabs,
+    ...Array.from(dynamicChecklistTypeTabMap.values()).sort(
+      (a:any,b:any)=>String(a.label).localeCompare(String(b.label))
+    ),
+  ].map((tab:any)=>({
+    ...tab,
+    count:
+      tab.key==="all"
+        ? (groups || []).length
+        : (groups || []).filter(
+            (group:any)=>getChecklistGroupTypeMeta(group).key===tab.key
+          ).length,
+  }));
+
+  const checklistTypeTabSignature = checklistTypeTabs
+    .map((tab:any)=>tab.key)
+    .join("|");
+
+  const visibleChecklistGroups = [...(groups || [])]
+    .filter((group:any)=>
+      checklistTypeFilter==="all" ||
+      getChecklistGroupTypeMeta(group).key===checklistTypeFilter
+    )
+    .filter((group:any)=>{
+      const status =
+        group.arrivalStatus ||
+        (group.productsArrived ? "arrived" : "waiting");
+      return arrivalFilter==="all" ? true : status===arrivalFilter;
+    })
+    .sort((a:any,b:any)=>{
+      const rank:any = { arrived:0,arriving:1,waiting:2 };
+      const aStatus =
+        a.arrivalStatus ||
+        (a.productsArrived ? "arrived" : "waiting");
+      const bStatus =
+        b.arrivalStatus ||
+        (b.productsArrived ? "arrived" : "waiting");
+      return (rank[aStatus] ?? 3) - (rank[bStatus] ?? 3);
+    });
+
+  useEffect(()=>{
+    if(
+      checklistTypeFilter!=="all" &&
+      !checklistTypeTabs.some((tab:any)=>tab.key===checklistTypeFilter)
+    ){
+      setChecklistTypeFilter("all");
+    }
+  },[checklistTypeFilter,checklistTypeTabSignature]);
 
   useEffect(()=>{
     if(!navigateToGroupId) return;
@@ -20561,8 +20791,14 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
   return (
     <div>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8 }}>
-        <p style={{ margin:0,fontSize:13,color:C.muted }}>{groups.length===0?"No checklist groups yet.":`${groups.length} group${groups.length>1?"s":""}`}</p>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8 }}>
+        <p style={{ margin:0,fontSize:13,color:C.muted }}>
+          {groups.length===0
+            ? "No checklist groups yet."
+            : checklistTypeFilter==="all" && arrivalFilter==="all"
+              ? `${groups.length} group${groups.length>1?"s":""}`
+              : `${visibleChecklistGroups.length} of ${groups.length} groups`}
+        </p>
         <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
           <select value={arrivalFilter} onChange={event=>setArrivalFilter(event.target.value as any)} style={{height:34,border:`1px solid ${C.border}`,borderRadius:7,padding:"0 10px",background:C.surface,color:C.textSub,fontSize:12,fontWeight:700,outline:"none"}}>
             <option value="all">All arrival statuses</option>
@@ -20574,6 +20810,66 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
           <Btn variant="outline" onClick={()=>setTrashOpen(true)}>Trash{checklistTrash?.length?` (${checklistTrash.length})`:""}</Btn>
           {!creating&&<Btn onClick={()=>setCreating(true)}>+ New Group</Btn>}
         </div>
+      </div>
+
+      <div
+        aria-label="Checklist type filters"
+        style={{
+          display:"flex",
+          gap:7,
+          overflowX:"auto",
+          padding:"2px 1px 10px",
+          marginBottom:10,
+          scrollbarWidth:"thin",
+        }}
+      >
+        {checklistTypeTabs.map((typeTab:any)=>{
+          const selected = checklistTypeFilter===typeTab.key;
+          return (
+            <button
+              key={typeTab.key}
+              type="button"
+              onClick={()=>setChecklistTypeFilter(typeTab.key)}
+              style={{
+                flex:"0 0 auto",
+                minHeight:34,
+                border:selected
+                  ? `1.5px solid ${typeTab.color}`
+                  : `1px solid ${C.border}`,
+                borderRadius:999,
+                padding:"6px 11px",
+                background:selected ? `${typeTab.color}12` : C.surface,
+                color:selected ? typeTab.color : C.textSub,
+                fontSize:11.5,
+                fontWeight:selected ? 800 : 700,
+                cursor:"pointer",
+                whiteSpace:"nowrap",
+                display:"inline-flex",
+                alignItems:"center",
+                gap:6,
+              }}
+            >
+              <span>{typeTab.label}</span>
+              <span
+                style={{
+                  minWidth:19,
+                  height:19,
+                  padding:"0 5px",
+                  borderRadius:999,
+                  display:"inline-flex",
+                  alignItems:"center",
+                  justifyContent:"center",
+                  background:selected ? typeTab.color : C.surfaceAlt,
+                  color:selected ? "#FFFFFF" : C.muted,
+                  fontSize:9.5,
+                  fontWeight:900,
+                }}
+              >
+                {typeTab.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <Modal open={trashOpen} onClose={()=>setTrashOpen(false)} title="Checklist Trash" width={620}>
@@ -20623,19 +20919,17 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         <div style={{ background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12 }}>
           <Empty title="No checklist groups" sub="Create a group by selecting SKUs and an operational type." action={<Btn onClick={()=>setCreating(true)}>+ New Group</Btn>} />
         </div>
+      ):visibleChecklistGroups.length===0&&!creating?(
+        <div style={{ background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12 }}>
+          <Empty
+            title="No matching checklist groups"
+            sub="Change the checklist type or arrival-status filter to view other groups."
+            action={<Btn variant="outline" onClick={()=>{setChecklistTypeFilter("all");setArrivalFilter("all");}}>Show All Checklists</Btn>}
+          />
+        </div>
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
-          {[...groups]
-            .filter((group:any)=>{
-              const status = group.arrivalStatus || (group.productsArrived ? "arrived" : "waiting");
-              return arrivalFilter==="all" ? true : status===arrivalFilter;
-            })
-            .sort((a:any,b:any)=>{
-              const rank:any = {arrived:0,arriving:1,waiting:2};
-              const aStatus = a.arrivalStatus || (a.productsArrived ? "arrived" : "waiting");
-              const bStatus = b.arrivalStatus || (b.productsArrived ? "arrived" : "waiting");
-              return (rank[aStatus] ?? 3) - (rank[bStatus] ?? 3);
-            })
+          {visibleChecklistGroups
             .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const compactSummary=(g?.progressSummary && typeof g.progressSummary==="object") ? g.progressSummary : {}; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id]; const deptOrder=["ecommerce","marketing","digital"]; if(gItems){ return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); } const summaryDepartments=(compactSummary?.departments && typeof compactSummary.departments==="object") ? compactSummary.departments : {}; return deptOrder.filter((dept:string)=>Number(summaryDepartments?.[dept]?.total || 0)>0 && Number(summaryDepartments?.[dept]?.done || 0)>=Number(summaryDepartments?.[dept]?.total || 0)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
             <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px",minWidth:0 }}>
@@ -25401,6 +25695,152 @@ const TABS = [
 const TAB_ICONS = { calendar:"📅", events:"🗓", checklists:"✓", skus:"📦", ai:"✦" };
 const TAB_SHORT = { calendar:"Calendar", events:"Events", checklists:"Checklists", skus:"SKUs", ai:"AI" };
 
+const ANNOUNCEMENT_TONES:any = {
+  information:{
+    label:"Announcement",
+    background:"#EFF6FF",
+    border:"#BFDBFE",
+    text:"#1E3A8A",
+    badge:"#2563EB",
+  },
+  maintenance:{
+    label:"Maintenance",
+    background:"#FFF7ED",
+    border:"#FED7AA",
+    text:"#9A3412",
+    badge:"#EA580C",
+  },
+  warning:{
+    label:"Important",
+    background:"#FEFCE8",
+    border:"#FDE68A",
+    text:"#854D0E",
+    badge:"#CA8A04",
+  },
+  success:{
+    label:"Update",
+    background:"#ECFDF5",
+    border:"#A7F3D0",
+    text:"#065F46",
+    badge:"#059669",
+  },
+};
+
+const normalizeSiteAnnouncement = (value:any = {}) => {
+  const toneKey = String(value?.tone || "");
+  const tone = Object.prototype.hasOwnProperty.call(
+    ANNOUNCEMENT_TONES,
+    toneKey
+  )
+    ? toneKey
+    : "information";
+
+  return {
+    enabled:!!value?.enabled,
+    message:String(value?.message || ""),
+    tone,
+    linkLabel:String(value?.linkLabel || ""),
+    linkUrl:String(value?.linkUrl || ""),
+    updatedAt:String(value?.updatedAt || ""),
+  };
+};
+
+const isValidAnnouncementLink = (value:any) => {
+  const link = String(value || "").trim();
+  if(!link) return true;
+  return (
+    /^https?:\/\//i.test(link) ||
+    link.startsWith("/") ||
+    link.startsWith("#")
+  );
+};
+
+const GlobalAnnouncementBar = ({ announcement }:any) => {
+  const safeAnnouncement = normalizeSiteAnnouncement(announcement);
+  const message = String(safeAnnouncement.message || "").trim();
+  if(!safeAnnouncement.enabled || !message) return null;
+
+  const tone =
+    ANNOUNCEMENT_TONES[safeAnnouncement.tone] ||
+    ANNOUNCEMENT_TONES.information;
+  const linkUrl = String(safeAnnouncement.linkUrl || "").trim();
+  const externalLink = /^https?:\/\//i.test(linkUrl);
+
+  return (
+    <div
+      className="emdc-global-announcement"
+      style={{
+        minHeight:44,
+        borderBottom:`1px solid ${tone.border}`,
+        background:tone.background,
+        color:tone.text,
+        width:"100%",
+      }}
+    >
+      <div
+        className="emdc-global-announcement-inner"
+        style={{
+          minHeight:44,
+          maxWidth:1760,
+          margin:"0 auto",
+          padding:"8px 18px",
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"center",
+          gap:8,
+          minWidth:0,
+        }}
+      >
+        <span
+          style={{
+            flex:"0 0 auto",
+            padding:"3px 7px",
+            borderRadius:999,
+            background:tone.badge,
+            color:"#FFFFFF",
+            fontSize:9,
+            fontWeight:900,
+            textTransform:"uppercase",
+            letterSpacing:".03em",
+          }}
+        >
+          {tone.label}
+        </span>
+        <span
+          className="emdc-global-announcement-message"
+          style={{
+            minWidth:0,
+            fontSize:11.5,
+            fontWeight:700,
+            lineHeight:1.35,
+            textAlign:"center",
+          }}
+        >
+          {message}
+        </span>
+        {!!linkUrl&&(
+          <a
+            href={linkUrl}
+            target={externalLink ? "_blank" : undefined}
+            rel={externalLink ? "noreferrer" : undefined}
+            style={{
+              flex:"0 0 auto",
+              color:tone.text,
+              fontSize:11,
+              fontWeight:900,
+              textDecoration:"underline",
+              textUnderlineOffset:2,
+              whiteSpace:"nowrap",
+            }}
+          >
+            {String(safeAnnouncement.linkLabel || "View details").trim()}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function App({
   initialData,
   onStateChange,
@@ -25425,6 +25865,14 @@ export default function App({
   const [checklistTrash,setChecklistTrash] = useState<any[]>(initialData?.checklistTrash ?? []);
   const [checklistAllItems,setChecklistAllItems] = useState<Record<string,any>>(initialData?.checklistItems ?? {});
   const [checklistStatuses,setChecklistStatuses] = useState<any[]>(initialData?.checklistStatuses ?? DEFAULT_STATUSES);
+  const [siteAnnouncement,setSiteAnnouncement] = useState<any>(()=>
+    normalizeSiteAnnouncement(initialData?.siteAnnouncement)
+  );
+  const [announcementDraft,setAnnouncementDraft] = useState<any>(()=>
+    normalizeSiteAnnouncement(initialData?.siteAnnouncement)
+  );
+  const [announcementEditorOpen,setAnnouncementEditorOpen] = useState(false);
+  const [announcementEditorError,setAnnouncementEditorError] = useState("");
 
   const checklistCalEvents = useMemo(()=>
     (checklistGroups || []).flatMap((g:any)=>{
@@ -25838,6 +26286,18 @@ export default function App({
       setChecklistAllItems(cleanAllItems);
     }
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
+    if(
+      hydratedParsed?.siteAnnouncement &&
+      typeof hydratedParsed.siteAnnouncement==="object"
+    ){
+      const nextAnnouncement = normalizeSiteAnnouncement(
+        hydratedParsed.siteAnnouncement
+      );
+      setSiteAnnouncement(nextAnnouncement);
+      if(!announcementEditorOpen){
+        setAnnouncementDraft(nextAnnouncement);
+      }
+    }
     if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(hydratedParsed.calendarEvents);
     if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(hydratedParsed.calendarTypes));
     if (Array.isArray(hydratedParsed?.seasonalEvents)) setSeasonalEvents(hydratedParsed.seasonalEvents);
@@ -27194,6 +27654,19 @@ export default function App({
       setChecklistTrash(patch.checklistTrash);
     }
 
+    if(
+      patch.siteAnnouncement &&
+      typeof patch.siteAnnouncement==="object"
+    ){
+      const nextAnnouncement = normalizeSiteAnnouncement(
+        patch.siteAnnouncement
+      );
+      setSiteAnnouncement(nextAnnouncement);
+      if(!announcementEditorOpen){
+        setAnnouncementDraft(nextAnnouncement);
+      }
+    }
+
     if (Array.isArray(patch.calendarTypes)) {
       setCalendarEventTypes(patch.calendarTypes);
       try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
@@ -27211,6 +27684,53 @@ export default function App({
       saveAppPatchDirect(patchForGeneralSave);
     }
   };
+
+  const openAnnouncementEditor = () => {
+    setAnnouncementDraft(normalizeSiteAnnouncement(siteAnnouncement));
+    setAnnouncementEditorError("");
+    setAnnouncementEditorOpen(true);
+  };
+
+  const persistSiteAnnouncement = (draft:any) => {
+    const nextAnnouncement = {
+      ...normalizeSiteAnnouncement(draft),
+      message:String(draft?.message || "").trim(),
+      linkLabel:String(draft?.linkLabel || "").trim(),
+      linkUrl:String(draft?.linkUrl || "").trim(),
+      updatedAt:new Date().toISOString(),
+    };
+
+    if(nextAnnouncement.enabled && !nextAnnouncement.message){
+      setAnnouncementEditorError(
+        "Add an announcement message before publishing."
+      );
+      return;
+    }
+
+    if(!isValidAnnouncementLink(nextAnnouncement.linkUrl)){
+      setAnnouncementEditorError(
+        "Use a complete https:// link, an internal /path, or a #page link."
+      );
+      return;
+    }
+
+    setSiteAnnouncement(nextAnnouncement);
+    setAnnouncementDraft(nextAnnouncement);
+    setAnnouncementEditorError("");
+    setAnnouncementEditorOpen(false);
+
+    // This sends only { siteAnnouncement } through the existing app-patch
+    // route. No checklist group, item, progress, or output field is included.
+    handleRootStateChange({ siteAnnouncement:nextAnnouncement });
+  };
+
+  const disableSiteAnnouncement = () => {
+    persistSiteAnnouncement({
+      ...announcementDraft,
+      enabled:false,
+    });
+  };
+
   const readCurrentLocalSnapshot = () => {
     const snapshot:any = {};
     if (typeof window === "undefined") return snapshot;
@@ -27789,11 +28309,28 @@ export default function App({
   const allCalExtra = useMemo(()=>[...seasonalCalEvents,...checklistCalEvents],[seasonalCalEvents,checklistCalEvents]);
   const pageMaxWidth = !isMobile && tab==="calendar" ? 1760 : 1280;
   const pagePadding = isMobile ? "16px 16px 90px" : tab==="calendar" ? "28px 32px" : "28px 28px";
+  const announcementVisible = !!(
+    siteAnnouncement.enabled &&
+    String(siteAnnouncement.message || "").trim()
+  );
 
   return (
     <>
       <GlobalStyles />
-      <div style={{ minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.text,width:"100%",maxWidth:"100%",overflowX:"hidden" }}>
+      <div
+        style={{
+          minHeight:"100vh",
+          background:C.bg,
+          fontFamily:C.font,
+          color:C.text,
+          width:"100%",
+          maxWidth:"100%",
+          overflowX:"hidden",
+          ["--emdc-announcement-offset" as any]:announcementVisible
+            ? "44px"
+            : "0px",
+        }}
+      >
       {!cloudHydrated&&(
         <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(249,250,251,.96)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,pointerEvents:"auto" }}>
           <div style={{ width:"min(420px,100%)",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:16,padding:20,textAlign:"center",boxShadow:"0 12px 40px rgba(15,23,42,.08)" }}>
@@ -27804,6 +28341,7 @@ export default function App({
         </div>
       )}
 
+        <GlobalAnnouncementBar announcement={siteAnnouncement} />
         <AppTopBar />
 
         {/* ── Page content ─────────────────────────────────────────────────── */}
@@ -27829,6 +28367,22 @@ export default function App({
                 Import Backup
                 <input type="file" accept="application/json,.json" style={{ display:"none" }} onChange={(e:any)=>{ importFullBackup(e.target.files?.[0]); e.target.value=""; }} />
               </label>
+              <button
+                type="button"
+                onClick={openAnnouncementEditor}
+                style={{
+                  border:`1px solid ${announcementVisible ? "#93C5FD" : C.border}`,
+                  background:announcementVisible ? "#EFF6FF" : C.surface,
+                  borderRadius:7,
+                  padding:"4px 8px",
+                  fontSize:11,
+                  fontWeight:700,
+                  color:announcementVisible ? "#1D4ED8" : C.textSub,
+                  cursor:"pointer",
+                }}
+              >
+                {announcementVisible ? "Edit Announcement" : "Announcement"}
+              </button>
             </div>
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleRootStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
@@ -27837,6 +28391,256 @@ export default function App({
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
+
+        <Modal
+          open={announcementEditorOpen}
+          onClose={()=>{
+            setAnnouncementEditorOpen(false);
+            setAnnouncementEditorError("");
+          }}
+          title="Global Announcement"
+          width={620}
+        >
+          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            <label
+              style={{
+                display:"flex",
+                alignItems:"center",
+                gap:9,
+                fontSize:12.5,
+                fontWeight:800,
+                color:C.text,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!announcementDraft.enabled}
+                onChange={(event:any)=>
+                  setAnnouncementDraft((current:any)=>({
+                    ...current,
+                    enabled:event.target.checked,
+                  }))
+                }
+              />
+              Show this announcement to all users
+            </label>
+
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) 180px",gap:10 }}>
+              <label style={{ display:"flex",flexDirection:"column",gap:6,minWidth:0 }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.textSub }}>
+                  Message
+                </span>
+                <textarea
+                  value={announcementDraft.message}
+                  onChange={(event:any)=>
+                    setAnnouncementDraft((current:any)=>({
+                      ...current,
+                      message:event.target.value,
+                    }))
+                  }
+                  placeholder="Enter the announcement shown across EMDC."
+                  style={{
+                    width:"100%",
+                    minHeight:92,
+                    border:`1px solid ${C.border}`,
+                    borderRadius:9,
+                    padding:10,
+                    resize:"vertical",
+                    outline:"none",
+                    fontSize:12.5,
+                    lineHeight:1.45,
+                    color:C.text,
+                    background:C.surface,
+                  }}
+                />
+              </label>
+
+              <label style={{ display:"flex",flexDirection:"column",gap:6,minWidth:0 }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.textSub }}>
+                  Announcement Type
+                </span>
+                <select
+                  value={announcementDraft.tone}
+                  onChange={(event:any)=>
+                    setAnnouncementDraft((current:any)=>({
+                      ...current,
+                      tone:event.target.value,
+                    }))
+                  }
+                  style={{
+                    width:"100%",
+                    height:40,
+                    border:`1px solid ${C.border}`,
+                    borderRadius:9,
+                    padding:"0 10px",
+                    outline:"none",
+                    fontSize:12,
+                    fontWeight:700,
+                    color:C.textSub,
+                    background:C.surface,
+                  }}
+                >
+                  {Object.entries(ANNOUNCEMENT_TONES).map(
+                    ([toneKey,toneValue]:any)=>(
+                      <option key={toneKey} value={toneKey}>
+                        {toneValue.label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+            </div>
+
+            <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"180px minmax(0,1fr)",gap:10 }}>
+              <label style={{ display:"flex",flexDirection:"column",gap:6,minWidth:0 }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.textSub }}>
+                  Link Label (optional)
+                </span>
+                <input
+                  value={announcementDraft.linkLabel}
+                  onChange={(event:any)=>
+                    setAnnouncementDraft((current:any)=>({
+                      ...current,
+                      linkLabel:event.target.value,
+                    }))
+                  }
+                  placeholder="View details"
+                  style={{
+                    width:"100%",
+                    height:40,
+                    border:`1px solid ${C.border}`,
+                    borderRadius:9,
+                    padding:"0 10px",
+                    outline:"none",
+                    fontSize:12,
+                    color:C.text,
+                    background:C.surface,
+                  }}
+                />
+              </label>
+
+              <label style={{ display:"flex",flexDirection:"column",gap:6,minWidth:0 }}>
+                <span style={{ fontSize:11,fontWeight:800,color:C.textSub }}>
+                  Link URL (optional)
+                </span>
+                <input
+                  value={announcementDraft.linkUrl}
+                  onChange={(event:any)=>
+                    setAnnouncementDraft((current:any)=>({
+                      ...current,
+                      linkUrl:event.target.value,
+                    }))
+                  }
+                  placeholder="https://... or /internal-page"
+                  style={{
+                    width:"100%",
+                    height:40,
+                    border:`1px solid ${C.border}`,
+                    borderRadius:9,
+                    padding:"0 10px",
+                    outline:"none",
+                    fontSize:12,
+                    color:C.text,
+                    background:C.surface,
+                  }}
+                />
+              </label>
+            </div>
+
+            {(()=>{
+              const previewTone =
+                ANNOUNCEMENT_TONES[announcementDraft.tone] ||
+                ANNOUNCEMENT_TONES.information;
+              return (
+                <div
+                  style={{
+                    padding:"10px 12px",
+                    border:`1px solid ${previewTone.border}`,
+                    borderRadius:9,
+                    background:previewTone.background,
+                    color:previewTone.text,
+                    display:"flex",
+                    alignItems:"center",
+                    gap:8,
+                    minWidth:0,
+                  }}
+                >
+                  <span
+                    style={{
+                      flex:"0 0 auto",
+                      padding:"3px 7px",
+                      borderRadius:999,
+                      background:previewTone.badge,
+                      color:"#FFFFFF",
+                      fontSize:9,
+                      fontWeight:900,
+                      textTransform:"uppercase",
+                    }}
+                  >
+                    {previewTone.label}
+                  </span>
+                  <span
+                    style={{
+                      minWidth:0,
+                      fontSize:11.5,
+                      fontWeight:700,
+                      lineHeight:1.4,
+                      wordBreak:"break-word",
+                    }}
+                  >
+                    {String(
+                      announcementDraft.message ||
+                      "Announcement preview"
+                    )}
+                  </span>
+                </div>
+              );
+            })()}
+
+            {!!announcementEditorError&&(
+              <div
+                style={{
+                  padding:"9px 10px",
+                  border:"1px solid #FECACA",
+                  borderRadius:8,
+                  background:"#FEF2F2",
+                  color:"#B91C1C",
+                  fontSize:11,
+                  fontWeight:700,
+                  lineHeight:1.45,
+                }}
+              >
+                {announcementEditorError}
+              </div>
+            )}
+
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+              <div>
+                {siteAnnouncement.enabled&&(
+                  <Btn variant="danger" onClick={disableSiteAnnouncement}>
+                    Disable Announcement
+                  </Btn>
+                )}
+              </div>
+              <div style={{ display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap" }}>
+                <Btn
+                  variant="outline"
+                  onClick={()=>{
+                    setAnnouncementEditorOpen(false);
+                    setAnnouncementEditorError("");
+                  }}
+                >
+                  Cancel
+                </Btn>
+                <Btn onClick={()=>persistSiteAnnouncement(announcementDraft)}>
+                  {announcementDraft.enabled
+                    ? "Publish Announcement"
+                    : "Save as Hidden"}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        </Modal>
 
         <TeamChatPopup />
         <AppBottomNav />
