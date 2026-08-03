@@ -6528,27 +6528,129 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
             gap:14,
           }}
         >
-          <div
-            style={{
-              maxHeight:"55vh",
-              overflow:"auto",
-              padding:14,
-              border:`1px solid ${C.border}`,
-              borderRadius:10,
-              background:C.bg,
-              color:C.text,
-              fontFamily:
-                "Inter, system-ui, sans-serif",
-              fontSize:13,
-              fontWeight:400,
-              lineHeight:1.65,
-              whiteSpace:"pre-wrap",
-              wordBreak:"break-word",
-              overflowWrap:"anywhere",
-            }}
-          >
-            {campaignTableTextPreview.value}
-          </div>
+          {Array.isArray(
+            campaignTableTextPreview
+              ?.skuEntries
+          ) &&
+          campaignTableTextPreview
+            .skuEntries.length
+            ? (
+              <div
+                style={{
+                  maxHeight:"55vh",
+                  overflow:"auto",
+                  display:"flex",
+                  flexDirection:"column",
+                  gap:7,
+                }}
+              >
+                {campaignTableTextPreview
+                  .skuEntries
+                  .map(
+                    (
+                      entry:any,
+                      entryIndex:number
+                    )=>(
+                      <div
+                        key={`${entry?.sku || "sku"}-${entryIndex}`}
+                        style={{
+                          display:"flex",
+                          justifyContent:"space-between",
+                          alignItems:"center",
+                          gap:10,
+                          padding:"10px 12px",
+                          border:`1px solid ${C.border}`,
+                          borderRadius:9,
+                          background:C.bg,
+                        }}
+                      >
+                        {entry?.imageLink
+                          ? (
+                            <a
+                              href={
+                                entry.imageLink
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Open image for ${entry.sku}`}
+                              style={{
+                                color:C.accent,
+                                fontFamily:
+                                  "Inter, system-ui, sans-serif",
+                                fontSize:12,
+                                fontWeight:750,
+                                lineHeight:1.4,
+                                textDecoration:
+                                  "underline",
+                                textUnderlineOffset:2,
+                                wordBreak:
+                                  "break-word",
+                              }}
+                            >
+                              {entry.sku}
+                            </a>
+                          )
+                          : (
+                            <span
+                              title="No image link available"
+                              style={{
+                                color:C.textSub,
+                                fontFamily:
+                                  "Inter, system-ui, sans-serif",
+                                fontSize:12,
+                                fontWeight:500,
+                                lineHeight:1.4,
+                                wordBreak:
+                                  "break-word",
+                              }}
+                            >
+                              {entry.sku}
+                            </span>
+                          )}
+
+                        <span
+                          style={{
+                            flex:"0 0 auto",
+                            color:
+                              entry?.imageLink
+                                ? C.success
+                                : C.muted,
+                            fontSize:9.5,
+                            fontWeight:750,
+                          }}
+                        >
+                          {entry?.imageLink
+                            ? "Image available"
+                            : "No image"}
+                        </span>
+                      </div>
+                    )
+                  )}
+              </div>
+            )
+            : (
+              <div
+                style={{
+                  maxHeight:"55vh",
+                  overflow:"auto",
+                  padding:14,
+                  border:`1px solid ${C.border}`,
+                  borderRadius:10,
+                  background:C.bg,
+                  color:C.text,
+                  fontFamily:
+                    "Inter, system-ui, sans-serif",
+                  fontSize:13,
+                  fontWeight:400,
+                  lineHeight:1.65,
+                  whiteSpace:"pre-wrap",
+                  wordBreak:"break-word",
+                  overflowWrap:"anywhere",
+                }}
+              >
+                {campaignTableTextPreview.value}
+              </div>
+            )}
 
           <div
             style={{
@@ -12412,6 +12514,39 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     markActionDone("campaign-table-send-dc");
   };
 
+  const openCampaignSkuListPreview = (
+    skuValue:any,
+    preferredProducts:any[] = []
+  ) => {
+    const skuCodes =
+      splitCampaignSkuCodes(
+        skuValue
+      );
+
+    if(!skuCodes.length){
+      return;
+    }
+
+    const skuEntries =
+      skuCodes.map(
+        (sku:string)=>({
+          sku,
+          imageLink:
+            getCampaignSkuImageLink(
+              sku,
+              preferredProducts
+            ),
+        })
+      );
+
+    setCampaignTableTextPreview({
+      label:"All SKUs",
+      value:skuCodes.join(", "),
+      skuEntries,
+      editSkuRowId:"",
+    });
+  };
+
   const getCampaignSharedRowId = (row:any) =>
     String(
       row?.sourceRowId ||
@@ -17939,8 +18074,29 @@ ${slidesHtml}
                                   {field.label==="SKU"
                                     ? (
                                       <div
-                                        title="SKUs with image links are clickable"
+                                        title="Click to view all SKUs"
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={()=>
+                                          openCampaignSkuListPreview(
+                                            field.value,
+                                            []
+                                          )
+                                        }
+                                        onKeyDown={(event:any)=>{
+                                          if(
+                                            event.key==="Enter" ||
+                                            event.key===" "
+                                          ){
+                                            event.preventDefault();
+                                            openCampaignSkuListPreview(
+                                              field.value,
+                                              []
+                                            );
+                                          }
+                                        }}
                                         style={{
+                                          position:"relative",
                                           display:"flex",
                                           alignItems:
                                             campaignOverviewFullView
@@ -17956,7 +18112,7 @@ ${slidesHtml}
                                               ? 68
                                               : 38,
                                           boxSizing:"border-box",
-                                          padding:"7px 8px",
+                                          padding:"7px 58px 7px 8px",
                                           overflow:
                                             campaignOverviewFullView
                                               ? "visible"
@@ -17993,6 +18149,38 @@ ${slidesHtml}
                                           [],
                                           campaignOverviewFullView
                                         )}
+
+                                        <button
+                                          type="button"
+                                          onClick={(event:any)=>{
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            openCampaignSkuListPreview(
+                                              field.value,
+                                              []
+                                            );
+                                          }}
+                                          title="View all SKUs"
+                                          style={{
+                                            position:"absolute",
+                                            right:6,
+                                            top:6,
+                                            height:26,
+                                            padding:"0 7px",
+                                            border:`1px solid ${C.border}`,
+                                            borderRadius:6,
+                                            background:C.surfaceAlt,
+                                            color:C.textSub,
+                                            fontFamily:
+                                              "Inter, system-ui, sans-serif",
+                                            fontSize:8.5,
+                                            fontWeight:800,
+                                            cursor:"pointer",
+                                            whiteSpace:"nowrap",
+                                          }}
+                                        >
+                                          View All
+                                        </button>
                                       </div>
                                     )
                                     : (
@@ -20388,8 +20576,29 @@ ${slidesHtml}
                           }}
                         >
                           <div
-                            title="SKUs with image links are clickable"
+                            title="Click to view all SKUs"
+                            role="button"
+                            tabIndex={0}
+                            onClick={()=>
+                              openCampaignSkuListPreview(
+                                skuText,
+                                products
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignSkuListPreview(
+                                  skuText,
+                                  products
+                                );
+                              }
+                            }}
                             style={{
+                              position:"relative",
                               display:"flex",
                               alignItems:
                                 campaignMarketingFullView
@@ -20400,7 +20609,7 @@ ${slidesHtml}
                                 campaignMarketingFullView
                                   ? 68
                                   : 38,
-                              padding:"7px 8px",
+                              padding:"7px 58px 7px 8px",
                               boxSizing:"border-box",
                               overflow:
                                 campaignMarketingFullView
@@ -20439,6 +20648,38 @@ ${slidesHtml}
                               products,
                               campaignMarketingFullView
                             )}
+
+                            <button
+                              type="button"
+                              onClick={(event:any)=>{
+                                event.preventDefault();
+                                event.stopPropagation();
+                                openCampaignSkuListPreview(
+                                  skuText,
+                                  products
+                                );
+                              }}
+                              title="View all SKUs"
+                              style={{
+                                position:"absolute",
+                                right:6,
+                                top:6,
+                                height:26,
+                                padding:"0 7px",
+                                border:`1px solid ${C.border}`,
+                                borderRadius:6,
+                                background:C.surfaceAlt,
+                                color:C.textSub,
+                                fontFamily:
+                                  "Inter, system-ui, sans-serif",
+                                fontSize:8.5,
+                                fontWeight:800,
+                                cursor:"pointer",
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              View All
+                            </button>
                           </div>
                         </td>
 
@@ -24631,8 +24872,29 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           }}
                         >
                           <div
-                            title="SKUs with image links are clickable"
+                            title="Click to view all SKUs"
+                            role="button"
+                            tabIndex={0}
+                            onClick={()=>
+                              openCampaignSkuListPreview(
+                                skuText,
+                                products
+                              )
+                            }
+                            onKeyDown={(event:any)=>{
+                              if(
+                                event.key==="Enter" ||
+                                event.key===" "
+                              ){
+                                event.preventDefault();
+                                openCampaignSkuListPreview(
+                                  skuText,
+                                  products
+                                );
+                              }
+                            }}
                             style={{
+                              position:"relative",
                               display:"flex",
                               alignItems:
                                 campaignDigitalFullView
@@ -24643,7 +24905,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 campaignDigitalFullView
                                   ? 68
                                   : 38,
-                              padding:"7px 8px",
+                              padding:"7px 58px 7px 8px",
                               boxSizing:"border-box",
                               overflow:
                                 campaignDigitalFullView
@@ -24682,6 +24944,38 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               products,
                               campaignDigitalFullView
                             )}
+
+                            <button
+                              type="button"
+                              onClick={(event:any)=>{
+                                event.preventDefault();
+                                event.stopPropagation();
+                                openCampaignSkuListPreview(
+                                  skuText,
+                                  products
+                                );
+                              }}
+                              title="View all SKUs"
+                              style={{
+                                position:"absolute",
+                                right:6,
+                                top:6,
+                                height:26,
+                                padding:"0 7px",
+                                border:`1px solid ${C.border}`,
+                                borderRadius:6,
+                                background:C.surfaceAlt,
+                                color:C.textSub,
+                                fontFamily:
+                                  "Inter, system-ui, sans-serif",
+                                fontSize:8.5,
+                                fontWeight:800,
+                                cursor:"pointer",
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              View All
+                            </button>
                           </div>
                         </td>
 
