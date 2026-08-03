@@ -18096,6 +18096,7 @@ ${slidesHtml}
                                           }
                                         }}
                                         style={{
+                                          cursor:"pointer",
                                           position:"relative",
                                           display:"flex",
                                           alignItems:
@@ -18112,7 +18113,7 @@ ${slidesHtml}
                                               ? 68
                                               : 38,
                                           boxSizing:"border-box",
-                                          padding:"7px 58px 7px 8px",
+                                          padding:"7px 8px",
                                           overflow:
                                             campaignOverviewFullView
                                               ? "visible"
@@ -18150,37 +18151,7 @@ ${slidesHtml}
                                           campaignOverviewFullView
                                         )}
 
-                                        <button
-                                          type="button"
-                                          onClick={(event:any)=>{
-                                            event.preventDefault();
-                                            event.stopPropagation();
-                                            openCampaignSkuListPreview(
-                                              field.value,
-                                              []
-                                            );
-                                          }}
-                                          title="View all SKUs"
-                                          style={{
-                                            position:"absolute",
-                                            right:6,
-                                            top:6,
-                                            height:26,
-                                            padding:"0 7px",
-                                            border:`1px solid ${C.border}`,
-                                            borderRadius:6,
-                                            background:C.surfaceAlt,
-                                            color:C.textSub,
-                                            fontFamily:
-                                              "Inter, system-ui, sans-serif",
-                                            fontSize:8.5,
-                                            fontWeight:800,
-                                            cursor:"pointer",
-                                            whiteSpace:"nowrap",
-                                          }}
-                                        >
-                                          View All
-                                        </button>
+                                        
                                       </div>
                                     )
                                     : (
@@ -20598,6 +20569,7 @@ ${slidesHtml}
                               }
                             }}
                             style={{
+                                          cursor:"pointer",
                               position:"relative",
                               display:"flex",
                               alignItems:
@@ -20609,7 +20581,7 @@ ${slidesHtml}
                                 campaignMarketingFullView
                                   ? 68
                                   : 38,
-                              padding:"7px 58px 7px 8px",
+                              padding:"7px 8px",
                               boxSizing:"border-box",
                               overflow:
                                 campaignMarketingFullView
@@ -20649,37 +20621,7 @@ ${slidesHtml}
                               campaignMarketingFullView
                             )}
 
-                            <button
-                              type="button"
-                              onClick={(event:any)=>{
-                                event.preventDefault();
-                                event.stopPropagation();
-                                openCampaignSkuListPreview(
-                                  skuText,
-                                  products
-                                );
-                              }}
-                              title="View all SKUs"
-                              style={{
-                                position:"absolute",
-                                right:6,
-                                top:6,
-                                height:26,
-                                padding:"0 7px",
-                                border:`1px solid ${C.border}`,
-                                borderRadius:6,
-                                background:C.surfaceAlt,
-                                color:C.textSub,
-                                fontFamily:
-                                  "Inter, system-ui, sans-serif",
-                                fontSize:8.5,
-                                fontWeight:800,
-                                cursor:"pointer",
-                                whiteSpace:"nowrap",
-                              }}
-                            >
-                              View All
-                            </button>
+                            
                           </div>
                         </td>
 
@@ -24894,6 +24836,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               }
                             }}
                             style={{
+                                          cursor:"pointer",
                               position:"relative",
                               display:"flex",
                               alignItems:
@@ -24905,7 +24848,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                 campaignDigitalFullView
                                   ? 68
                                   : 38,
-                              padding:"7px 58px 7px 8px",
+                              padding:"7px 8px",
                               boxSizing:"border-box",
                               overflow:
                                 campaignDigitalFullView
@@ -24945,37 +24888,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               campaignDigitalFullView
                             )}
 
-                            <button
-                              type="button"
-                              onClick={(event:any)=>{
-                                event.preventDefault();
-                                event.stopPropagation();
-                                openCampaignSkuListPreview(
-                                  skuText,
-                                  products
-                                );
-                              }}
-                              title="View all SKUs"
-                              style={{
-                                position:"absolute",
-                                right:6,
-                                top:6,
-                                height:26,
-                                padding:"0 7px",
-                                border:`1px solid ${C.border}`,
-                                borderRadius:6,
-                                background:C.surfaceAlt,
-                                color:C.textSub,
-                                fontFamily:
-                                  "Inter, system-ui, sans-serif",
-                                fontSize:8.5,
-                                fontWeight:800,
-                                cursor:"pointer",
-                                whiteSpace:"nowrap",
-                              }}
-                            >
-                              View All
-                            </button>
+                            
                           </div>
                         </td>
 
