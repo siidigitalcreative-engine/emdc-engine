@@ -37094,6 +37094,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   const [editingGroup,setEditingGroup] = useState(null);
   const [trashOpen,setTrashOpen] = useState(false);
   const [arrivalFilter,setArrivalFilter] = useState<"all"|"arrived"|"arriving"|"waiting">("all");
+  const [checklistTypeFilter,setChecklistTypeFilter] = useState("all");
 
   const persistChecklistItemsNow = (nextItems:any) => {
     if (typeof window === "undefined") return;
@@ -37202,6 +37203,276 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   });
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
+
+  const normalizeChecklistTypeTabKey = (
+    value:any
+  ) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/&/g," and ")
+      .replace(/[^a-z0-9]+/g,"-")
+      .replace(/^-+|-+$/g,"");
+
+  const getChecklistGroupTypeMeta = (
+    group:any
+  ) => {
+    const launchTypeKey = String(
+      group?.launchType ||
+      group?.checklistType ||
+      group?.groupType ||
+      group?.type ||
+      ""
+    ).trim();
+
+    const configuredType =
+      launchTypes?.[launchTypeKey] ||
+      LAUNCH_TYPES?.[launchTypeKey] ||
+      {};
+
+    const hasSpecialCampaignWorkspace =
+      !!(
+        group?.aiWorkspace
+          ?.ecommerce
+          ?.specialCampaignTracker
+      );
+
+    const rawLabel = String(
+      configuredType?.label ||
+      group?.launchTypeLabel ||
+      group?.checklistTypeLabel ||
+      group?.groupTypeLabel ||
+      group?.typeLabel ||
+      launchTypeKey ||
+      "Checklist"
+    ).trim();
+
+    const normalizedLabel =
+      normalizeChecklistTypeTabKey(
+        rawLabel
+      );
+
+    let key = normalizedLabel;
+    let label = rawLabel;
+
+    if(
+      hasSpecialCampaignWorkspace ||
+      (
+        normalizedLabel.includes("special") &&
+        normalizedLabel.includes("campaign")
+      )
+    ){
+      key = "special-campaign";
+      label = "Special Campaign";
+    } else if(
+      normalizedLabel.includes(
+        "reactivation"
+      )
+    ){
+      key = "product-reactivation";
+      label = "Product Reactivation";
+    } else if(
+      normalizedLabel.includes(
+        "introduction"
+      )
+    ){
+      key = "product-introduction";
+      label = "Product Introduction";
+    } else if(
+      normalizedLabel==="campaign" ||
+      (
+        normalizedLabel.includes(
+          "campaign"
+        ) &&
+        !normalizedLabel.includes(
+          "special"
+        )
+      )
+    ){
+      key = "campaign";
+      label = "Campaign";
+    } else if(!key){
+      key = normalizeChecklistTypeTabKey(
+        launchTypeKey || "checklist"
+      );
+      label = rawLabel || "Checklist";
+    }
+
+    return {
+      key,
+      label,
+      color:
+        configuredType?.color ||
+        group?.calendarColor ||
+        C.accent,
+      launchTypeKey,
+    };
+  };
+
+  const standardChecklistTypeTabs = [
+    {
+      key:"product-introduction",
+      label:"Product Introduction",
+      color:
+        launchTypes?.introduction?.color ||
+        LAUNCH_TYPES.introduction.color,
+    },
+    {
+      key:"product-reactivation",
+      label:"Product Reactivation",
+      color:
+        launchTypes?.reactivation?.color ||
+        LAUNCH_TYPES.reactivation.color,
+    },
+    {
+      key:"campaign",
+      label:"Campaign",
+      color:
+        launchTypes?.campaign?.color ||
+        LAUNCH_TYPES.campaign.color,
+    },
+    {
+      key:"special-campaign",
+      label:"Special Campaign",
+      color:"#F97316",
+    },
+  ];
+
+  const standardChecklistTypeKeys =
+    new Set(
+      standardChecklistTypeTabs.map(
+        (tab:any)=>tab.key
+      )
+    );
+
+  const dynamicChecklistTypeTabMap =
+    new Map<string,any>();
+
+  (groups || []).forEach((group:any)=>{
+    const meta =
+      getChecklistGroupTypeMeta(group);
+
+    if(
+      meta.key &&
+      !standardChecklistTypeKeys.has(
+        meta.key
+      ) &&
+      !dynamicChecklistTypeTabMap.has(
+        meta.key
+      )
+    ){
+      dynamicChecklistTypeTabMap.set(
+        meta.key,
+        meta
+      );
+    }
+  });
+
+  const checklistTypeTabs = [
+    {
+      key:"all",
+      label:"All Checklists",
+      color:C.text,
+    },
+    ...standardChecklistTypeTabs,
+    ...Array.from(
+      dynamicChecklistTypeTabMap.values()
+    ).sort((a:any,b:any)=>
+      String(a.label).localeCompare(
+        String(b.label)
+      )
+    ),
+  ].map((tab:any)=>({
+    ...tab,
+    count:
+      tab.key==="all"
+        ? (groups || []).length
+        : (groups || []).filter(
+            (group:any)=>
+              getChecklistGroupTypeMeta(
+                group
+              ).key===tab.key
+          ).length,
+  }));
+
+  const checklistTypeTabSignature =
+    checklistTypeTabs
+      .map((tab:any)=>tab.key)
+      .join("|");
+
+  const visibleChecklistGroups =
+    [...(groups || [])]
+      .filter((group:any)=>{
+        const status =
+          group.arrivalStatus ||
+          (
+            group.productsArrived
+              ? "arrived"
+              : "waiting"
+          );
+
+        return arrivalFilter==="all"
+          ? true
+          : status===arrivalFilter;
+      })
+      .filter((group:any)=>
+        checklistTypeFilter==="all"
+          ? true
+          : getChecklistGroupTypeMeta(
+              group
+            ).key===checklistTypeFilter
+      )
+      .sort((a:any,b:any)=>{
+        const rank:any = {
+          arrived:0,
+          arriving:1,
+          waiting:2,
+        };
+
+        const aStatus =
+          a.arrivalStatus ||
+          (
+            a.productsArrived
+              ? "arrived"
+              : "waiting"
+          );
+
+        const bStatus =
+          b.arrivalStatus ||
+          (
+            b.productsArrived
+              ? "arrived"
+              : "waiting"
+          );
+
+        return (
+          (rank[aStatus] ?? 3) -
+          (rank[bStatus] ?? 3)
+        );
+      });
+
+  const activeChecklistTypeTab =
+    checklistTypeTabs.find(
+      (tab:any)=>
+        tab.key===checklistTypeFilter
+    ) ||
+    checklistTypeTabs[0];
+
+  useEffect(()=>{
+    if(
+      checklistTypeTabs.some(
+        (tab:any)=>
+          tab.key===checklistTypeFilter
+      )
+    ){
+      return;
+    }
+
+    setChecklistTypeFilter("all");
+  },[
+    checklistTypeFilter,
+    checklistTypeTabSignature,
+  ]);
 
   useEffect(()=>{
     if(!navigateToGroupId) return;
@@ -37954,6 +38225,11 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
     if(onGroupCreated) onGroupCreated(g);
 
+    setChecklistTypeFilter(
+      getChecklistGroupTypeMeta(g).key ||
+      "all"
+    );
+
     logActivity({
       action:"created a checklist group",
       entityType:"checklist",
@@ -38182,6 +38458,14 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     if(typeChanged){
       cleanupPhaseoutProductsForGroup(currentGroup);
 
+      setChecklistTypeFilter(
+        getChecklistGroupTypeMeta({
+          ...currentGroup,
+          ...patch,
+        }).key ||
+        "all"
+      );
+
       const freshItems = buildChecklistItemsFromTemplates(patch.launchType,templates,null);
       setAllGroupItems((prev:any)=>{
         const next = { ...prev, [id]: freshItems };
@@ -38336,7 +38620,28 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   return (
     <div>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8 }}>
-        <p style={{ margin:0,fontSize:13,color:C.muted }}>{groups.length===0?"No checklist groups yet.":`${groups.length} group${groups.length>1?"s":""}`}</p>
+        <p
+          style={{
+            margin:0,
+            fontSize:13,
+            color:C.muted,
+          }}
+        >
+          {groups.length===0
+            ? "No checklist groups yet."
+            : (
+                checklistTypeFilter==="all" &&
+                arrivalFilter==="all"
+              )
+              ? `${groups.length} group${
+                  groups.length>1
+                    ? "s"
+                    : ""
+                }`
+              : `${visibleChecklistGroups.length} of ${
+                  groups.length
+                } groups`}
+        </p>
         <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
           <select value={arrivalFilter} onChange={event=>setArrivalFilter(event.target.value as any)} style={{height:34,border:`1px solid ${C.border}`,borderRadius:7,padding:"0 10px",background:C.surface,color:C.textSub,fontSize:12,fontWeight:700,outline:"none"}}>
             <option value="all">All arrival statuses</option>
@@ -38347,6 +38652,116 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
           <Btn variant="outline" onClick={()=>setTemplatesModal(true)}>Manage Templates</Btn>
           <Btn variant="outline" onClick={()=>setTrashOpen(true)}>Trash{checklistTrash?.length?` (${checklistTrash.length})`:""}</Btn>
           {!creating&&<Btn onClick={()=>setCreating(true)}>+ New Group</Btn>}
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginBottom:16,
+          padding:5,
+          border:`1px solid ${C.border}`,
+          borderRadius:11,
+          background:C.surface,
+          overflow:"hidden",
+        }}
+      >
+        <div
+          role="tablist"
+          aria-label="Filter checklist groups by type"
+          style={{
+            display:"flex",
+            alignItems:"center",
+            gap:5,
+            overflowX:"auto",
+            WebkitOverflowScrolling:"touch",
+            scrollbarWidth:"thin",
+            paddingBottom:1,
+          }}
+        >
+          {checklistTypeTabs.map(
+            (tab:any)=>{
+              const isSelected =
+                checklistTypeFilter===
+                tab.key;
+
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={
+                    isSelected
+                  }
+                  onClick={()=>
+                    setChecklistTypeFilter(
+                      tab.key
+                    )
+                  }
+                  style={{
+                    flex:"0 0 auto",
+                    minHeight:34,
+                    display:"inline-flex",
+                    alignItems:"center",
+                    gap:7,
+                    padding:"7px 10px",
+                    border:isSelected
+                      ? `1px solid ${
+                          tab.color ||
+                          C.text
+                        }`
+                      : "1px solid transparent",
+                    borderRadius:8,
+                    background:isSelected
+                      ? (
+                          tab.color ||
+                          C.text
+                        )
+                      : "transparent",
+                    color:isSelected
+                      ? "#FFFFFF"
+                      : C.textSub,
+                    fontFamily:
+                      "Inter, system-ui, sans-serif",
+                    fontSize:11,
+                    fontWeight:isSelected
+                      ? 800
+                      : 650,
+                    lineHeight:1.2,
+                    cursor:"pointer",
+                    whiteSpace:"nowrap",
+                    transition:
+                      "background .15s ease, color .15s ease, border-color .15s ease",
+                  }}
+                >
+                  <span>
+                    {tab.label}
+                  </span>
+
+                  <span
+                    style={{
+                      minWidth:19,
+                      height:19,
+                      display:"inline-flex",
+                      alignItems:"center",
+                      justifyContent:"center",
+                      padding:"0 5px",
+                      borderRadius:999,
+                      background:isSelected
+                        ? "rgba(255,255,255,.18)"
+                        : C.surfaceAlt,
+                      color:isSelected
+                        ? "#FFFFFF"
+                        : C.muted,
+                      fontSize:9,
+                      fontWeight:850,
+                    }}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            }
+          )}
         </div>
       </div>
 
@@ -38397,19 +38812,44 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         <div style={{ background:C.surface,border:`1.5px dashed ${C.border}`,borderRadius:12 }}>
           <Empty title="No checklist groups" sub="Create a group by selecting SKUs and an operational type." action={<Btn onClick={()=>setCreating(true)}>+ New Group</Btn>} />
         </div>
+      ):groups.length>0&&visibleChecklistGroups.length===0?(
+        <div
+          style={{
+            background:C.surface,
+            border:`1.5px dashed ${C.border}`,
+            borderRadius:12,
+          }}
+        >
+          <Empty
+            title={`No ${
+              activeChecklistTypeTab?.label ||
+              "matching"
+            } checklists`}
+            sub={
+              arrivalFilter==="all"
+                ? "No checklist groups are currently assigned to this type."
+                : "No checklist groups match the selected checklist type and arrival status."
+            }
+            action={
+              <Btn
+                variant="outline"
+                onClick={()=>{
+                  setChecklistTypeFilter(
+                    "all"
+                  );
+                  setArrivalFilter(
+                    "all"
+                  );
+                }}
+              >
+                Clear Filters
+              </Btn>
+            }
+          />
+        </div>
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
-          {[...groups]
-            .filter((group:any)=>{
-              const status = group.arrivalStatus || (group.productsArrived ? "arrived" : "waiting");
-              return arrivalFilter==="all" ? true : status===arrivalFilter;
-            })
-            .sort((a:any,b:any)=>{
-              const rank:any = {arrived:0,arriving:1,waiting:2};
-              const aStatus = a.arrivalStatus || (a.productsArrived ? "arrived" : "waiting");
-              const bStatus = b.arrivalStatus || (b.productsArrived ? "arrived" : "waiting");
-              return (rank[aStatus] ?? 3) - (rank[bStatus] ?? 3);
-            })
+          {visibleChecklistGroups
             .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const compactSummary=(g?.progressSummary && typeof g.progressSummary==="object") ? g.progressSummary : {}; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id]; const deptOrder=["ecommerce","marketing","digital"]; if(gItems){ return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); } const summaryDepartments=(compactSummary?.departments && typeof compactSummary.departments==="object") ? compactSummary.departments : {}; return deptOrder.filter((dept:string)=>Number(summaryDepartments?.[dept]?.total || 0)>0 && Number(summaryDepartments?.[dept]?.done || 0)>=Number(summaryDepartments?.[dept]?.total || 0)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
             <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px",minWidth:0 }}>
