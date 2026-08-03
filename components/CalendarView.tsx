@@ -870,9 +870,35 @@ const DEFAULT_STATUSES = [
 ];
 const TEMPLATES = {
   introduction:{
-    ecommerce:["Create and activate product listings on Shopee, Lazada, and TikTok Shop","Upload complete product photography (main, variant, lifestyle, infographic)","Write and optimize product title, description, and bullet points","Set up pricing tiers (regular, sale, bundle) across all platforms","Configure inventory allocation per channel via Ginee","Set up platform vouchers and launch-day promotional mechanics","Submit product for platform-level featuring or spotlight badge","Enable Shopify product page and confirm cross-channel sync","Configure shipping class, weight, and fulfillment rules","QA all listings: images, specs, pricing, variants, and stock display"],
-    marketing:["Brief campaign concept and messaging direction for launch","Define target audience segments and key messaging pillars","Plan launch campaign timeline with content milestones","Coordinate with KOLs or brand partners for launch seeding","Draft and schedule announcement copy for IG, TikTok, and Facebook","Set up Meta Ads launch campaign (awareness + conversion objectives)","Create paid media brief and allocate launch budget per channel","Plan and schedule TikTok LIVE session for launch day","Write email campaign copy for Klaviyo launch broadcast","Monitor launch-day performance and prepare day-1 report"],
-    digital:["Produce primary product photography or CGI renders","Create platform-compliant listing infographics (Shopee, Lazada, TikTok)","Design IG Feed posts, Reels cover, and Stories assets","Produce TikTok launch video (hook, demo, CTA format)","Design Meta Ads creatives (static, carousel, and Story units)","Build product highlight reel or unboxing-style short video","Export all assets in platform-required specs and file formats","Update Shopify product page layout and featured imagery","Deliver Klaviyo email header and banner design","Archive final production files to shared drive with naming convention"],
+    ecommerce:[
+      "Write and optimize product title, description, and bullet points",
+      "Set up pricing tiers (regular, sale, bundle) across all platforms",
+      "Upload complete product photography (main, variant, lifestyle, infographic)",
+      "Configure shipping class, weight, and fulfillment rules",
+      "Create and activate product listings on Shopee, Lazada, and TikTok Shop",
+      "Configure inventory allocation per channel via Ginee",
+      "Enable Shopify product page and confirm cross-channel sync",
+      "Platform Search Ads",
+      "Meta Ads/Sponsored Media Creation",
+      "Set up platform vouchers and launch-day promotional mechanics",
+    ],
+    marketing:[
+      "Plan launch campaign timeline with content milestones",
+      "Coordinate with KOLs or brand partners for launch seeding",
+      "Draft and schedule announcement copy for IG, TikTok, and Facebook",
+      "Set up Meta Ads launch campaign (awareness + consideration)",
+      "Set up TikTok Ads launch campaign (reach, consideration, & sales GMV max)",
+      "Plan and schedule Shopee & TikTok LIVE for launch day",
+      "Develop & schedule content calendar for TikTok & Meta based on content pillars",
+    ],
+    digital:[
+      "Product Image",
+      "CEM Banner",
+      "Store Banner",
+      "Feed",
+      "Story",
+      "Showcase Video",
+    ],
   },
   campaign:{
     ecommerce:["Map campaign product list and confirm SKU availability per platform","Create campaign product rows for Shopee, Lazada, TikTok Shop, Shopify, and Meta","Set campaign pricing, bundle offers, vouchers, and platform mechanics","Confirm inventory allocation and fulfillment readiness before campaign go-live","QA all campaign listings, product links, prices, variants, and stock display","Prepare campaign schedule with launch date, promo period, and cut-off deadlines","Add campaign product links and final marketplace URLs for team reference","Coordinate flash sale, payday sale, mega sale, and platform ad placements","Track campaign product performance and flag items needing optimization","Finalize campaign post-mortem notes and next action items"],
@@ -907,8 +933,75 @@ const mergeChecklistLaunchTypesWithDefaults = (saved:any) => {
   };
 };
 
+const PRODUCT_INTRODUCTION_DEFAULT_TASKS_VERSION = "2026-08-03-product-introduction-v1";
+const PRODUCT_INTRODUCTION_DEFAULT_TASKS_VERSION_KEY =
+  "emdc_product_introduction_default_tasks_version_v1";
+
+const migrateProductIntroductionDefaultTasks = (
+  saved:any
+) => {
+  const safeSaved =
+    saved &&
+    typeof saved === "object" &&
+    !Array.isArray(saved)
+      ? saved
+      : {};
+
+  if(typeof window === "undefined"){
+    return safeSaved;
+  }
+
+  let savedVersion = "";
+
+  try {
+    savedVersion =
+      localStorage.getItem(
+        PRODUCT_INTRODUCTION_DEFAULT_TASKS_VERSION_KEY
+      ) || "";
+  } catch {}
+
+  if(
+    savedVersion===
+    PRODUCT_INTRODUCTION_DEFAULT_TASKS_VERSION
+  ){
+    return safeSaved;
+  }
+
+  const migrated = {
+    ...safeSaved,
+    introduction:{
+      ecommerce:[
+        ...(TEMPLATES.introduction.ecommerce || []),
+      ],
+      marketing:[
+        ...(TEMPLATES.introduction.marketing || []),
+      ],
+      digital:[
+        ...(TEMPLATES.introduction.digital || []),
+      ],
+    },
+  };
+
+  try {
+    localStorage.setItem(
+      PRODUCT_INTRODUCTION_DEFAULT_TASKS_VERSION_KEY,
+      PRODUCT_INTRODUCTION_DEFAULT_TASKS_VERSION
+    );
+    localStorage.setItem(
+      "emdc_checklist_templates_v1",
+      JSON.stringify(migrated)
+    );
+  } catch {}
+
+  return migrated;
+};
+
 const mergeChecklistTemplatesWithDefaults = (saved:any) => {
-  const safeSaved = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  const migratedSaved =
+    migrateProductIntroductionDefaultTasks(
+      saved
+    );
+  const safeSaved = migratedSaved && typeof migratedSaved === "object" && !Array.isArray(migratedSaved) ? migratedSaved : {};
   const merged:any = { ...TEMPLATES, ...safeSaved };
   Object.keys(LAUNCH_TYPES).forEach((typeKey:string)=>{
     merged[typeKey] = { ...(TEMPLATES as any)[typeKey], ...(safeSaved as any)[typeKey] };
