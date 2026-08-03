@@ -854,6 +854,11 @@ const DEPTS = {
 const LAUNCH_TYPES = {
   introduction:{ label:"Product Introduction", tag:"New Launch", color:"#111827" },
   campaign:    { label:"Campaign",              tag:"Promo Plan",  color:"#F59E0B" },
+  specialcampaign:{
+    label:"Special Campaign",
+    tag:"Special Campaign",
+    color:"#F97316",
+  },
   reactivation:{ label:"Product Reactivation",  tag:"Relaunch",   color:"#374151" },
   phaseout:    { label:"Product Phase-Out",      tag:"Closeout",   color:"#9CA3AF" },
 };
@@ -905,6 +910,26 @@ const TEMPLATES = {
     marketing:["Define campaign objective, promotion angle, and key selling message","Build campaign content plan for Meta, TikTok, Shopee, Lazada, and website","Create ad copy directions for single image, carousel, collection, Reels, and TikTok ads","Prepare campaign caption sets, hooks, headlines, and CTA variations","Set paid media budget, targeting, retargeting, and optimization schedule","Coordinate affiliate, KOL, livestream, and social posting requirements","Review campaign creative outputs and approve final marketing assets","Monitor campaign performance and update optimization notes","Prepare daily or milestone campaign performance summary","Collect learnings for the next campaign cycle"],
     digital:["Create campaign key visual direction and overall design treatment","Design campaign banners for marketplace, website, Meta, and TikTok placements","Create product image prompts, lifestyle prompts, and creative asset directions","Produce carousel, feed, story, and Reels/TikTok creative layouts","Prepare digital creative asset links table for product image, CEM banner, store banner, feed, story, and showcase video","Generate or upload final creative output links and add approved assets to Overview manually","Export all campaign assets in required sizes and platform-safe formats","QA all creative assets for readability, spacing, product accuracy, and brand consistency","Archive final campaign files with clear naming convention","Update source tabs when Overview cards are edited or finalized"],
   },
+  specialcampaign:{
+    ecommerce:[
+      "Complete the Campaign Brief with campaign name, platform, store or account, deadline, and request instructions",
+      "Add the main Seller Kit and editable asset folder links",
+      "Create the Asset Requirements & Output Tracker rows",
+      "Assign the featured SKU or SKUs to every requirement row",
+      "Complete the copy or headline instructions and notes for each requirement",
+      "Send the completed requirement rows to Digital Creative",
+      "Add the Campaign Brief & Seller Kit to Overview",
+    ],
+    marketing:[],
+    digital:[
+      "Review all shared Special Campaign requirement rows",
+      "Complete the required dimensions for every collateral row",
+      "Add the final preview image URL for every completed requirement",
+      "Add the final Google Drive asset or folder link",
+      "Update the production status for every requirement row",
+      "Add completed requirement rows to Overview",
+    ],
+  },
   reactivation:{
     // Keep Product Reactivation using the exact same operational template/settings as Product Introduction.
     ecommerce:["Create and activate product listings on Shopee, Lazada, and TikTok Shop","Upload complete product photography (main, variant, lifestyle, infographic)","Write and optimize product title, description, and bullet points","Set up pricing tiers (regular, sale, bundle) across all platforms","Configure inventory allocation per channel via Ginee","Set up platform vouchers and launch-day promotional mechanics","Submit product for platform-level featuring or spotlight badge","Enable Shopify product page and confirm cross-channel sync","Configure shipping class, weight, and fulfillment rules","QA all listings: images, specs, pricing, variants, and stock display"],
@@ -920,7 +945,37 @@ const TEMPLATES = {
 
 const mergeChecklistLaunchTypesWithDefaults = (saved:any) => {
   const base = { ...LAUNCH_TYPES };
-  const safeSaved = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  const safeSaved =
+    saved &&
+    typeof saved==="object" &&
+    !Array.isArray(saved)
+      ? saved
+      : {};
+
+  const savedSpecialCampaignEntry =
+    safeSaved.specialcampaign ||
+    safeSaved["special-campaign"] ||
+    Object.values(safeSaved).find(
+      (definition:any)=>{
+        const identity = String(
+          [
+            definition?.label,
+            definition?.tag,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        )
+          .trim()
+          .toLowerCase();
+
+        return (
+          identity.includes("special") &&
+          identity.includes("campaign")
+        );
+      }
+    ) ||
+    {};
+
   return {
     ...base,
     ...safeSaved,
@@ -929,6 +984,12 @@ const mergeChecklistLaunchTypesWithDefaults = (saved:any) => {
       ...(safeSaved.campaign || {}),
       label: base.campaign.label,
       tag: base.campaign.tag,
+    },
+    specialcampaign:{
+      ...base.specialcampaign,
+      ...(savedSpecialCampaignEntry as any),
+      label:base.specialcampaign.label,
+      tag:base.specialcampaign.tag,
     },
   };
 };
@@ -36959,7 +37020,9 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
   const specialCampaignEditFingerprint = [
     launchTypes?.[launchType]?.label,
     launchTypes?.[launchType]?.tag,
-    launchType,
+    launchType==="specialcampaign"
+      ? "special campaign"
+      : launchType,
     group?.launchType,
     group?.type,
     group?.checklistType,
