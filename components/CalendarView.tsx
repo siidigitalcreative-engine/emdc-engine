@@ -37640,77 +37640,149 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       ""
     ).trim();
 
+    const hasConfiguredLaunchType =
+      !!launchTypeKey &&
+      (
+        Object.prototype.hasOwnProperty.call(
+          launchTypes || {},
+          launchTypeKey
+        ) ||
+        Object.prototype.hasOwnProperty.call(
+          LAUNCH_TYPES || {},
+          launchTypeKey
+        )
+      );
+
     const configuredType =
       launchTypes?.[launchTypeKey] ||
       LAUNCH_TYPES?.[launchTypeKey] ||
       {};
 
+    const ecommerceWorkspace =
+      group?.aiWorkspace?.ecommerce ||
+      {};
+
+    const marketingWorkspace =
+      group?.aiWorkspace?.marketing ||
+      {};
+
+    const digitalWorkspace =
+      group?.aiWorkspace?.digital ||
+      {};
+
     const hasSpecialCampaignWorkspace =
       !!(
-        group?.aiWorkspace
-          ?.ecommerce
+        ecommerceWorkspace
           ?.specialCampaignTracker
       );
 
-    const rawLabel = String(
+    const hasCampaignWorkspace =
+      !!(
+        ecommerceWorkspace
+          ?.campaignBuilder ||
+        ecommerceWorkspace
+          ?.campaignRows ||
+        marketingWorkspace
+          ?.campaignRows ||
+        marketingWorkspace
+          ?.campaignMarketingRows ||
+        digitalWorkspace
+          ?.campaignRows ||
+        digitalWorkspace
+          ?.campaignDigitalRows
+      );
+
+    const explicitLabel = String(
       configuredType?.label ||
       group?.launchTypeLabel ||
       group?.checklistTypeLabel ||
       group?.groupTypeLabel ||
       group?.typeLabel ||
-      launchTypeKey ||
-      "Checklist"
+      ""
     ).trim();
 
-    const normalizedLabel =
+    const configuredTag = String(
+      configuredType?.tag ||
+      group?.launchTypeTag ||
+      ""
+    ).trim();
+
+    const groupName = String(
+      group?.groupName ||
+      group?.name ||
+      group?.title ||
+      ""
+    ).trim();
+
+    const typeFingerprint =
       normalizeChecklistTypeTabKey(
-        rawLabel
+        [
+          explicitLabel,
+          configuredTag,
+          launchTypeKey,
+          groupName,
+        ]
+          .filter(Boolean)
+          .join(" ")
       );
 
-    let key = normalizedLabel;
-    let label = rawLabel;
+    const meaningfulCustomLabel =
+      !!explicitLabel &&
+      explicitLabel.toLowerCase()!=="checklist" &&
+      normalizeChecklistTypeTabKey(
+        explicitLabel
+      )!==normalizeChecklistTypeTabKey(
+        launchTypeKey
+      );
+
+    let key = "unclassified";
+    let label = "Other";
+    let canCreateDynamicTab = false;
 
     if(
       hasSpecialCampaignWorkspace ||
       (
-        normalizedLabel.includes("special") &&
-        normalizedLabel.includes("campaign")
+        typeFingerprint.includes("special") &&
+        typeFingerprint.includes("campaign")
       )
     ){
       key = "special-campaign";
       label = "Special Campaign";
     } else if(
-      normalizedLabel.includes(
+      typeFingerprint.includes(
         "reactivation"
+      ) ||
+      typeFingerprint.includes(
+        "relaunch"
       )
     ){
       key = "product-reactivation";
       label = "Product Reactivation";
     } else if(
-      normalizedLabel.includes(
+      typeFingerprint.includes(
         "introduction"
+      ) ||
+      typeFingerprint.includes(
+        "new-launch"
       )
     ){
       key = "product-introduction";
       label = "Product Introduction";
     } else if(
-      normalizedLabel==="campaign" ||
-      (
-        normalizedLabel.includes(
-          "campaign"
-        ) &&
-        !normalizedLabel.includes(
-          "special"
-        )
+      hasCampaignWorkspace ||
+      typeFingerprint.includes(
+        "campaign"
       )
     ){
       key = "campaign";
       label = "Campaign";
-    } else if(!key){
-      key = normalizeChecklistTypeTabKey(
-        launchTypeKey || "checklist"
-      );
-      label = rawLabel || "Checklist";
+    } else if(
+      hasConfiguredLaunchType &&
+      meaningfulCustomLabel
+    ){
+      key = `custom-${launchTypeKey}`;
+      label = explicitLabel;
+      canCreateDynamicTab = true;
     }
 
     return {
@@ -37721,6 +37793,8 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
         group?.calendarColor ||
         C.accent,
       launchTypeKey,
+      canCreateDynamicTab,
+      hasConfiguredLaunchType,
     };
   };
 
@@ -37768,6 +37842,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       getChecklistGroupTypeMeta(group);
 
     if(
+      meta.canCreateDynamicTab &&
       meta.key &&
       !standardChecklistTypeKeys.has(
         meta.key
@@ -38640,10 +38715,16 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
     if(onGroupCreated) onGroupCreated(g);
 
-    setChecklistTypeFilter(
-      getChecklistGroupTypeMeta(g).key ||
-      "all"
-    );
+    {
+      const createdTypeMeta =
+        getChecklistGroupTypeMeta(g);
+
+      setChecklistTypeFilter(
+        createdTypeMeta.key!=="unclassified"
+          ? createdTypeMeta.key
+          : "all"
+      );
+    }
 
     logActivity({
       action:"created a checklist group",
@@ -38873,13 +38954,19 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     if(typeChanged){
       cleanupPhaseoutProductsForGroup(currentGroup);
 
-      setChecklistTypeFilter(
-        getChecklistGroupTypeMeta({
-          ...currentGroup,
-          ...patch,
-        }).key ||
-        "all"
-      );
+      {
+        const editedTypeMeta =
+          getChecklistGroupTypeMeta({
+            ...currentGroup,
+            ...patch,
+          });
+
+        setChecklistTypeFilter(
+          editedTypeMeta.key!=="unclassified"
+            ? editedTypeMeta.key
+            : "all"
+        );
+      }
 
       const freshItems = buildChecklistItemsFromTemplates(patch.launchType,templates,null);
       setAllGroupItems((prev:any)=>{
