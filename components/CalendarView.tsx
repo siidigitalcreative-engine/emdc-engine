@@ -26548,6 +26548,7 @@ export default function App({
   const [checklistItemsLoadingGroupId,setChecklistItemsLoadingGroupId] = useState("");
   const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
+  const sharedUiSettingsSignatureRef = useRef("");
   const cloudApplyingRef = useRef(false);
   const cloudSavingRef = useRef(false);
   const cloudSaveTimerRef = useRef<any>(null);
@@ -26757,46 +26758,71 @@ export default function App({
       !parsed ||
       typeof parsed!=="object"
     ){
-      return;
+      return false;
     }
 
-    if(
+    const nextLaunchTypes =
       parsed?.checklistLaunchTypes &&
       typeof parsed.checklistLaunchTypes==="object" &&
       !Array.isArray(
         parsed.checklistLaunchTypes
       )
-    ){
-      setChecklistLaunchTypes(
-        mergeChecklistLaunchTypesWithDefaults(
-          parsed.checklistLaunchTypes
-        )
-      );
-    }
+        ? mergeChecklistLaunchTypesWithDefaults(
+            parsed.checklistLaunchTypes
+          )
+        : null;
 
-    if(
+    const nextTemplates =
       parsed?.checklistTemplates &&
       typeof parsed.checklistTemplates==="object" &&
       !Array.isArray(
         parsed.checklistTemplates
       )
+        ? mergeChecklistTemplatesWithDefaults(
+            parsed.checklistTemplates
+          )
+        : null;
+
+    const nextAnnouncement =
+      parsed?.siteAnnouncement &&
+      typeof parsed.siteAnnouncement==="object"
+        ? normalizeSiteAnnouncement(
+            parsed.siteAnnouncement
+          )
+        : null;
+
+    const nextSignature = JSON.stringify({
+      checklistLaunchTypes:
+        nextLaunchTypes,
+      checklistTemplates:
+        nextTemplates,
+      siteAnnouncement:
+        nextAnnouncement,
+    });
+
+    if(
+      nextSignature===
+      sharedUiSettingsSignatureRef.current
     ){
-      setChecklistTemplates(
-        mergeChecklistTemplatesWithDefaults(
-          parsed.checklistTemplates
-        )
+      return false;
+    }
+
+    sharedUiSettingsSignatureRef.current =
+      nextSignature;
+
+    if(nextLaunchTypes){
+      setChecklistLaunchTypes(
+        nextLaunchTypes
       );
     }
 
-    if(
-      parsed?.siteAnnouncement &&
-      typeof parsed.siteAnnouncement==="object"
-    ){
-      const nextAnnouncement =
-        normalizeSiteAnnouncement(
-          parsed.siteAnnouncement
-        );
+    if(nextTemplates){
+      setChecklistTemplates(
+        nextTemplates
+      );
+    }
 
+    if(nextAnnouncement){
       setSiteAnnouncement(
         nextAnnouncement
       );
@@ -26807,6 +26833,8 @@ export default function App({
         );
       }
     }
+
+    return true;
   };
 
   const applyAppState = (parsed:any) => {
@@ -27298,17 +27326,11 @@ export default function App({
           cloud?.updatedAt || ""
         );
 
-      if(
-        remoteUpdatedAt &&
-        remoteUpdatedAt===
-          cloudLastUpdatedAtRef.current
-      ){
-        return cloud;
-      }
-
       // Deliberately apply only the shared settings. The general app-state
       // payload may contain stale checklist groups/items because those use
       // dedicated fast endpoints.
+      // Compare the actual shared settings content. A checklist or SKU save
+      // may change the global updatedAt marker without changing these values.
       applySharedUiSettings(
         cloud?.appState ||
         cloud
@@ -28313,6 +28335,16 @@ export default function App({
           new Event("emdc-local-sync")
         );
       } catch {}
+    }
+
+    if(
+      Object.keys(patch).some(
+        (key:string)=>
+          SHARED_UI_SETTING_KEYS.has(key)
+      )
+    ){
+      sharedUiSettingsSignatureRef.current =
+        "";
     }
 
     const patchForGeneralSave = { ...patch };
