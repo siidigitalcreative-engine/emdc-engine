@@ -26549,6 +26549,10 @@ export default function App({
   const [localSyncTick,setLocalSyncTick] = useState(0);
   const cloudLastUpdatedAtRef = useRef("");
   const sharedUiSettingsSignatureRef = useRef("");
+  const sharedUiRealtimeChannelRef = useRef<any>(null);
+  const sharedUiRealtimeClientIdRef = useRef(
+    `emdc-ui-${Date.now()}-${Math.random().toString(36).slice(2,10)}`
+  );
   const cloudApplyingRef = useRef(false);
   const cloudSavingRef = useRef(false);
   const cloudSaveTimerRef = useRef<any>(null);
@@ -27347,6 +27351,69 @@ export default function App({
     } finally {
       sharedSettingsPollInFlightRef.current =
         false;
+    }
+  };
+
+  const broadcastSharedUiSettingsChange = async (
+    patch:any,
+    updatedAt:string
+  ) => {
+    const changedKeys = Object.keys(
+      patch &&
+      typeof patch==="object"
+        ? patch
+        : {}
+    ).filter((key:string)=>
+      SHARED_UI_SETTING_KEYS.has(key)
+    );
+
+    if(!changedKeys.length){
+      return;
+    }
+
+    const message = {
+      type:"broadcast",
+      event:"shared-settings-updated",
+      payload:{
+        changedKeys,
+        updatedAt:String(
+          updatedAt || ""
+        ),
+        senderId:
+          sharedUiRealtimeClientIdRef.current,
+      },
+    };
+
+    try {
+      const currentChannel =
+        sharedUiRealtimeChannelRef.current;
+
+      if(currentChannel){
+        await currentChannel.send(
+          message
+        );
+        return;
+      }
+
+      // A user may save during initial connection. channel.send() before
+      // subscribe uses the Supabase HTTP broadcast path as a fallback.
+      const supabase = createClient();
+      const temporaryChannel =
+        supabase.channel(
+          "emdc-shared-ui-settings-v1"
+        );
+
+      try {
+        await temporaryChannel.send(
+          message
+        );
+      } finally {
+        await supabase.removeChannel(
+          temporaryChannel
+        );
+      }
+    } catch {
+      // Existing Blob polling remains the fallback if Realtime is unavailable.
     }
   };
 
@@ -28241,12 +28308,20 @@ export default function App({
       const json =
         await res.json().catch(()=>null);
 
-      cloudLastUpdatedAtRef.current =
+      const savedUpdatedAt =
         String(
           json?.data?.updatedAt ||
           json?.updatedAt ||
           updatedAt
         );
+
+      cloudLastUpdatedAtRef.current =
+        savedUpdatedAt;
+
+      await broadcastSharedUiSettingsChange(
+        patch,
+        savedUpdatedAt
+      );
 
       setCloudSyncStatus("Synced");
     } catch {
@@ -28573,6 +28648,75 @@ export default function App({
   }, [appStateHydrated]);
 
   useEffect(() => {
+    if(!cloudHydrated){
+      return;
+    }
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(
+        "emdc-shared-ui-settings-v1",
+        {
+          config:{
+            broadcast:{
+              self:false,
+              ack:false,
+            },
+          },
+        }
+      )
+      .on(
+        "broadcast",
+        {
+          event:
+            "shared-settings-updated",
+        },
+        (message:any)=>{
+          const senderId = String(
+            message?.payload?.senderId ||
+            ""
+          );
+
+          if(
+            senderId &&
+            senderId===
+              sharedUiRealtimeClientIdRef
+                .current
+          ){
+            return;
+          }
+
+          // Realtime carries only the change signal. The actual values are
+          // always re-read from the Vercel Blob-backed API.
+          void fetchSharedUiSettings();
+        }
+      );
+
+    sharedUiRealtimeChannelRef.current =
+      channel;
+
+    channel.subscribe((status:string)=>{
+      if(status==="SUBSCRIBED"){
+        void fetchSharedUiSettings();
+      }
+    });
+
+    return ()=>{
+      if(
+        sharedUiRealtimeChannelRef.current===
+        channel
+      ){
+        sharedUiRealtimeChannelRef.current =
+          null;
+      }
+
+      void supabase.removeChannel(
+        channel
+      );
+    };
+  },[cloudHydrated]);
+
+  useEffect(() => {
     if (!cloudHydrated) return;
 
     void fetchSharedUiSettings();
@@ -28582,19 +28726,74 @@ export default function App({
       void fetchSharedUiSettings();
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+    const refreshVisiblePage = () => {
+      if(
+        document.visibilityState===
+        "visible"
+      ){
         void pollSyncV2();
         void fetchSharedUiSettings();
       }
     };
 
-    const timer = window.setInterval(heartbeat, 3000);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const handleVisibilityChange = () => {
+      refreshVisiblePage();
+    };
+
+    const handleFocus = () => {
+      refreshVisiblePage();
+    };
+
+    const handlePageShow = () => {
+      refreshVisiblePage();
+    };
+
+    const handleOnline = () => {
+      refreshVisiblePage();
+    };
+
+    // This remains only as a fallback for blocked WebSockets or temporary
+    // Realtime interruptions. Normal cross-device updates use Broadcast.
+    const timer = window.setInterval(
+      heartbeat,
+      3000
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+    window.addEventListener(
+      "focus",
+      handleFocus
+    );
+    window.addEventListener(
+      "pageshow",
+      handlePageShow
+    );
+    window.addEventListener(
+      "online",
+      handleOnline
+    );
 
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+      window.removeEventListener(
+        "focus",
+        handleFocus
+      );
+      window.removeEventListener(
+        "pageshow",
+        handlePageShow
+      );
+      window.removeEventListener(
+        "online",
+        handleOnline
+      );
     };
   }, [cloudHydrated]);
 
