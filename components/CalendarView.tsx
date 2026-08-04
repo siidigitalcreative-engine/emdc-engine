@@ -441,6 +441,11 @@ const DEPTS = {
 const LAUNCH_TYPES = {
   introduction:{ label:"Product Introduction", tag:"New Launch", color:"#111827" },
   campaign:    { label:"Campaign",              tag:"Promo Plan",  color:"#F59E0B" },
+  specialcampaign:{
+    label:"Special Campaign",
+    tag:"Special Campaign",
+    color:"#F97316",
+  },
   reactivation:{ label:"Product Reactivation",  tag:"Relaunch",   color:"#374151" },
   phaseout:    { label:"Product Phase-Out",      tag:"Closeout",   color:"#9CA3AF" },
 };
@@ -466,6 +471,26 @@ const TEMPLATES = {
     marketing:["Define campaign objective, promotion angle, and key selling message","Build campaign content plan for Meta, TikTok, Shopee, Lazada, and website","Create ad copy directions for single image, carousel, collection, Reels, and TikTok ads","Prepare campaign caption sets, hooks, headlines, and CTA variations","Set paid media budget, targeting, retargeting, and optimization schedule","Coordinate affiliate, KOL, livestream, and social posting requirements","Review campaign creative outputs and approve final marketing assets","Monitor campaign performance and update optimization notes","Prepare daily or milestone campaign performance summary","Collect learnings for the next campaign cycle"],
     digital:["Create campaign key visual direction and overall design treatment","Design campaign banners for marketplace, website, Meta, and TikTok placements","Create product image prompts, lifestyle prompts, and creative asset directions","Produce carousel, feed, story, and Reels/TikTok creative layouts","Prepare digital creative asset links table for product image, CEM banner, store banner, feed, story, and showcase video","Generate or upload final creative output links and add approved assets to Overview manually","Export all campaign assets in required sizes and platform-safe formats","QA all creative assets for readability, spacing, product accuracy, and brand consistency","Archive final campaign files with clear naming convention","Update source tabs when Overview cards are edited or finalized"],
   },
+  specialcampaign:{
+    ecommerce:[
+      "Complete the Campaign Brief with campaign name, platform, store or account, deadline, and request instructions",
+      "Add the main Seller Kit and editable asset folder links",
+      "Create the Asset Requirements & Output Tracker rows",
+      "Assign the featured SKU or SKUs to every requirement row",
+      "Complete the copy or headline instructions and notes for each requirement",
+      "Send the completed requirement rows to Digital Creative",
+      "Add the Campaign Brief & Seller Kit to Overview",
+    ],
+    marketing:[],
+    digital:[
+      "Review all shared Special Campaign requirement rows",
+      "Complete the required dimensions for every collateral row",
+      "Add the final preview image URL for every completed requirement",
+      "Add the final Google Drive asset or folder link",
+      "Update the production status for every requirement row",
+      "Add completed requirement rows to Overview",
+    ],
+  },
   reactivation:{
     // Keep Product Reactivation using the exact same operational template/settings as Product Introduction.
     ecommerce:["Create and activate product listings on Shopee, Lazada, and TikTok Shop","Upload complete product photography (main, variant, lifestyle, infographic)","Write and optimize product title, description, and bullet points","Set up pricing tiers (regular, sale, bundle) across all platforms","Configure inventory allocation per channel via Ginee","Set up platform vouchers and launch-day promotional mechanics","Submit product for platform-level featuring or spotlight badge","Enable Shopify product page and confirm cross-channel sync","Configure shipping class, weight, and fulfillment rules","QA all listings: images, specs, pricing, variants, and stock display"],
@@ -481,17 +506,180 @@ const TEMPLATES = {
 
 const mergeChecklistLaunchTypesWithDefaults = (saved:any) => {
   const base = { ...LAUNCH_TYPES };
-  const safeSaved = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  const safeSaved =
+    saved &&
+    typeof saved==="object" &&
+    !Array.isArray(saved)
+      ? saved
+      : {};
+
+  const savedSpecialCampaignEntry =
+    safeSaved.specialcampaign ||
+    safeSaved["special-campaign"] ||
+    Object.values(safeSaved).find(
+      (definition:any)=>{
+        const identity = String(
+          [
+            definition?.label,
+            definition?.tag,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        )
+          .trim()
+          .toLowerCase();
+
+        return (
+          identity.includes("special") &&
+          identity.includes("campaign")
+        );
+      }
+    ) ||
+    {};
+
   return {
     ...base,
     ...safeSaved,
-    campaign: {
+    campaign:{
       ...base.campaign,
       ...(safeSaved.campaign || {}),
-      label: base.campaign.label,
-      tag: base.campaign.tag,
+      label:base.campaign.label,
+      tag:base.campaign.tag,
+    },
+    specialcampaign:{
+      ...base.specialcampaign,
+      ...(savedSpecialCampaignEntry as any),
+      label:base.specialcampaign.label,
+      tag:base.specialcampaign.tag,
     },
   };
+};
+
+const normalizeChecklistTypeIdentity = (value:any) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+
+const hasSpecialCampaignGroupSignals = (
+  group:any,
+  launchTypes:any=LAUNCH_TYPES
+) => {
+  if(!group || typeof group!=="object"){
+    return false;
+  }
+
+  const launchTypeKey = String(
+    group?.launchType || ""
+  ).trim();
+
+  const configuredType =
+    launchTypes?.[launchTypeKey] ||
+    (LAUNCH_TYPES as any)?.[launchTypeKey] ||
+    null;
+
+  const configuredIdentity =
+    normalizeChecklistTypeIdentity(
+      [
+        configuredType?.label,
+        configuredType?.tag,
+        launchTypeKey,
+        group?.launchTypeLabel,
+        group?.checklistType,
+        group?.checklistTypeLabel,
+        group?.groupType,
+        group?.groupTypeLabel,
+        group?.type,
+        group?.typeLabel,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+  if(
+    launchTypeKey==="specialcampaign" ||
+    launchTypeKey==="special-campaign" ||
+    (
+      configuredIdentity.includes("special") &&
+      configuredIdentity.includes("campaign")
+    )
+  ){
+    return true;
+  }
+
+  const ecommerceWorkspace =
+    group?.aiWorkspace?.ecommerce ||
+    {};
+
+  const overviewRows =
+    group?.aiWorkspace?.overview?.items ||
+    group?.aiWorkspace?.overviewRows ||
+    [];
+
+  const hasSpecialWorkspace =
+    !!(
+      ecommerceWorkspace?.specialCampaignTracker ||
+      group?.specialCampaignTracker ||
+      ecommerceWorkspace?.campaignBriefSellerKit ||
+      ecommerceWorkspace?.assetRequirementsTracker
+    ) ||
+    (
+      Array.isArray(overviewRows) &&
+      overviewRows.some((row:any)=>{
+        const sourceType = String(
+          row?.sourceRef?.type ||
+          row?.type ||
+          ""
+        ).toLowerCase();
+
+        return (
+          sourceType.includes("specialcampaign") ||
+          sourceType.includes("special campaign")
+        );
+      })
+    );
+
+  if(hasSpecialWorkspace){
+    return true;
+  }
+
+  // Recover only unknown legacy IDs. Configured standard/custom types are
+  // never reclassified by group-name wording.
+  if(configuredType){
+    return false;
+  }
+
+  const groupName =
+    normalizeChecklistTypeIdentity(
+      group?.groupName ||
+      group?.name ||
+      group?.title ||
+      ""
+    );
+
+  const obviousLegacySpecialName =
+    groupName.includes("campaign brief") ||
+    groupName.includes("seller kit") ||
+    groupName.includes("asset requirement") ||
+    groupName.includes("collateral tracker") ||
+    groupName.includes("special campaign");
+
+  if(obviousLegacySpecialName){
+    return true;
+  }
+
+  const isPlatformExclusive =
+    groupName.includes("exclusive") &&
+    (
+      groupName.includes("shopee") ||
+      groupName.includes("lazada") ||
+      groupName.includes("tiktok") ||
+      groupName.includes("landers")
+    );
+
+  return isPlatformExclusive;
 };
 
 const mergeChecklistTemplatesWithDefaults = (saved:any) => {
@@ -6033,7 +6221,24 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return next;
   }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
-  const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
+  const lt=
+    launchTypes?.[group.launchType] ||
+    (LAUNCH_TYPES as any)?.[group.launchType] ||
+    (
+      hasSpecialCampaignGroupSignals(
+        group,
+        launchTypes
+      )
+        ? (
+            launchTypes?.specialcampaign ||
+            LAUNCH_TYPES.specialcampaign
+          )
+        : {
+            label:"Checklist",
+            tag:"Custom",
+            color:C.accent,
+          }
+    );
   const groupColor = group.calendarColor || lt?.color || C.accent;
   const linkedEvents = (events||[]).filter((ev:any)=>(group.linkedEventIds||[]).includes(ev.id));
   const allItems = Object.values(items || {}).flat().filter((item:any)=>item && typeof item==="object");
@@ -14573,6 +14778,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const checklistAnnouncementType = (() => {
         const raw = String(
+          lt?.label ||
           launchTypes?.[group.launchType]?.label ||
           group.launchType ||
           ""
@@ -18691,6 +18897,27 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
           productName:String(s?.productName || s?.product || s?.name || value),
         };
       });
+  const selectedLaunchTypeDefinition =
+    launchTypes?.[selType] ||
+    (LAUNCH_TYPES as any)?.[selType] ||
+    {};
+
+  const isSpecialCampaignType =
+    selType==="specialcampaign" ||
+    selType==="special-campaign" ||
+    (
+      String(
+        selectedLaunchTypeDefinition?.label ||
+        selectedLaunchTypeDefinition?.tag ||
+        ""
+      ).toLowerCase().includes("special") &&
+      String(
+        selectedLaunchTypeDefinition?.label ||
+        selectedLaunchTypeDefinition?.tag ||
+        ""
+      ).toLowerCase().includes("campaign")
+    );
+
   const isPhaseoutType = selType==="phaseout" || (launchTypes?.[selType]?.label || "").toLowerCase().includes("phase-out");
   const selectedCalendarType = calendarTypes.find((t:any)=>t.id===calendarType) || defaultCalendarType;
   const onCalendarTypeChange = (id:any) => {
@@ -18731,7 +18958,10 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
     setPhaseoutHelperMsg(`${result.usedAi?"Gemini AI":"Fallback helper"} matched ${totalProducts} phase-out SKU${totalProducts>1?"s":""} to ${ids.length} high-sales event/season card${ids.length>1?"s":""}.`);
   };
 
-  const canNext=finalSkus.length>0&&selType&&groupName.trim();
+  const canNext=
+    (finalSkus.length>0 || isSpecialCampaignType) &&
+    !!selType &&
+    !!groupName.trim();
   return (
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:18 }}>
@@ -18893,7 +19123,37 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       setCalendarType(loadedCalendarType || "");
       setCalendarColor(group.calendarColor || group.color || matchedCalendarType.color || "#8B5CF6");
       setLinkedEventIds(Array.isArray(group.linkedEventIds)?group.linkedEventIds:[]);
-      const availableTypes = Object.keys(launchTypes||LAUNCH_TYPES); setLaunchType((group.launchType&&availableTypes.includes(group.launchType)) ? group.launchType : (availableTypes[0]||"introduction"));
+      const availableTypes =
+        Object.keys(
+          launchTypes || LAUNCH_TYPES
+        );
+
+      const resolvedExistingLaunchType =
+        (
+          group.launchType &&
+          availableTypes.includes(
+            group.launchType
+          )
+        )
+          ? group.launchType
+          : (
+              hasSpecialCampaignGroupSignals(
+                group,
+                launchTypes
+              ) &&
+              availableTypes.includes(
+                "specialcampaign"
+              )
+            )
+              ? "specialcampaign"
+              : (
+                  availableTypes[0] ||
+                  "introduction"
+                );
+
+      setLaunchType(
+        resolvedExistingLaunchType
+      );
       setSkus(existingSkus);
       setPickedSkus(useStorageMode ? storageMatches : []);
       setSkuMode(useStorageMode ? "storage" : "manual");
@@ -18920,8 +19180,39 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
           productName:String(s?.productName || s?.product || s?.name || value),
         };
       });
+  const selectedEditLaunchTypeDefinition =
+    launchTypes?.[launchType] ||
+    (LAUNCH_TYPES as any)?.[launchType] ||
+    {};
+
+  const isSpecialCampaignType =
+    launchType==="specialcampaign" ||
+    launchType==="special-campaign" ||
+    (
+      String(
+        selectedEditLaunchTypeDefinition?.label ||
+        selectedEditLaunchTypeDefinition?.tag ||
+        ""
+      ).toLowerCase().includes("special") &&
+      String(
+        selectedEditLaunchTypeDefinition?.label ||
+        selectedEditLaunchTypeDefinition?.tag ||
+        ""
+      ).toLowerCase().includes("campaign")
+    );
+
   const isPhaseoutType = launchType==="phaseout" || (launchTypes?.[launchType]?.label || "").toLowerCase().includes("phase-out");
-  const canSave = finalSkus.length>0 && groupName.trim();
+  const canSave =
+    (finalSkus.length>0 || isSpecialCampaignType) &&
+    !!groupName.trim();
+
+  const originalResolvedLaunchType =
+    hasSpecialCampaignGroupSignals(
+      group,
+      launchTypes
+    )
+      ? "specialcampaign"
+      : group?.launchType;
   const onCalendarTypeChange = (id:any) => {
     if (id === "__none__" || id === "") {
       setCalendarType("");
@@ -19068,6 +19359,22 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
           )}
         </Field>
 
+        {isSpecialCampaignType&&(
+          <div
+            style={{
+              padding:"10px 12px",
+              borderRadius:9,
+              background:"#FFF7ED",
+              border:"1px solid #FED7AA",
+              fontSize:11.5,
+              color:"#9A3412",
+              lineHeight:1.45,
+            }}
+          >
+            SKUs are optional for Special Campaign. You can save the group title and campaign settings without adding a SKU.
+          </div>
+        )}
+
         <Field label="Operational Type" hint="changing this will load the default tasks for the selected type">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
@@ -19078,7 +19385,7 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
             ))}
           </div>
         </Field>
-        {group?.launchType!==launchType&&(
+        {originalResolvedLaunchType!==launchType&&(
           <div style={{ padding:"10px 12px",borderRadius:9,background:"#FFFBEB",border:"1px solid #FDE68A",fontSize:12,color:"#92400E",lineHeight:1.45 }}>
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
@@ -19548,10 +19855,11 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       .filter(Boolean)
       .join(" ");
 
-    const hasSpecialCampaignWorkspace = !!(
-      group?.aiWorkspace?.ecommerce?.specialCampaignTracker ||
-      group?.specialCampaignTracker
-    );
+    const hasSpecialCampaignWorkspace =
+      hasSpecialCampaignGroupSignals(
+        group,
+        launchTypes
+      );
 
     if(
       hasSpecialCampaignWorkspace ||
@@ -20068,6 +20376,16 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       group?.launchType || ""
     ).trim();
 
+    if(
+      hasSpecialCampaignGroupSignals(
+        group,
+        launchTypes
+      ) &&
+      nextTemplates?.specialcampaign
+    ){
+      return "specialcampaign";
+    }
+
     const groupIdentity =
       getLaunchTypeIdentity(groupKey);
 
@@ -20124,13 +20442,23 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   ) => {
     if(!targetLaunchType) return true;
 
-    const groupKey = String(
-      group?.launchType || ""
-    ).trim();
     const targetKey = String(
       targetLaunchType || ""
     ).trim();
 
+    if(
+      targetKey==="specialcampaign" &&
+      hasSpecialCampaignGroupSignals(
+        group,
+        launchTypes
+      )
+    ){
+      return true;
+    }
+
+    const groupKey = String(
+      group?.launchType || ""
+    ).trim();
     if(groupKey===targetKey){
       return true;
     }
@@ -20979,7 +21307,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
           {visibleChecklistGroups
-            .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const compactSummary=(g?.progressSummary && typeof g.progressSummary==="object") ? g.progressSummary : {}; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id]; const deptOrder=["ecommerce","marketing","digital"]; if(gItems){ return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); } const summaryDepartments=(compactSummary?.departments && typeof compactSummary.departments==="object") ? compactSummary.departments : {}; return deptOrder.filter((dept:string)=>Number(summaryDepartments?.[dept]?.total || 0)>0 && Number(summaryDepartments?.[dept]?.done || 0)>=Number(summaryDepartments?.[dept]?.total || 0)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
+            .map(g=>{ const lt=launchTypes[g.launchType] || (LAUNCH_TYPES as any)[g.launchType] || (hasSpecialCampaignGroupSignals(g,launchTypes) ? (launchTypes?.specialcampaign || LAUNCH_TYPES.specialcampaign) : { label:"Checklist", tag:"Custom", color:C.accent }); const groupColor=g.calendarColor||lt?.color||C.accent; const compactSummary=(g?.progressSummary && typeof g.progressSummary==="object") ? g.progressSummary : {}; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id]; const deptOrder=["ecommerce","marketing","digital"]; if(gItems){ return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); } const summaryDepartments=(compactSummary?.departments && typeof compactSummary.departments==="object") ? compactSummary.departments : {}; return deptOrder.filter((dept:string)=>Number(summaryDepartments?.[dept]?.total || 0)>0 && Number(summaryDepartments?.[dept]?.done || 0)>=Number(summaryDepartments?.[dept]?.total || 0)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
             <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px",minWidth:0 }}>
                 <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",alignItems:"flex-start",gap:8,marginBottom:10,minWidth:0 }}>
