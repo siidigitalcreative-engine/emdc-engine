@@ -19397,7 +19397,7 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 };
 
 // ─── CHECKLIST VIEW ──────────────────────────────────────────────────────────
-const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onChecklistItemsDirectSave, onChecklistGroupsDirectSave, onRouteChange, groups, setGroups, checklistTrash=[], setChecklistTrash, allGroupItems, setAllGroupItems, statuses, setStatuses, checklistItemsLoadingGroupId="" }: any) => {
+const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, setSeasonalEvents, calendarTypes=DEFAULT_EVENT_TYPES, navigateToGroupId, navigateToGroupTab="tasks", onGroupNavigated, onStateChange, onChecklistItemsDirectSave, onChecklistGroupsDirectSave, onRouteChange, groups, setGroups, checklistTrash=[], setChecklistTrash, allGroupItems, setAllGroupItems, statuses, setStatuses, checklistItemsLoadingGroupId="", sharedLaunchTypes, setSharedLaunchTypes, sharedTemplates, setSharedTemplates }: any) => {
   const [active,setActive]     = useState(null);
   const [creating,setCreating] = useState(false);
   const [editingGroup,setEditingGroup] = useState(null);
@@ -19492,24 +19492,33 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     persistChecklistStatusesNow(s);
     if(onStateChange) onStateChange({checklistStatuses:s});
   };
-  const [launchTypes,setLaunchTypes] = useState<any>(() => {
-    if (typeof window === "undefined") return mergeChecklistLaunchTypesWithDefaults(null);
-    try {
-      const raw = localStorage.getItem("emdc_checklist_launch_types_v1");
-      const parsed = raw ? JSON.parse(raw) : null;
-      return mergeChecklistLaunchTypesWithDefaults(parsed);
-    } catch {}
-    return mergeChecklistLaunchTypesWithDefaults(null);
-  });
-  const [templates,setTemplates]   = useState<any>(() => {
-    if (typeof window === "undefined") return mergeChecklistTemplatesWithDefaults(null);
-    try {
-      const raw = localStorage.getItem("emdc_checklist_templates_v1");
-      const parsed = raw ? JSON.parse(raw) : null;
-      return mergeChecklistTemplatesWithDefaults(parsed);
-    } catch {}
-    return mergeChecklistTemplatesWithDefaults(null);
-  });
+  const [launchTypes,setLaunchTypes] = useState<any>(
+    ()=>mergeChecklistLaunchTypesWithDefaults(
+      sharedLaunchTypes
+    )
+  );
+
+  const [templates,setTemplates] = useState<any>(
+    ()=>mergeChecklistTemplatesWithDefaults(
+      sharedTemplates
+    )
+  );
+
+  useEffect(()=>{
+    setLaunchTypes(
+      mergeChecklistLaunchTypesWithDefaults(
+        sharedLaunchTypes
+      )
+    );
+  },[sharedLaunchTypes]);
+
+  useEffect(()=>{
+    setTemplates(
+      mergeChecklistTemplatesWithDefaults(
+        sharedTemplates
+      )
+    );
+  },[sharedTemplates]);
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
 
@@ -19631,6 +19640,24 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     };
   };
 
+  const sharedSpecialCampaignDefinition = Object.values(
+    launchTypes || {}
+  ).find((definition:any)=>{
+    const identity = String(
+      [
+        definition?.label,
+        definition?.tag,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    ).toLowerCase();
+
+    return (
+      identity.includes("special") &&
+      identity.includes("campaign")
+    );
+  }) as any;
+
   const standardChecklistTypeTabs = [
     {
       key:"product-introduction",
@@ -19650,7 +19677,9 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     {
       key:"special-campaign",
       label:"Special Campaign",
-      color:"#F97316",
+      color:
+        sharedSpecialCampaignDefinition?.color ||
+        "#F97316",
     },
   ];
 
@@ -20331,6 +20360,14 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       // Save the edited default-task template to the shared app state.
       // Without this cloud/app-state save, the checklist task sync can work,
       // but reopening Manage Templates may restore the older template.
+      if(setSharedTemplates){
+        setSharedTemplates(
+          mergeChecklistTemplatesWithDefaults(
+            next
+          )
+        );
+      }
+
       if(onStateChange){
         onStateChange({
           checklistTemplates:next,
@@ -20353,32 +20390,32 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
   const updateLaunchTypesAndSync = (updater:any) => {
     setLaunchTypes((prev:any)=>{
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if(onStateChange) onStateChange({checklistLaunchTypes:next});
-      return next;
+      const next =
+        typeof updater==="function"
+          ? updater(prev)
+          : updater;
+
+      const normalizedNext =
+        mergeChecklistLaunchTypesWithDefaults(
+          next
+        );
+
+      if(setSharedLaunchTypes){
+        setSharedLaunchTypes(
+          normalizedNext
+        );
+      }
+
+      if(onStateChange){
+        onStateChange({
+          checklistLaunchTypes:
+            normalizedNext,
+        });
+      }
+
+      return normalizedNext;
     });
   };
-
-  useEffect(()=>{
-    try {
-      localStorage.setItem("emdc_checklist_launch_types_v1", JSON.stringify(launchTypes));
-      window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch {}
-  },[launchTypes]);
-
-  useEffect(()=>{
-    // Browser cache only. The shared app-state save in
-    // updateTemplatesAndChecklistItems is the authoritative persistence path.
-    try {
-      localStorage.setItem(
-        "emdc_checklist_templates_v1",
-        JSON.stringify(templates)
-      );
-      window.dispatchEvent(
-        new Event("emdc-local-sync")
-      );
-    } catch {}
-  },[templates]);
 
   const applyPhaseoutAssignments = (assignments:any) => {
     if(!assignments || !setSeasonalEvents) return;
@@ -25877,6 +25914,19 @@ export default function App({
   const [checklistTrash,setChecklistTrash] = useState<any[]>(initialData?.checklistTrash ?? []);
   const [checklistAllItems,setChecklistAllItems] = useState<Record<string,any>>(initialData?.checklistItems ?? {});
   const [checklistStatuses,setChecklistStatuses] = useState<any[]>(initialData?.checklistStatuses ?? DEFAULT_STATUSES);
+
+  const [checklistLaunchTypes,setChecklistLaunchTypes] = useState<any>(
+    ()=>mergeChecklistLaunchTypesWithDefaults(
+      initialData?.checklistLaunchTypes
+    )
+  );
+
+  const [checklistTemplates,setChecklistTemplates] = useState<any>(
+    ()=>mergeChecklistTemplatesWithDefaults(
+      initialData?.checklistTemplates
+    )
+  );
+
   const [siteAnnouncement,setSiteAnnouncement] = useState<any>(()=>
     normalizeSiteAnnouncement(initialData?.siteAnnouncement)
   );
@@ -26151,8 +26201,6 @@ export default function App({
     "emdc_text_saved_outputs_v1",
     "emdc_ad_template_platforms_v1",
     "emdc_saved_ad_templates_v1",
-    "emdc_checklist_launch_types_v1",
-    "emdc_checklist_templates_v1",
     "emdc_calendar_manual_events_v1",
     "emdc_seasonal_events_v1",
     "emdc_calendar_types_v1",
@@ -26175,6 +26223,9 @@ export default function App({
     checklistTrash,
     checklistItems: checklistAllItems,
     checklistStatuses,
+    checklistLaunchTypes,
+    checklistTemplates,
+    siteAnnouncement,
     calendarEvents: calendarManualEvents,
     calendarTypes: calendarEventTypes,
     seasonalEvents,
@@ -26219,6 +26270,30 @@ export default function App({
           checklistStatuses:nextStatuses,
         }));
       } catch {}
+    }
+
+    if(
+      patch.checklistLaunchTypes &&
+      typeof patch.checklistLaunchTypes==="object" &&
+      !Array.isArray(patch.checklistLaunchTypes)
+    ){
+      setChecklistLaunchTypes(
+        mergeChecklistLaunchTypesWithDefaults(
+          patch.checklistLaunchTypes
+        )
+      );
+    }
+
+    if(
+      patch.checklistTemplates &&
+      typeof patch.checklistTemplates==="object" &&
+      !Array.isArray(patch.checklistTemplates)
+    ){
+      setChecklistTemplates(
+        mergeChecklistTemplatesWithDefaults(
+          patch.checklistTemplates
+        )
+      );
     }
 
     try {
@@ -26298,6 +26373,31 @@ export default function App({
       setChecklistAllItems(cleanAllItems);
     }
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
+
+    if(
+      hydratedParsed?.checklistLaunchTypes &&
+      typeof hydratedParsed.checklistLaunchTypes==="object" &&
+      !Array.isArray(hydratedParsed.checklistLaunchTypes)
+    ){
+      setChecklistLaunchTypes(
+        mergeChecklistLaunchTypesWithDefaults(
+          hydratedParsed.checklistLaunchTypes
+        )
+      );
+    }
+
+    if(
+      hydratedParsed?.checklistTemplates &&
+      typeof hydratedParsed.checklistTemplates==="object" &&
+      !Array.isArray(hydratedParsed.checklistTemplates)
+    ){
+      setChecklistTemplates(
+        mergeChecklistTemplatesWithDefaults(
+          hydratedParsed.checklistTemplates
+        )
+      );
+    }
+
     if(
       hydratedParsed?.siteAnnouncement &&
       typeof hydratedParsed.siteAnnouncement==="object"
@@ -26336,8 +26436,17 @@ export default function App({
       ) {
         try {
           Object.entries(cloud.localStorage).forEach(([key,value]:any)=>{
-            if (String(key || "").startsWith("emdc") && typeof value === "string") {
-              localStorage.setItem(key,value);
+            const localKey = String(key || "");
+
+            if(
+              localKey==="emdc_checklist_launch_types_v1" ||
+              localKey==="emdc_checklist_templates_v1"
+            ){
+              return;
+            }
+
+            if (localKey.startsWith("emdc") && typeof value === "string") {
+              localStorage.setItem(localKey,value);
             }
           });
         } catch {}
@@ -27667,6 +27776,30 @@ export default function App({
     }
 
     if(
+      patch.checklistLaunchTypes &&
+      typeof patch.checklistLaunchTypes==="object" &&
+      !Array.isArray(patch.checklistLaunchTypes)
+    ){
+      setChecklistLaunchTypes(
+        mergeChecklistLaunchTypesWithDefaults(
+          patch.checklistLaunchTypes
+        )
+      );
+    }
+
+    if(
+      patch.checklistTemplates &&
+      typeof patch.checklistTemplates==="object" &&
+      !Array.isArray(patch.checklistTemplates)
+    ){
+      setChecklistTemplates(
+        mergeChecklistTemplatesWithDefaults(
+          patch.checklistTemplates
+        )
+      );
+    }
+
+    if(
       patch.siteAnnouncement &&
       typeof patch.siteAnnouncement==="object"
     ){
@@ -27757,6 +27890,8 @@ export default function App({
         if (key === "emdc_app_state_history_v1") continue;
         if (key === "emdc_sku_items_v1") continue;
         if (key === "emdc_sku_items_last_good_v1") continue;
+        if (key === "emdc_checklist_launch_types_v1") continue;
+        if (key === "emdc_checklist_templates_v1") continue;
         if (key.includes("history")) continue;
         if (key.includes("last_good")) continue;
 
@@ -28399,7 +28534,7 @@ export default function App({
           </div>
           {tab==="calendar"   && <CalendarView extraEvents={allCalExtra} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} brands={brands} skuStorage={skuStorage} setSkuStorage={setSkuStorage} onNavigateToGroup={handleNavigateToGroup} onStateChange={handleRootStateChange} manualEvents={calendarManualEvents} setManualEvents={setCalendarManualEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
           {tab==="events"     && <EventsView skuStorage={skuStorage} brands={brands} onStateChange={handleRootStateChange} events={seasonalEvents} setEvents={setSeasonalEvents} eventTypes={calendarEventTypes} setEventTypes={setCalendarEventTypes} />}
-          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} checklistTrash={checklistTrash} setChecklistTrash={setChecklistTrash} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} checklistItemsLoadingGroupId={checklistItemsLoadingGroupId} />}
+          {tab==="checklists" && <ChecklistView onGroupCreated={handleGroupCreated} skuStorage={skuStorage} brands={brands} seasonalEvents={seasonalEvents} setSeasonalEvents={setSeasonalEvents} calendarTypes={calendarEventTypes} navigateToGroupId={navigateToGroupId} navigateToGroupTab={routeGroupTab} onGroupNavigated={()=>setNavigateToGroupId(null)} onRouteChange={applyRoute} onStateChange={handleRootStateChange} onChecklistItemsDirectSave={saveChecklistItemsDirect} onChecklistGroupsDirectSave={saveChecklistGroupsDirect} groups={checklistGroups} setGroups={setChecklistGroups} checklistTrash={checklistTrash} setChecklistTrash={setChecklistTrash} allGroupItems={checklistAllItems} setAllGroupItems={setChecklistAllItems} statuses={checklistStatuses} setStatuses={setChecklistStatuses} checklistItemsLoadingGroupId={checklistItemsLoadingGroupId} sharedLaunchTypes={checklistLaunchTypes} setSharedLaunchTypes={setChecklistLaunchTypes} sharedTemplates={checklistTemplates} setSharedTemplates={setChecklistTemplates} />}
           {tab==="skus"       && <SKUStorage brands={brands} setBrands={setBrands} skuStorage={skuStorage} setSkuStorage={setSkuStorageAndSave} skuTableColumns={skuTableColumns} setSkuTableColumns={setSkuTableColumns} onStateChange={handleRootStateChange} onSkuStorageDirectSave={saveSkuStorageDirect} />}
           <div style={{ display: tab==="ai" ? "block" : "none" }}><AIEngineView skuStorage={skuStorage} brands={brands} /></div>
         </div>
