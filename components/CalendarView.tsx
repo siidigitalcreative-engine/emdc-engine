@@ -90,6 +90,38 @@ const GlobalStyles = () => {
       .emdc-top-nav{
         background:#fff;
       }
+
+      .emdc-global-announcement{
+        position:fixed!important;
+        top:0!important;
+        left:0!important;
+        right:0!important;
+        width:100%!important;
+        height:44px!important;
+        min-height:44px!important;
+        z-index:9300!important;
+      }
+
+      .emdc-global-announcement-inner{
+        height:44px!important;
+        min-height:44px!important;
+      }
+
+      .emdc-global-announcement-spacer{
+        width:100%!important;
+        height:var(--emdc-announcement-offset, 0px)!important;
+        min-height:var(--emdc-announcement-offset, 0px)!important;
+        flex:0 0 var(--emdc-announcement-offset, 0px)!important;
+      }
+
+      header.emdc-app-topbar{
+        top:var(--emdc-announcement-offset, 0px)!important;
+      }
+
+      nav.emdc-app-topbar{
+        top:calc(52px + var(--emdc-announcement-offset, 0px))!important;
+      }
+
       @media(max-width:759px){
         .emdc-top-nav{
           position:fixed!important;
@@ -106,18 +138,7 @@ const GlobalStyles = () => {
           min-height:calc(52px + var(--emdc-announcement-offset, 0px))!important;
           width:100%!important;
         }
-        .emdc-global-announcement{
-          position:fixed!important;
-          top:0!important;
-          left:0!important;
-          right:0!important;
-          height:44px!important;
-          min-height:44px!important;
-          z-index:9200!important;
-        }
         .emdc-global-announcement-inner{
-          height:44px!important;
-          min-height:44px!important;
           padding-left:12px!important;
           padding-right:12px!important;
         }
@@ -28817,6 +28838,12 @@ export default function App({
       )}
 
         <GlobalAnnouncementBar announcement={siteAnnouncement} />
+
+        <div
+          className="emdc-global-announcement-spacer"
+          aria-hidden="true"
+        />
+
         <AppTopBar />
 
         {/* ── Page content ─────────────────────────────────────────────────── */}
