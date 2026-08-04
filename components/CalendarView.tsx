@@ -1079,16 +1079,39 @@ const clearHeavyEmdcLocalBackupKeys = () => {
 
 const makeLocalStorableEmdcAppState = (state:any) => {
   if (!state || typeof state !== "object") return state;
-  const skuItems = Array.isArray(state.skuItems) ? state.skuItems : [];
 
-  // Always keep SKU Storage in its own protected key too. This prevents code updates,
-  // partial cloud payloads, or delayed hydration from wiping user-entered SKU rows.
-  if (skuItems.length) rememberProtectedSkuItems(skuItems,"make-local-storable-app-state");
+  // These values are Vercel Blob shared settings. Never retain a
+  // browser-specific copy that could override another device.
+  const {
+    siteAnnouncement:_siteAnnouncement,
+    checklistLaunchTypes:_checklistLaunchTypes,
+    checklistTemplates:_checklistTemplates,
+    ...cloudIndependentState
+  } = state;
 
-  if (skuItems.length < EMDC_LARGE_SKU_COUNT) return state;
+  const skuItems = Array.isArray(
+    cloudIndependentState.skuItems
+  )
+    ? cloudIndependentState.skuItems
+    : [];
+
+  // Existing SKU recovery behavior remains unchanged.
+  if (skuItems.length) {
+    rememberProtectedSkuItems(
+      skuItems,
+      "make-local-storable-app-state"
+    );
+  }
+
+  if (
+    skuItems.length <
+    EMDC_LARGE_SKU_COUNT
+  ) {
+    return cloudIndependentState;
+  }
 
   return {
-    ...state,
+    ...cloudIndependentState,
     skuItems:[],
     skuItemsExternal:true,
     skuItemsExternalCount:skuItems.length,
@@ -26153,6 +26176,27 @@ const isValidAnnouncementLink = (value:any) => {
   );
 };
 
+const SHARED_UI_SETTING_KEYS = new Set([
+  "siteAnnouncement",
+  "checklistLaunchTypes",
+  "checklistTemplates",
+]);
+
+const isSharedUiSettingsOnlyPatch = (patch:any) => {
+  const keys = Object.keys(
+    patch && typeof patch==="object"
+      ? patch
+      : {}
+  );
+
+  return (
+    keys.length>0 &&
+    keys.every((key:string)=>
+      SHARED_UI_SETTING_KEYS.has(key)
+    )
+  );
+};
+
 const GlobalAnnouncementBar = ({ announcement }:any) => {
   const safeAnnouncement = normalizeSiteAnnouncement(announcement);
   const message = String(safeAnnouncement.message || "").trim();
@@ -26645,10 +26689,20 @@ export default function App({
       );
     }
 
-    try {
-      window.dispatchEvent(new Event("emdc-local-sync"));
-      window.dispatchEvent(new Event("emdc-force-cloud-save"));
-    } catch {}
+    if(
+      !isSharedUiSettingsOnlyPatch(
+        patch
+      )
+    ){
+      try {
+        window.dispatchEvent(
+          new Event("emdc-local-sync")
+        );
+        window.dispatchEvent(
+          new Event("emdc-force-cloud-save")
+        );
+      } catch {}
+    }
   };
 
   const isLargeCloudLocalStorageKey = (key:any, value:any) => {
@@ -26698,9 +26752,70 @@ export default function App({
 
   const writeLocalSnapshot = (snapshot:any) => {};
 
+  const applySharedUiSettings = (parsed:any) => {
+    if(
+      !parsed ||
+      typeof parsed!=="object"
+    ){
+      return;
+    }
+
+    if(
+      parsed?.checklistLaunchTypes &&
+      typeof parsed.checklistLaunchTypes==="object" &&
+      !Array.isArray(
+        parsed.checklistLaunchTypes
+      )
+    ){
+      setChecklistLaunchTypes(
+        mergeChecklistLaunchTypesWithDefaults(
+          parsed.checklistLaunchTypes
+        )
+      );
+    }
+
+    if(
+      parsed?.checklistTemplates &&
+      typeof parsed.checklistTemplates==="object" &&
+      !Array.isArray(
+        parsed.checklistTemplates
+      )
+    ){
+      setChecklistTemplates(
+        mergeChecklistTemplatesWithDefaults(
+          parsed.checklistTemplates
+        )
+      );
+    }
+
+    if(
+      parsed?.siteAnnouncement &&
+      typeof parsed.siteAnnouncement==="object"
+    ){
+      const nextAnnouncement =
+        normalizeSiteAnnouncement(
+          parsed.siteAnnouncement
+        );
+
+      setSiteAnnouncement(
+        nextAnnouncement
+      );
+
+      if(!announcementEditorOpen){
+        setAnnouncementDraft(
+          nextAnnouncement
+        );
+      }
+    }
+  };
+
   const applyAppState = (parsed:any) => {
     if (!parsed || typeof parsed !== "object") return;
     const hydratedParsed = parsed;
+
+    applySharedUiSettings(
+      hydratedParsed
+    );
 
     if (Array.isArray(hydratedParsed?.skuBrands)) setBrands(hydratedParsed.skuBrands);
     if (Array.isArray(hydratedParsed?.skuItems)) {
@@ -26723,42 +26838,6 @@ export default function App({
     }
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
 
-    if(
-      hydratedParsed?.checklistLaunchTypes &&
-      typeof hydratedParsed.checklistLaunchTypes==="object" &&
-      !Array.isArray(hydratedParsed.checklistLaunchTypes)
-    ){
-      setChecklistLaunchTypes(
-        mergeChecklistLaunchTypesWithDefaults(
-          hydratedParsed.checklistLaunchTypes
-        )
-      );
-    }
-
-    if(
-      hydratedParsed?.checklistTemplates &&
-      typeof hydratedParsed.checklistTemplates==="object" &&
-      !Array.isArray(hydratedParsed.checklistTemplates)
-    ){
-      setChecklistTemplates(
-        mergeChecklistTemplatesWithDefaults(
-          hydratedParsed.checklistTemplates
-        )
-      );
-    }
-
-    if(
-      hydratedParsed?.siteAnnouncement &&
-      typeof hydratedParsed.siteAnnouncement==="object"
-    ){
-      const nextAnnouncement = normalizeSiteAnnouncement(
-        hydratedParsed.siteAnnouncement
-      );
-      setSiteAnnouncement(nextAnnouncement);
-      if(!announcementEditorOpen){
-        setAnnouncementDraft(nextAnnouncement);
-      }
-    }
     if (Array.isArray(hydratedParsed?.calendarEvents)) setCalendarManualEvents(hydratedParsed.calendarEvents);
     if (Array.isArray(hydratedParsed?.calendarTypes)) setCalendarEventTypes(ensureRequiredCalendarTypes(hydratedParsed.calendarTypes));
     if (Array.isArray(hydratedParsed?.seasonalEvents)) setSeasonalEvents(hydratedParsed.seasonalEvents);
@@ -27176,32 +27255,76 @@ export default function App({
     } catch {}
   };
 
-  const fetchCloudState = async (mode:"initial"|"poll"="poll") => {
-    if (
-      mode==="poll" &&
-      (
-        cloudSavingRef.current ||
-        cloudApplyingRef.current ||
-        Date.now() < checklistGroupsPendingUntilRef.current ||
-        !!checklistGroupsSaveTimerRef.current ||
-        Date.now() < checklistItemsPendingUntilRef.current ||
-        !!checklistItemsSaveTimerRef.current ||
-        checklistItemsSaveInFlightRef.current
-      )
-    ) return null;
+  const sharedSettingsPollInFlightRef =
+    useRef(false);
+
+  const fetchSharedUiSettings = async () => {
+    if(
+      sharedSettingsPollInFlightRef.current ||
+      cloudSavingRef.current
+    ){
+      return null;
+    }
+
+    sharedSettingsPollInFlightRef.current =
+      true;
+
     try {
-      const res = await fetch("/api/emdc-state", { cache:"no-store" });
-      if (!res.ok) throw new Error("Cloud sync unavailable");
-      const payload = await res.json();
-      const cloud = payload?.data;
-      if (cloud?.updatedAt && cloud.updatedAt !== cloudLastUpdatedAtRef.current) {
-        applyCloudState(cloud);
+      const res = await fetch(
+        "/api/emdc-state",
+        {
+          cache:"no-store",
+        }
+      );
+
+      if(!res.ok){
+        throw new Error(
+          "Shared settings sync unavailable"
+        );
       }
-      if (mode==="initial") setCloudSyncStatus(cloud ? "Synced" : "Ready");
+
+      const payload =
+        await res.json().catch(()=>null);
+
+      const cloud =
+        payload?.data || null;
+
+      if(!cloud){
+        return null;
+      }
+
+      const remoteUpdatedAt =
+        String(
+          cloud?.updatedAt || ""
+        );
+
+      if(
+        remoteUpdatedAt &&
+        remoteUpdatedAt===
+          cloudLastUpdatedAtRef.current
+      ){
+        return cloud;
+      }
+
+      // Deliberately apply only the shared settings. The general app-state
+      // payload may contain stale checklist groups/items because those use
+      // dedicated fast endpoints.
+      applySharedUiSettings(
+        cloud?.appState ||
+        cloud
+      );
+
+      if(remoteUpdatedAt){
+        cloudLastUpdatedAtRef.current =
+          remoteUpdatedAt;
+      }
+
       return cloud;
     } catch {
-      if (mode==="initial") setCloudSyncStatus("Local fallback");
       return null;
+    } finally {
+      sharedSettingsPollInFlightRef.current =
+        false;
     }
   };
 
@@ -28092,7 +28215,17 @@ export default function App({
         body:JSON.stringify({ mode:"app-patch", clientId:cloudClientIdRef.current, updatedAt, patch }),
       });
       if (!res.ok) throw new Error("Save failed");
-      cloudLastUpdatedAtRef.current = updatedAt;
+
+      const json =
+        await res.json().catch(()=>null);
+
+      cloudLastUpdatedAtRef.current =
+        String(
+          json?.data?.updatedAt ||
+          json?.updatedAt ||
+          updatedAt
+        );
+
       setCloudSyncStatus("Synced");
     } catch {
       setCloudSyncStatus("Save failed");
@@ -28166,10 +28299,21 @@ export default function App({
       try { localStorage.setItem("emdc_calendar_types_v1", JSON.stringify(patch.calendarTypes)); } catch {}
     }
 
-    try {
-      localStorage.setItem("emdc_app_state_local_updated_at_v1", new Date().toISOString());
-      window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch {}
+    if(
+      !isSharedUiSettingsOnlyPatch(
+        patch
+      )
+    ){
+      try {
+        localStorage.setItem(
+          "emdc_app_state_local_updated_at_v1",
+          new Date().toISOString()
+        );
+        window.dispatchEvent(
+          new Event("emdc-local-sync")
+        );
+      } catch {}
+    }
 
     const patchForGeneralSave = { ...patch };
     delete patchForGeneralSave.checklistItems;
@@ -28399,13 +28543,17 @@ export default function App({
   useEffect(() => {
     if (!cloudHydrated) return;
 
+    void fetchSharedUiSettings();
+
     const heartbeat = () => {
       void pollSyncV2();
+      void fetchSharedUiSettings();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void pollSyncV2();
+        void fetchSharedUiSettings();
       }
     };
 
