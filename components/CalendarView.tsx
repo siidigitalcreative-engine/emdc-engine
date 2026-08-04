@@ -26303,28 +26303,28 @@ export default function App({
   const [navigateToGroupId,setNavigateToGroupId]   = useState<any>(()=>initialRouteRef.current.groupId || null);
 
   // Lifted checklist state — owned by App so it survives switching away from and back to the Checklists tab
-  const [checklistGroups,setChecklistGroups] = useState<any[]>(initialData?.checklistGroups ?? []);
-  const [checklistTrash,setChecklistTrash] = useState<any[]>(initialData?.checklistTrash ?? []);
-  const [checklistAllItems,setChecklistAllItems] = useState<Record<string,any>>(initialData?.checklistItems ?? {});
-  const [checklistStatuses,setChecklistStatuses] = useState<any[]>(initialData?.checklistStatuses ?? DEFAULT_STATUSES);
+  const [checklistGroups,setChecklistGroups] = useState<any[]>([]);
+  const [checklistTrash,setChecklistTrash] = useState<any[]>([]);
+  const [checklistAllItems,setChecklistAllItems] = useState<Record<string,any>>({});
+  const [checklistStatuses,setChecklistStatuses] = useState<any[]>(DEFAULT_STATUSES);
 
   const [checklistLaunchTypes,setChecklistLaunchTypes] = useState<any>(
     ()=>mergeChecklistLaunchTypesWithDefaults(
-      initialData?.checklistLaunchTypes
+      null
     )
   );
 
   const [checklistTemplates,setChecklistTemplates] = useState<any>(
     ()=>mergeChecklistTemplatesWithDefaults(
-      initialData?.checklistTemplates
+      null
     )
   );
 
   const [siteAnnouncement,setSiteAnnouncement] = useState<any>(()=>
-    normalizeSiteAnnouncement(initialData?.siteAnnouncement)
+    normalizeSiteAnnouncement(null)
   );
   const [announcementDraft,setAnnouncementDraft] = useState<any>(()=>
-    normalizeSiteAnnouncement(initialData?.siteAnnouncement)
+    normalizeSiteAnnouncement(null)
   );
   const [announcementEditorOpen,setAnnouncementEditorOpen] = useState(false);
   const [announcementEditorError,setAnnouncementEditorError] = useState("");
@@ -26544,6 +26544,8 @@ export default function App({
 
   const [appStateHydrated,setAppStateHydrated] = useState(false);
   const [cloudHydrated,setCloudHydrated] = useState(false);
+  const [cloudHydrationError,setCloudHydrationError] = useState("");
+  const [cloudHydrationAttempt,setCloudHydrationAttempt] = useState(0);
   const [cloudSyncStatus,setCloudSyncStatus] = useState("Loading cloud...");
   const [checklistItemsLoadingGroupId,setChecklistItemsLoadingGroupId] = useState("");
   const [localSyncTick,setLocalSyncTick] = useState(0);
@@ -26841,13 +26843,22 @@ export default function App({
     return true;
   };
 
-  const applyAppState = (parsed:any) => {
+  const applyAppState = (
+    parsed:any,
+    options:any={}
+  ) => {
     if (!parsed || typeof parsed !== "object") return;
     const hydratedParsed = parsed;
+    const includeChecklistData =
+      options?.includeChecklistData===true;
+    const includeSharedUiSettings =
+      options?.includeSharedUiSettings!==false;
 
-    applySharedUiSettings(
-      hydratedParsed
-    );
+    if(includeSharedUiSettings){
+      applySharedUiSettings(
+        hydratedParsed
+      );
+    }
 
     if (Array.isArray(hydratedParsed?.skuBrands)) setBrands(hydratedParsed.skuBrands);
     if (Array.isArray(hydratedParsed?.skuItems)) {
@@ -26860,13 +26871,38 @@ export default function App({
       lastDirectSkuSaveSignatureRef.current = `${count}:${first}:${last}:${checksum}`;
     }
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
-    if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
-    if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") {
+    if(
+      includeChecklistData &&
+      Array.isArray(
+        hydratedParsed?.checklistGroups
+      )
+    ){
+      setChecklistGroups(
+        hydratedParsed.checklistGroups
+      );
+    }
+
+    if(
+      includeChecklistData &&
+      hydratedParsed?.checklistItems &&
+      typeof hydratedParsed.checklistItems==="object"
+    ){
       const cleanAllItems:any = {};
-      Object.entries(hydratedParsed.checklistItems).forEach(([groupId,groupItems]:any)=>{
-        cleanAllItems[groupId] = dedupeChecklistItemsObject(groupItems);
-      });
-      setChecklistAllItems(cleanAllItems);
+
+      Object.entries(
+        hydratedParsed.checklistItems
+      ).forEach(
+        ([groupId,groupItems]:any)=>{
+          cleanAllItems[groupId] =
+            dedupeChecklistItemsObject(
+              groupItems
+            );
+        }
+      );
+
+      setChecklistAllItems(
+        cleanAllItems
+      );
     }
     if (Array.isArray(hydratedParsed?.checklistStatuses)) setChecklistStatuses(hydratedParsed.checklistStatuses);
 
@@ -27790,7 +27826,13 @@ export default function App({
       };
 
       cloudApplyingRef.current = true;
-      applyAppState(safeImportedState);
+      applyAppState(
+        safeImportedState,
+        {
+          includeChecklistData:true,
+          includeSharedUiSettings:true,
+        }
+      );
       setTimeout(()=>{ cloudApplyingRef.current = false; },0);
 
       const updatedAt = new Date().toISOString();
@@ -28569,83 +28611,231 @@ export default function App({
     if (!appStateHydrated) return;
 
     let cancelled = false;
+    let retryTimer:any = null;
 
     (async()=>{
       try {
-        setCloudSyncStatus("Loading synced data...");
+        setCloudHydrationError("");
+        setCloudSyncStatus(
+          "Loading current synced data..."
+        );
 
-        const [bootstrapRes,groupsRes,syncRes] = await Promise.all([
-          fetch("/api/emdc-bootstrap-lite", { cache:"no-store" }),
-          fetch("/api/checklist-groups-fast?mode=index", {
-            cache:"no-store",
-          }),
-          fetch("/api/sync-version", { cache:"no-store" }),
+        const [
+          bootstrapRes,
+          sharedSettingsRes,
+          groupsRes,
+          syncRes,
+        ] = await Promise.all([
+          fetch(
+            "/api/emdc-bootstrap-lite",
+            { cache:"no-store" }
+          ),
+          fetch(
+            "/api/emdc-state",
+            { cache:"no-store" }
+          ),
+          fetch(
+            "/api/checklist-groups-fast?mode=index",
+            { cache:"no-store" }
+          ),
+          fetch(
+            "/api/sync-version",
+            { cache:"no-store" }
+          ),
         ]);
 
-        const bootstrapJson = await bootstrapRes
-          .json()
-          .catch(()=>null);
-        const groupsJson = await groupsRes
-          .json()
-          .catch(()=>null);
-        const syncJson = await syncRes
-          .json()
-          .catch(()=>null);
+        const bootstrapJson =
+          await bootstrapRes
+            .json()
+            .catch(()=>null);
+
+        const sharedSettingsJson =
+          await sharedSettingsRes
+            .json()
+            .catch(()=>null);
+
+        const groupsJson =
+          await groupsRes
+            .json()
+            .catch(()=>null);
+
+        const syncJson =
+          await syncRes
+            .json()
+            .catch(()=>null);
 
         if(cancelled) return;
 
-        if(bootstrapRes.ok && bootstrapJson?.ok){
-          const cloud = bootstrapJson.data;
-          if(cloud?.appState) applyAppState(cloud.appState);
-          if(cloud?.updatedAt){
-            cloudLastUpdatedAtRef.current = cloud.updatedAt;
-          }
+        if(
+          !bootstrapRes.ok ||
+          !bootstrapJson?.ok ||
+          !bootstrapJson?.data?.appState
+        ){
+          throw new Error(
+            "General cloud data is unavailable."
+          );
+        }
+
+        const sharedSettingsCloud =
+          sharedSettingsJson?.data;
+
+        if(
+          !sharedSettingsRes.ok ||
+          !sharedSettingsCloud
+        ){
+          throw new Error(
+            "Shared settings are unavailable."
+          );
         }
 
         if(
-          groupsRes.ok &&
-          groupsJson?.ok &&
-          Array.isArray(groupsJson.checklistGroups)
+          !groupsRes.ok ||
+          !groupsJson?.ok ||
+          !Array.isArray(
+            groupsJson.checklistGroups
+          )
         ){
-          setChecklistGroups((previous:any[])=>
-            mergeChecklistGroupIndexRows(
-              previous,
-              groupsJson.checklistGroups
-            )
+          throw new Error(
+            "Checklist cloud data is unavailable."
           );
         }
 
-        if(syncRes.ok && syncJson?.ok && syncJson?.data){
+        // General app data comes from bootstrap, but checklist groups/items
+        // and shared UI settings are intentionally excluded here.
+        applyAppState(
+          bootstrapJson.data.appState,
+          {
+            includeChecklistData:false,
+            includeSharedUiSettings:false,
+          }
+        );
+
+        // Announcement, checklist types, and templates come directly from
+        // the authoritative Vercel Blob app-state response.
+        applySharedUiSettings(
+          sharedSettingsCloud?.appState ||
+          sharedSettingsCloud
+        );
+
+        // Replace the blank initial checklist list with the authoritative
+        // dedicated checklist index. Never merge an old bootstrap copy first.
+        setChecklistGroups(
+          groupsJson.checklistGroups
+        );
+
+        if(
+          bootstrapJson.data?.updatedAt
+        ){
+          cloudLastUpdatedAtRef.current =
+            String(
+              bootstrapJson.data.updatedAt
+            );
+        }
+
+        if(
+          sharedSettingsCloud?.updatedAt
+        ){
+          cloudLastUpdatedAtRef.current =
+            String(
+              sharedSettingsCloud.updatedAt
+            );
+        }
+
+        if(
+          syncRes.ok &&
+          syncJson?.ok &&
+          syncJson?.data
+        ){
           const syncData = syncJson.data;
-          syncV2VersionRef.current = Number(syncData.version || 0);
-          syncV2GroupsVersionRef.current = Number(
-            syncData.checklistGroupsVersion || 0
-          );
-          syncV2ItemsVersionRef.current = Number(
-            syncData.checklistItemsVersion || 0
-          );
+
+          syncV2VersionRef.current =
+            Number(
+              syncData.version || 0
+            );
+
+          syncV2GroupsVersionRef.current =
+            Number(
+              syncData
+                .checklistGroupsVersion ||
+              0
+            );
+
+          syncV2ItemsVersionRef.current =
+            Number(
+              syncData
+                .checklistItemsVersion ||
+              0
+            );
+
           syncV2ItemGroupVersionsRef.current =
-            syncData.checklistItemGroupVersions &&
-            typeof syncData.checklistItemGroupVersions === "object"
-              ? { ...syncData.checklistItemGroupVersions }
+            syncData
+              .checklistItemGroupVersions &&
+            typeof syncData
+              .checklistItemGroupVersions===
+              "object"
+              ? {
+                  ...syncData
+                    .checklistItemGroupVersions,
+                }
               : {};
 
-          const etag = syncRes.headers.get("etag") || "";
-          if(etag) syncV2EtagRef.current = etag;
+          const etag =
+            syncRes.headers.get("etag") ||
+            "";
+
+          if(etag){
+            syncV2EtagRef.current =
+              etag;
+          }
         }
 
         setCloudSyncStatus("Synced");
-      } catch {
-        if(!cancelled) setCloudSyncStatus("Local fallback");
-      } finally {
-        if(!cancelled) setCloudHydrated(true);
+        setCloudHydrationError("");
+        setCloudHydrated(true);
+      } catch(error:any) {
+        if(cancelled) return;
+
+        const message = String(
+          error?.message ||
+          "Unable to load current cloud data."
+        );
+
+        setCloudHydrationError(
+          message
+        );
+        setCloudSyncStatus(
+          "Waiting for cloud..."
+        );
+
+        // Never reveal a previous snapshot. Keep the blocking loader and
+        // retry until the current authoritative responses are available.
+        retryTimer = window.setTimeout(
+          ()=>{
+            if(!cancelled){
+              setCloudHydrationAttempt(
+                (value:number)=>
+                  value + 1
+              );
+            }
+          },
+          1500
+        );
       }
     })();
 
     return () => {
       cancelled = true;
+
+      if(retryTimer){
+        window.clearTimeout(
+          retryTimer
+        );
+      }
     };
-  }, [appStateHydrated]);
+  }, [
+    appStateHydrated,
+    cloudHydrationAttempt,
+  ]);
 
   useEffect(() => {
     if(!cloudHydrated){
@@ -29210,8 +29400,14 @@ export default function App({
         <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(249,250,251,.96)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,pointerEvents:"auto" }}>
           <div style={{ width:"min(420px,100%)",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:16,padding:20,textAlign:"center",boxShadow:"0 12px 40px rgba(15,23,42,.08)" }}>
             <div style={{ width:44,height:48,borderRadius:12,background:C.accent,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,marginBottom:12 }}>EMDC</div>
-            <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:900,color:C.text }}>Loading current synced data…</h2>
-            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.45 }}>Please wait. Latest cloud data is loading.</p>
+            <h2 style={{ margin:"0 0 6px",fontSize:18,fontWeight:900,color:C.text }}>
+              Loading current synced data…
+            </h2>
+            <p style={{ margin:0,fontSize:13,color:C.muted,lineHeight:1.45 }}>
+              {cloudHydrationError
+                ? `${cloudHydrationError} Retrying automatically…`
+                : "Please wait. The latest Vercel Blob data is loading."}
+            </p>
           </div>
         </div>
       )}
