@@ -853,9 +853,137 @@ const DEPTS = {
 };
 const LAUNCH_TYPES = {
   introduction:{ label:"Product Introduction", tag:"New Launch", color:"#111827" },
-  campaign:    { label:"Campaign",              tag:"Promo Plan",  color:"#F59E0B" },
-  reactivation:{ label:"Product Reactivation",  tag:"Relaunch",   color:"#374151" },
-  phaseout:    { label:"Product Phase-Out",      tag:"Closeout",   color:"#9CA3AF" },
+  reactivation:{ label:"Product Reactivation", tag:"Relaunch", color:"#374151" },
+  campaign:{ label:"Campaign", tag:"Promo Plan", color:"#F59E0B" },
+  specialcampaign:{ label:"Special Campaign", tag:"Special Campaign", color:"#F97316" },
+  phaseout:{ label:"Product Phase-Out", tag:"Closeout", color:"#9CA3AF" },
+};
+
+const CHECKLIST_TYPE_KEYS = [
+  "introduction",
+  "reactivation",
+  "campaign",
+  "specialcampaign",
+  "phaseout",
+] as const;
+
+const normalizeChecklistTypeIdentity = (value:any) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g," and ")
+    .replace(/[^a-z0-9]+/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+
+const resolveCanonicalChecklistTypeKey = (
+  groupOrValue:any,
+  launchTypes:any=LAUNCH_TYPES
+) => {
+  const group =
+    groupOrValue &&
+    typeof groupOrValue==="object" &&
+    !Array.isArray(groupOrValue)
+      ? groupOrValue
+      : null;
+
+  const rawKey = String(
+    group
+      ? (
+          group?.launchType ||
+          group?.checklistType ||
+          group?.groupType ||
+          group?.type ||
+          ""
+        )
+      : (groupOrValue || "")
+  ).trim();
+
+  const configured =
+    launchTypes?.[rawKey] ||
+    LAUNCH_TYPES?.[rawKey] ||
+    {};
+
+  const identity = normalizeChecklistTypeIdentity(
+    [
+      rawKey,
+      configured?.label,
+      configured?.tag,
+      group?.launchTypeLabel,
+      group?.checklistTypeLabel,
+      group?.groupTypeLabel,
+      group?.typeLabel,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  const hasSpecialCampaignWorkspace =
+    !!(
+      group?.aiWorkspace
+        ?.ecommerce
+        ?.specialCampaignTracker
+    );
+
+  if(
+    hasSpecialCampaignWorkspace ||
+    (
+      identity.includes("special") &&
+      identity.includes("campaign")
+    )
+  ){
+    return "specialcampaign";
+  }
+
+  if(identity.includes("reactivation")){
+    return "reactivation";
+  }
+
+  if(
+    identity.includes("phase out") ||
+    identity.includes("phaseout") ||
+    identity.includes("closeout") ||
+    identity.includes("clearance")
+  ){
+    return "phaseout";
+  }
+
+  if(identity.includes("campaign")){
+    return "campaign";
+  }
+
+  if(
+    identity.includes("introduction") ||
+    identity.includes("new launch") ||
+    identity.includes("product launch")
+  ){
+    return "introduction";
+  }
+
+  // Unknown or previously generated custom IDs are treated as Product
+  // Introduction so no extra checklist-type tabs are created and no group is
+  // hidden from the five fixed operational types.
+  return "introduction";
+};
+
+const getCanonicalChecklistTypeDefinition = (
+  groupOrValue:any,
+  launchTypes:any=LAUNCH_TYPES
+) => {
+  const key =
+    resolveCanonicalChecklistTypeKey(
+      groupOrValue,
+      launchTypes
+    );
+
+  return {
+    key,
+    ...(
+      launchTypes?.[key] ||
+      (LAUNCH_TYPES as any)[key] ||
+      LAUNCH_TYPES.introduction
+    ),
+  };
 };
 const STATUS_PALETTE = [
   "#111827","#374151","#6B7280","#9CA3AF",
@@ -905,6 +1033,26 @@ const TEMPLATES = {
     marketing:["Define campaign objective, promotion angle, and key selling message","Build campaign content plan for Meta, TikTok, Shopee, Lazada, and website","Create ad copy directions for single image, carousel, collection, Reels, and TikTok ads","Prepare campaign caption sets, hooks, headlines, and CTA variations","Set paid media budget, targeting, retargeting, and optimization schedule","Coordinate affiliate, KOL, livestream, and social posting requirements","Review campaign creative outputs and approve final marketing assets","Monitor campaign performance and update optimization notes","Prepare daily or milestone campaign performance summary","Collect learnings for the next campaign cycle"],
     digital:["Create campaign key visual direction and overall design treatment","Design campaign banners for marketplace, website, Meta, and TikTok placements","Create product image prompts, lifestyle prompts, and creative asset directions","Produce carousel, feed, story, and Reels/TikTok creative layouts","Prepare digital creative asset links table for product image, CEM banner, store banner, feed, story, and showcase video","Generate or upload final creative output links and add approved assets to Overview manually","Export all campaign assets in required sizes and platform-safe formats","QA all creative assets for readability, spacing, product accuracy, and brand consistency","Archive final campaign files with clear naming convention","Update source tabs when Overview cards are edited or finalized"],
   },
+  specialcampaign:{
+    ecommerce:[
+      "Complete the Campaign Brief with campaign name, platform, store or account, deadline, and request instructions",
+      "Add the main Seller Kit and editable asset folder links",
+      "Create the Asset Requirements & Output Tracker rows",
+      "Assign the featured SKU or SKUs to every requirement row",
+      "Complete the copy or headline instructions and notes for each requirement",
+      "Send the completed requirement rows to Digital Creative",
+      "Add the Campaign Brief & Seller Kit to Overview",
+    ],
+    marketing:[],
+    digital:[
+      "Review all shared Special Campaign requirement rows",
+      "Complete the required dimensions for every collateral row",
+      "Add the final preview image URL for every completed requirement",
+      "Add the final Google Drive asset or folder link",
+      "Update the production status for every requirement row",
+      "Add completed requirement rows to Overview",
+    ],
+  },
   reactivation:{
     // Keep Product Reactivation using the exact same operational template/settings as Product Introduction.
     ecommerce:["Create and activate product listings on Shopee, Lazada, and TikTok Shop","Upload complete product photography (main, variant, lifestyle, infographic)","Write and optimize product title, description, and bullet points","Set up pricing tiers (regular, sale, bundle) across all platforms","Configure inventory allocation per channel via Ginee","Set up platform vouchers and launch-day promotional mechanics","Submit product for platform-level featuring or spotlight badge","Enable Shopify product page and confirm cross-channel sync","Configure shipping class, weight, and fulfillment rules","QA all listings: images, specs, pricing, variants, and stock display"],
@@ -919,18 +1067,60 @@ const TEMPLATES = {
 };
 
 const mergeChecklistLaunchTypesWithDefaults = (saved:any) => {
-  const base = { ...LAUNCH_TYPES };
-  const safeSaved = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
-  return {
-    ...base,
-    ...safeSaved,
-    campaign: {
-      ...base.campaign,
-      ...(safeSaved.campaign || {}),
-      label: base.campaign.label,
-      tag: base.campaign.tag,
-    },
+  const safeSaved =
+    saved &&
+    typeof saved==="object" &&
+    !Array.isArray(saved)
+      ? saved
+      : {};
+
+  const savedSpecialCampaignEntry =
+    safeSaved.specialcampaign ||
+    safeSaved["special-campaign"] ||
+    Object.values(safeSaved).find(
+      (definition:any)=>{
+        const identity =
+          normalizeChecklistTypeIdentity(
+            [
+              definition?.label,
+              definition?.tag,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          );
+
+        return (
+          identity.includes("special") &&
+          identity.includes("campaign")
+        );
+      }
+    ) ||
+    {};
+
+  const savedByKey:any = {
+    introduction:safeSaved.introduction || {},
+    reactivation:safeSaved.reactivation || {},
+    campaign:safeSaved.campaign || {},
+    specialcampaign:savedSpecialCampaignEntry,
+    phaseout:safeSaved.phaseout || {},
   };
+
+  return CHECKLIST_TYPE_KEYS.reduce(
+    (result:any,typeKey:string)=>{
+      const canonical =
+        (LAUNCH_TYPES as any)[typeKey];
+
+      result[typeKey] = {
+        ...canonical,
+        ...(savedByKey[typeKey] || {}),
+        label:canonical.label,
+        tag:canonical.tag,
+      };
+
+      return result;
+    },
+    {}
+  );
 };
 
 const PRODUCT_INTRODUCTION_DEFAULT_TASKS_VERSION = "2026-08-03-product-introduction-v1";
@@ -968,7 +1158,6 @@ const migrateProductIntroductionDefaultTasks = (
   }
 
   const migrated = {
-    ...safeSaved,
     introduction:{
       ecommerce:[
         ...(TEMPLATES.introduction.ecommerce || []),
@@ -980,6 +1169,12 @@ const migrateProductIntroductionDefaultTasks = (
         ...(TEMPLATES.introduction.digital || []),
       ],
     },
+    reactivation:safeSaved.reactivation,
+    campaign:safeSaved.campaign,
+    specialcampaign:
+      safeSaved.specialcampaign ||
+      safeSaved["special-campaign"],
+    phaseout:safeSaved.phaseout,
   };
 
   try {
@@ -1001,40 +1196,55 @@ const mergeChecklistTemplatesWithDefaults = (saved:any) => {
     migrateProductIntroductionDefaultTasks(
       saved
     );
-  const safeSaved = migratedSaved && typeof migratedSaved === "object" && !Array.isArray(migratedSaved) ? migratedSaved : {};
-  const merged:any = { ...TEMPLATES, ...safeSaved };
-  Object.keys(LAUNCH_TYPES).forEach((typeKey:string)=>{
-    merged[typeKey] = { ...(TEMPLATES as any)[typeKey], ...(safeSaved as any)[typeKey] };
-    Object.keys(DEPTS).forEach((deptKey:string)=>{
-      if (!Array.isArray(merged[typeKey]?.[deptKey])) {
-        merged[typeKey][deptKey] = ((TEMPLATES as any)[typeKey]?.[deptKey] || []);
-      }
-    });
-  });
 
-  // Product Reactivation has its own editable template.
-  // Use its saved tasks when present. The built-in Reactivation defaults are
-  // used only when no saved department list exists.
-  merged.reactivation = {
-    ...(TEMPLATES as any).reactivation,
-    ...((safeSaved as any).reactivation || {}),
+  const safeSaved =
+    migratedSaved &&
+    typeof migratedSaved==="object" &&
+    !Array.isArray(migratedSaved)
+      ? migratedSaved
+      : {};
+
+  const savedSpecialCampaignTemplates =
+    safeSaved.specialcampaign ||
+    safeSaved["special-campaign"] ||
+    {};
+
+  const savedByKey:any = {
+    introduction:safeSaved.introduction || {},
+    reactivation:safeSaved.reactivation || {},
+    campaign:safeSaved.campaign || {},
+    specialcampaign:savedSpecialCampaignTemplates,
+    phaseout:safeSaved.phaseout || {},
   };
 
-  Object.keys(DEPTS).forEach((deptKey:string)=>{
-    if(
-      !Array.isArray(
-        merged.reactivation?.[deptKey]
-      )
-    ){
-      merged.reactivation[deptKey] = [
-        ...(
-          (TEMPLATES as any)
-            .reactivation?.[deptKey] ||
-          []
-        ),
-      ];
+  const merged:any = {};
+
+  CHECKLIST_TYPE_KEYS.forEach(
+    (typeKey:string)=>{
+      merged[typeKey] = {
+        ...((TEMPLATES as any)[typeKey] || {}),
+        ...(savedByKey[typeKey] || {}),
+      };
+
+      Object.keys(DEPTS).forEach(
+        (deptKey:string)=>{
+          if(
+            !Array.isArray(
+              merged[typeKey]?.[deptKey]
+            )
+          ){
+            merged[typeKey][deptKey] = [
+              ...(
+                (TEMPLATES as any)
+                  [typeKey]?.[deptKey] ||
+                []
+              ),
+            ];
+          }
+        }
+      );
     }
-  });
+  );
 
   return merged;
 };
@@ -6318,6 +6528,11 @@ const ChecklistItem = ({ item, dept, statuses, onUpdate, onDelete, onStatusChang
 // ─── CHECKLIST BOARD ─────────────────────────────────────────────────────────
 const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTypes, events, onStateChange, initialItems, onItemsChange, statuses, setStatuses, onUpdateGroup, initialGroupTab="tasks", onGroupTabChange }: any) => {
   const { isMobile } = useBreakpoint();
+  const canonicalLaunchTypeKey =
+    resolveCanonicalChecklistTypeKey(
+      group,
+      launchTypes
+    );
   const saveStatuses = (s:any[]) => { setStatuses(s); };
   const [statusModal,setStatusModal] = useState(false);
   const [groupEditModal,setGroupEditModal] = useState(false);
@@ -6327,9 +6542,9 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
 
     Object.keys(DEPTS).forEach((dept:string)=>{
       const templateRows = Array.isArray(
-        templates?.[group.launchType]?.[dept]
+        templates?.[canonicalLaunchTypeKey]?.[dept]
       )
-        ? templates[group.launchType][dept]
+        ? templates[canonicalLaunchTypeKey][dept]
         : [];
 
       out[dept] = templateRows.map((taskText:string)=>({
@@ -6814,7 +7029,11 @@ const ChecklistBoard = ({ group, onBack, skuStorage, brands, templates, launchTy
     return next;
   }); setSkuPickDept(null); };
   const depts=activeDept==="all"?Object.keys(DEPTS):[activeDept];
-  const lt=launchTypes?.[group.launchType] || LAUNCH_TYPES[group.launchType] || { label:"Checklist", tag:"Custom", color:C.accent };
+  const lt =
+    getCanonicalChecklistTypeDefinition(
+      group,
+      launchTypes
+    );
 
   const checklistTypeFingerprint = [
     lt?.label,
@@ -20054,8 +20273,7 @@ ${slidesHtml}
                           <button
                             onClick={()=>{
                               const resolvedAnnouncementType = String(
-                                launchTypes?.[group?.launchType]?.label ||
-                                group?.launchType ||
+                                lt?.label ||
                                 "Product Introduction"
                               ).trim();
 
@@ -26481,9 +26699,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const checklistAnnouncementType = (() => {
         const raw = String(
-          launchTypes?.[group.launchType]?.label ||
-          group.launchType ||
-          ""
+          lt?.label ||
+          "Product Introduction"
         ).trim().toLowerCase();
 
         if(raw.includes("reactivation")) return "Product Reactivation";
@@ -28776,7 +28993,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const youtubeChecklistRaw = [
         String(group?.launchType || ""),
-        String(launchTypes?.[group?.launchType]?.label || ""),
+        String(lt?.label || ""),
       ].join(" ").toLowerCase();
 
       const youtubeGeneratorEligible =
@@ -36122,7 +36339,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       <div style={{ display:"grid",gridTemplateColumns:activeDept==="all"?"repeat(auto-fill,minmax(min(100%,320px),1fr))":"1fr",gap:16 }}>
         {depts.map(dept=>{
-          const di=orderChecklistItemsByTemplate(items[dept], templates?.[group.launchType]?.[dept] || []), done=di.filter(i=>i.done).length, pct=di.length?Math.round(done/di.length*100):0, dc=DEPTS[dept].color;
+          const di=orderChecklistItemsByTemplate(items[dept], templates?.[canonicalLaunchTypeKey]?.[dept] || []), done=di.filter(i=>i.done).length, pct=di.length?Math.round(done/di.length*100):0, dc=DEPTS[dept].color;
           return (
             <div key={dept} style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
               <div style={{ padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:`linear-gradient(135deg,${dc}08,${dc}04)`,borderTop:`3px solid ${dc}` }}>
@@ -36261,7 +36478,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DEFAULT_EVENT_TYPES, events=[], onApplyPhaseoutAssignments }) => {
   const [skuMode,setSkuMode]     = useState("manual");
   const [skus,setSkus]           = useState([{id:uid(),value:""}]);
-  const [selType,setSelType]     = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
+  const [selType,setSelType]     = useState<string>("introduction");
   const [groupName,setGroupName] = useState("");
   const [arrivalStatus,setArrivalStatus] = useState<"waiting"|"arriving"|"arrived">("waiting");
   const [deadline,setDeadline]   = useState("");
@@ -36370,12 +36587,17 @@ const SKUSelector = ({ onNext, skuStorage, brands, launchTypes, calendarTypes=DE
         </Field>
         <Field label="Operational Type" hint="choose this before SKU/date">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
+            {CHECKLIST_TYPE_KEYS.map((k:string)=>{
+              const v =
+                (launchTypes||LAUNCH_TYPES)[k] ||
+                (LAUNCH_TYPES as any)[k];
+              return (
               <button key={k} onClick={()=>setSelType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
                 <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
                 <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${selType===k?C.accent:C.border}`,background:selType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{selType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </Field>
         <Field label="Month Only" hint="optional, no specific date needed">
@@ -36512,7 +36734,19 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
       setCalendarType(loadedCalendarType || "");
       setCalendarColor(group.calendarColor || group.color || matchedCalendarType.color || "#8B5CF6");
       setLinkedEventIds(Array.isArray(group.linkedEventIds)?group.linkedEventIds:[]);
-      const availableTypes = Object.keys(launchTypes||LAUNCH_TYPES); setLaunchType((group.launchType&&availableTypes.includes(group.launchType)) ? group.launchType : (availableTypes[0]||"introduction"));
+      const availableTypes = [...CHECKLIST_TYPE_KEYS];
+      const canonicalGroupType =
+        resolveCanonicalChecklistTypeKey(
+          group,
+          launchTypes
+        );
+      setLaunchType(
+        availableTypes.includes(
+          canonicalGroupType as any
+        )
+          ? canonicalGroupType
+          : "introduction"
+      );
       setSkus(existingSkus);
       setPickedSkus(useStorageMode ? storageMatches : []);
       setSkuMode(useStorageMode ? "storage" : "manual");
@@ -36745,15 +36979,20 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
 
         <Field label="Operational Type" hint="changing this will load the default tasks for the selected type">
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {Object.entries(launchTypes||LAUNCH_TYPES).map(([k,v]:any)=>(
+            {CHECKLIST_TYPE_KEYS.map((k:string)=>{
+              const v =
+                (launchTypes||LAUNCH_TYPES)[k] ||
+                (LAUNCH_TYPES as any)[k];
+              return (
               <button key={k} onClick={()=>setLaunchType(k)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:10,cursor:"pointer",textAlign:"left",border:`2px solid ${launchType===k?C.accent:C.border}`,background:launchType===k?C.surfaceAlt:C.surface,transition:"border-color .15s" }}>
                 <div><p style={{ margin:0,fontSize:13,fontWeight:700,color:C.text }}>{v.label}</p><p style={{ margin:"2px 0 0",fontSize:11,color:C.muted }}>{v.tag}</p></div>
                 <div style={{ width:20,height:20,borderRadius:"50%",border:`2px solid ${launchType===k?C.accent:C.border}`,background:launchType===k?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{launchType===k&&<span style={{ color:"#fff",fontSize:10 }}>&#10003;</span>}</div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </Field>
-        {group?.launchType!==launchType&&(
+        {resolveCanonicalChecklistTypeKey(group,launchTypes)!==launchType&&(
           <div style={{ padding:"10px 12px",borderRadius:9,background:"#FFFBEB",border:"1px solid #FDE68A",fontSize:12,color:"#92400E",lineHeight:1.45 }}>
             Changing the operational type will replace this group's checklist items with the default tasks from the selected type.
           </div>
@@ -36782,32 +37021,38 @@ const GroupEditModal = ({ open, group, onClose, onSave, skuStorage, brands, laun
 
 // ─── TEMPLATE MANAGER ────────────────────────────────────────────────────────
 const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes, onLaunchTypesChange }) => {
-  const [launchType,setLaunchType] = useState(()=>Object.keys(launchTypes||LAUNCH_TYPES)[0] || "introduction");
+  const [launchType,setLaunchType] = useState<string>("introduction");
   const [dept,setDept]             = useState("ecommerce");
   const [editIdx,setEditIdx]       = useState(null);
   const [editText,setEditText]     = useState("");
   const [newText,setNewText]       = useState("");
-  const [typeLabel,setTypeLabel]   = useState("");
-  const [typeTag,setTypeTag]       = useState("");
   const [typeColor,setTypeColor]   = useState("#111827");
   const [draftTasks,setDraftTasks] = useState<any[]>([]);
   const [tasksDirty,setTasksDirty] = useState(false);
   const [syncFlash,setSyncFlash] = useState(false);
 
-  const typeKeys = Object.keys(launchTypes||LAUNCH_TYPES);
+  const typeKeys = CHECKLIST_TYPE_KEYS.filter(
+    (typeKey:string)=>
+      !!(launchTypes||LAUNCH_TYPES)[typeKey]
+  );
 
   useEffect(()=>{
-    const keys = Object.keys(launchTypes||LAUNCH_TYPES);
+    const keys = CHECKLIST_TYPE_KEYS.filter(
+      (typeKey:string)=>
+        !!(launchTypes||LAUNCH_TYPES)[typeKey]
+    );
     if(!keys.length) return;
-    if(!keys.includes(launchType)) setLaunchType(keys[0]);
+    if(!keys.some((key:string)=>key===launchType)) setLaunchType(keys[0]);
   },[launchTypes]);
 
   useEffect(()=>{
-    const current = (launchTypes||LAUNCH_TYPES)[launchType];
+    const current =
+      (launchTypes||LAUNCH_TYPES)[launchType];
     if(current){
-      setTypeLabel(current.label||"");
-      setTypeTag(current.tag||"");
-      setTypeColor(current.color||"#111827");
+      setTypeColor(
+        current.color ||
+        "#111827"
+      );
     }
   },[launchType,launchTypes]);
 
@@ -36819,17 +37064,26 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     setNewText("");
   },[open,launchType,dept,templates]);
 
-  const updateChecklistTypeField = (patch:any) => {
-    onLaunchTypesChange((prev:any)=>({
-      ...prev,
-      [launchType]: {
-        ...(prev[launchType] || {}),
-        label:typeLabel || "Checklist Type",
-        tag:typeTag || "Custom",
-        color:typeColor || "#111827",
-        ...patch,
-      },
-    }));
+  const updateChecklistTypeColor = (color:any) => {
+    const canonical =
+      (LAUNCH_TYPES as any)[launchType] ||
+      LAUNCH_TYPES.introduction;
+
+    onLaunchTypesChange((prev:any)=>
+      mergeChecklistLaunchTypesWithDefaults({
+        ...prev,
+        [launchType]: {
+          ...(prev?.[launchType] || {}),
+          label:canonical.label,
+          tag:canonical.tag,
+          color:String(
+            color ||
+            prev?.[launchType]?.color ||
+            canonical.color
+          ).toUpperCase(),
+        },
+      })
+    );
   };
 
   const makeEmptyTemplateSet = () => Object.keys(DEPTS).reduce((acc:any,deptKey:string)=>({ ...acc, [deptKey]:[] }),{});
@@ -36842,8 +37096,11 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     // Auto-save default task order immediately so existing checklist task views
     // follow the exact arrangement shown here.
     onChange((prev:any) => ({
-      ...prev,
-      [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: next },
+      ...mergeChecklistTemplatesWithDefaults(prev),
+      [launchType]: {
+        ...(mergeChecklistTemplatesWithDefaults(prev)[launchType] || makeEmptyTemplateSet()),
+        [dept]: next,
+      },
     }), launchType);
     setSyncFlash(true);
     setTimeout(()=>setSyncFlash(false),900);
@@ -36851,75 +37108,16 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
 
   const saveDefaultTasksChanges = () => {
     onChange((prev:any) => ({
-      ...prev,
-      [launchType]: { ...(prev[launchType] || makeEmptyTemplateSet()), [dept]: draftTasks },
+      ...mergeChecklistTemplatesWithDefaults(prev),
+      [launchType]: {
+        ...(mergeChecklistTemplatesWithDefaults(prev)[launchType] || makeEmptyTemplateSet()),
+        [dept]: draftTasks,
+      },
     }), launchType);
     setTasksDirty(false);
     setEditIdx(null);
     setSyncFlash(true);
     setTimeout(()=>setSyncFlash(false),1400);
-  };
-
-  const saveChecklistType = () => {
-    if(!typeLabel.trim()) return;
-    onLaunchTypesChange((prev:any)=>({
-      ...prev,
-      [launchType]: {
-        ...(prev[launchType] || {}),
-        label:typeLabel || "Checklist Type",
-        tag:typeTag || "Custom",
-        color:typeColor || "#111827",
-      },
-    }));
-  };
-
-  const addChecklistType = () => {
-    const id = uid();
-    const label = "New Checklist Type";
-    onLaunchTypesChange((prev:any)=>({
-      ...prev,
-      [id]: { label, tag:"Custom", color:"#111827" },
-    }));
-    onChange((prev:any)=>({
-      ...prev,
-      [id]: makeEmptyTemplateSet(),
-    }));
-    setLaunchType(id);
-    setEditIdx(null);
-  };
-
-  const duplicateChecklistType = () => {
-    const id = uid();
-    const current = (launchTypes||LAUNCH_TYPES)[launchType] || { label:"Checklist Type", tag:"Custom", color:"#111827" };
-    onLaunchTypesChange((prev:any)=>({
-      ...prev,
-      [id]: { ...current, label:`${current.label} Copy` },
-    }));
-    onChange((prev:any)=>({
-      ...prev,
-      [id]: JSON.parse(JSON.stringify(prev[launchType] || makeEmptyTemplateSet())),
-    }));
-    setLaunchType(id);
-    setEditIdx(null);
-  };
-
-  const deleteChecklistType = () => {
-    const keys = Object.keys(launchTypes||LAUNCH_TYPES);
-    if(keys.length<=1) return;
-    const nextKey = keys.find(k=>k!==launchType) || keys[0];
-
-    onLaunchTypesChange((prev:any)=>{
-      const next = { ...prev };
-      delete next[launchType];
-      return next;
-    });
-    onChange((prev:any)=>{
-      const next = { ...prev };
-      delete next[launchType];
-      return next;
-    });
-    setLaunchType(nextKey);
-    setEditIdx(null);
   };
 
   const addItem = () => {
@@ -36951,33 +37149,35 @@ const TemplateManagerModal = ({ open, onClose, templates, onChange, launchTypes,
     <Modal open={open} onClose={()=>{onClose();setEditIdx(null);}} title="Manage Checklist Templates" width={660}>
       <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
         <Field label="Checklist Type">
-          <div style={{ display:"flex",gap:8,alignItems:"center" }}>
-            <div style={{ flex:1 }}>
-              <Select value={launchType} onChange={v=>{setLaunchType(v);setEditIdx(null);}}>
-                {typeKeys.map(k=><option key={k} value={k}>{(launchTypes||LAUNCH_TYPES)[k]?.label || k}</option>)}
-              </Select>
-            </div>
-            <Btn sm variant="outline" onClick={addChecklistType}>+ Add Type</Btn>
-          </div>
+          <Select value={launchType} onChange={v=>{setLaunchType(v);setEditIdx(null);}}>
+            {typeKeys.map(k=><option key={k} value={k}>{(launchTypes||LAUNCH_TYPES)[k]?.label || (LAUNCH_TYPES as any)[k]?.label || k}</option>)}
+          </Select>
         </Field>
 
         <div style={{ padding:12,background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}`,display:"flex",flexDirection:"column",gap:10 }}>
-          <p style={{ margin:0,fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Checklist Type Settings</p>
-          <Field label="Name">
-            <TI value={typeLabel} onChange={v=>{ setTypeLabel(v); updateChecklistTypeField({ label:v || "Checklist Type" }); }} placeholder="e.g. Product Launch, Monthly Campaign, Clearance Sale" />
-          </Field>
-          <Field label="Tag">
-            <TI value={typeTag} onChange={v=>{ setTypeTag(v); updateChecklistTypeField({ tag:v || "Custom" }); }} placeholder="e.g. New Launch, Relaunch, Custom" />
-          </Field>
-          <Field label="Color">
-            <ColorPicker value={typeColor} onChange={v=>{ setTypeColor(v); updateChecklistTypeField({ color:v }); }} palette={STATUS_PALETTE} />
-          </Field>
-          <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
-            <span style={{ fontSize:11,color:"#16A34A",fontWeight:700 }}>Type settings autosave</span>
-            <Btn sm onClick={saveChecklistType}>Save Type</Btn>
-            <Btn sm variant="outline" onClick={duplicateChecklistType}>Duplicate Type</Btn>
-            <Btn sm variant="danger" onClick={deleteChecklistType} disabled={typeKeys.length<=1}>Delete Type</Btn>
+          <div>
+            <p style={{ margin:0,fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",letterSpacing:".05em" }}>Fixed Checklist Type</p>
+            <p style={{ margin:"4px 0 0",fontSize:12,color:C.textSub,lineHeight:1.45 }}>
+              Checklist type names are fixed to Product Introduction, Product Reactivation, Campaign, Special Campaign, and Product Phase-Out. You can still customize the color and default tasks.
+            </p>
           </div>
+          <div style={{ display:"flex",alignItems:"center",gap:8,padding:"9px 11px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface }}>
+            <span style={{ width:10,height:10,borderRadius:3,background:typeColor,flexShrink:0 }} />
+            <span style={{ fontSize:13,fontWeight:800,color:C.text }}>
+              {(LAUNCH_TYPES as any)[launchType]?.label || "Product Introduction"}
+            </span>
+          </div>
+          <Field label="Color">
+            <ColorPicker
+              value={typeColor}
+              onChange={v=>{
+                setTypeColor(v);
+                updateChecklistTypeColor(v);
+              }}
+              palette={STATUS_PALETTE}
+            />
+          </Field>
+          <span style={{ fontSize:11,color:"#16A34A",fontWeight:700 }}>Color changes autosave</span>
         </div>
 
         <Field label="Department">
@@ -37204,108 +37404,35 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   const [templatesModal,setTemplatesModal] = useState(false);
   const navRef = useRef(null);
 
-  const normalizeChecklistTypeTabKey = (
-    value:any
-  ) =>
-    String(value || "")
-      .trim()
-      .toLowerCase()
-      .replace(/&/g," and ")
-      .replace(/[^a-z0-9]+/g,"-")
-      .replace(/^-+|-+$/g,"");
-
   const getChecklistGroupTypeMeta = (
     group:any
   ) => {
-    const launchTypeKey = String(
-      group?.launchType ||
-      group?.checklistType ||
-      group?.groupType ||
-      group?.type ||
-      ""
-    ).trim();
-
-    const configuredType =
-      launchTypes?.[launchTypeKey] ||
-      LAUNCH_TYPES?.[launchTypeKey] ||
-      {};
-
-    const hasSpecialCampaignWorkspace =
-      !!(
-        group?.aiWorkspace
-          ?.ecommerce
-          ?.specialCampaignTracker
+    const canonical =
+      getCanonicalChecklistTypeDefinition(
+        group,
+        launchTypes
       );
 
-    const rawLabel = String(
-      configuredType?.label ||
-      group?.launchTypeLabel ||
-      group?.checklistTypeLabel ||
-      group?.groupTypeLabel ||
-      group?.typeLabel ||
-      launchTypeKey ||
-      "Checklist"
-    ).trim();
-
-    const normalizedLabel =
-      normalizeChecklistTypeTabKey(
-        rawLabel
-      );
-
-    let key = normalizedLabel;
-    let label = rawLabel;
-
-    if(
-      hasSpecialCampaignWorkspace ||
-      (
-        normalizedLabel.includes("special") &&
-        normalizedLabel.includes("campaign")
-      )
-    ){
-      key = "special-campaign";
-      label = "Special Campaign";
-    } else if(
-      normalizedLabel.includes(
-        "reactivation"
-      )
-    ){
-      key = "product-reactivation";
-      label = "Product Reactivation";
-    } else if(
-      normalizedLabel.includes(
-        "introduction"
-      )
-    ){
-      key = "product-introduction";
-      label = "Product Introduction";
-    } else if(
-      normalizedLabel==="campaign" ||
-      (
-        normalizedLabel.includes(
-          "campaign"
-        ) &&
-        !normalizedLabel.includes(
-          "special"
-        )
-      )
-    ){
-      key = "campaign";
-      label = "Campaign";
-    } else if(!key){
-      key = normalizeChecklistTypeTabKey(
-        launchTypeKey || "checklist"
-      );
-      label = rawLabel || "Checklist";
-    }
+    const tabKeyByType:any = {
+      introduction:"product-introduction",
+      reactivation:"product-reactivation",
+      campaign:"campaign",
+      specialcampaign:"special-campaign",
+      phaseout:"product-phase-out",
+    };
 
     return {
-      key,
-      label,
+      key:
+        tabKeyByType[canonical.key] ||
+        "product-introduction",
+      label:
+        canonical.label ||
+        LAUNCH_TYPES.introduction.label,
       color:
-        configuredType?.color ||
+        canonical.color ||
         group?.calendarColor ||
         C.accent,
-      launchTypeKey,
+      launchTypeKey:canonical.key,
     };
   };
 
@@ -37334,39 +37461,18 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     {
       key:"special-campaign",
       label:"Special Campaign",
-      color:"#F97316",
+      color:
+        launchTypes?.specialcampaign?.color ||
+        LAUNCH_TYPES.specialcampaign.color,
+    },
+    {
+      key:"product-phase-out",
+      label:"Product Phase-Out",
+      color:
+        launchTypes?.phaseout?.color ||
+        LAUNCH_TYPES.phaseout.color,
     },
   ];
-
-  const standardChecklistTypeKeys =
-    new Set(
-      standardChecklistTypeTabs.map(
-        (tab:any)=>tab.key
-      )
-    );
-
-  const dynamicChecklistTypeTabMap =
-    new Map<string,any>();
-
-  (groups || []).forEach((group:any)=>{
-    const meta =
-      getChecklistGroupTypeMeta(group);
-
-    if(
-      meta.key &&
-      !standardChecklistTypeKeys.has(
-        meta.key
-      ) &&
-      !dynamicChecklistTypeTabMap.has(
-        meta.key
-      )
-    ){
-      dynamicChecklistTypeTabMap.set(
-        meta.key,
-        meta
-      );
-    }
-  });
 
   const checklistTypeTabs = [
     {
@@ -37375,13 +37481,6 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       color:C.text,
     },
     ...standardChecklistTypeTabs,
-    ...Array.from(
-      dynamicChecklistTypeTabMap.values()
-    ).sort((a:any,b:any)=>
-      String(a.label).localeCompare(
-        String(b.label)
-      )
-    ),
   ].map((tab:any)=>({
     ...tab,
     count:
@@ -38075,10 +38174,15 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
     targetLaunchType:any=null
   ) => {
     setTemplates((prev:any)=>{
-      const next =
+      const proposed =
         typeof updater==="function"
           ? updater(prev)
           : updater;
+
+      const next =
+        mergeChecklistTemplatesWithDefaults(
+          proposed
+        );
 
       // Save the edited default-task template to the shared app state.
       // Without this cloud/app-state save, the checklist task sync can work,
@@ -38105,31 +38209,70 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
 
   const updateLaunchTypesAndSync = (updater:any) => {
     setLaunchTypes((prev:any)=>{
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if(onStateChange) onStateChange({checklistLaunchTypes:next});
+      const proposed =
+        typeof updater==="function"
+          ? updater(prev)
+          : updater;
+
+      const next =
+        mergeChecklistLaunchTypesWithDefaults(
+          proposed
+        );
+
+      if(onStateChange){
+        onStateChange({
+          checklistLaunchTypes:next,
+        });
+      }
+
       return next;
     });
   };
 
   useEffect(()=>{
-    try {
-      localStorage.setItem("emdc_checklist_launch_types_v1", JSON.stringify(launchTypes));
-      window.dispatchEvent(new Event("emdc-local-sync"));
-    } catch {}
-  },[launchTypes]);
+    const fixedLaunchTypes =
+      mergeChecklistLaunchTypesWithDefaults(
+        launchTypes
+      );
 
-  useEffect(()=>{
-    // Browser cache only. The shared app-state save in
-    // updateTemplatesAndChecklistItems is the authoritative persistence path.
     try {
       localStorage.setItem(
-        "emdc_checklist_templates_v1",
-        JSON.stringify(templates)
+        "emdc_checklist_launch_types_v1",
+        JSON.stringify(fixedLaunchTypes)
       );
       window.dispatchEvent(
         new Event("emdc-local-sync")
       );
     } catch {}
+
+    if(onStateChange){
+      onStateChange({
+        checklistLaunchTypes:fixedLaunchTypes,
+      });
+    }
+  },[launchTypes]);
+
+  useEffect(()=>{
+    const fixedTemplates =
+      mergeChecklistTemplatesWithDefaults(
+        templates
+      );
+
+    try {
+      localStorage.setItem(
+        "emdc_checklist_templates_v1",
+        JSON.stringify(fixedTemplates)
+      );
+      window.dispatchEvent(
+        new Event("emdc-local-sync")
+      );
+    } catch {}
+
+    if(onStateChange){
+      onStateChange({
+        checklistTemplates:fixedTemplates,
+      });
+    }
   },[templates]);
 
   const applyPhaseoutAssignments = (assignments:any) => {
@@ -38165,8 +38308,13 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
   const cleanupPhaseoutProductsForGroup = (group:any) => {
     if(!group || !setSeasonalEvents) return;
 
-    const typeLabel = (launchTypes?.[group.launchType]?.label || group.launchType || "").toLowerCase();
-    const isDeletedPhaseoutGroup = group.launchType==="phaseout" || typeLabel.includes("phase-out") || typeLabel.includes("phaseout");
+    const canonicalType =
+      getCanonicalChecklistTypeDefinition(
+        group,
+        launchTypes
+      );
+    const isDeletedPhaseoutGroup =
+      canonicalType.key==="phaseout";
     if(!isDeletedPhaseoutGroup) return;
 
     const labelsToRemove = new Set(
@@ -38850,7 +38998,7 @@ const ChecklistView = ({ onGroupCreated, skuStorage, brands, seasonalEvents, set
       ):(
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12 }}>
           {visibleChecklistGroups
-            .map(g=>{ const lt=launchTypes[g.launchType] || LAUNCH_TYPES[g.launchType] || { label:"Checklist", tag:"Custom", color:C.accent }; const groupColor=g.calendarColor||lt?.color||C.accent; const compactSummary=(g?.progressSummary && typeof g.progressSummary==="object") ? g.progressSummary : {}; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id]; const deptOrder=["ecommerce","marketing","digital"]; if(gItems){ return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); } const summaryDepartments=(compactSummary?.departments && typeof compactSummary.departments==="object") ? compactSummary.departments : {}; return deptOrder.filter((dept:string)=>Number(summaryDepartments?.[dept]?.total || 0)>0 && Number(summaryDepartments?.[dept]?.done || 0)>=Number(summaryDepartments?.[dept]?.total || 0)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
+            .map(g=>{ const lt=getCanonicalChecklistTypeDefinition(g,launchTypes); const groupColor=g.calendarColor||lt?.color||C.accent; const compactSummary=(g?.progressSummary && typeof g.progressSummary==="object") ? g.progressSummary : {}; const completedDeptBadges=(()=>{ const gItems=allGroupItems?.[g.id]; const deptOrder=["ecommerce","marketing","digital"]; if(gItems){ return deptOrder.filter((dept:string)=>Array.isArray(gItems[dept]) && gItems[dept].length>0 && gItems[dept].every((item:any)=>!!item.done)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); } const summaryDepartments=(compactSummary?.departments && typeof compactSummary.departments==="object") ? compactSummary.departments : {}; return deptOrder.filter((dept:string)=>Number(summaryDepartments?.[dept]?.total || 0)>0 && Number(summaryDepartments?.[dept]?.done || 0)>=Number(summaryDepartments?.[dept]?.total || 0)).map((dept:string)=>({ id:dept, label:(DEPTS as any)?.[dept]?.label || dept })); })(); return (
             <div key={g.id} className="emdc-card" style={{ background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,borderLeft:`4px solid ${groupColor}`,cursor:"pointer",transition:"box-shadow .2s",overflow:"hidden",minWidth:0 }} onClick={()=>{ setActive(g.id); if(onRouteChange) onRouteChange({ tab:"checklists", groupId:g.id, groupTab:"tasks" }); }}>
               <div style={{ padding:"16px",minWidth:0 }}>
                 <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",alignItems:"flex-start",gap:8,marginBottom:10,minWidth:0 }}>
