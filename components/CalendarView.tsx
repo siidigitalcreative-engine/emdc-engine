@@ -20561,6 +20561,96 @@ ${slidesHtml}
         });
       };
 
+      const campaignMarketingGroupBy =
+        data.campaignMarketingGroupBy ||
+        "none";
+
+      const getCampaignMarketingGroupLabel = (
+        row:any
+      ) => {
+        if(
+          campaignMarketingGroupBy===
+          "platform"
+        ){
+          return String(
+            row?.platform ||
+            "No Platform"
+          ).trim();
+        }
+
+        if(
+          campaignMarketingGroupBy===
+          "brand"
+        ){
+          const products =
+            Array.isArray(row?.products)
+              ? row.products
+              : [];
+
+          const brands =
+            Array.from(
+              new Set(
+                [
+                  row?.brand,
+                  ...products.map(
+                    (product:any)=>
+                      product?.brand
+                  ),
+                ]
+                  .map((value:any)=>
+                    String(
+                      value || ""
+                    ).trim()
+                  )
+                  .filter(Boolean)
+              )
+            );
+
+          return (
+            brands.join(", ") ||
+            "No Brand"
+          );
+        }
+
+        return "";
+      };
+
+      const campaignMarketingGroupedRows =
+        (() => {
+          if(
+            campaignMarketingGroupBy===
+            "none"
+          ){
+            return [{
+              label:"",
+              rows,
+            }];
+          }
+
+          const grouped =
+            new Map<string,any[]>();
+
+          rows.forEach((row:any)=>{
+            const label =
+              getCampaignMarketingGroupLabel(
+                row
+              );
+
+            if(!grouped.has(label)){
+              grouped.set(label,[]);
+            }
+
+            grouped.get(label)!.push(row);
+          });
+
+          return Array.from(
+            grouped.entries()
+          ).map(([label,groupRows])=>({
+            label,
+            rows:groupRows,
+          }));
+        })();
+
       const campaignMarketingTableColumns = [
         {
           heading:"SKU",
@@ -20632,31 +20722,97 @@ ${slidesHtml}
               </p>
             </div>
 
-            <Btn
-              xs
-              type="button"
-              variant={
-                campaignMarketingFullView
-                  ? "primary"
-                  : "outline"
-              }
-              disabled={!rows.length}
-              onClick={()=>
-                setCampaignMarketingFullView(
-                  (previous:boolean)=>
-                    !previous
-                )
-              }
-              title={
-                campaignMarketingFullView
-                  ? "Return to compact rows"
-                  : "Expand rows and wrap all long field content"
-              }
+            <div
+              style={{
+                display:"flex",
+                alignItems:"center",
+                justifyContent:"flex-end",
+                gap:6,
+                flexWrap:"wrap",
+                width:isMobile
+                  ? "100%"
+                  : "auto",
+              }}
             >
-              {campaignMarketingFullView
-                ? "Compact View"
-                : "View Full"}
-            </Btn>
+              <span
+                style={{
+                  fontSize:10,
+                  fontWeight:800,
+                  color:C.muted,
+                  background:C.surfaceAlt,
+                  border:`1px solid ${C.border}`,
+                  borderRadius:999,
+                  padding:"3px 8px",
+                }}
+              >
+                {rows.length} row{
+                  rows.length!==1
+                    ? "s"
+                    : ""
+                }
+              </span>
+
+              <Select
+                value={
+                  campaignMarketingGroupBy
+                }
+                onChange={(value:any)=>
+                  updateAiWorkspace(
+                    "marketing",
+                    {
+                      campaignMarketingGroupBy:
+                        value,
+                    }
+                  )
+                }
+                style={{
+                  width:isMobile
+                    ? "100%"
+                    : 168,
+                  height:30,
+                  minHeight:30,
+                  fontSize:10.5,
+                  padding:
+                    "4px 28px 4px 8px",
+                }}
+              >
+                <option value="none">
+                  No Grouping
+                </option>
+                <option value="brand">
+                  Group by Brand
+                </option>
+                <option value="platform">
+                  Group by Platform
+                </option>
+              </Select>
+
+              <Btn
+                xs
+                type="button"
+                variant={
+                  campaignMarketingFullView
+                    ? "primary"
+                    : "outline"
+                }
+                disabled={!rows.length}
+                onClick={()=>
+                  setCampaignMarketingFullView(
+                    (previous:boolean)=>
+                      !previous
+                  )
+                }
+                title={
+                  campaignMarketingFullView
+                    ? "Return to compact rows"
+                    : "Expand rows and wrap all long field content"
+                }
+              >
+                {campaignMarketingFullView
+                  ? "Compact View"
+                  : "View Full"}
+              </Btn>
+            </div>
           </div>
 
           {rows.length===0 ? (
@@ -20737,7 +20893,61 @@ ${slidesHtml}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row:any,index:number)=>{
+                  {campaignMarketingGroupedRows.map(
+                    (
+                      group:any,
+                      groupIndex:number
+                    )=>(
+                      <React.Fragment
+                        key={`${
+                          group.label ||
+                          "all"
+                        }-${groupIndex}`}
+                      >
+                        {campaignMarketingGroupBy!=="none"&&(
+                          <tr>
+                            <td
+                              colSpan={10}
+                              style={{
+                                position:"sticky",
+                                left:0,
+                                zIndex:9,
+                                padding:"7px 10px",
+                                background:"#F8FAFC",
+                                borderBottom:`1px solid ${C.border}`,
+                                fontSize:9.5,
+                                fontWeight:900,
+                                color:C.textSub,
+                                textTransform:"uppercase",
+                                letterSpacing:".04em",
+                              }}
+                            >
+                              {group.label}
+                              <span
+                                style={{
+                                  color:C.faint,
+                                  fontWeight:800,
+                                  textTransform:"none",
+                                  letterSpacing:0,
+                                }}
+                              >
+                                {" "}({
+                                  group.rows.length
+                                } row{
+                                  group.rows.length!==1
+                                    ? "s"
+                                    : ""
+                                })
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+
+                        {group.rows.map(
+                          (
+                            row:any,
+                            index:number
+                          )=>{
                     const products=Array.isArray(row?.products)?row.products:[];
                     const skuText=products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", ");
                     return (
@@ -21155,8 +21365,12 @@ ${slidesHtml}
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
+                            );
+                          }
+                        )}
+                      </React.Fragment>
+                    )
+                  )}
                 </tbody>
               </table>
             </div>
@@ -24829,6 +25043,96 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         );
       };
 
+      const campaignDigitalGroupBy =
+        digital.campaignDigitalGroupBy ||
+        "none";
+
+      const getCampaignDigitalGroupLabel = (
+        row:any
+      ) => {
+        if(
+          campaignDigitalGroupBy===
+          "platform"
+        ){
+          return String(
+            row?.platform ||
+            "No Platform"
+          ).trim();
+        }
+
+        if(
+          campaignDigitalGroupBy===
+          "brand"
+        ){
+          const products =
+            Array.isArray(row?.products)
+              ? row.products
+              : [];
+
+          const brands =
+            Array.from(
+              new Set(
+                [
+                  row?.brand,
+                  ...products.map(
+                    (product:any)=>
+                      product?.brand
+                  ),
+                ]
+                  .map((value:any)=>
+                    String(
+                      value || ""
+                    ).trim()
+                  )
+                  .filter(Boolean)
+              )
+            );
+
+          return (
+            brands.join(", ") ||
+            "No Brand"
+          );
+        }
+
+        return "";
+      };
+
+      const campaignDigitalGroupedRows =
+        (() => {
+          if(
+            campaignDigitalGroupBy===
+            "none"
+          ){
+            return [{
+              label:"",
+              rows,
+            }];
+          }
+
+          const grouped =
+            new Map<string,any[]>();
+
+          rows.forEach((row:any)=>{
+            const label =
+              getCampaignDigitalGroupLabel(
+                row
+              );
+
+            if(!grouped.has(label)){
+              grouped.set(label,[]);
+            }
+
+            grouped.get(label)!.push(row);
+          });
+
+          return Array.from(
+            grouped.entries()
+          ).map(([label,groupRows])=>({
+            label,
+            rows:groupRows,
+          }));
+        })();
+
       const campaignDigitalTableColumns = [
         {
           heading:"SKU",
@@ -24886,6 +25190,59 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 flexWrap:"wrap",
               }}
             >
+              <span
+                style={{
+                  fontSize:10,
+                  fontWeight:800,
+                  color:C.muted,
+                  background:C.surfaceAlt,
+                  border:`1px solid ${C.border}`,
+                  borderRadius:999,
+                  padding:"3px 8px",
+                }}
+              >
+                {rows.length} row{
+                  rows.length!==1
+                    ? "s"
+                    : ""
+                }
+              </span>
+
+              <Select
+                value={
+                  campaignDigitalGroupBy
+                }
+                onChange={(value:any)=>
+                  updateAiWorkspace(
+                    "digital",
+                    {
+                      campaignDigitalGroupBy:
+                        value,
+                    }
+                  )
+                }
+                style={{
+                  width:isMobile
+                    ? "100%"
+                    : 168,
+                  height:30,
+                  minHeight:30,
+                  fontSize:10.5,
+                  padding:
+                    "4px 28px 4px 8px",
+                }}
+              >
+                <option value="none">
+                  No Grouping
+                </option>
+                <option value="brand">
+                  Group by Brand
+                </option>
+                <option value="platform">
+                  Group by Platform
+                </option>
+              </Select>
+
               <Btn
                 xs
                 type="button"
@@ -25002,7 +25359,61 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row:any,index:number)=>{
+                  {campaignDigitalGroupedRows.map(
+                    (
+                      group:any,
+                      groupIndex:number
+                    )=>(
+                      <React.Fragment
+                        key={`${
+                          group.label ||
+                          "all"
+                        }-${groupIndex}`}
+                      >
+                        {campaignDigitalGroupBy!=="none"&&(
+                          <tr>
+                            <td
+                              colSpan={8}
+                              style={{
+                                position:"sticky",
+                                left:0,
+                                zIndex:9,
+                                padding:"7px 10px",
+                                background:"#F8FAFC",
+                                borderBottom:`1px solid ${C.border}`,
+                                fontSize:9.5,
+                                fontWeight:900,
+                                color:C.textSub,
+                                textTransform:"uppercase",
+                                letterSpacing:".04em",
+                              }}
+                            >
+                              {group.label}
+                              <span
+                                style={{
+                                  color:C.faint,
+                                  fontWeight:800,
+                                  textTransform:"none",
+                                  letterSpacing:0,
+                                }}
+                              >
+                                {" "}({
+                                  group.rows.length
+                                } row{
+                                  group.rows.length!==1
+                                    ? "s"
+                                    : ""
+                                })
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+
+                        {group.rows.map(
+                          (
+                            row:any,
+                            index:number
+                          )=>{
                     const rowId=String(row?.sourceRowId||row?.id||index);
                     const products=Array.isArray(row?.products)?row.products:[];
                     const skuText=products.map((product:any)=>String(product?.sku||product?.skuCode||"").trim()).filter(Boolean).join(", ");
@@ -25631,8 +26042,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
+                            );
+                          }
+                        )}
+                      </React.Fragment>
+                    )
+                  )}
                 </tbody>
               </table>
             </div>
