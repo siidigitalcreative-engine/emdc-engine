@@ -12775,7 +12775,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       ""
     ).trim();
 
-  const getCampaignDigitalRowsWithBackup = () => {
+  const getCampaignDigitalRowsWithBackup = ():any[] => {
     const currentDigital =
       ((group.aiWorkspace || {}).digital || {}) as any;
 
@@ -12783,7 +12783,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       ((((getPersistedChecklistGroup() || group) || {})
         .aiWorkspace || {}).digital || {}) as any;
 
-    return mergeDigitalCreativeRows(
+    const savedDigitalRows = mergeDigitalCreativeRows(
       Array.isArray(persistedDigital.campaignCreativeRows)
         ? persistedDigital.campaignCreativeRows
         : [],
@@ -12791,7 +12791,57 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         ? currentDigital.campaignCreativeRows
         : [],
       readMarketingDcTransferRowsBackup("campaign")
-    ).filter(
+    );
+
+    const ecommerceRows = getEcommerceCampaignRows();
+
+    // Campaign E-commerce is the source table for Digital Creative.
+    // Rebuild any missing Digital Creative rows from the current Campaign
+    // product table while preserving existing final links, preview URLs,
+    // statuses, and timestamps. This keeps the row totals aligned even when
+    // new E-commerce rows were added after the last Send to DC action.
+    if(ecommerceRows.length){
+      const savedBySourceId = new Map<string,any>(
+        savedDigitalRows.map((row:any)=>[
+          getCampaignSharedRowId(row),
+          row,
+        ])
+      );
+
+      return ecommerceRows
+        .map((sourceRow:any)=>{
+          const sourceRowId = getCampaignSharedRowId(sourceRow);
+          const existingRow = savedBySourceId.get(sourceRowId);
+          const rebuiltRow = buildCampaignDigitalTransferRow(
+            sourceRow,
+            existingRow
+          );
+
+          return {
+            ...rebuiltRow,
+            createdAt:
+              existingRow?.createdAt ||
+              rebuiltRow?.createdAt,
+            sentFromEcommerceAt:
+              existingRow?.sentFromEcommerceAt ||
+              rebuiltRow?.sentFromEcommerceAt,
+            updatedAt:
+              existingRow?.updatedAt ||
+              rebuiltRow?.updatedAt,
+          };
+        })
+        .filter(
+          (row:any)=>
+            !isCampaignDepartmentRowDeleted(
+              "digital",
+              row
+            )
+        );
+    }
+
+    // Keep the saved Digital Creative rows available when the source Campaign
+    // table is temporarily empty so existing links and progress are not lost.
+    return savedDigitalRows.filter(
       (row:any)=>
         !isCampaignDepartmentRowDeleted(
           "digital",
