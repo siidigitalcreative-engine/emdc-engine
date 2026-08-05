@@ -11500,6 +11500,15 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const getCampaignMainPromotionDefault = () => formatMainPromotion(((group.aiWorkspace || {}).ecommerce || {}).mainPromotion || "");
   const getCampaignRowDiscountValue = (row:any) => String(row?.discount || "").trim() || getCampaignMainPromotionDefault();
+  const getCampaignRowTypeValue = (row:any) => String(row?.campaignType || "").trim();
+  const getCampaignRowTypeMode = (row:any) => {
+    const savedMode = String(row?.campaignTypeMode || "").trim().toLowerCase();
+    const savedValue = getCampaignRowTypeValue(row);
+    if(savedMode==="custom") return "custom";
+    if(savedMode==="gwp") return "gwp";
+    if(savedValue.toUpperCase()==="GWP") return "gwp";
+    return savedValue ? "custom" : "";
+  };
 
   const getEcommerceCampaignRows = () => {
     const builder = getEcommerceCampaignBuilder();
@@ -11516,6 +11525,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         brand: summary.brand || row.brand || "",
         collection: summary.collection || row.collection || row.category || "",
         platform: row.platform || builder.platform || "All Platforms",
+        campaignType: row.campaignType || "",
+        campaignTypeMode: row.campaignTypeMode || "",
         discount: row.discount || "",
         mechanics: row.mechanics || "",
         headline: row.headline || "",
@@ -11542,6 +11553,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         brand: row.brand || "",
         collection: row.collection || "",
         platform: row.platform || "",
+        campaignType: row.campaignType || "",
+        campaignTypeMode: row.campaignTypeMode || "",
         discount: row.discount || "",
         mechanics: row.mechanics || "",
         headline: row.headline || "",
@@ -11563,6 +11576,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       brand:summary.brand,
       collection:summary.collection,
       platform:builder.platform || "All Platforms",
+      campaignType:"",
+      campaignTypeMode:"",
       discount:getCampaignMainPromotionDefault(),
       mechanics:"",
       headline:"",
@@ -11589,6 +11604,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           brand: row.brand || "",
           collection: row.collection || "",
           platform: row.platform || builder.platform || "All Platforms",
+          campaignType: row.campaignType || "",
+          campaignTypeMode: row.campaignTypeMode || "",
           discount: row.discount || "",
           mechanics: row.mechanics || "",
           headline: row.headline || "",
@@ -11631,6 +11648,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         brand:"",
         collection:"",
         platform:builder.platform || "All Platforms",
+        campaignType:"",
+        campaignTypeMode:"",
         discount:getCampaignMainPromotionDefault(),
         mechanics:"",
         headline:"",
@@ -11780,6 +11799,8 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         brand: row.brand || "",
         collection: row.collection || "",
         platform: row.platform || builder.platform || "All Platforms",
+        campaignType: row.campaignType || "",
+        campaignTypeMode: row.campaignTypeMode || "",
         discount: row.discount || "",
         mechanics: row.mechanics || "",
         headline: row.headline || "",
@@ -11797,7 +11818,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const getEcommerceCampaignProductSummary = (rows:any[]) => rows.map((row:any,idx:number)=>{
     const products = getEcommerceCampaignRowProducts(row);
     const productList = products.length ? products.map((item:any)=>`${item.product || "Product"} (${item.sku || "No SKU"})`).join("; ") : `${row.product || ""} (${row.sku || "No SKU"})`;
-    return `${idx+1}. Platform: ${row.platform || "All Platforms"} | Products: ${productList} | Brand: ${row.brand || "Unbranded"} | Collection/Category: ${row.collection || "No collection/category"} | Discount/Offer: ${getCampaignRowDiscountValue(row) || "Not specified"} | Mechanics/Notes: ${row.mechanics || "Not specified"}`;
+    return `${idx+1}. Platform: ${row.platform || "All Platforms"} | Type: ${getCampaignRowTypeValue(row) || "Not specified"} | Products: ${productList} | Brand: ${row.brand || "Unbranded"} | Collection/Category: ${row.collection || "No collection/category"} | Discount/Offer: ${getCampaignRowDiscountValue(row) || "Not specified"} | Mechanics/Notes: ${row.mechanics || "Not specified"}`;
   }).join("\n");
 
   const parseCampaignCopySections = (value:any) => {
@@ -12026,6 +12047,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     "Platform",
     row.platform || "",
     "",
+    "Type",
+    getCampaignRowTypeValue(row) || "",
+    "",
     "Headline",
     row.headline || "",
     "",
@@ -12080,6 +12104,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         instruction,
         input:JSON.stringify({
           platform:row.platform || builder.platform,
+          campaignType:getCampaignRowTypeValue(row) || "",
           linkedEventContext,
           linkedEvents:getCampaignLinkedEventItems(),
           theme:linkedEventContext || theme,
@@ -12400,6 +12425,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       collection:product.collection || row.collection || row.category || "",
       category:product.collection || row.collection || row.category || "",
       platform:row.platform || builder.platform || "All Platforms",
+      campaignType:getCampaignRowTypeValue(row) || "",
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
@@ -12415,6 +12441,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       collection:row.collection || row.category || "",
       category:row.collection || row.category || "",
       platform:row.platform || builder.platform || "All Platforms",
+      campaignType:getCampaignRowTypeValue(row) || "",
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
@@ -12424,7 +12451,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const marketingProducts = (products.length ? products : [fallbackProduct]).map((item:any)=>enrichEcommerceTransferProductRow(item));
     const existingRows = getCampaignMarketingRowsWithBackup();
     const nextRows = [
-      { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:marketingProducts, createdAt:new Date().toISOString() },
+      { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", campaignType:getCampaignRowTypeValue(row) || "", products:marketingProducts, createdAt:new Date().toISOString() },
       ...existingRows.filter((existing:any)=>String(existing.sourceRowId || existing.id || "")!==rowKey),
     ].slice(0,30);
     writeEcommerceTransferRowsBackup("marketing","campaign",nextRows);
@@ -12449,6 +12476,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       collection:product.collection || row.collection || row.category || "",
       category:product.collection || row.collection || row.category || "",
       platform:row.platform || builder.platform || "All Platforms",
+      campaignType:getCampaignRowTypeValue(row) || "",
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
@@ -12464,6 +12492,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       collection:row.collection || row.category || "",
       category:row.collection || row.category || "",
       platform:row.platform || builder.platform || "All Platforms",
+      campaignType:getCampaignRowTypeValue(row) || "",
       headline:row.headline || "",
       subheadline:row.subheadline || "",
       cta:row.cta || "",
@@ -12473,7 +12502,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     const livestreamProducts = (products.length ? products : [fallbackProduct]).map((item:any)=>enrichEcommerceTransferProductRow(item));
     const existingRows = getCampaignLivestreamRowsWithBackup();
     const nextRows = [
-      { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", products:livestreamProducts, createdAt:new Date().toISOString() },
+      { id:rowKey, sourceRowId:rowKey, product:row.product || "Campaign Product Row", platform:row.platform || builder.platform || "All Platforms", campaignType:getCampaignRowTypeValue(row) || "", products:livestreamProducts, createdAt:new Date().toISOString() },
       ...existingRows.filter((existing:any)=>String(existing.sourceRowId || existing.id || "")!==rowKey),
     ].slice(0,30);
     writeEcommerceTransferRowsBackup("livestream","campaign",nextRows);
@@ -12497,6 +12526,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       brand:row.brand || "",
       collection:row.collection || "",
       platform:row.platform || builder.platform || "All Platforms",
+      campaignType:getCampaignRowTypeValue(row) || "",
       discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
       linkedEventContext:linkedContext,
@@ -12511,6 +12541,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   const formatCampaignDigitalCreativeItem = (item:any) => [
     "Platform",
     item.platform || "",
+    "",
+    "Type",
+    item.campaignType || "",
     "",
     "Brand",
     item.brand || "",
@@ -12577,6 +12610,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
           row.collection ||
           row.category ||
           "",
+        campaignType:getCampaignRowTypeValue(row) || "",
       })
     );
 
@@ -12592,6 +12626,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
         row.platform ||
         builder.platform ||
         "All Platforms",
+      campaignType:getCampaignRowTypeValue(row) || "",
       discount:getCampaignRowDiscountValue(row) || "",
       mechanics:row.mechanics || "",
       headline:row.headline || "",
@@ -31989,6 +32024,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           width:155,
         },
         {
+          heading:"Type",
+          width:175,
+        },
+        {
           heading:"Discount / Offer",
           width:180,
         },
@@ -35603,8 +35642,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           >
                             <table
                               style={{
-                                width:2280,
-                                minWidth:2280,
+                                width:2455,
+                                minWidth:2455,
                                 maxWidth:"none",
                                 borderCollapse:"separate",
                                 borderSpacing:0,
@@ -36003,6 +36042,102 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                                               )
                                             )}
                                           </Select>
+                                        </td>
+
+                                        <td
+                                          style={{
+                                            width:175,
+                                            minWidth:175,
+                                            padding:6,
+                                            borderBottom:`1px solid ${C.border}`,
+                                            borderRight:`1px solid ${C.border}`,
+                                            verticalAlign:"middle",
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              display:"flex",
+                                              flexDirection:"column",
+                                              gap:5,
+                                            }}
+                                          >
+                                            <Select
+                                              value={getCampaignRowTypeMode(row)}
+                                              onChange={(value:any)=>{
+                                                if(value==="gwp"){
+                                                  updateEcommerceCampaignRow(
+                                                    row.id,
+                                                    {
+                                                      campaignType:"GWP",
+                                                      campaignTypeMode:"gwp",
+                                                    },
+                                                    rowIndex
+                                                  );
+                                                  return;
+                                                }
+
+                                                if(value==="custom"){
+                                                  updateEcommerceCampaignRow(
+                                                    row.id,
+                                                    {
+                                                      campaignType:
+                                                        getCampaignRowTypeMode(row)==="custom"
+                                                          ? getCampaignRowTypeValue(row)
+                                                          : "",
+                                                      campaignTypeMode:"custom",
+                                                    },
+                                                    rowIndex
+                                                  );
+                                                  return;
+                                                }
+
+                                                updateEcommerceCampaignRow(
+                                                  row.id,
+                                                  {
+                                                    campaignType:"",
+                                                    campaignTypeMode:"",
+                                                  },
+                                                  rowIndex
+                                                );
+                                              }}
+                                              style={{
+                                                width:"100%",
+                                                minWidth:0,
+                                                height:38,
+                                                minHeight:38,
+                                                padding:"7px 30px 7px 8px",
+                                                fontSize:10.5,
+                                                background:C.surface,
+                                              }}
+                                            >
+                                              <option value="">Select Type</option>
+                                              <option value="gwp">GWP</option>
+                                              <option value="custom">Add Custom</option>
+                                            </Select>
+
+                                            {getCampaignRowTypeMode(row)==="custom"&&(
+                                              <TI
+                                                value={getCampaignRowTypeValue(row)}
+                                                onChange={(value:any)=>
+                                                  updateEcommerceCampaignRow(
+                                                    row.id,
+                                                    {
+                                                      campaignType:value,
+                                                      campaignTypeMode:"custom",
+                                                    },
+                                                    rowIndex
+                                                  )
+                                                }
+                                                placeholder="Enter custom type"
+                                                style={{
+                                                  height:34,
+                                                  minHeight:34,
+                                                  fontSize:10.5,
+                                                  padding:"6px 8px",
+                                                }}
+                                              />
+                                            )}
+                                          </div>
                                         </td>
 
                                         <td
