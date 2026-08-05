@@ -2141,6 +2141,275 @@ const Select = ({ value, onChange, children, style={} }) => {
 
 
 
+const CAMPAIGN_GROUP_BY_OPTIONS = [
+  { id:"brand", label:"Brand" },
+  { id:"platform", label:"Platform" },
+  { id:"type", label:"Type" },
+];
+
+const normalizeCampaignGroupBySelection = (value:any) => {
+  const rawValues = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(/[,+|]/)
+        .map((item:string)=>item.trim())
+        .filter(Boolean);
+
+  const selected = new Set(
+    rawValues
+      .map((item:any)=>String(item || "").trim().toLowerCase())
+      .filter((item:string)=>item && item!=="none")
+  );
+
+  return CAMPAIGN_GROUP_BY_OPTIONS
+    .map((option:any)=>option.id)
+    .filter((id:string)=>selected.has(id));
+};
+
+const getCampaignGroupingDimensionValue = (row:any, dimension:string) => {
+  const products = Array.isArray(row?.products) ? row.products : [];
+
+  if(dimension==="platform"){
+    return String(row?.platform || "No Platform").trim() || "No Platform";
+  }
+
+  if(dimension==="type"){
+    const types = Array.from(
+      new Set(
+        [
+          row?.campaignType,
+          ...products.map((product:any)=>product?.campaignType),
+        ]
+          .map((value:any)=>String(value || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    return types.join(", ") || "No Type";
+  }
+
+  if(dimension==="brand"){
+    const brands = Array.from(
+      new Set(
+        [
+          row?.brand,
+          ...products.map((product:any)=>product?.brand),
+        ]
+          .map((value:any)=>String(value || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    return brands.join(", ") || "No Brand";
+  }
+
+  return "";
+};
+
+const getCampaignMultiGroupLabel = (row:any, dimensions:any) =>
+  normalizeCampaignGroupBySelection(dimensions)
+    .map((dimension:string)=>getCampaignGroupingDimensionValue(row,dimension))
+    .join(" · ");
+
+const CampaignGroupByMultiSelect = ({ value, onChange, style={} }: any) => {
+  const [open,setOpen] = useState(false);
+  const rootRef = useRef<any>(null);
+  const selected = normalizeCampaignGroupBySelection(value);
+  const selectedSet = new Set(selected);
+
+  useEffect(()=>{
+    const close = (event:any) => {
+      if(rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
+    };
+
+    document.addEventListener("mousedown",close);
+    document.addEventListener("touchstart",close);
+    return ()=>{
+      document.removeEventListener("mousedown",close);
+      document.removeEventListener("touchstart",close);
+    };
+  },[]);
+
+  const toggle = (id:string) => {
+    const nextSet = new Set(selected);
+    if(nextSet.has(id)) nextSet.delete(id);
+    else nextSet.add(id);
+
+    const next = CAMPAIGN_GROUP_BY_OPTIONS
+      .map((option:any)=>option.id)
+      .filter((optionId:string)=>nextSet.has(optionId));
+
+    onChange(next);
+  };
+
+  const label = selected.length
+    ? `Group by ${selected
+        .map((id:string)=>CAMPAIGN_GROUP_BY_OPTIONS.find((option:any)=>option.id===id)?.label || id)
+        .join(" + ")}`
+    : "No Grouping";
+
+  return (
+    <div
+      ref={rootRef}
+      style={{
+        position:"relative",
+        width:style?.width || 190,
+        minWidth:style?.minWidth,
+        maxWidth:style?.maxWidth,
+        flex:style?.flex,
+      }}
+    >
+      <button
+        type="button"
+        onClick={()=>setOpen((current:boolean)=>!current)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        style={{
+          width:"100%",
+          height:style?.height || 30,
+          minHeight:style?.minHeight || style?.height || 30,
+          padding:style?.padding || "4px 28px 4px 9px",
+          border:`1.5px solid ${open?C.accent:C.border}`,
+          borderRadius:8,
+          background:C.surface,
+          color:C.text,
+          fontSize:style?.fontSize || 10.5,
+          fontWeight:500,
+          textAlign:"left",
+          whiteSpace:"nowrap",
+          overflow:"hidden",
+          textOverflow:"ellipsis",
+          cursor:"pointer",
+          position:"relative",
+          boxSizing:"border-box",
+        }}
+      >
+        {label}
+        <span
+          aria-hidden="true"
+          style={{
+            position:"absolute",
+            right:10,
+            top:"50%",
+            transform:"translateY(-50%)",
+            fontSize:9,
+            color:C.muted,
+          }}
+        >
+          {open?"▴":"▾"}
+        </span>
+      </button>
+
+      {open&&(
+        <div
+          role="menu"
+          style={{
+            position:"absolute",
+            top:"calc(100% + 6px)",
+            right:0,
+            zIndex:120,
+            width:220,
+            maxWidth:"calc(100vw - 28px)",
+            padding:7,
+            background:C.surface,
+            border:`1px solid ${C.border}`,
+            borderRadius:10,
+            boxShadow:"0 14px 34px rgba(15,23,42,.18)",
+          }}
+        >
+          <div style={{padding:"4px 7px 7px",fontSize:9.5,fontWeight:900,color:C.muted,textTransform:"uppercase",letterSpacing:".05em"}}>
+            Select one or more
+          </div>
+
+          {CAMPAIGN_GROUP_BY_OPTIONS.map((option:any)=>{
+            const checked = selectedSet.has(option.id);
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={checked}
+                onClick={()=>toggle(option.id)}
+                style={{
+                  width:"100%",
+                  display:"flex",
+                  alignItems:"center",
+                  gap:9,
+                  padding:"8px 9px",
+                  border:"none",
+                  borderRadius:7,
+                  background:checked?C.surfaceAlt:"transparent",
+                  color:C.textSub,
+                  fontSize:11,
+                  fontWeight:checked?800:600,
+                  textAlign:"left",
+                  cursor:"pointer",
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width:16,
+                    height:16,
+                    borderRadius:4,
+                    border:`1.5px solid ${checked?C.accent:C.borderStrong}`,
+                    background:checked?C.accent:C.surface,
+                    color:"#fff",
+                    display:"inline-flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                    fontSize:10,
+                    flexShrink:0,
+                  }}
+                >
+                  {checked?"✓":""}
+                </span>
+                {option.label}
+              </button>
+            );
+          })}
+
+          <div style={{display:"flex",gap:6,justifyContent:"space-between",padding:"7px 2px 1px",borderTop:`1px solid ${C.border}`,marginTop:5}}>
+            <button
+              type="button"
+              onClick={()=>onChange([])}
+              disabled={!selected.length}
+              style={{
+                border:"none",
+                background:"transparent",
+                color:selected.length?"#DC2626":C.faint,
+                fontSize:10.5,
+                fontWeight:800,
+                cursor:selected.length?"pointer":"default",
+                padding:"5px 7px",
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={()=>setOpen(false)}
+              style={{
+                border:"none",
+                borderRadius:7,
+                background:C.accent,
+                color:"#fff",
+                fontSize:10.5,
+                fontWeight:800,
+                cursor:"pointer",
+                padding:"6px 12px",
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const SearchableCreatableSelect = ({ value, onChange, options=[], placeholder="" }: any) => {
   const [open,setOpen] = useState(false);
   const [activeIndex,setActiveIndex] = useState(0);
@@ -20647,65 +20916,13 @@ ${slidesHtml}
       };
 
       const campaignMarketingGroupBy =
-        data.campaignMarketingGroupBy ||
-        "none";
-
-      const getCampaignMarketingGroupLabel = (
-        row:any
-      ) => {
-        if(
-          campaignMarketingGroupBy===
-          "platform"
-        ){
-          return String(
-            row?.platform ||
-            "No Platform"
-          ).trim();
-        }
-
-        if(
-          campaignMarketingGroupBy===
-          "brand"
-        ){
-          const products =
-            Array.isArray(row?.products)
-              ? row.products
-              : [];
-
-          const brands =
-            Array.from(
-              new Set(
-                [
-                  row?.brand,
-                  ...products.map(
-                    (product:any)=>
-                      product?.brand
-                  ),
-                ]
-                  .map((value:any)=>
-                    String(
-                      value || ""
-                    ).trim()
-                  )
-                  .filter(Boolean)
-              )
-            );
-
-          return (
-            brands.join(", ") ||
-            "No Brand"
-          );
-        }
-
-        return "";
-      };
+        normalizeCampaignGroupBySelection(
+          data.campaignMarketingGroupBy
+        );
 
       const campaignMarketingGroupedRows =
         (() => {
-          if(
-            campaignMarketingGroupBy===
-            "none"
-          ){
+          if(!campaignMarketingGroupBy.length){
             return [{
               label:"",
               rows,
@@ -20717,8 +20934,9 @@ ${slidesHtml}
 
           rows.forEach((row:any)=>{
             const label =
-              getCampaignMarketingGroupLabel(
-                row
+              getCampaignMultiGroupLabel(
+                row,
+                campaignMarketingGroupBy
               );
 
             if(!grouped.has(label)){
@@ -20837,40 +21055,26 @@ ${slidesHtml}
                 }
               </span>
 
-              <Select
-                value={
-                  campaignMarketingGroupBy
-                }
+              <CampaignGroupByMultiSelect
+                value={campaignMarketingGroupBy}
                 onChange={(value:any)=>
                   updateAiWorkspace(
                     "marketing",
                     {
-                      campaignMarketingGroupBy:
-                        value,
+                      campaignMarketingGroupBy:value,
                     }
                   )
                 }
                 style={{
                   width:isMobile
                     ? "100%"
-                    : 168,
+                    : 196,
                   height:30,
                   minHeight:30,
                   fontSize:10.5,
-                  padding:
-                    "4px 28px 4px 8px",
+                  padding:"4px 28px 4px 8px",
                 }}
-              >
-                <option value="none">
-                  No Grouping
-                </option>
-                <option value="brand">
-                  Group by Brand
-                </option>
-                <option value="platform">
-                  Group by Platform
-                </option>
-              </Select>
+              />
 
               <Btn
                 xs
@@ -20989,7 +21193,7 @@ ${slidesHtml}
                           "all"
                         }-${groupIndex}`}
                       >
-                        {campaignMarketingGroupBy!=="none"&&(
+                        {campaignMarketingGroupBy.length>0&&(
                           <tr>
                             <td
                               colSpan={10}
@@ -25129,65 +25333,13 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const campaignDigitalGroupBy =
-        digital.campaignDigitalGroupBy ||
-        "none";
-
-      const getCampaignDigitalGroupLabel = (
-        row:any
-      ) => {
-        if(
-          campaignDigitalGroupBy===
-          "platform"
-        ){
-          return String(
-            row?.platform ||
-            "No Platform"
-          ).trim();
-        }
-
-        if(
-          campaignDigitalGroupBy===
-          "brand"
-        ){
-          const products =
-            Array.isArray(row?.products)
-              ? row.products
-              : [];
-
-          const brands =
-            Array.from(
-              new Set(
-                [
-                  row?.brand,
-                  ...products.map(
-                    (product:any)=>
-                      product?.brand
-                  ),
-                ]
-                  .map((value:any)=>
-                    String(
-                      value || ""
-                    ).trim()
-                  )
-                  .filter(Boolean)
-              )
-            );
-
-          return (
-            brands.join(", ") ||
-            "No Brand"
-          );
-        }
-
-        return "";
-      };
+        normalizeCampaignGroupBySelection(
+          digital.campaignDigitalGroupBy
+        );
 
       const campaignDigitalGroupedRows =
         (() => {
-          if(
-            campaignDigitalGroupBy===
-            "none"
-          ){
+          if(!campaignDigitalGroupBy.length){
             return [{
               label:"",
               rows,
@@ -25199,8 +25351,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
           rows.forEach((row:any)=>{
             const label =
-              getCampaignDigitalGroupLabel(
-                row
+              getCampaignMultiGroupLabel(
+                row,
+                campaignDigitalGroupBy
               );
 
             if(!grouped.has(label)){
@@ -25293,40 +25446,26 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 }
               </span>
 
-              <Select
-                value={
-                  campaignDigitalGroupBy
-                }
+              <CampaignGroupByMultiSelect
+                value={campaignDigitalGroupBy}
                 onChange={(value:any)=>
                   updateAiWorkspace(
                     "digital",
                     {
-                      campaignDigitalGroupBy:
-                        value,
+                      campaignDigitalGroupBy:value,
                     }
                   )
                 }
                 style={{
                   width:isMobile
                     ? "100%"
-                    : 168,
+                    : 196,
                   height:30,
                   minHeight:30,
                   fontSize:10.5,
-                  padding:
-                    "4px 28px 4px 8px",
+                  padding:"4px 28px 4px 8px",
                 }}
-              >
-                <option value="none">
-                  No Grouping
-                </option>
-                <option value="brand">
-                  Group by Brand
-                </option>
-                <option value="platform">
-                  Group by Platform
-                </option>
-              </Select>
+              />
 
               <Btn
                 xs
@@ -25455,7 +25594,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                           "all"
                         }-${groupIndex}`}
                       >
-                        {campaignDigitalGroupBy!=="none"&&(
+                        {campaignDigitalGroupBy.length>0&&(
                           <tr>
                             <td
                               colSpan={8}
