@@ -44759,6 +44759,7 @@ export default function App({
   const syncV2ApplyingRef = useRef(false);
   const checklistGroupDetailsLoadedRef = useRef<Record<string,boolean>>({});
   const checklistGroupDetailRequestsRef = useRef<Record<string,Promise<any>>>({});
+  const checklistGroupDetailCacheRef = useRef<Record<string,any>>({});
   const checklistItemRequestsRef = useRef<Record<string,Promise<any>>>({});
   const activeChecklistRequestControllerRef = useRef<AbortController | null>(null);
   const activeRouteGroupIdRef = useRef("");
@@ -44772,6 +44773,7 @@ export default function App({
   // replacing unsaved local input while that snapshot is being committed.
   const checklistGroupsSaveTimerRef = useRef<any>(null);
   const checklistGroupsQueuedRef = useRef<any[] | null>(null);
+  const checklistGroupsSaveInFlightRef = useRef(false);
   const checklistGroupsSaveSequenceRef = useRef(0);
   const checklistGroupsPendingUntilRef = useRef(0);
 
@@ -44930,7 +44932,15 @@ export default function App({
       lastDirectSkuSaveSignatureRef.current = `${count}:${first}:${last}:${checksum}`;
     }
     if (Array.isArray(hydratedParsed?.skuTableColumns)) setSkuTableColumns(sanitizeSkuTableColumns(hydratedParsed.skuTableColumns));
-    if (Array.isArray(hydratedParsed?.checklistGroups)) setChecklistGroups(hydratedParsed.checklistGroups);
+    if (Array.isArray(hydratedParsed?.checklistGroups)) {
+      hydratedParsed.checklistGroups.forEach((group:any)=>{
+        const groupId = String(group?.id || "");
+        if(groupId && group?.aiWorkspace && typeof group.aiWorkspace === "object"){
+          checklistGroupDetailCacheRef.current[groupId] = group;
+        }
+      });
+      setChecklistGroups(hydratedParsed.checklistGroups);
+    }
     if (hydratedParsed?.checklistItems && typeof hydratedParsed.checklistItems === "object") {
       const cleanAllItems:any = {};
       Object.entries(hydratedParsed.checklistItems).forEach(([groupId,groupItems]:any)=>{
@@ -45062,6 +45072,8 @@ export default function App({
 
         checklistGroupDetailsLoadedRef.current[id] =
           true;
+        checklistGroupDetailCacheRef.current[id] =
+          json.group;
 
         syncV2ApplyingRef.current = true;
 
@@ -46168,21 +46180,306 @@ export default function App({
     };
   },[]);
 
-  const flushChecklistGroupsSave = async () => {
-    if (cloudApplyingRef.current) return;
+  const isPlainEmdcObject = (value:any) =>
+    !!value && typeof value === "object" && !Array.isArray(value);
 
-    const snapshot = checklistGroupsQueuedRef.current;
-    if (!Array.isArray(snapshot)) return;
+  const EMDC_RECOVERY_ARRAY_KEYS = new Set([
+    "items",
+    "savedOutputs",
+    "savedImageOutputs",
+    "productIntroCreativeRows",
+    "campaignCreativeRows",
+    "campaignMarketingRows",
+    "campaignLivestreamRows",
+    "assetRows",
+    "requirements",
+    "briefRows",
+    "sellerKitRows",
+  ]);
+
+  const getEmdcRecoveryRowKey = (item:any, index:number=0) =>
+    String(
+      item?.id ||
+      item?.sourceRowId ||
+      item?.transferGroupId ||
+      item?.cardId ||
+      item?.productKey ||
+      item?.sku ||
+      item?.skuCode ||
+      `${item?.title || item?.product || item?.name || "row"}|${item?.createdAt || item?.updatedAt || index}`
+    ).trim();
+
+  const mergeEmdcRecoveryRows = (...lists:any[][]) => {
+    const map = new Map<string,any>();
+    lists
+      .flat()
+      .filter(Boolean)
+      .forEach((item:any,index:number)=>{
+        const key = getEmdcRecoveryRowKey(item,index);
+        if(!key) return;
+        map.set(key,{ ...(map.get(key) || {}), ...item });
+      });
+    return Array.from(map.values());
+  };
+
+  const tabExplicitlyClearsRecoveryArray = (
+    tab:any,
+    key:string
+  ) => {
+    if(!isPlainEmdcObject(tab)) return false;
+
+    if(
+      key === "items" &&
+      (
+        (Array.isArray(tab.deletedItemIds) && tab.deletedItemIds.length > 0) ||
+        (Array.isArray(tab.deletedItemKeys) && tab.deletedItemKeys.length > 0)
+      )
+    ){
+      return true;
+    }
+
+    if(
+      key === "productIntroCreativeRows" &&
+      tab.productIntroRowsCleared === true
+    ){
+      return true;
+    }
+
+    if(
+      key === "campaignCreativeRows" &&
+      tab.campaignRowsCleared === true
+    ){
+      return true;
+    }
+
+    return false;
+  };
+
+  const mergeEmdcWorkspaceTabPreservingData = (
+    previous:any,
+    incoming:any
+  ) => {
+    const left = isPlainEmdcObject(previous) ? previous : {};
+    const right = isPlainEmdcObject(incoming) ? incoming : {};
+    const merged:any = { ...left };
+
+    Object.entries(right).forEach(([key,value]:any)=>{
+      const existing = left?.[key];
+
+      if(
+        Array.isArray(value) &&
+        EMDC_RECOVERY_ARRAY_KEYS.has(key)
+      ){
+        if(
+          value.length === 0 &&
+          Array.isArray(existing) &&
+          existing.length > 0 &&
+          !tabExplicitlyClearsRecoveryArray(right,key)
+        ){
+          merged[key] = existing;
+        } else {
+          merged[key] = mergeEmdcRecoveryRows(
+            Array.isArray(existing) ? existing : [],
+            value
+          );
+        }
+        return;
+      }
+
+      if(
+        isPlainEmdcObject(existing) &&
+        isPlainEmdcObject(value)
+      ){
+        merged[key] = {
+          ...existing,
+          ...value,
+        };
+        return;
+      }
+
+      merged[key] = value;
+    });
+
+    return merged;
+  };
+
+  const mergeEmdcAiWorkspacesPreservingData = (
+    ...sources:any[]
+  ) => {
+    const merged:any = {};
+
+    sources
+      .filter(isPlainEmdcObject)
+      .forEach((workspace:any)=>{
+        Object.entries(workspace).forEach(([tab,value]:any)=>{
+          if(
+            isPlainEmdcObject(value) ||
+            isPlainEmdcObject(merged[tab])
+          ){
+            merged[tab] =
+              mergeEmdcWorkspaceTabPreservingData(
+                merged[tab],
+                value
+              );
+          } else {
+            merged[tab] = value;
+          }
+        });
+      });
+
+    return merged;
+  };
+
+  const getChecklistGroupMapFromState = (state:any) => {
+    const map = new Map<string,any>();
+    const groups = Array.isArray(state?.checklistGroups)
+      ? state.checklistGroups
+      : [];
+    groups.forEach((group:any)=>{
+      const id = String(group?.id || "");
+      if(id) map.set(id,group);
+    });
+    return map;
+  };
+
+  const getPreWriteAppStateForRecovery = () => {
+    if(typeof window === "undefined") return null;
+    try {
+      const parsed:any = parseEmdcJson(
+        localStorage.getItem(EMDC_PRE_WRITE_BACKUP_KEY)
+      );
+      return hydrateExternalSkuItems(
+        parsed?.appState || parsed
+      );
+    } catch {
+      return null;
+    }
+  };
+
+  const hydrateChecklistGroupsSnapshotForSafeSave = async (
+    snapshot:any[] = []
+  ) => {
+    const safeSnapshot = Array.isArray(snapshot)
+      ? snapshot
+      : [];
+
+    const localStateMap = getChecklistGroupMapFromState(
+      readStoredEmdcAppState()
+    );
+    const lastGoodEntry:any = readLastGoodEmdcAppState();
+    const lastGoodMap = getChecklistGroupMapFromState(
+      lastGoodEntry?.appState || lastGoodEntry
+    );
+    const preWriteMap = getChecklistGroupMapFromState(
+      getPreWriteAppStateForRecovery()
+    );
+    const workspaceBackups = readEmdcGroupWorkspaceBackups();
+
+    const resolved = await Promise.all(
+      safeSnapshot.map(async (incomingGroup:any)=>{
+        const id = String(incomingGroup?.id || "");
+        if(!id) return incomingGroup;
+
+        let detailedGroup =
+          checklistGroupDetailCacheRef.current[id] ||
+          null;
+
+        if(
+          !detailedGroup &&
+          !checklistGroupDetailsLoadedRef.current[id]
+        ){
+          try {
+            const response = await fetch(
+              `/api/checklist-groups-fast?groupId=${encodeURIComponent(id)}`,
+              { cache:"no-store" }
+            );
+            const json = await response.json().catch(()=>null);
+            if(response.ok && json?.ok && json?.group){
+              detailedGroup = json.group;
+              checklistGroupDetailCacheRef.current[id] =
+                json.group;
+            }
+          } catch {}
+        }
+
+        const preWriteGroup = preWriteMap.get(id) || {};
+        const lastGoodGroup = lastGoodMap.get(id) || {};
+        const localGroup = localStateMap.get(id) || {};
+        const backupWorkspace =
+          workspaceBackups?.[id]?.aiWorkspace &&
+          isPlainEmdcObject(workspaceBackups[id].aiWorkspace)
+            ? workspaceBackups[id].aiWorkspace
+            : {};
+
+        const mergedWorkspace =
+          mergeEmdcAiWorkspacesPreservingData(
+            preWriteGroup?.aiWorkspace,
+            lastGoodGroup?.aiWorkspace,
+            localGroup?.aiWorkspace,
+            detailedGroup?.aiWorkspace,
+            backupWorkspace,
+            incomingGroup?.aiWorkspace
+          );
+
+        const nextGroup:any = {
+          ...preWriteGroup,
+          ...lastGoodGroup,
+          ...localGroup,
+          ...(detailedGroup || {}),
+          ...incomingGroup,
+        };
+
+        if(Object.keys(mergedWorkspace).length){
+          nextGroup.aiWorkspace = mergedWorkspace;
+        }
+
+        checklistGroupDetailCacheRef.current[id] =
+          nextGroup;
+
+        return nextGroup;
+      })
+    );
+
+    return resolved;
+  };
+
+  const flushChecklistGroupsSave = async () => {
+    if(
+      cloudApplyingRef.current ||
+      checklistGroupsSaveInFlightRef.current
+    ) return;
+
+    const queuedSnapshot =
+      checklistGroupsQueuedRef.current;
+
+    if(!Array.isArray(queuedSnapshot)) return;
 
     checklistGroupsQueuedRef.current = null;
-    const sequence = ++checklistGroupsSaveSequenceRef.current;
+    checklistGroupsSaveInFlightRef.current = true;
+
+    const sequence =
+      ++checklistGroupsSaveSequenceRef.current;
     const updatedAt = new Date().toISOString();
 
-    checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
+    checklistGroupsPendingUntilRef.current =
+      Date.now() + 10_000;
     cloudSavingRef.current = true;
-    setCloudSyncStatus("Saved locally • syncing group...");
+    setCloudSyncStatus(
+      "Saved locally • protecting workspace data..."
+    );
+
+    let protectedSnapshot = queuedSnapshot;
 
     try {
+      protectedSnapshot =
+        await hydrateChecklistGroupsSnapshotForSafeSave(
+          queuedSnapshot
+        );
+
+      setCloudSyncStatus(
+        "Saved locally • syncing group..."
+      );
+
       const res = await fetch("/api/checklist-groups-fast", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -46190,42 +46487,66 @@ export default function App({
         body:JSON.stringify({
           clientId:cloudClientIdRef.current,
           updatedAt,
-          checklistGroups:snapshot,
+          checklistGroups:protectedSnapshot,
         }),
       });
 
       const json = await res.json().catch(()=>null);
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || "Checklist groups save failed");
+        throw new Error(
+          json?.error ||
+          "Checklist groups save failed"
+        );
       }
 
-      // Only the newest completed request may update the sync marker.
-      if (sequence === checklistGroupsSaveSequenceRef.current) {
+      protectedSnapshot.forEach((group:any)=>{
+        const id = String(group?.id || "");
+        if(id){
+          checklistGroupDetailCacheRef.current[id] =
+            group;
+        }
+      });
+
+      if (
+        sequence ===
+        checklistGroupsSaveSequenceRef.current
+      ) {
         cloudLastUpdatedAtRef.current = updatedAt;
-        syncV2VersionRef.current = Math.max(syncV2VersionRef.current, Number(json?.syncVersion || 0));
-        syncV2GroupsVersionRef.current = Math.max(syncV2GroupsVersionRef.current, Number(json?.checklistGroupsVersion || 0));
+        syncV2VersionRef.current = Math.max(
+          syncV2VersionRef.current,
+          Number(json?.syncVersion || 0)
+        );
+        syncV2GroupsVersionRef.current = Math.max(
+          syncV2GroupsVersionRef.current,
+          Number(json?.checklistGroupsVersion || 0)
+        );
         syncV2EtagRef.current = "";
         setCloudSyncStatus("Synced");
       }
     } catch {
-      // Put the newest unsaved state back in the queue. Never replace a newer
-      // queued snapshot with the older failed snapshot.
       if (!Array.isArray(checklistGroupsQueuedRef.current)) {
-        checklistGroupsQueuedRef.current = snapshot;
+        checklistGroupsQueuedRef.current =
+          protectedSnapshot;
       }
-      setCloudSyncStatus("Checklist groups save failed");
+      setCloudSyncStatus(
+        "Checklist groups save failed"
+      );
     } finally {
+      checklistGroupsSaveInFlightRef.current = false;
       cloudSavingRef.current = false;
 
-      // Edits may have arrived while the request was in flight.
       if (Array.isArray(checklistGroupsQueuedRef.current)) {
-        checklistGroupsPendingUntilRef.current = Date.now() + 10_000;
-        checklistGroupsSaveTimerRef.current = setTimeout(() => {
-          checklistGroupsSaveTimerRef.current = null;
-          void flushChecklistGroupsSave();
-        }, 20);
+        checklistGroupsPendingUntilRef.current =
+          Date.now() + 10_000;
+        checklistGroupsSaveTimerRef.current =
+          setTimeout(() => {
+            checklistGroupsSaveTimerRef.current =
+              null;
+            void flushChecklistGroupsSave();
+          }, 20);
       } else {
-        checklistGroupsPendingUntilRef.current = Date.now() + 1200;
+        checklistGroupsPendingUntilRef.current =
+          Date.now() + 1200;
       }
     }
   };
@@ -46532,20 +46853,21 @@ export default function App({
 
     setChecklistItemsLoadingGroupId(groupId);
 
-    void fetchChecklistGroupDetailV2(
-      groupId,
-      false,
-      controller.signal
-    );
-
     void (async()=>{
       try {
-        await fetchChecklistItemsGroupV2(
-          groupId,
-          {
-            signal:controller.signal,
-          }
-        );
+        await Promise.all([
+          fetchChecklistGroupDetailV2(
+            groupId,
+            false,
+            controller.signal
+          ),
+          fetchChecklistItemsGroupV2(
+            groupId,
+            {
+              signal:controller.signal,
+            }
+          ),
+        ]);
       } finally {
         if(
           !cancelled &&
@@ -46585,191 +46907,436 @@ export default function App({
   }, [cloudHydrated]);
 
   useEffect(() => {
-    if (!cloudHydrated || !Array.isArray(checklistGroups) || !checklistGroups.length) {
+    if (
+      !cloudHydrated ||
+      !Array.isArray(checklistGroups) ||
+      !checklistGroups.length
+    ){
       return;
     }
-    if (typeof window === "undefined") return;
+    if(typeof window === "undefined") return;
 
-    const recoveryKey = "emdc_workspace_cloud_recovery_v2_completed";
-    if (localStorage.getItem(recoveryKey) === "1") return;
+    const recoveryKey =
+      "emdc_workspace_cloud_recovery_v3_completed";
 
-    const mergeObjects = (previous:any, incoming:any) => {
-      const left = previous && typeof previous === "object" && !Array.isArray(previous)
-        ? previous
-        : {};
-      const right = incoming && typeof incoming === "object" && !Array.isArray(incoming)
-        ? incoming
-        : {};
-      const merged:any = { ...left };
+    if(localStorage.getItem(recoveryKey) === "1"){
+      return;
+    }
 
-      Object.entries(right).forEach(([key,value]:any) => {
-        if (
-          value &&
-          typeof value === "object" &&
-          !Array.isArray(value) &&
-          left?.[key] &&
-          typeof left[key] === "object" &&
-          !Array.isArray(left[key])
-        ) {
-          merged[key] = { ...left[key], ...value };
-        } else {
-          merged[key] = value;
-        }
-      });
+    const currentLocalMap = getChecklistGroupMapFromState(
+      readStoredEmdcAppState()
+    );
+    const lastGoodEntry:any =
+      readLastGoodEmdcAppState();
+    const lastGoodMap = getChecklistGroupMapFromState(
+      lastGoodEntry?.appState || lastGoodEntry
+    );
+    const preWriteMap = getChecklistGroupMapFromState(
+      getPreWriteAppStateForRecovery()
+    );
+    const workspaceBackups =
+      readEmdcGroupWorkspaceBackups();
 
-      return merged;
+    const readLocalArray = (key:string) => {
+      try {
+        const parsed = JSON.parse(
+          localStorage.getItem(key) || "[]"
+        );
+        return Array.isArray(parsed)
+          ? parsed.filter(Boolean)
+          : [];
+      } catch {
+        return [];
+      }
     };
 
-    const mergeRows = (...lists:any[][]) => {
-      const map = new Map<string,any>();
-      lists
-        .flat()
-        .filter(Boolean)
-        .forEach((item:any) => {
-          const key = String(
-            item?.id ||
-            `${item?.title || ""}|${item?.createdAt || ""}|${item?.updatedAt || ""}`
-          ).trim();
-          if (!key) return;
-          map.set(key, { ...(map.get(key) || {}), ...item });
-        });
-      return Array.from(map.values());
+    const readTransferBackup = (
+      groupId:string,
+      groupName:string,
+      transferType:string
+    ) => {
+      const groupKey = String(
+        groupId || groupName || ""
+      )
+        .trim()
+        .replace(/[^a-z0-9_-]+/gi,"_");
+
+      return mergeEmdcRecoveryRows(
+        readLocalArray(
+          `emdc_marketing_dc_transfer_rows_v2_${groupKey}_${transferType}`
+        ),
+        readLocalArray(
+          `emdc_marketing_dc_transfer_rows_v1_${groupId}_${transferType}`
+        )
+      );
     };
 
-    const workspaceBackups = readEmdcGroupWorkspaceBackups();
     let changed = false;
 
-    const recoveredGroups = checklistGroups.map((group:any) => {
-      const groupId = String(group?.id || "");
-      if (!groupId) return group;
+    const recoveredGroups = checklistGroups.map(
+      (group:any)=>{
+        const groupId = String(group?.id || "");
+        if(!groupId) return group;
 
-      const storedBackup =
-        workspaceBackups?.[groupId]?.aiWorkspace &&
-        typeof workspaceBackups[groupId].aiWorkspace === "object"
-          ? workspaceBackups[groupId].aiWorkspace
-          : {};
+        const currentWorkspace =
+          isPlainEmdcObject(group?.aiWorkspace)
+            ? group.aiWorkspace
+            : {};
+        const localGroup =
+          currentLocalMap.get(groupId) || {};
+        const lastGoodGroup =
+          lastGoodMap.get(groupId) || {};
+        const preWriteGroup =
+          preWriteMap.get(groupId) || {};
+        const storedBackup =
+          workspaceBackups?.[groupId]?.aiWorkspace &&
+          isPlainEmdcObject(
+            workspaceBackups[groupId].aiWorkspace
+          )
+            ? workspaceBackups[groupId].aiWorkspace
+            : {};
 
-      let localOverviewItems:any[] = [];
-      let localSavedEcommerce:any[] = [];
+        let nextWorkspace =
+          mergeEmdcAiWorkspacesPreservingData(
+            preWriteGroup?.aiWorkspace,
+            lastGoodGroup?.aiWorkspace,
+            localGroup?.aiWorkspace,
+            currentWorkspace,
+            storedBackup
+          );
 
-      try {
-        const parsed = JSON.parse(
-          localStorage.getItem(`emdc_overview_items_v1_${groupId}`) || "[]"
+        const localOverviewItems = readLocalArray(
+          `emdc_overview_items_v1_${groupId}`
         );
-        localOverviewItems = Array.isArray(parsed) ? parsed : [];
-      } catch {}
-
-      try {
-        const parsed = JSON.parse(
-          localStorage.getItem(`emdc_ecommerce_saved_outputs_v1_${groupId}`) || "[]"
+        const overviewItems = mergeEmdcRecoveryRows(
+          Array.isArray(
+            preWriteGroup?.aiWorkspace?.overview?.items
+          )
+            ? preWriteGroup.aiWorkspace.overview.items
+            : [],
+          Array.isArray(
+            lastGoodGroup?.aiWorkspace?.overview?.items
+          )
+            ? lastGoodGroup.aiWorkspace.overview.items
+            : [],
+          Array.isArray(
+            localGroup?.aiWorkspace?.overview?.items
+          )
+            ? localGroup.aiWorkspace.overview.items
+            : [],
+          Array.isArray(
+            currentWorkspace?.overview?.items
+          )
+            ? currentWorkspace.overview.items
+            : [],
+          Array.isArray(
+            storedBackup?.overview?.items
+          )
+            ? storedBackup.overview.items
+            : [],
+          localOverviewItems
         );
-        localSavedEcommerce = Array.isArray(parsed) ? parsed : [];
-      } catch {}
 
-      const currentWorkspace =
-        group?.aiWorkspace &&
-        typeof group.aiWorkspace === "object"
-          ? group.aiWorkspace
-          : {};
+        if(overviewItems.length){
+          const currentOverviewItems =
+            Array.isArray(
+              currentWorkspace?.overview?.items
+            )
+              ? currentWorkspace.overview.items
+              : [];
+          const accidentalEmptyOverview =
+            currentOverviewItems.length === 0 &&
+            overviewItems.length > 0;
 
-      let nextWorkspace = mergeObjects(currentWorkspace, storedBackup);
+          nextWorkspace = {
+            ...nextWorkspace,
+            overview:{
+              ...(nextWorkspace.overview || {}),
+              items:overviewItems,
+              deletedItemIds:accidentalEmptyOverview
+                ? []
+                : (
+                    nextWorkspace.overview
+                      ?.deletedItemIds || []
+                  ),
+              deletedItemKeys:accidentalEmptyOverview
+                ? []
+                : (
+                    nextWorkspace.overview
+                      ?.deletedItemKeys || []
+                  ),
+              restoredItemKeys:accidentalEmptyOverview
+                ? overviewItems.map(
+                    (item:any,index:number)=>
+                      getEmdcRecoveryRowKey(
+                        item,
+                        index
+                      )
+                  )
+                : (
+                    nextWorkspace.overview
+                      ?.restoredItemKeys || []
+                  ),
+              updatedAt:new Date().toISOString(),
+            },
+          };
 
-      const overviewItems = mergeRows(
-        Array.isArray(currentWorkspace?.overview?.items)
-          ? currentWorkspace.overview.items
-          : [],
-        Array.isArray(storedBackup?.overview?.items)
-          ? storedBackup.overview.items
-          : [],
-        localOverviewItems
-      );
+          try {
+            localStorage.setItem(
+              `emdc_overview_items_v1_${groupId}`,
+              JSON.stringify(overviewItems)
+            );
+            if(accidentalEmptyOverview){
+              localStorage.setItem(
+                `emdc_overview_deleted_v2_${groupId}`,
+                JSON.stringify({
+                  ids:[],
+                  keys:[],
+                  recoveredAt:
+                    new Date().toISOString(),
+                })
+              );
+            }
+          } catch {}
+        }
 
-      if (overviewItems.length) {
-        nextWorkspace = {
-          ...nextWorkspace,
-          overview: {
-            ...(currentWorkspace?.overview || {}),
-            ...(storedBackup?.overview || {}),
-            items: overviewItems,
-            updatedAt: new Date().toISOString(),
-          },
-        };
+        const groupName = String(
+          group?.groupName || group?.name || ""
+        );
+        const productIntroTransferRows =
+          readTransferBackup(
+            groupId,
+            groupName,
+            "product_intro"
+          );
+        const campaignTransferRows =
+          readTransferBackup(
+            groupId,
+            groupName,
+            "campaign"
+          );
+
+        const digitalSources = [
+          preWriteGroup?.aiWorkspace?.digital,
+          lastGoodGroup?.aiWorkspace?.digital,
+          localGroup?.aiWorkspace?.digital,
+          currentWorkspace?.digital,
+          storedBackup?.digital,
+          nextWorkspace?.digital,
+        ].filter(isPlainEmdcObject);
+
+        let nextDigital =
+          digitalSources.reduce(
+            (acc:any,value:any)=>
+              mergeEmdcWorkspaceTabPreservingData(
+                acc,
+                value
+              ),
+            {}
+          );
+
+        const productIntroCreativeRows =
+          mergeEmdcRecoveryRows(
+            ...digitalSources.map((source:any)=>
+              Array.isArray(
+                source?.productIntroCreativeRows
+              )
+                ? source.productIntroCreativeRows
+                : []
+            ),
+            productIntroTransferRows
+          );
+
+        const campaignCreativeRows =
+          mergeEmdcRecoveryRows(
+            ...digitalSources.map((source:any)=>
+              Array.isArray(
+                source?.campaignCreativeRows
+              )
+                ? source.campaignCreativeRows
+                : []
+            ),
+            campaignTransferRows
+          );
+
+        const savedImageOutputs =
+          mergeEmdcRecoveryRows(
+            ...digitalSources.map((source:any)=>
+              Array.isArray(
+                source?.savedImageOutputs
+              )
+                ? source.savedImageOutputs
+                : []
+            )
+          );
+
+        if(
+          productIntroCreativeRows.length &&
+          nextDigital.productIntroRowsCleared !== true
+        ){
+          nextDigital.productIntroCreativeRows =
+            productIntroCreativeRows;
+          nextDigital.productIntroRowsCleared =
+            false;
+        }
+
+        if(campaignCreativeRows.length){
+          nextDigital.campaignCreativeRows =
+            campaignCreativeRows;
+        }
+
+        if(savedImageOutputs.length){
+          nextDigital.savedImageOutputs =
+            savedImageOutputs;
+        }
+
+        if(Object.keys(nextDigital).length){
+          nextWorkspace = {
+            ...nextWorkspace,
+            digital:nextDigital,
+          };
+        }
+
+        const localSavedEcommerce = readLocalArray(
+          `emdc_ecommerce_saved_outputs_v1_${groupId}`
+        );
+        const ecommerceSavedOutputs =
+          mergeEmdcRecoveryRows(
+            Array.isArray(
+              preWriteGroup?.aiWorkspace?.ecommerce
+                ?.savedOutputs
+            )
+              ? preWriteGroup.aiWorkspace.ecommerce
+                  .savedOutputs
+              : [],
+            Array.isArray(
+              lastGoodGroup?.aiWorkspace?.ecommerce
+                ?.savedOutputs
+            )
+              ? lastGoodGroup.aiWorkspace.ecommerce
+                  .savedOutputs
+              : [],
+            Array.isArray(
+              localGroup?.aiWorkspace?.ecommerce
+                ?.savedOutputs
+            )
+              ? localGroup.aiWorkspace.ecommerce
+                  .savedOutputs
+              : [],
+            Array.isArray(
+              currentWorkspace?.ecommerce?.savedOutputs
+            )
+              ? currentWorkspace.ecommerce.savedOutputs
+              : [],
+            Array.isArray(
+              storedBackup?.ecommerce?.savedOutputs
+            )
+              ? storedBackup.ecommerce.savedOutputs
+              : [],
+            localSavedEcommerce
+          );
+
+        if(ecommerceSavedOutputs.length){
+          nextWorkspace = {
+            ...nextWorkspace,
+            ecommerce:{
+              ...(nextWorkspace.ecommerce || {}),
+              savedOutputs:ecommerceSavedOutputs,
+              savedOutputsUpdatedAt:
+                new Date().toISOString(),
+            },
+          };
+        }
+
+        const before = JSON.stringify(
+          currentWorkspace || {}
+        );
+        const after = JSON.stringify(
+          nextWorkspace || {}
+        );
+
+        if(after !== before && after !== "{}"){
+          changed = true;
+          writeEmdcGroupWorkspaceBackup(
+            groupId,
+            nextWorkspace
+          );
+          const recoveredGroup = {
+            ...group,
+            aiWorkspace:nextWorkspace,
+          };
+          checklistGroupDetailCacheRef.current[
+            groupId
+          ] = recoveredGroup;
+          return recoveredGroup;
+        }
+
+        return group;
       }
+    );
 
-      const ecommerceSavedOutputs = mergeRows(
-        Array.isArray(currentWorkspace?.ecommerce?.savedOutputs)
-          ? currentWorkspace.ecommerce.savedOutputs
-          : [],
-        Array.isArray(storedBackup?.ecommerce?.savedOutputs)
-          ? storedBackup.ecommerce.savedOutputs
-          : [],
-        localSavedEcommerce
-      );
-
-      if (ecommerceSavedOutputs.length) {
-        nextWorkspace = {
-          ...nextWorkspace,
-          ecommerce: {
-            ...(currentWorkspace?.ecommerce || {}),
-            ...(storedBackup?.ecommerce || {}),
-            savedOutputs: ecommerceSavedOutputs,
-            savedOutputsUpdatedAt: new Date().toISOString(),
-          },
-        };
-      }
-
-      const before = JSON.stringify(currentWorkspace || {});
-      const after = JSON.stringify(nextWorkspace || {});
-
-      if (after !== before && after !== "{}") {
-        changed = true;
-        return {
-          ...group,
-          aiWorkspace: nextWorkspace,
-        };
-      }
-
-      return group;
-    });
-
-    if (!changed) {
-      localStorage.setItem(recoveryKey, "1");
+    if(!changed){
+      localStorage.setItem(recoveryKey,"1");
       return;
     }
 
     let cancelled = false;
 
-    (async () => {
+    (async()=>{
       try {
-        setCloudSyncStatus("Recovering saved workspace data...");
+        setCloudSyncStatus(
+          "Recovering Digital Creative and Overview data..."
+        );
 
+        const protectedRecoveredGroups =
+          await hydrateChecklistGroupsSnapshotForSafeSave(
+            recoveredGroups
+          );
         const updatedAt = new Date().toISOString();
-        const response = await fetch("/api/checklist-groups-fast", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          body: JSON.stringify({
-            clientId: cloudClientIdRef.current,
-            updatedAt,
-            checklistGroups: recoveredGroups,
-          }),
-        });
+        const response = await fetch(
+          "/api/checklist-groups-fast",
+          {
+            method:"POST",
+            headers:{
+              "Content-Type":"application/json",
+            },
+            cache:"no-store",
+            body:JSON.stringify({
+              clientId:cloudClientIdRef.current,
+              updatedAt,
+              checklistGroups:
+                protectedRecoveredGroups,
+            }),
+          }
+        );
 
-        const json = await response.json().catch(() => null);
+        const json = await response
+          .json()
+          .catch(()=>null);
 
-        if (!response.ok || !json?.ok) {
+        if(!response.ok || !json?.ok){
           throw new Error(
-            json?.error || "Unable to restore saved workspace data to cloud."
+            json?.error ||
+            "Unable to restore saved workspace data to cloud."
           );
         }
 
-        if (cancelled) return;
+        if(cancelled) return;
 
-        setChecklistGroups(recoveredGroups);
-        localStorage.setItem(recoveryKey, "1");
+        setChecklistGroups(
+          protectedRecoveredGroups
+        );
+        safeSetEmdcAppStateLocal({
+          ...(readStoredEmdcAppState() || {}),
+          checklistGroups:
+            protectedRecoveredGroups,
+        });
+        localStorage.setItem(recoveryKey,"1");
         syncV2GroupsVersionRef.current = Math.max(
           syncV2GroupsVersionRef.current,
-          Number(json?.checklistGroupsVersion || 0)
+          Number(
+            json?.checklistGroupsVersion || 0
+          )
         );
         syncV2VersionRef.current = Math.max(
           syncV2VersionRef.current,
@@ -46778,14 +47345,18 @@ export default function App({
         syncV2EtagRef.current = "";
         setCloudSyncStatus("Synced");
       } catch {
-        if (!cancelled) setCloudSyncStatus("Workspace recovery failed");
+        if(!cancelled){
+          setCloudSyncStatus(
+            "Workspace recovery failed"
+          );
+        }
       }
     })();
 
-    return () => {
+    return ()=>{
       cancelled = true;
     };
-  }, [cloudHydrated, checklistGroups.length]);
+  }, [cloudHydrated,checklistGroups.length]);
 
   useEffect(() => {
     // Sync v2 uses targeted feature saves. Full app-state autosaves are paused
