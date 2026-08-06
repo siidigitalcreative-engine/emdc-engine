@@ -27679,6 +27679,71 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .join("");
       };
 
+      const stripAnnouncementYoutubeReferencesFromBody = (value:any) => {
+        const lines = String(value || "")
+          .replace(/\r\n?/g,"\n")
+          .split("\n");
+
+        const cleaned:string[] = [];
+        let skipFollowingYoutubeUrl = false;
+
+        lines.forEach((line:string)=>{
+          const trimmed = String(line || "").trim();
+          const isYoutubeHeading =
+            /^watch\s+(?:the\s+product\s+video|on\s+youtube)\s*:?/i.test(trimmed) ||
+            /^youtube\s+(?:video|link)\s*:?$/i.test(trimmed);
+          const isYoutubeUrl =
+            /(?:youtube\.com|youtu\.be)/i.test(trimmed) ||
+            (!!announcementYoutubeUrl && trimmed === String(announcementYoutubeUrl).trim());
+
+          if(isYoutubeHeading){
+            skipFollowingYoutubeUrl = !/(?:youtube\.com|youtu\.be)/i.test(trimmed);
+            return;
+          }
+
+          if(skipFollowingYoutubeUrl && isYoutubeUrl){
+            skipFollowingYoutubeUrl = false;
+            return;
+          }
+
+          skipFollowingYoutubeUrl = false;
+
+          if(isYoutubeUrl && /^https?:\/\//i.test(trimmed)){
+            return;
+          }
+
+          cleaned.push(line);
+        });
+
+        return cleaned
+          .join("\n")
+          .replace(/\n{3,}/g,"\n\n")
+          .trim();
+      };
+
+      const getClientAnnouncementBodySections = (body:any) => {
+        const cleanBody = stripAnnouncementYoutubeReferencesFromBody(
+          stripExistingClientEmailSignature(
+            normalizeWhyYouLoveItBullets(body)
+          )
+        );
+        const lines = cleanBody.split(/\r?\n/);
+        const whyIndex = lines.findIndex((line:string)=>
+          /^why\s+you(?:'|’)?ll\s+love\s+it\s*:?\s*$/i.test(
+            String(line || "").trim()
+          )
+        );
+
+        if(whyIndex < 0){
+          return { before:cleanBody, after:"" };
+        }
+
+        return {
+          before:lines.slice(0,whyIndex).join("\n").trim(),
+          after:lines.slice(whyIndex).join("\n").trim(),
+        };
+      };
+
       const getClientEmailSignatureHtml = (signatureKey:any) => {
         const signature = getClientEmailSignature(signatureKey);
         const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(signature.address)}`;
@@ -27708,18 +27773,34 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       };
 
       const buildClientAnnouncementEmailHtml = (body:any) => {
-        const bodyHtml = renderAnnouncementEmailBodyHtml(body);
+        const bodySections = getClientAnnouncementBodySections(body);
+        const bodyBeforeImageHtml = bodySections.before
+          ? renderAnnouncementEmailBodyHtml(bodySections.before)
+          : "";
+        const bodyAfterImageHtml = bodySections.after
+          ? renderAnnouncementEmailBodyHtml(bodySections.after)
+          : "";
         const signatureHtml = getClientEmailSignatureHtml(
           assetAnnouncementData.signatureKey
         );
         const headerHtml = announcementHeaderImagePreviewUrl
-          ? `<img src='${escapeAnnouncementEmailHtml(announcementHeaderImagePreviewUrl)}' alt='Email header' style='display:block;width:100%;max-height:240px;object-fit:cover;border:0'>`
+          ? `<img src='${escapeAnnouncementEmailHtml(announcementHeaderImagePreviewUrl)}' alt='Email header' width='820' style='display:block;width:100%;max-width:820px;height:auto;border:0;outline:none;text-decoration:none'>`
           : "";
         const imageHtml = announcementImagePreviewUrl
-          ? `<div style='margin:20px 0;text-align:center'><img src='${escapeAnnouncementEmailHtml(announcementImagePreviewUrl)}' alt='Product image' style='display:inline-block;max-width:100%;max-height:520px;object-fit:contain;border:0'></div>`
+          ? `<div style='margin:20px 0 12px;text-align:center'><img src='${escapeAnnouncementEmailHtml(announcementImagePreviewUrl)}' alt='Product image' width='760' style='display:inline-block;width:100%;max-width:760px;height:auto;border:0;outline:none;text-decoration:none'></div>`
           : "";
         const youtubeHtml = announcementYoutubeUrl && announcementYoutubeThumbnailPreviewUrl
-          ? `<div style='margin:22px 0 0'><a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:block;text-decoration:none'><img src='${escapeAnnouncementEmailHtml(announcementYoutubeThumbnailPreviewUrl)}' alt='Watch on YouTube' style='display:block;width:100%;max-width:680px;aspect-ratio:16/9;object-fit:cover;border:0;border-radius:8px'></a></div>`
+          ? [
+              "<div style='margin:24px 0 0;padding-top:18px;border-top:1px solid #E5E7EB'>",
+              "<p style='margin:0 0 10px;font-family:Arial,sans-serif;font-size:14px;line-height:1.4;font-weight:700;color:#111827'>Watch the Product Video</p>",
+              `<a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:block;text-decoration:none;text-align:center'>`,
+              `<img src='${escapeAnnouncementEmailHtml(announcementYoutubeThumbnailPreviewUrl)}' alt='Watch the product video on YouTube' width='760' style='display:inline-block;width:100%;max-width:760px;height:auto;border:0;border-radius:8px;outline:none;text-decoration:none'>`,
+              "</a>",
+              "<div style='margin:12px 0 0;text-align:center'>",
+              `<a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:inline-block;padding:8px 16px;border-radius:5px;background:#FF0000;color:#FFFFFF;font-family:Arial,sans-serif;font-size:12px;line-height:1.2;font-weight:700;text-decoration:none'>Watch on YouTube</a>`,
+              "</div>",
+              "</div>",
+            ].join("")
           : "";
 
         return [
@@ -27727,8 +27808,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden'>",
           headerHtml,
           "<div style='padding:28px 30px'>",
-          bodyHtml,
+          bodyBeforeImageHtml,
           imageHtml,
+          bodyAfterImageHtml,
           youtubeHtml,
           signatureHtml,
           "</div>",
@@ -29084,7 +29166,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   ? assetAnnouncementData.viberEmailImageUrl
                   : "",
               youtubeUrl:
-                audience==="viber"
+                audience==="client" || audience==="viber"
                   ? ""
                   : announcementYoutubeUrl,
               youtubeThumbnailUrl:
