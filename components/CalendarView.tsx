@@ -27904,9 +27904,20 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           }
         );
 
+      const youtubeUrlEnteredInThumbnailField =
+        getAnnouncementYoutubeVideoId(
+          assetAnnouncementData.youtubeThumbnailUrl
+        )
+          ? String(
+              assetAnnouncementData.youtubeThumbnailUrl || ""
+            ).trim()
+          : "";
+
       const announcementYoutubeUrl =
         String(
-          announcementYoutubeAsset?.link || ""
+          announcementYoutubeAsset?.link ||
+          youtubeUrlEnteredInThumbnailField ||
+          ""
         ).trim();
 
       const announcementYoutubeVideoId =
@@ -27914,24 +27925,38 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           announcementYoutubeUrl
         );
 
+      // hqdefault is available more consistently than maxresdefault, so the
+      // actual YouTube thumbnail is shown instead of a broken video-page URL.
       const automaticYoutubeThumbnailUrl =
-        announcementYoutubeVideoId
-          ? `https://i.ytimg.com/vi/${encodeURIComponent(
-              announcementYoutubeVideoId
-            )}/maxresdefault.jpg`
-          : "";
-
-      const fallbackYoutubeThumbnailUrl =
         announcementYoutubeVideoId
           ? `https://i.ytimg.com/vi/${encodeURIComponent(
               announcementYoutubeVideoId
             )}/hqdefault.jpg`
           : "";
 
-      const announcementYoutubeThumbnailPreviewUrl =
-        getAnnouncementImagePreviewUrl(
+      const fallbackYoutubeThumbnailUrl =
+        announcementYoutubeVideoId
+          ? `https://i.ytimg.com/vi/${encodeURIComponent(
+              announcementYoutubeVideoId
+            )}/mqdefault.jpg`
+          : "";
+
+      const customYoutubeThumbnailVideoId =
+        getAnnouncementYoutubeVideoId(
           assetAnnouncementData.youtubeThumbnailUrl
-        ) ||
+        );
+
+      const customYoutubeThumbnailPreviewUrl =
+        customYoutubeThumbnailVideoId
+          ? `https://i.ytimg.com/vi/${encodeURIComponent(
+              customYoutubeThumbnailVideoId
+            )}/hqdefault.jpg`
+          : getAnnouncementImagePreviewUrl(
+              assetAnnouncementData.youtubeThumbnailUrl
+            );
+
+      const announcementYoutubeThumbnailPreviewUrl =
+        customYoutubeThumbnailPreviewUrl ||
         automaticYoutubeThumbnailUrl;
 
       const readCurrentAnnouncementAssets = () => {
@@ -29044,20 +29069,16 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 audience==="client"
                   ? assetAnnouncementData.signatureKey
                   : "",
-              emailSignatureImageUrl:
-                audience==="client"
-                  ? assetAnnouncementData.signatureImageUrl
-                  : "",
+              // Client Email images are already embedded as remote <img>
+              // elements inside customHtmlBody. Do not also pass them through
+              // the API image fields, because those fields are converted into
+              // MIME attachments and Gmail shows duplicate attachment cards.
+              emailSignatureImageUrl:"",
               headerImageUrl:
-                audience==="viber"
-                  ? ""
-                  : audience==="internal"
-                    ? assetAnnouncementData.internalEmailImageUrl
-                    : assetAnnouncementData.headerImageUrl,
-              imageUrl:
-                audience==="client"
-                  ? assetAnnouncementData.imageUrl
+                audience==="internal"
+                  ? assetAnnouncementData.internalEmailImageUrl
                   : "",
+              imageUrl:"",
               footerImageUrl:
                 audience==="viber"
                   ? assetAnnouncementData.viberEmailImageUrl
@@ -29067,7 +29088,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   ? ""
                   : announcementYoutubeUrl,
               youtubeThumbnailUrl:
-                audience==="viber"
+                audience==="client" || audience==="viber"
                   ? ""
                   : assetAnnouncementData.youtubeThumbnailUrl,
               checklistTitle:
@@ -31804,7 +31825,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                 )}
 
                 {assetAnnouncementTab==="client"&&(
-                  <Field label="YouTube Thumbnail URL (Optional)">
+                  <Field label="YouTube Video or Thumbnail URL (Optional)">
                     <div
                       style={{
                         display:"flex",
@@ -31822,7 +31843,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               value,
                           })
                         }
-                        placeholder="Leave blank to use the YouTube video's automatic thumbnail"
+                        placeholder="Paste a YouTube video link, Google Drive thumbnail, or direct image URL"
                       />
 
                       {!!announcementYoutubeThumbnailPreviewUrl&&(
@@ -31910,8 +31931,8 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                         }}
                       >
                         {announcementYoutubeUrl
-                          ? "The YouTube link was detected from Digital Creative Asset Links. Leave this field blank to use YouTube’s standard thumbnail automatically."
-                          : "Add the YouTube link under Digital Creative Asset Links first. You may also paste a custom Google Drive or direct thumbnail URL here."}
+                          ? "The actual YouTube thumbnail is shown automatically. You may also paste a custom Google Drive or direct thumbnail image here."
+                          : "Paste the YouTube video link here to show its actual thumbnail, or add the link under Digital Creative Asset Links."}
                       </div>
                     </div>
                   </Field>
