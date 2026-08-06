@@ -27773,17 +27773,17 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             }
 
             if(/^Why You(?:'|’)ll Love It:?$/i.test(clean)){
-              return `<p style='margin:18px 0 14px;font-family:Arial,sans-serif;font-size:14px;line-height:1.45;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean.replace(/:$/,""))}</p>`;
+              return `<p style='margin:18px 0 14px;font-family:Inter,Arial,sans-serif;font-size:14px;line-height:1.45;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean.replace(/:$/,""))}</p>`;
             }
 
             if(/^•\s*/.test(clean)){
               const bulletText = clean.replace(/^•\s*/,"");
-              return `<p style='margin:0 0 8px;font-family:Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>•${escapeAnnouncementEmailHtml(bulletText)}</p>`;
+              return `<p style='margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>&#8226;&nbsp;${escapeAnnouncementEmailHtml(bulletText)}</p>`;
             }
 
             if(/^https?:\/\//i.test(clean)){
               const safeUrl = escapeAnnouncementEmailHtml(clean);
-              return `<p style='margin:0 0 10px;font-family:Arial,sans-serif;font-size:13px;line-height:1.55'><a href='${safeUrl}' style='color:#1155CC;text-decoration:underline'>${safeUrl}</a></p>`;
+              return `<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55'><a href='${safeUrl}' style='color:#1155CC;text-decoration:underline'>${safeUrl}</a></p>`;
             }
 
             const isShortHeadline =
@@ -27793,10 +27793,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               !/^Watch on YouTube:?$/i.test(clean);
 
             if(isShortHeadline){
-              return `<p style='margin:0 0 12px;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean)}</p>`;
+              return `<p style='margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean)}</p>`;
             }
 
-            return `<p style='margin:0 0 10px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#222222'>${escapeAnnouncementEmailHtml(clean)}</p>`;
+            return `<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#222222'>${escapeAnnouncementEmailHtml(clean)}</p>`;
           })
           .join("");
       };
@@ -27879,7 +27879,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           : "";
 
         return [
-          "<div style='margin-top:28px;padding-top:18px;border-top:1px solid #E5E7EB;font-family:Arial,sans-serif;color:#222222'>",
+          "<div style='margin-top:28px;padding-top:18px;border-top:1px solid #E5E7EB;font-family:Inter,Arial,sans-serif;color:#222222'>",
           "<p style='margin:0 0 18px;font-size:13px;line-height:1.5'>Best Regards,</p>",
           `<p style='margin:0;font-size:13px;line-height:1.45;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(signature.name)}</p>`,
           `<p style='margin:0 0 ${signatureImageUrl ? "0" : "16px"};font-size:13px;line-height:1.45;color:#222222'>${escapeAnnouncementEmailHtml(signature.title)}</p>`,
@@ -27914,19 +27914,19 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         const youtubeHtml = announcementYoutubeUrl && announcementYoutubeThumbnailPreviewUrl
           ? [
               "<div style='margin:22px 0 0;padding-top:16px;border-top:1px solid #E5E7EB'>",
-              "<p style='margin:0 0 10px;font-family:Arial,sans-serif;font-size:14px;line-height:1.4;font-weight:700;color:#111827'>Watch the Product Video</p>",
+              "<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:14px;line-height:1.4;font-weight:700;color:#111827'>Watch the Product Video</p>",
               `<a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:block;text-decoration:none;text-align:center'>`,
               `<img src='${escapeAnnouncementEmailHtml(announcementYoutubeThumbnailPreviewUrl)}' alt='Watch the product video on YouTube' width='760' style='display:inline-block;width:100%;max-width:760px;height:auto;border:0;border-radius:8px;outline:none;text-decoration:none'>`,
               "</a>",
               "<div style='margin:12px 0 0;text-align:center'>",
-              `<a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:inline-block;padding:8px 16px;border-radius:5px;background:#FF0000;color:#FFFFFF;font-family:Arial,sans-serif;font-size:12px;line-height:1.2;font-weight:700;text-decoration:none'>Watch on YouTube</a>`,
+              `<a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:inline-block;padding:8px 16px;border-radius:5px;background:#FF0000;color:#FFFFFF;font-family:Inter,Arial,sans-serif;font-size:12px;line-height:1.2;font-weight:700;text-decoration:none'>Watch on YouTube</a>`,
               "</div>",
               "</div>",
             ].join("")
           : "";
 
         return [
-          "<div style='margin:0;padding:24px;background:#F3F4F6;font-family:Arial,sans-serif;color:#222222'>",
+          "<div style='margin:0;padding:24px;background:#F3F4F6;font-family:Inter,Arial,sans-serif;color:#222222'>",
           "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden'>",
           headerHtml,
           "<div style='padding:26px 30px 30px'>",
