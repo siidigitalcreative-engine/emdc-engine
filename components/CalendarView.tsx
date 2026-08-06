@@ -11758,9 +11758,80 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     return schedule ? `${label} · ${schedule}` : label;
   };
 
+  const mergeEcommerceCampaignSavedOutputs = (
+    lists:any[][] = [],
+    deletedOverride:any[] = []
+  ) => {
+    const deletedIds = new Set(
+      (Array.isArray(deletedOverride) ? deletedOverride : [])
+        .map((item:any)=>String(item || "").trim())
+        .filter(Boolean)
+    );
+
+    const map = new Map<string,any>();
+    lists.flat().filter(Boolean).forEach((item:any)=>{
+      const id = String(item?.id || "").trim();
+      if(id && deletedIds.has(id)) return;
+      const fallback = `${item?.title || ""}|${item?.createdAt || ""}|${String(item?.text || "").slice(0,120)}`;
+      const key = id || fallback;
+      if(!key.trim()) return;
+      map.set(key,{ ...(map.get(key) || {}), ...item });
+    });
+
+    return Array.from(map.values())
+      .sort((a:any,b:any)=>String(b?.updatedAt || b?.createdAt || "").localeCompare(String(a?.updatedAt || a?.createdAt || "")))
+      .slice(0,60);
+  };
+
+  const commitEcommerceCampaignSavedOutputs = (
+    nextSaved:any[] = [],
+    deletedIds:any[] = []
+  ) => {
+    const safeDeleted = Array.from(new Set(
+      (Array.isArray(deletedIds) ? deletedIds : [])
+        .map((item:any)=>String(item || "").trim())
+        .filter(Boolean)
+    ));
+    const safeSaved = mergeEcommerceCampaignSavedOutputs(
+      [Array.isArray(nextSaved) ? nextSaved : []],
+      safeDeleted
+    ).slice(0,60);
+
+    const liveWorkspace = ((group.aiWorkspace || {}) as any);
+    const liveEcommerce = (liveWorkspace.ecommerce || {}) as any;
+    const liveBuilder = (liveEcommerce.campaignBuilder || {}) as any;
+    const now = new Date().toISOString();
+    const nextWorkspace = {
+      ...liveWorkspace,
+      ecommerce:{
+        ...liveEcommerce,
+        campaignBuilder:{
+          ...liveBuilder,
+          savedOutputs:safeSaved,
+          deletedSavedOutputIds:safeDeleted,
+          savedOutputsUpdatedAt:now,
+        },
+      },
+    };
+
+    if(onUpdateGroup){
+      onUpdateGroup({ aiWorkspace:nextWorkspace });
+    }
+  };
+
   const getEcommerceCampaignBuilder = () => {
     const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
     const builder = data.campaignBuilder || {};
+    const deletedIds = Array.from(new Set(
+      (Array.isArray(builder.deletedSavedOutputIds)
+        ? builder.deletedSavedOutputIds
+        : []
+      ).map((item:any)=>String(item || "").trim()).filter(Boolean)
+    ));
+    const savedOutputs = mergeEcommerceCampaignSavedOutputs([
+      Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [],
+    ],deletedIds);
+
     return {
       platform: builder.platform || "All Platforms",
       theme: builder.theme || "Payday Sale",
@@ -11775,19 +11846,54 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       productRows: Array.isArray(builder.productRows) ? builder.productRows : [],
       generatedText: builder.generatedText || "",
       generatedAt: builder.generatedAt || "",
-      savedOutputs: Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [],
+      savedOutputs,
+      deletedSavedOutputIds:deletedIds,
+      savedOutputsUpdatedAt:builder.savedOutputsUpdatedAt || "",
     };
   };
 
   const updateEcommerceCampaignBuilder = (patch:any) => {
-    const data = ((group.aiWorkspace || {}).ecommerce || {}) as any;
-    const currentBuilder = data.campaignBuilder || {};
-    updateAiWorkspace("ecommerce",{
-      campaignBuilder:{
-        ...currentBuilder,
-        ...patch,
+    const liveWorkspace = ((group.aiWorkspace || {}) as any);
+    const liveEcommerce = (liveWorkspace.ecommerce || {}) as any;
+    const currentBuilder = (liveEcommerce.campaignBuilder || {}) as any;
+    const currentDeleted = Array.isArray(currentBuilder.deletedSavedOutputIds)
+      ? currentBuilder.deletedSavedOutputIds
+      : [];
+    const currentSaved = mergeEcommerceCampaignSavedOutputs([
+      Array.isArray(currentBuilder.savedOutputs)
+        ? currentBuilder.savedOutputs
+        : [],
+    ],currentDeleted);
+    const patchHasSavedOutputs = Object.prototype.hasOwnProperty.call(
+      patch || {},
+      "savedOutputs"
+    );
+    const nextDeleted = Array.isArray(patch?.deletedSavedOutputIds)
+      ? patch.deletedSavedOutputIds
+      : currentDeleted;
+    const nextSaved = patchHasSavedOutputs
+      ? mergeEcommerceCampaignSavedOutputs([
+          Array.isArray(patch?.savedOutputs) ? patch.savedOutputs : [],
+          currentSaved,
+        ],nextDeleted)
+      : currentSaved;
+    const nextBuilder = {
+      ...currentBuilder,
+      ...patch,
+      savedOutputs:nextSaved,
+      deletedSavedOutputIds:nextDeleted,
+    };
+    const nextWorkspace = {
+      ...liveWorkspace,
+      ecommerce:{
+        ...liveEcommerce,
+        campaignBuilder:nextBuilder,
       },
-    });
+    };
+
+    if(onUpdateGroup){
+      onUpdateGroup({ aiWorkspace:nextWorkspace });
+    }
   };
 
   const openEcommerceCampaignInstructions = () => {
@@ -13569,16 +13675,20 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if(!output || !(row.headline || row.subheadline || row.cta)) return;
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     const saved = Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [];
-    updateEcommerceCampaignBuilder({
-      savedOutputs:[{
-        id:uid(),
-        title:`Campaign Copy ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
-        text:output,
-        platform:row.platform || builder.platform,
-        theme,
-        createdAt:new Date().toISOString(),
-      },...saved].slice(0,20),
-    });
+    const now = new Date().toISOString();
+    const entry = {
+      id:uid(),
+      title:`Campaign Copy ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+      text:output,
+      platform:row.platform || builder.platform,
+      theme,
+      createdAt:now,
+      updatedAt:now,
+    };
+    const nextSaved = [entry,...saved].slice(0,60);
+    const nextDeleted = (builder.deletedSavedOutputIds || [])
+      .filter((item:any)=>String(item || "")!==String(entry.id || ""));
+    commitEcommerceCampaignSavedOutputs(nextSaved,nextDeleted);
   };
 
   const saveEcommerceCampaignOutput = () => {
@@ -13587,22 +13697,34 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
     if(!output) return;
     const theme = getCampaignContextFromLinkedEvents() || String(builder.theme || "Campaign").trim();
     const saved = Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [];
-    updateEcommerceCampaignBuilder({
-      savedOutputs:[{
-        id:uid(),
-        title:`Campaign Copy ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
-        text:output,
-        platform:builder.platform,
-        theme,
-        createdAt:new Date().toISOString(),
-      },...saved].slice(0,20),
-    });
+    const now = new Date().toISOString();
+    const entry = {
+      id:uid(),
+      title:`Campaign Copy ${new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`,
+      text:output,
+      platform:builder.platform,
+      theme,
+      createdAt:now,
+      updatedAt:now,
+    };
+    const nextSaved = [entry,...saved].slice(0,60);
+    const nextDeleted = (builder.deletedSavedOutputIds || [])
+      .filter((item:any)=>String(item || "")!==String(entry.id || ""));
+    commitEcommerceCampaignSavedOutputs(nextSaved,nextDeleted);
   };
 
   const deleteEcommerceCampaignSavedOutput = (id:string) => {
     const builder = getEcommerceCampaignBuilder();
+    const cleanId = String(id || "").trim();
+    if(!cleanId) return;
     const saved = Array.isArray(builder.savedOutputs) ? builder.savedOutputs : [];
-    updateEcommerceCampaignBuilder({ savedOutputs:saved.filter((item:any)=>item.id!==id) });
+    const nextSaved = saved.filter((item:any)=>String(item?.id || "").trim()!==cleanId);
+    const nextDeleted = Array.from(new Set([
+      ...(Array.isArray(builder.deletedSavedOutputIds) ? builder.deletedSavedOutputIds : []),
+      ...readEcommerceCampaignDeletedOutputIds(),
+      cleanId,
+    ].map((item:any)=>String(item || "").trim()).filter(Boolean)));
+    commitEcommerceCampaignSavedOutputs(nextSaved,nextDeleted);
   };
 
   const BUDGET_COLUMNS = Array.from({length:15},(_,index)=>String.fromCharCode(65+index));
@@ -27647,34 +27769,34 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             const clean = String(line || "").trim();
 
             if(!clean){
-              return "<div style='height:9px;line-height:9px'>&nbsp;</div>";
+              return "<div style='height:10px;line-height:10px'>&nbsp;</div>";
             }
 
-            if(/^•\s+/.test(clean)){
-              return `<div style='display:flex;gap:8px;margin:5px 0;font-family:Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'><span style='font-weight:700;color:#111827'>•</span><div>${escapeAnnouncementEmailHtml(clean.replace(/^•\s+/,""))}</div></div>`;
+            if(/^Why You(?:'|’)ll Love It:?$/i.test(clean)){
+              return `<p style='margin:18px 0 14px;font-family:Arial,sans-serif;font-size:14px;line-height:1.45;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean.replace(/:$/,""))}</p>`;
+            }
+
+            if(/^•\s*/.test(clean)){
+              const bulletText = clean.replace(/^•\s*/,"");
+              return `<p style='margin:0 0 8px;font-family:Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>•${escapeAnnouncementEmailHtml(bulletText)}</p>`;
             }
 
             if(/^https?:\/\//i.test(clean)){
               const safeUrl = escapeAnnouncementEmailHtml(clean);
-              return `<p style='margin:7px 0;font-family:Arial,sans-serif;font-size:13px;line-height:1.6'><a href='${safeUrl}' style='color:#1155CC;text-decoration:underline'>${safeUrl}</a></p>`;
+              return `<p style='margin:0 0 10px;font-family:Arial,sans-serif;font-size:13px;line-height:1.55'><a href='${safeUrl}' style='color:#1155CC;text-decoration:underline'>${safeUrl}</a></p>`;
             }
 
             const isShortHeadline =
               clean.length <= 72 &&
               !/[.!?]$/.test(clean) &&
               !/^Dear\b/i.test(clean) &&
-              !/^Why You(?:'|’)ll Love It:?$/i.test(clean) &&
               !/^Watch on YouTube:?$/i.test(clean);
 
-            if(/^Why You(?:'|’)ll Love It:?$/i.test(clean)){
-              return `<h3 style='margin:18px 0 8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.35;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean.replace(/:$/,""))}</h3>`;
-            }
-
             if(isShortHeadline){
-              return `<h2 style='margin:16px 0 8px;font-family:Arial,sans-serif;font-size:17px;line-height:1.35;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean)}</h2>`;
+              return `<p style='margin:0 0 12px;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean)}</p>`;
             }
 
-            return `<p style='margin:7px 0;font-family:Arial,sans-serif;font-size:13px;line-height:1.65;color:#222222'>${escapeAnnouncementEmailHtml(clean)}</p>`;
+            return `<p style='margin:0 0 10px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#222222'>${escapeAnnouncementEmailHtml(clean)}</p>`;
           })
           .join("");
       };
@@ -27787,11 +27909,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           ? `<img src='${escapeAnnouncementEmailHtml(announcementHeaderImagePreviewUrl)}' alt='Email header' width='820' style='display:block;width:100%;max-width:820px;height:auto;border:0;outline:none;text-decoration:none'>`
           : "";
         const imageHtml = announcementImagePreviewUrl
-          ? `<div style='margin:20px 0 12px;text-align:center'><img src='${escapeAnnouncementEmailHtml(announcementImagePreviewUrl)}' alt='Product image' width='760' style='display:inline-block;width:100%;max-width:760px;height:auto;border:0;outline:none;text-decoration:none'></div>`
+          ? `<div style='margin:16px 0 20px;text-align:center'><img src='${escapeAnnouncementEmailHtml(announcementImagePreviewUrl)}' alt='Product image' width='760' style='display:inline-block;width:100%;max-width:760px;height:auto;border:0;outline:none;text-decoration:none'></div>`
           : "";
         const youtubeHtml = announcementYoutubeUrl && announcementYoutubeThumbnailPreviewUrl
           ? [
-              "<div style='margin:24px 0 0;padding-top:18px;border-top:1px solid #E5E7EB'>",
+              "<div style='margin:22px 0 0;padding-top:16px;border-top:1px solid #E5E7EB'>",
               "<p style='margin:0 0 10px;font-family:Arial,sans-serif;font-size:14px;line-height:1.4;font-weight:700;color:#111827'>Watch the Product Video</p>",
               `<a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:block;text-decoration:none;text-align:center'>`,
               `<img src='${escapeAnnouncementEmailHtml(announcementYoutubeThumbnailPreviewUrl)}' alt='Watch the product video on YouTube' width='760' style='display:inline-block;width:100%;max-width:760px;height:auto;border:0;border-radius:8px;outline:none;text-decoration:none'>`,
@@ -27805,9 +27927,9 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
         return [
           "<div style='margin:0;padding:24px;background:#F3F4F6;font-family:Arial,sans-serif;color:#222222'>",
-          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden'>",
+          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden'>",
           headerHtml,
-          "<div style='padding:28px 30px'>",
+          "<div style='padding:26px 30px 30px'>",
           bodyBeforeImageHtml,
           imageHtml,
           bodyAfterImageHtml,
@@ -46127,6 +46249,7 @@ export default function App({
           }
         } catch {}
 
+
         return {
           ...group,
           aiWorkspace: nextWorkspace,
@@ -47743,6 +47866,7 @@ export default function App({
             },
           };
         }
+
 
         const before = JSON.stringify(
           currentWorkspace || {}
