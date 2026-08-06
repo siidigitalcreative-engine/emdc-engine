@@ -1266,7 +1266,7 @@ const CLIENT_EMAIL_SIGNATURES:any = {
     name:"Roy Anthony De Pedro",
     title:"Sales Representative",
     address:"19 SURAYA Building, Main Avenue ACSIE West Service Road, Bicutan, Parañaque City, Metro Manila, Philippines 1700",
-    telephone:"(632) 8659.3877-78-80 Loc. 122",
+    telephone:"(632) 8659.3877-78-80 Loc. 120",
     mobile:"(63) 917.621.1307",
     website:"www.sunbeamsimpexinc.com",
   },
