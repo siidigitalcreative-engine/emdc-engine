@@ -1249,6 +1249,48 @@ const mergeChecklistTemplatesWithDefaults = (saved:any) => {
   return merged;
 };
 
+const CLIENT_EMAIL_SIGNATURES:any = {
+  vhet:{
+    key:"vhet",
+    optionLabel:"Vhet — Marivel Baytan",
+    name:"Marivel Baytan",
+    title:"Business Development Manager",
+    address:"19 SURAYA Building, Main Avenue ACSIE West Service Road, Bicutan, Parañaque City, Metro Manila, Philippines 1700",
+    telephone:"(632) 8659.3877-78-80 Loc. 121",
+    mobile:"(63) 917.705.2576 Globe",
+    website:"www.sunbeamsimpexinc.com",
+  },
+  roy:{
+    key:"roy",
+    optionLabel:"Roy — Roy Anthony De Pedro",
+    name:"Roy Anthony De Pedro",
+    title:"Sales Representative",
+    address:"19 SURAYA Building, Main Avenue ACSIE West Service Road, Bicutan, Parañaque City, Metro Manila, Philippines 1700",
+    telephone:"(632) 8659.3877-78-80 Loc. 122",
+    mobile:"(63) 917.621.1307",
+    website:"www.sunbeamsimpexinc.com",
+  },
+};
+
+const CLIENT_EMAIL_SIGNATURE_DISCLAIMER =
+  "DISCLAIMER: This message and its attachments are confidential and may contain information which is protected by copyright. It is intended solely for the named addressee. If you are not the authorized recipient (or responsible for delivery of the message to the authorized recipient), you must not use, disclose, print, copy or deliver this message or its attachments to anyone. If you receive this email in error, please contact the sender immediately and permanently delete this message and its attachments from your system. Any content of this message and its attachments that does not relate to the official business of Sunbeams Impex Inc. must be taken not to have been sent or endorsed by it. No representation is made that this email or its attachments are without defect or that the contents express views other than those of the sender.";
+
+const CLIENT_EMAIL_SIGNATURE_ENVIRONMENT_NOTICE =
+  "Please consider the environment before printing this email";
+
+const getClientEmailSignatureKey = (value:any) =>
+  Object.prototype.hasOwnProperty.call(
+    CLIENT_EMAIL_SIGNATURES,
+    String(value || "").trim().toLowerCase()
+  )
+    ? String(value || "").trim().toLowerCase()
+    : "vhet";
+
+const getClientEmailSignature = (value:any) =>
+  CLIENT_EMAIL_SIGNATURES[
+    getClientEmailSignatureKey(value)
+  ] || CLIENT_EMAIL_SIGNATURES.vhet;
+
 const uid = () => Math.random().toString(36).slice(2,9);
 const EMDC_LOCAL_STATE_UPDATED_AT_KEY = "emdc_app_state_local_updated_at_v1";
 const markEmdcLocalStateUpdated = (updatedAt = new Date().toISOString()) => {
@@ -27470,6 +27512,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         instructions:String(digitalData.assetAnnouncementInstructions || ""),
         to:String(digitalData.assetAnnouncementTo || ""),
         cc:String(digitalData.assetAnnouncementCc || ""),
+        signatureKey:getClientEmailSignatureKey(
+          digitalData.assetAnnouncementSignatureKey || "vhet"
+        ),
+        signatureImageUrl:String(
+          digitalData.assetAnnouncementSignatureImageUrl || ""
+        ),
         headerImageUrl:String(
           digitalData.assetAnnouncementHeaderImageUrl || ""
         ),
@@ -27522,6 +27570,171 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
       const patchAssetAnnouncement = (patch:any) => {
         updateAiWorkspace("digital",patch);
+      };
+
+      const selectedClientEmailSignature =
+        getClientEmailSignature(
+          assetAnnouncementData.signatureKey
+        );
+
+      const escapeAnnouncementEmailHtml = (value:any) =>
+        String(value || "")
+          .replace(/&/g,"&amp;")
+          .replace(/</g,"&lt;")
+          .replace(/>/g,"&gt;")
+          .replace(/"/g,"&quot;")
+          .replace(/'/g,"&#039;");
+
+      const stripExistingClientEmailSignature = (value:any) => {
+        let body = String(value || "").trimEnd();
+
+        body = body.replace(
+          /\n{2,}Best Regards,\s*\n(?:Marivel Baytan|Roy Anthony De Pedro)[\s\S]*$/i,
+          ""
+        );
+
+        body = body.replace(
+          /\n{2,}(?:Best|Kind|Warm) Regards,?\s*$/i,
+          ""
+        );
+
+        return body.trimEnd();
+      };
+
+      const getClientEmailSignatureText = (signatureKey:any) => {
+        const signature = getClientEmailSignature(signatureKey);
+
+        return [
+          "Best Regards,",
+          "",
+          signature.name,
+          signature.title,
+          "",
+          signature.address,
+          `t:  ${signature.telephone}`,
+          `m:  ${signature.mobile}`,
+          `w:  ${signature.website}`,
+          "",
+          CLIENT_EMAIL_SIGNATURE_DISCLAIMER,
+          "",
+          CLIENT_EMAIL_SIGNATURE_ENVIRONMENT_NOTICE,
+        ].join("\n");
+      };
+
+      const getClientAnnouncementBodyWithSignature = (
+        body:any,
+        signatureKey:any = assetAnnouncementData.signatureKey
+      ) => {
+        const cleanBody = stripExistingClientEmailSignature(
+          normalizeWhyYouLoveItBullets(body)
+        );
+        const signatureText =
+          getClientEmailSignatureText(signatureKey);
+
+        return [cleanBody,signatureText]
+          .filter(Boolean)
+          .join("\n\n");
+      };
+
+      const renderAnnouncementEmailBodyHtml = (value:any) => {
+        const cleanBody = stripExistingClientEmailSignature(
+          normalizeWhyYouLoveItBullets(value)
+        );
+
+        return cleanBody
+          .split(/\r?\n/)
+          .map((line:string)=>{
+            const clean = String(line || "").trim();
+
+            if(!clean){
+              return "<div style='height:9px;line-height:9px'>&nbsp;</div>";
+            }
+
+            if(/^•\s+/.test(clean)){
+              return `<div style='display:flex;gap:8px;margin:5px 0;font-family:Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'><span style='font-weight:700;color:#111827'>•</span><div>${escapeAnnouncementEmailHtml(clean.replace(/^•\s+/,""))}</div></div>`;
+            }
+
+            if(/^https?:\/\//i.test(clean)){
+              const safeUrl = escapeAnnouncementEmailHtml(clean);
+              return `<p style='margin:7px 0;font-family:Arial,sans-serif;font-size:13px;line-height:1.6'><a href='${safeUrl}' style='color:#1155CC;text-decoration:underline'>${safeUrl}</a></p>`;
+            }
+
+            const isShortHeadline =
+              clean.length <= 72 &&
+              !/[.!?]$/.test(clean) &&
+              !/^Dear\b/i.test(clean) &&
+              !/^Why You(?:'|’)ll Love It:?$/i.test(clean) &&
+              !/^Watch on YouTube:?$/i.test(clean);
+
+            if(/^Why You(?:'|’)ll Love It:?$/i.test(clean)){
+              return `<h3 style='margin:18px 0 8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.35;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean.replace(/:$/,""))}</h3>`;
+            }
+
+            if(isShortHeadline){
+              return `<h2 style='margin:16px 0 8px;font-family:Arial,sans-serif;font-size:17px;line-height:1.35;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean)}</h2>`;
+            }
+
+            return `<p style='margin:7px 0;font-family:Arial,sans-serif;font-size:13px;line-height:1.65;color:#222222'>${escapeAnnouncementEmailHtml(clean)}</p>`;
+          })
+          .join("");
+      };
+
+      const getClientEmailSignatureHtml = (signatureKey:any) => {
+        const signature = getClientEmailSignature(signatureKey);
+        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(signature.address)}`;
+        const websiteUrl = `https://${signature.website}`;
+        const signatureImageUrl =
+          getAnnouncementImagePreviewUrl(
+            assetAnnouncementData.signatureImageUrl
+          );
+        const signatureImageHtml = signatureImageUrl
+          ? `<img src='${escapeAnnouncementEmailHtml(signatureImageUrl)}' alt='Email signature banner' style='display:block;width:420px;max-width:100%;height:auto;margin:10px 0 3px;border:0;outline:none;text-decoration:none'>`
+          : "";
+
+        return [
+          "<div style='margin-top:28px;padding-top:18px;border-top:1px solid #E5E7EB;font-family:Arial,sans-serif;color:#222222'>",
+          "<p style='margin:0 0 18px;font-size:13px;line-height:1.5'>Best Regards,</p>",
+          `<p style='margin:0;font-size:13px;line-height:1.45;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(signature.name)}</p>`,
+          `<p style='margin:0 0 ${signatureImageUrl ? "0" : "16px"};font-size:13px;line-height:1.45;color:#222222'>${escapeAnnouncementEmailHtml(signature.title)}</p>`,
+          signatureImageHtml,
+          `<p style='margin:0 0 2px;font-size:13px;line-height:1.45'><a href='${escapeAnnouncementEmailHtml(mapUrl)}' style='color:#1155CC;text-decoration:underline'>${escapeAnnouncementEmailHtml(signature.address)}</a></p>`,
+          `<p style='margin:0;font-size:13px;line-height:1.45'>t:&nbsp;&nbsp; ${escapeAnnouncementEmailHtml(signature.telephone)}</p>`,
+          `<p style='margin:0;font-size:13px;line-height:1.45'>m:&nbsp;&nbsp; ${escapeAnnouncementEmailHtml(signature.mobile)}</p>`,
+          `<p style='margin:0 0 18px;font-size:13px;line-height:1.45'>w:&nbsp;&nbsp; <a href='${escapeAnnouncementEmailHtml(websiteUrl)}' style='color:#374151;text-decoration:underline'>${escapeAnnouncementEmailHtml(signature.website)}</a></p>`,
+          `<p style='margin:0 0 18px;font-size:10.5px;line-height:1.45;color:#222222'>${escapeAnnouncementEmailHtml(CLIENT_EMAIL_SIGNATURE_DISCLAIMER)}</p>`,
+          `<p style='margin:0;font-size:11px;line-height:1.45;color:#008000'>${escapeAnnouncementEmailHtml(CLIENT_EMAIL_SIGNATURE_ENVIRONMENT_NOTICE)}</p>`,
+          "</div>",
+        ].join("");
+      };
+
+      const buildClientAnnouncementEmailHtml = (body:any) => {
+        const bodyHtml = renderAnnouncementEmailBodyHtml(body);
+        const signatureHtml = getClientEmailSignatureHtml(
+          assetAnnouncementData.signatureKey
+        );
+        const headerHtml = announcementHeaderImagePreviewUrl
+          ? `<img src='${escapeAnnouncementEmailHtml(announcementHeaderImagePreviewUrl)}' alt='Email header' style='display:block;width:100%;max-height:240px;object-fit:cover;border:0'>`
+          : "";
+        const imageHtml = announcementImagePreviewUrl
+          ? `<div style='margin:20px 0;text-align:center'><img src='${escapeAnnouncementEmailHtml(announcementImagePreviewUrl)}' alt='Product image' style='display:inline-block;max-width:100%;max-height:520px;object-fit:contain;border:0'></div>`
+          : "";
+        const youtubeHtml = announcementYoutubeUrl && announcementYoutubeThumbnailPreviewUrl
+          ? `<div style='margin:22px 0 0'><a href='${escapeAnnouncementEmailHtml(announcementYoutubeUrl)}' style='display:block;text-decoration:none'><img src='${escapeAnnouncementEmailHtml(announcementYoutubeThumbnailPreviewUrl)}' alt='Watch on YouTube' style='display:block;width:100%;max-width:680px;aspect-ratio:16/9;object-fit:cover;border:0;border-radius:8px'></a></div>`
+          : "";
+
+        return [
+          "<div style='margin:0;padding:24px;background:#F3F4F6;font-family:Arial,sans-serif;color:#222222'>",
+          "<div style='max-width:820px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden'>",
+          headerHtml,
+          "<div style='padding:28px 30px'>",
+          bodyHtml,
+          imageHtml,
+          youtubeHtml,
+          signatureHtml,
+          "</div>",
+          "</div>",
+          "</div>",
+        ].join("");
       };
 
       const getAnnouncementGoogleDriveFileId = (
@@ -27626,6 +27839,11 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const announcementHeaderImagePreviewUrl =
         getAnnouncementImagePreviewUrl(
           assetAnnouncementData.headerImageUrl
+        );
+
+      const announcementSignatureImagePreviewUrl =
+        getAnnouncementImagePreviewUrl(
+          assetAnnouncementData.signatureImageUrl
         );
 
       const announcementInternalEmailImagePreviewUrl =
@@ -28755,7 +28973,12 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           to:assetAnnouncementData.to,
           cc:assetAnnouncementData.cc,
           su:email.subject,
-          body:email.body,
+          body:
+            audience==="client"
+              ? getClientAnnouncementBodyWithSignature(
+                  email.body
+                )
+              : email.body,
         });
         window.open(
           `https://mail.google.com/mail/?${params.toString()}`,
@@ -28803,9 +29026,28 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               to:assetAnnouncementData.to,
               cc:assetAnnouncementData.cc,
               subject:email.subject,
-              body:normalizeWhyYouLoveItBullets(
-                email.body
-              ),
+              body:
+                audience==="client"
+                  ? getClientAnnouncementBodyWithSignature(
+                      email.body
+                    )
+                  : normalizeWhyYouLoveItBullets(
+                      email.body
+                    ),
+              customHtmlBody:
+                audience==="client"
+                  ? buildClientAnnouncementEmailHtml(
+                      email.body
+                    )
+                  : undefined,
+              emailSignatureKey:
+                audience==="client"
+                  ? assetAnnouncementData.signatureKey
+                  : "",
+              emailSignatureImageUrl:
+                audience==="client"
+                  ? assetAnnouncementData.signatureImageUrl
+                  : "",
               headerImageUrl:
                 audience==="viber"
                   ? ""
@@ -31247,6 +31489,152 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                   </Field>
                 </div>
 
+                {assetAnnouncementTab==="client"&&(
+                  <Field label="Email Signature" hint="">
+                    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                      <select
+                        value={assetAnnouncementData.signatureKey}
+                        onChange={(event:any)=>patchAssetAnnouncement({
+                          assetAnnouncementSignatureKey:
+                            getClientEmailSignatureKey(
+                              event.target.value
+                            ),
+                        })}
+                        style={{
+                          width:"100%",
+                          height:40,
+                          border:`1.5px solid ${C.border}`,
+                          borderRadius:9,
+                          padding:"0 11px",
+                          background:C.surface,
+                          color:C.textSub,
+                          fontSize:12.5,
+                          fontWeight:800,
+                          outline:"none",
+                        }}
+                      >
+                        {Object.values(CLIENT_EMAIL_SIGNATURES).map((signature:any)=>(
+                          <option key={signature.key} value={signature.key}>
+                            {signature.optionLabel}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div style={{
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:7,
+                      }}>
+                        <div style={{
+                          color:C.muted,
+                          fontSize:10.5,
+                          fontWeight:800,
+                          letterSpacing:".04em",
+                          textTransform:"uppercase",
+                        }}>
+                          Signature Image URL
+                        </div>
+                        <TI
+                          value={assetAnnouncementData.signatureImageUrl}
+                          onChange={(value:any)=>patchAssetAnnouncement({
+                            assetAnnouncementSignatureImageUrl:value,
+                          })}
+                          placeholder="Paste a Google Drive signature image link or direct image URL"
+                        />
+
+                        {!!announcementSignatureImagePreviewUrl&&(
+                          <div style={{
+                            width:"100%",
+                            padding:10,
+                            overflow:"hidden",
+                            border:`1px solid ${C.border}`,
+                            borderRadius:9,
+                            background:"#FFFFFF",
+                          }}>
+                            <img
+                              src={announcementSignatureImagePreviewUrl}
+                              alt="Email signature image preview"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              style={{
+                                display:"block",
+                                width:420,
+                                maxWidth:"100%",
+                                height:"auto",
+                                objectFit:"contain",
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        <div style={{
+                          color:C.faint,
+                          fontSize:10.5,
+                          lineHeight:1.45,
+                        }}>
+                          This image is placed between the selected person’s position and the company address. For Google Drive, set the file to “Anyone with the link can view.”
+                        </div>
+                      </div>
+
+                      <div style={{
+                        padding:12,
+                        border:`1px solid ${C.border}`,
+                        borderRadius:9,
+                        background:C.surfaceAlt,
+                        color:C.textSub,
+                        fontSize:11.5,
+                        lineHeight:1.48,
+                      }}>
+                        <p style={{ margin:"0 0 10px" }}>Best Regards,</p>
+                        <p style={{ margin:0,fontWeight:900,color:C.text }}>
+                          {selectedClientEmailSignature.name}
+                        </p>
+                        <p style={{ margin:announcementSignatureImagePreviewUrl?"0":"0 0 10px" }}>
+                          {selectedClientEmailSignature.title}
+                        </p>
+                        {!!announcementSignatureImagePreviewUrl&&(
+                          <img
+                            src={announcementSignatureImagePreviewUrl}
+                            alt="Email signature banner"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            style={{
+                              display:"block",
+                              width:420,
+                              maxWidth:"100%",
+                              height:"auto",
+                              margin:"10px 0 3px",
+                              objectFit:"contain",
+                            }}
+                          />
+                        )}
+                        <p style={{ margin:0,color:"#1155CC",textDecoration:"underline" }}>
+                          {selectedClientEmailSignature.address}
+                        </p>
+                        <p style={{ margin:0 }}>
+                          t:&nbsp;&nbsp; {selectedClientEmailSignature.telephone}
+                        </p>
+                        <p style={{ margin:0 }}>
+                          m:&nbsp;&nbsp; {selectedClientEmailSignature.mobile}
+                        </p>
+                        <p style={{ margin:"0 0 10px",textDecoration:"underline" }}>
+                          w:&nbsp;&nbsp; {selectedClientEmailSignature.website}
+                        </p>
+                        <p style={{ margin:"0 0 10px",fontSize:10,lineHeight:1.42,color:C.muted }}>
+                          {CLIENT_EMAIL_SIGNATURE_DISCLAIMER}
+                        </p>
+                        <p style={{ margin:0,color:"#008000",fontSize:10.5 }}>
+                          {CLIENT_EMAIL_SIGNATURE_ENVIRONMENT_NOTICE}
+                        </p>
+                      </div>
+
+                      <div style={{ color:C.faint,fontSize:10.5,lineHeight:1.45 }}>
+                        The selected signature is added automatically when you copy the Client Email, open Gmail, create a Gmail draft, or send the email. It is not added to Internal Team or Viber messages.
+                      </div>
+                    </div>
+                  </Field>
+                )}
+
                 <Field label="Subject">
                   <TI
                     value={
@@ -31739,9 +32127,14 @@ Tap the product basket, claim the voucher if available, and checkout while the l
                               .drafts[assetAnnouncementData.audience]
                               .subject
                           }\n\n${
-                            assetAnnouncementData
-                              .drafts[assetAnnouncementData.audience]
-                              .body
+                            assetAnnouncementTab==="client"
+                              ? getClientAnnouncementBodyWithSignature(
+                                  assetAnnouncementData
+                                    .drafts.client.body
+                                )
+                              : assetAnnouncementData
+                                  .drafts[assetAnnouncementData.audience]
+                                  .body
                           }`,
                       `copy-announcement-${assetAnnouncementTab}`
                     )}
