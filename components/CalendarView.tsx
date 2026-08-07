@@ -11091,7 +11091,9 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
   };
 
   const copyGeneratedEcommerce = async () => {
-    const output = String(((group.aiWorkspace || {}).ecommerce || {}).generatedText || "");
+    const output = sanitizeProductIntroEcommerceGeneratedOutput(
+      ((group.aiWorkspace || {}).ecommerce || {}).generatedText || ""
+    );
     if(!output) return;
     try { await navigator.clipboard.writeText(output); } catch {}
   };
@@ -11134,7 +11136,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
   const saveEcommerceOutput = () => {
     const data = getMergedEcommerceData(((group.aiWorkspace || {}).ecommerce || {}));
-    const output = String(data.generatedText || "").trim();
+    const output = sanitizeProductIntroEcommerceGeneratedOutput(data.generatedText || "");
     if(!output) return;
     const saved = mergeEcommerceSavedOutputs(
       [
@@ -11197,6 +11199,54 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       .replace(/^\s*\d+\.\s+(Product Name|Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
       .replace(/^\s*[-*]\s+(Product Name|Product Overview|Key Features|Variants Available|Color Options|Product Specifications|Perfect For|Care & Use|Package Includes|Best SEO Listing Title|Stronger Lazada\/Shopee SEO Version|Recommended Variations|Better Option \/ Higher AOV|Search Keywords)/gmi,"$1")
       .replace(/\n\s*(?:\d+\.\s*)?Recommended Final Listing Structure[\s\S]*$/i,"")
+      .trim();
+  };
+
+  const ecommerceUnconfirmedPattern =
+    /\b(?:to be confirmed|tbc|tbd|to be determined|not yet confirmed|pending confirmation|requires confirmation|unconfirmed|unknown|not provided|not specified)\b/i;
+
+  const sanitizeProductIntroEcommerceGeneratedOutput = (value:any) => {
+    const cleaned = cleanReadyToUseOutput(value);
+    if(!isProductIntroEcommerceChecklist()) return cleaned;
+
+    return cleaned
+      // Preserve confirmed content while removing unsupported parenthetical notes,
+      // such as: White and Grey (To be confirmed if other colors are available).
+      .replace(
+        /\s*[\(\[][^\)\]\n]*(?:to be confirmed|tbc|tbd|to be determined|not yet confirmed|pending confirmation|requires confirmation|unconfirmed|unknown|not provided|not specified)[^\)\]\n]*[\)\]]/gi,
+        ""
+      )
+      .split("\n")
+      .map((line:string)=>{
+        const trimmedRight = String(line || "").trimEnd();
+        if(!trimmedRight.trim()) return "";
+
+        // Omit label-only lines such as "Material: To be confirmed" instead
+        // of leaving an empty label behind.
+        if(
+          /^\s*(?:[-*•]\s*)?[^:\n]{1,120}\s*(?::|-|–|—)\s*(?:to be confirmed|tbc|tbd|to be determined|not yet confirmed|pending confirmation|requires confirmation|unconfirmed|unknown|not provided|not specified)\b/i.test(trimmedRight)
+        ) return "";
+
+        // Remove a trailing unsupported clause when the beginning of the line
+        // still contains a confirmed value.
+        const withoutTrailingPlaceholder = trimmedRight
+          .replace(
+            /\s*(?:[-–—,:;]|\b(?:and|or|but)\b)?\s*(?:to be confirmed|tbc|tbd|to be determined|not yet confirmed|pending confirmation|requires confirmation|unconfirmed|unknown|not provided|not specified)\b.*$/i,
+            ""
+          )
+          .replace(/\s+([,.;:])/g,"$1")
+          .trimEnd();
+
+        // Omit lines that contain no supported information after cleanup.
+        if(ecommerceUnconfirmedPattern.test(withoutTrailingPlaceholder)) return "";
+        return withoutTrailingPlaceholder;
+      })
+      .filter((line:string,index:number,lines:string[])=>{
+        if(line.trim()) return true;
+        return index>0 && index<lines.length-1 && !!lines[index-1]?.trim() && !!lines[index+1]?.trim();
+      })
+      .join("\n")
+      .replace(/\n{3,}/g,"\n\n")
       .trim();
   };
 
@@ -11360,7 +11410,12 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
       "Actively read uploaded catalog images and extract all visible text and product details before writing the output.",
       "Use the uploaded catalog pages to extract product specs, materials, dimensions, capacities, color options, package inclusions, and care instructions when visible.",
       "Do not invent exact technical specifications if they are not present in the product list or catalog reference.",
-      "If a detail is missing, write it as a clean placeholder like: To be confirmed.",
+      isProductIntroEcommerceChecklist()
+        ? "If a detail is missing, unsupported, uncertain, or not explicitly shown in the selected products or catalog reference, omit that detail entirely."
+        : "If a detail is missing, omit that detail instead of inventing it.",
+      isProductIntroEcommerceChecklist()
+        ? "Never write To be confirmed, TBC, TBD, To be determined, Unknown, Not provided, Not specified, Pending confirmation, or any similar placeholder wording."
+        : "Do not add unsupported placeholder wording.",
       "Generate a complete marketplace listing output using the exact required structure.",
       "Write in clear English for Lazada, Shopee, TikTok Shop, and Shopify.",
       "Avoid em dashes.",
@@ -11449,7 +11504,7 @@ Write in clean English for Lazada, Shopee, TikTok Shop, and Shopify listing use.
 
       updateAiWorkspace(tab,{
         textPrompt:prompt,
-        generatedText:cleanReadyToUseOutput(payload?.text || ""),
+        generatedText:sanitizeProductIntroEcommerceGeneratedOutput(payload?.text || ""),
         generatedProductRows:promptProductRows,
         generatedAt:new Date().toISOString(),
         generatedModel:String(
