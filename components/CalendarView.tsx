@@ -27755,6 +27755,71 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         return html;
       };
 
+      const renderAnnouncementBenefitBulletText = (value:any) => {
+        const source = String(value || "").trim();
+
+        if(!source){
+          return "";
+        }
+
+        let lead = "";
+        let remainder = "";
+
+        const availableMatch = source.match(
+          /^Available in\s+(.+)$/i
+        );
+
+        if(availableMatch){
+          const availableValue = String(
+            availableMatch[1] || ""
+          ).trim();
+          const words = availableValue.split(/\s+/).filter(Boolean);
+          const leadWordCount = Math.min(
+            Math.max(words.length,1),
+            6
+          );
+          lead = words.slice(0,leadWordCount).join(" ");
+          remainder = words.slice(leadWordCount).join(" ");
+
+          return [
+            "Available in ",
+            `<strong style='font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(lead)}</strong>`,
+            remainder
+              ? ` ${renderAnnouncementHighlightedText(remainder)}`
+              : "",
+          ].join("");
+        }
+
+        const phraseBoundary = source.match(
+          /\s+(?:(?:designed|built|engineered|made|ideal|perfect|suitable)\s+(?:for|to)|(?:for|to|with|that|which|featuring|offering|providing|allowing|helping))\s+/i
+        );
+
+        if(
+          phraseBoundary &&
+          typeof phraseBoundary.index === "number"
+        ){
+          lead = source.slice(0,phraseBoundary.index).trim();
+          remainder = source.slice(phraseBoundary.index);
+        }
+
+        const leadWords = lead.split(/\s+/).filter(Boolean);
+
+        if(leadWords.length < 2){
+          const words = source.split(/\s+/).filter(Boolean);
+          const fallbackCount = Math.min(
+            words.length,
+            words.length <= 5 ? words.length : 5
+          );
+          lead = words.slice(0,fallbackCount).join(" ");
+          remainder = source.slice(lead.length);
+        }
+
+        return [
+          `<strong style='font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(lead)}</strong>`,
+          renderAnnouncementHighlightedText(remainder),
+        ].join("");
+      };
+
       const stripExistingClientEmailSignature = (value:any) => {
         let body = String(value || "").trimEnd();
 
@@ -27826,7 +27891,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
             if(/^•\s*/.test(clean)){
               const bulletText = clean.replace(/^•\s*/,"");
-              return `<p style='margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>&#8226;&nbsp;${renderAnnouncementHighlightedText(bulletText)}</p>`;
+              return `<p style='margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>&#8226;&nbsp;${renderAnnouncementBenefitBulletText(bulletText)}</p>`;
             }
 
             if(/^https?:\/\//i.test(clean)){
@@ -27834,11 +27899,15 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               return `<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55'><a href='${safeUrl}' style='color:#1155CC;text-decoration:underline'>${safeUrl}</a></p>`;
             }
 
+            const isAvailabilityDetailLine =
+              /^Available\s+(?:colou?rs?|variants?|sizes?|capacities?|materials?|finishes?)\s*:/i.test(clean);
+
             const isShortHeadline =
               clean.length <= 72 &&
               !/[.!?]$/.test(clean) &&
               !/^Dear\b/i.test(clean) &&
-              !/^Watch on YouTube:?$/i.test(clean);
+              !/^Watch on YouTube:?$/i.test(clean) &&
+              !isAvailabilityDetailLine;
 
             if(isShortHeadline){
               return `<p style='margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${renderAnnouncementHighlightedText(clean)}</p>`;
