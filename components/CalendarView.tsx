@@ -27778,10 +27778,24 @@ Tap the product basket, claim the voucher if available, and checkout while the l
       const escapeAnnouncementRegex = (value:any) =>
         String(value || "").replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
 
-      const renderAnnouncementHighlightedText = (value:any) => {
+      const renderAnnouncementHighlightedText = (
+        value:any,
+        extraTerms:any[] = []
+      ) => {
         const source = String(value || "");
+        const combinedTerms = Array.from(
+          new Set(
+            [
+              ...announcementEmailHighlightTerms,
+              ...(Array.isArray(extraTerms) ? extraTerms : []),
+            ]
+              .map((term:any)=>String(term || "").trim())
+              .filter((term:string)=>term.length >= 2)
+          )
+        ).sort((a:string,b:string)=>b.length-a.length);
+
         const alternatives = [
-          ...announcementEmailHighlightTerms.map(escapeAnnouncementRegex),
+          ...combinedTerms.map(escapeAnnouncementRegex),
           "\\bORDER\\b",
         ].filter(Boolean);
 
@@ -27810,7 +27824,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
         return html;
       };
 
-      const renderAnnouncementBenefitBulletText = (value:any) => {
+      const renderAnnouncementBenefitBulletText = (
+        value:any,
+        extraTerms:any[] = []
+      ) => {
         const source = String(value || "").trim();
 
         if(!source){
@@ -27840,7 +27857,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
             "Available in ",
             `<strong style='font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(lead)}</strong>`,
             remainder
-              ? ` ${renderAnnouncementHighlightedText(remainder)}`
+              ? ` ${renderAnnouncementHighlightedText(remainder,extraTerms)}`
               : "",
           ].join("");
         }
@@ -27871,7 +27888,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
         return [
           `<strong style='font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(lead)}</strong>`,
-          renderAnnouncementHighlightedText(remainder),
+          renderAnnouncementHighlightedText(remainder,extraTerms),
         ].join("");
       };
 
@@ -27931,6 +27948,81 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           normalizeWhyYouLoveItBullets(value)
         );
 
+        // Build a body-specific highlight list so the exact checklist/product
+        // names used by the current E-commerce output are bold even when they
+        // are not identical to the SKU Storage product labels.
+        const bodyHighlightTerms = (() => {
+          const terms:any[] = [
+            ...announcementEmailHighlightTerms,
+          ];
+
+          String(cleanBody || "")
+            .split(/\r?\n/)
+            .forEach((rawLine:string)=>{
+              const line = String(rawLine || "").trim();
+              if(!line) return;
+
+              // Product/checklist title in Product Introduction body.
+              const introMatch = line.match(
+                /(?:introduce|introducing)\s+(.+?)(?=,\s*a new addition\b)/i
+              );
+              if(introMatch?.[1]) terms.push(introMatch[1].trim());
+
+              // Product/checklist title in Product Reactivation body.
+              const reactivationMatch = line.match(
+                /share that\s+(.+?)\s+is available again\b/i
+              );
+              if(reactivationMatch?.[1]) terms.push(reactivationMatch[1].trim());
+
+              // Product/checklist title in the ordering CTA.
+              const orderingMatch = line.match(
+                /Interested in ordering\s+(.+?)\?\s*Reply\s+ORDER\b/i
+              );
+              if(orderingMatch?.[1]) terms.push(orderingMatch[1].trim());
+
+              // Every item on the Available variants line is a product name.
+              if(/^Available\s+variants?\s*:/i.test(line)){
+                const payload = line
+                  .replace(/^Available\s+variants?\s*:\s*/i,"")
+                  .replace(/[.]\s*$/,"")
+                  .trim();
+
+                let matchedVariant = false;
+                const variantMatcher = /(?:^|,\s*)(.+?)\s*\(([^()]*)\)(?=,\s*|$)/g;
+                let variantMatch:any = null;
+
+                while((variantMatch = variantMatcher.exec(payload))){
+                  const productName = String(variantMatch?.[1] || "")
+                    .replace(/^,\s*/,"")
+                    .trim();
+                  if(productName){
+                    terms.push(productName);
+                    matchedVariant = true;
+                  }
+                  if(variantMatcher.lastIndex===variantMatch.index){
+                    variantMatcher.lastIndex += 1;
+                  }
+                }
+
+                if(!matchedVariant){
+                  payload
+                    .split(/\s*,\s*/)
+                    .map((item:string)=>item.trim())
+                    .filter(Boolean)
+                    .forEach((item:string)=>terms.push(item));
+                }
+              }
+            });
+
+          return Array.from(
+            new Set(
+              terms
+                .map((term:any)=>String(term || "").trim())
+                .filter((term:string)=>term.length >= 2)
+            )
+          ).sort((a:string,b:string)=>b.length-a.length);
+        })();
+
         return cleanBody
           .split(/\r?\n/)
           .map((line:string)=>{
@@ -27946,7 +28038,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
             if(/^•\s*/.test(clean)){
               const bulletText = clean.replace(/^•\s*/,"");
-              return `<p style='margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>&#8226;&nbsp;${renderAnnouncementBenefitBulletText(bulletText)}</p>`;
+              return `<p style='margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>&#8226;&nbsp;${renderAnnouncementBenefitBulletText(bulletText,bodyHighlightTerms)}</p>`;
             }
 
             if(/^https?:\/\//i.test(clean)){
@@ -27965,10 +28057,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               !isAvailabilityDetailLine;
 
             if(isShortHeadline){
-              return `<p style='margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${renderAnnouncementHighlightedText(clean)}</p>`;
+              return `<p style='margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${renderAnnouncementHighlightedText(clean,bodyHighlightTerms)}</p>`;
             }
 
-            return `<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#222222'>${renderAnnouncementHighlightedText(clean)}</p>`;
+            return `<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#222222'>${renderAnnouncementHighlightedText(clean,bodyHighlightTerms)}</p>`;
           })
           .join("");
       };
