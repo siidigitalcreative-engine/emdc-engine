@@ -27707,6 +27707,54 @@ Tap the product basket, claim the voucher if available, and checkout while the l
           .replace(/"/g,"&quot;")
           .replace(/'/g,"&#039;");
 
+      const announcementEmailHighlightTerms = Array.from(
+        new Set(
+          [
+            String(group?.groupName || "").trim(),
+            ...(productRows || []).flatMap((row:any)=>[
+              String(row?.product || "").trim(),
+              String(row?.productName || "").trim(),
+              String(row?.name || "").trim(),
+            ]),
+          ].filter((value:string)=>value.length >= 2)
+        )
+      ).sort((a:string,b:string)=>b.length-a.length);
+
+      const escapeAnnouncementRegex = (value:any) =>
+        String(value || "").replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+
+      const renderAnnouncementHighlightedText = (value:any) => {
+        const source = String(value || "");
+        const alternatives = [
+          ...announcementEmailHighlightTerms.map(escapeAnnouncementRegex),
+          "\\bORDER\\b",
+        ].filter(Boolean);
+
+        if(!alternatives.length){
+          return escapeAnnouncementEmailHtml(source);
+        }
+
+        const matcher = new RegExp(`(${alternatives.join("|")})`,"gi");
+        let cursor = 0;
+        let html = "";
+        let match:any = null;
+
+        while((match = matcher.exec(source))){
+          html += escapeAnnouncementEmailHtml(
+            source.slice(cursor,match.index)
+          );
+          html += `<strong style='font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(match[0])}</strong>`;
+          cursor = match.index + match[0].length;
+
+          if(matcher.lastIndex===match.index){
+            matcher.lastIndex += 1;
+          }
+        }
+
+        html += escapeAnnouncementEmailHtml(source.slice(cursor));
+        return html;
+      };
+
       const stripExistingClientEmailSignature = (value:any) => {
         let body = String(value || "").trimEnd();
 
@@ -27778,7 +27826,7 @@ Tap the product basket, claim the voucher if available, and checkout while the l
 
             if(/^•\s*/.test(clean)){
               const bulletText = clean.replace(/^•\s*/,"");
-              return `<p style='margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>&#8226;&nbsp;${escapeAnnouncementEmailHtml(bulletText)}</p>`;
+              return `<p style='margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.55;color:#222222'>&#8226;&nbsp;${renderAnnouncementHighlightedText(bulletText)}</p>`;
             }
 
             if(/^https?:\/\//i.test(clean)){
@@ -27793,10 +27841,10 @@ Tap the product basket, claim the voucher if available, and checkout while the l
               !/^Watch on YouTube:?$/i.test(clean);
 
             if(isShortHeadline){
-              return `<p style='margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${escapeAnnouncementEmailHtml(clean)}</p>`;
+              return `<p style='margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.5;font-weight:700;color:#111827'>${renderAnnouncementHighlightedText(clean)}</p>`;
             }
 
-            return `<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#222222'>${escapeAnnouncementEmailHtml(clean)}</p>`;
+            return `<p style='margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#222222'>${renderAnnouncementHighlightedText(clean)}</p>`;
           })
           .join("");
       };
