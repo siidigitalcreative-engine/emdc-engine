@@ -1,1 +1,1579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunbeams Promo Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --paper:#F3F2EE; --sheet:#FCFBF9; --sheet-2:#EBEAE4; --sheet-3:#E2E0D8;
+  --ink:#191D1B; --ink-2:#575F5A; --ink-3:#878D86;
+  --rule:#DBD8D0; --rule-2:#C5C2B7;
+  --accent:#0F4C53; --accent-2:#0B383D; --accent-soft:#DDEAEA; --on-accent:#FBFBF8;
+  --ok:#2C7147; --ok-soft:#E1EFE5; --warn:#8E6104; --warn-soft:#F4EBD4;
+  --bad:#9C2E1E; --bad-soft:#F5E1DC;
+  --lzd:#2C3888; --lzd-soft:#E3E5F5;
+  --shp:#CF4527; --shp-soft:#F8E4DD;
+  --ttk:#1B1B1B; --ttk-soft:#E8E6E6;
+  --shadow:0 1px 0 rgba(25,29,27,.04), 0 8px 24px -18px rgba(25,29,27,.35);
+  --r:3px;
+  --f-disp:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Public Sans","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#131614; --sheet:#1B1F1D; --sheet-2:#232825; --sheet-3:#2C322E;
+    --ink:#ECEDE7; --ink-2:#A5ACA6; --ink-3:#767C76;
+    --rule:#2D322E; --rule-2:#3C423D;
+    --accent:#6BC3C8; --accent-2:#96D8DB; --accent-soft:#15302F; --on-accent:#0B2124;
+    --ok:#6ECB90; --ok-soft:#152E1E; --warn:#DCAC4C; --warn-soft:#312513;
+    --bad:#E9806B; --bad-soft:#331812;
+    --lzd:#8E99EC; --lzd-soft:#1B1F38;
+    --shp:#FF8A67; --shp-soft:#341C14;
+    --ttk:#E4E2E2; --ttk-soft:#282828;
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 8px 24px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#131614; --sheet:#1B1F1D; --sheet-2:#232825; --sheet-3:#2C322E;
+  --ink:#ECEDE7; --ink-2:#A5ACA6; --ink-3:#767C76;
+  --rule:#2D322E; --rule-2:#3C423D;
+  --accent:#6BC3C8; --accent-2:#96D8DB; --accent-soft:#15302F; --on-accent:#0B2124;
+  --ok:#6ECB90; --ok-soft:#152E1E; --warn:#DCAC4C; --warn-soft:#312513;
+  --bad:#E9806B; --bad-soft:#331812;
+  --lzd:#8E99EC; --lzd-soft:#1B1F38;
+  --shp:#FF8A67; --shp-soft:#341C14;
+  --ttk:#E4E2E2; --ttk-soft:#282828;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 8px 24px -18px rgba(0,0,0,.8);
+}
+
+/* ============ BASE ============ */
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0; font-family:var(--f-disp); font-weight:700; text-wrap:balance; letter-spacing:-.015em}
+p{margin:0}
+button,input,select,textarea{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+
+.wrap{max-width:1220px; margin:0 auto; padding:0 20px}
+.num{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+.eyebrow{
+  font-family:var(--f-mono); font-size:10.5px; font-weight:600;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
+}
+
+/* ============ MASTHEAD ============ */
+.masthead{
+  border-bottom:1px solid var(--rule); background:var(--sheet);
+}
+.mast-in{
+  max-width:1220px; margin:0 auto; padding:18px 20px 16px;
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:16px 28px; justify-content:space-between;
+}
+.mark{display:flex; align-items:baseline; gap:10px}
+.mark .glyph{
+  font-family:var(--f-disp); font-weight:800; font-size:17px; letter-spacing:-.03em;
+  background:var(--accent); color:var(--on-accent); padding:3px 7px 4px; border-radius:var(--r);
+}
+.mark h1{font-size:20px; font-weight:700}
+.mark .sub{font-size:12.5px; color:var(--ink-3); margin-left:2px}
+
+.ctx{
+  display:flex; align-items:center; gap:0; flex-wrap:wrap;
+  border:1px solid var(--rule); background:var(--paper); border-radius:var(--r);
+  overflow:hidden;
+}
+.ctx div{
+  padding:6px 12px; border-right:1px solid var(--rule);
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--ink-2); white-space:nowrap;
+}
+.ctx div:last-child{border-right:0}
+.ctx div b{color:var(--ink); font-weight:600}
+.ctx .hot{color:var(--accent)}
+
+/* ============ PANELS ============ */
+.panel{border-bottom:1px solid var(--rule)}
+.panel-in{max-width:1220px; margin:0 auto; padding:26px 20px 30px}
+.panel-hd{
+  display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+  padding-bottom:12px; margin-bottom:18px; border-bottom:1px solid var(--rule);
+}
+.panel-hd .step{
+  font-family:var(--f-mono); font-size:11px; font-weight:600; color:var(--accent);
+  border:1px solid var(--accent); padding:1px 6px; border-radius:2px; letter-spacing:.06em;
+}
+.panel-hd h2{font-size:16.5px}
+.panel-hd .hint{font-size:12.5px; color:var(--ink-3); margin-left:auto}
+
+/* ============ FORM CONTROLS ============ */
+label.fld{display:flex; flex-direction:column; gap:5px; min-width:0}
+label.fld > span{
+  font-family:var(--f-mono); font-size:10px; font-weight:600; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+input[type=text],input[type=number],select,textarea{
+  background:var(--sheet); border:1px solid var(--rule-2); border-radius:var(--r);
+  padding:7px 9px; font-size:14px; width:100%; min-width:0;
+}
+input[type=number]{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+select{cursor:pointer; appearance:none; padding-right:26px;
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+  background-size:5px 5px,5px 5px; background-repeat:no-repeat;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--accent); outline:none; box-shadow:0 0 0 3px var(--accent-soft)}
+textarea{font-family:var(--f-mono); font-size:12.5px; line-height:1.6; resize:vertical}
+
+.setup-grid{
+  display:grid; gap:14px 18px;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  align-items:end;
+}
+.setup-grid .wide{grid-column:span 2}
+@media (max-width:560px){.setup-grid .wide{grid-column:span 1}}
+
+.guard{
+  margin-top:18px; padding-top:16px; border-top:1px dashed var(--rule-2);
+  display:flex; flex-wrap:wrap; gap:14px 22px; align-items:end;
+}
+.guard label.fld{width:150px}
+.guard-note{font-size:12.5px; color:var(--ink-3); padding-bottom:7px; max-width:38ch}
+
+.chanrow{margin-top:18px; padding-top:16px; border-top:1px dashed var(--rule-2); display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.chanrow .eyebrow{margin-right:4px}
+.chip-toggle{
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+  border:1px solid var(--rule-2); background:var(--sheet); border-radius:var(--r);
+  padding:6px 11px 6px 9px; font-size:13px; font-weight:600;
+}
+.chip-toggle input{accent-color:var(--accent); margin:0; width:14px; height:14px}
+.chip-toggle .dot{width:8px; height:8px; border-radius:50%; background:currentColor}
+.chip-toggle[data-p=LZD]{color:var(--lzd)} .chip-toggle[data-p=SHP]{color:var(--shp)} .chip-toggle[data-p=TTK]{color:var(--ttk)}
+.chip-toggle.off{opacity:.42}
+
+/* ============ BUTTONS ============ */
+.btn{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  border:1px solid var(--rule-2); background:var(--sheet); color:var(--ink);
+  border-radius:var(--r); padding:7px 13px; font-size:13.5px; font-weight:600;
+  transition:background .12s, border-color .12s;
+}
+.btn:hover{background:var(--sheet-2); border-color:var(--ink-3)}
+.btn-primary{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+.btn-primary:hover{background:var(--accent-2); border-color:var(--accent-2)}
+.btn-lg{padding:11px 22px; font-size:15px}
+.btn-sm{padding:4px 9px; font-size:11.5px; font-family:var(--f-mono); font-weight:500; letter-spacing:.03em}
+.btn-ghost{background:transparent; border-color:transparent; color:var(--ink-2)}
+.btn-ghost:hover{background:var(--sheet-2); border-color:var(--rule)}
+.btn:disabled{opacity:.4; cursor:not-allowed}
+.btnrow{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+
+/* ============ PRODUCT TABLE ============ */
+.tblwrap{overflow-x:auto; border:1px solid var(--rule); border-radius:var(--r); background:var(--sheet)}
+table{border-collapse:collapse; width:100%; min-width:840px}
+thead th{
+  text-align:left; font-family:var(--f-mono); font-size:10px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);
+  padding:9px 10px; background:var(--sheet-2); border-bottom:1px solid var(--rule-2);
+  white-space:nowrap; position:sticky; top:0; z-index:1;
+}
+tbody td{padding:5px 6px; border-bottom:1px solid var(--rule); vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.hero{background:var(--accent-soft)}
+tbody td input[type=text],tbody td input[type=number]{border-color:transparent; background:transparent; padding:5px 6px}
+tbody td input:hover{border-color:var(--rule)}
+tbody td input:focus{background:var(--sheet); border-color:var(--accent)}
+.t-r{text-align:right}
+.thumb{
+  width:38px; height:38px; border-radius:2px; border:1px dashed var(--rule-2);
+  display:grid; place-items:center; cursor:pointer; overflow:hidden; background:var(--sheet-2);
+  font-size:15px; color:var(--ink-3); flex:none;
+}
+.thumb img{width:100%; height:100%; object-fit:cover; display:block}
+.thumb:hover{border-color:var(--accent); color:var(--accent)}
+.starbtn{background:none; border:0; cursor:pointer; font-size:15px; line-height:1; padding:4px; color:var(--ink-2)}
+.starbtn:hover{color:var(--accent)}
+.starbtn.on{color:var(--accent)}
+.xbtn{background:none; border:0; cursor:pointer; color:var(--ink-3); font-size:16px; line-height:1; padding:4px 6px}
+.xbtn:hover{color:var(--bad)}
+.brandtag{font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3); white-space:nowrap}
+
+.importbox{margin-top:14px; display:none}
+.importbox.open{display:block}
+.importbox .eyebrow{display:block; margin-bottom:6px}
+
+.empty{padding:30px 16px; text-align:center; color:var(--ink-3); font-size:13.5px}
+
+/* ============ RESULTS ============ */
+#results{display:none}
+#results.on{display:block}
+.tabs{display:flex; gap:0; border-bottom:1px solid var(--rule-2); margin-bottom:22px; overflow-x:auto}
+.tab{
+  border:0; background:none; cursor:pointer; padding:10px 16px 11px;
+  font-weight:700; font-size:14px; color:var(--ink-3); white-space:nowrap;
+  border-bottom:2px solid transparent; display:flex; align-items:center; gap:8px;
+  font-family:var(--f-disp);
+}
+.tab .dot{width:7px; height:7px; border-radius:50%}
+.tab[data-p=LZD] .dot{background:var(--lzd)} .tab[data-p=SHP] .dot{background:var(--shp)}
+.tab[data-p=TTK] .dot{background:var(--ttk)} .tab[data-p=SHEET] .dot{background:var(--ink-3)}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink); border-bottom-color:var(--ink)}
+.tab .n{font-family:var(--f-mono); font-size:10.5px; font-weight:500; color:var(--ink-3)}
+
+.cards{display:grid; gap:16px; align-items:start; grid-template-columns:repeat(auto-fill,minmax(348px,1fr))}
+@media (max-width:420px){.cards{grid-template-columns:1fr}}
+
+.card{
+  background:var(--sheet); border:1px solid var(--rule); border-radius:var(--r);
+  box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:hidden;
+}
+.card-top{display:flex; gap:10px; padding:13px 14px 11px; border-bottom:1px solid var(--rule); align-items:flex-start}
+.card-top .thumb{width:44px; height:44px; border-style:solid; cursor:default}
+.card-top .thumb:hover{border-color:var(--rule-2); color:var(--ink-3)}
+.card-top .tt{min-width:0; flex:1}
+.card-top h3{font-size:15px; line-height:1.28; margin-bottom:5px}
+.tool{
+  display:inline-block; font-family:var(--f-mono); font-size:10px; font-weight:500;
+  letter-spacing:.04em; padding:2px 6px; border-radius:2px; border:1px solid;
+}
+.tool[data-p=LZD]{color:var(--lzd); background:var(--lzd-soft); border-color:color-mix(in srgb,var(--lzd) 32%,transparent)}
+.tool[data-p=SHP]{color:var(--shp); background:var(--shp-soft); border-color:color-mix(in srgb,var(--shp) 32%,transparent)}
+.tool[data-p=TTK]{color:var(--ttk); background:var(--ttk-soft); border-color:color-mix(in srgb,var(--ttk) 28%,transparent)}
+
+.sect{padding:12px 14px; border-bottom:1px solid var(--rule)}
+.sect:last-child{border-bottom:0}
+.sect > .eyebrow{display:block; margin-bottom:7px}
+
+.mech{font-size:13.5px; color:var(--ink-2); line-height:1.5}
+.mech b{color:var(--ink); font-weight:600}
+.skus{margin-top:7px; display:flex; flex-wrap:wrap; gap:4px}
+.sku{font-family:var(--f-mono); font-size:10px; color:var(--ink-2); background:var(--sheet-2); border:1px solid var(--rule); padding:1px 5px; border-radius:2px}
+
+/* ledger */
+.ledger{width:100%; min-width:0}
+.ledger table{min-width:0}
+.ledger td{padding:3px 0; border:0; font-size:13px}
+.ledger td:first-child{color:var(--ink-2)}
+.ledger td:last-child{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabular-nums; font-weight:500}
+.ledger tr.tot td{border-top:1px solid var(--rule-2); padding-top:6px; font-weight:700}
+.ledger tr.tot td:first-child{color:var(--ink)}
+.strike{text-decoration:line-through; color:var(--ink-3)}
+.save{color:var(--ok); font-weight:600}
+
+.mnote{margin-top:8px; font-size:11.5px; line-height:1.45}
+.pill{
+  display:inline-flex; align-items:center; gap:5px; font-family:var(--f-mono);
+  font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  padding:2px 7px; border-radius:99px; border:1px solid;
+}
+.pill.ok{color:var(--ok); background:var(--ok-soft); border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.pill.warn{color:var(--warn); background:var(--warn-soft); border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.pill.bad{color:var(--bad); background:var(--bad-soft); border-color:color-mix(in srgb,var(--bad) 35%,transparent)}
+.pill.mute{color:var(--ink-3); background:var(--sheet-2); border-color:var(--rule-2)}
+.ok-f{color:var(--ok)} .warn-f{color:var(--warn)} .bad-f{color:var(--bad)}
+
+/* copy blocks */
+.copyline{
+  display:flex; gap:9px; align-items:flex-start; padding:7px 0;
+  border-bottom:1px dotted var(--rule-2);
+}
+.copyline:last-child{border-bottom:0}
+.copyline .k{
+  font-family:var(--f-mono); font-size:9.5px; font-weight:600; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--ink-3); width:52px; flex:none; padding-top:3px;
+}
+.copyline .v{flex:1; min-width:0; font-size:13.5px; line-height:1.45}
+.copyline .v .thematic{font-family:var(--f-disp); font-weight:700; font-size:15.5px; letter-spacing:-.01em}
+.copyline .v .pushT{font-weight:700}
+.copyline .v .tags{color:var(--accent); font-size:12.5px; word-break:break-word}
+.copyline .cp{
+  border:1px solid var(--rule); background:transparent; color:var(--ink-3); cursor:pointer;
+  font-family:var(--f-mono); font-size:9.5px; padding:2px 5px; border-radius:2px; flex:none;
+}
+.copyline .cp:hover{color:var(--accent); border-color:var(--accent)}
+.copyline .cp.done{color:var(--ok); border-color:var(--ok)}
+.cc{font-family:var(--f-mono); font-size:10px; color:var(--ink-3)}
+
+.card-foot{
+  padding:9px 14px; background:var(--sheet-2); border-top:1px solid var(--rule);
+  display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+}
+.storecode{font-family:var(--f-mono); font-size:10.5px; color:var(--ink-2)}
+
+/* price table */
+.pt{margin-top:26px}
+.pt h3{font-size:14px; margin-bottom:10px}
+.pt table{min-width:640px}
+.pt tbody td{font-size:13px; padding:7px 10px}
+.pt tbody td.n{font-family:var(--f-mono); font-variant-numeric:tabular-nums; text-align:right}
+
+/* sheet view */
+.sheetnote{
+  background:var(--accent-soft); border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
+  border-radius:var(--r); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--ink-2);
+}
+.sheetnote b{color:var(--ink)}
+#sheetTbl table{min-width:1500px}
+#sheetTbl tbody td{font-size:12px; padding:6px 9px; vertical-align:top}
+#sheetTbl tbody td.mono{font-family:var(--f-mono); font-size:11px}
+#sheetTbl tbody td.them{font-weight:600; min-width:190px}
+
+.toast{
+  position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(120%);
+  background:var(--ink); color:var(--paper); padding:9px 18px; border-radius:99px;
+  font-size:13px; font-weight:600; z-index:99; transition:transform .22s ease; box-shadow:var(--shadow);
+}
+.toast.on{transform:translateX(-50%) translateY(0)}
+
+footer{padding:22px 20px 40px; max-width:1220px; margin:0 auto; color:var(--ink-3); font-size:12px; line-height:1.6}
+footer b{color:var(--ink-2)}
+</style>
+
+</head>
+<body>
+<header class="masthead">
+  <div class="mast-in">
+    <div class="mark">
+      <span class="glyph">SL</span>
+      <h1>Promo Engine</h1>
+      <span class="sub">Sunbeams Lifestyle · PH marketplaces</span>
+    </div>
+    <div class="ctx" id="ctx"></div>
+  </div>
+</header>
+
+<section class="panel">
+  <div class="panel-in">
+    <div class="panel-hd">
+      <span class="step">01</span>
+      <h2>Campaign window</h2>
+      <span class="hint">Pick the month, then the moment inside it — the engine tunes mechanics, discount depth and tone to it.</span>
+    </div>
+    <div class="setup-grid">
+      <label class="fld"><span>Month</span><select id="month"></select></label>
+      <label class="fld wide"><span>Sale moment</span><select id="event"></select></label>
+      <label class="fld"><span>Year</span><input type="number" id="year" min="2024" max="2035" step="1"></label>
+      <label class="fld"><span>Theme override</span><input type="text" id="themeOv" placeholder="e.g. quiet luxury"></label>
+    </div>
+    <div class="guard">
+      <label class="fld"><span>Discount ceiling %</span><input type="number" id="ceil" min="0" max="90" step="1"></label>
+      <span class="guard-note">No promo goes deeper than the ceiling, whatever the sale moment suggests.</span>
+    </div>
+    <div class="chanrow">
+      <span class="eyebrow">Generate for</span>
+      <label class="chip-toggle" data-p="LZD"><input type="checkbox" id="pLZD" checked><span class="dot"></span>Lazada</label>
+      <label class="chip-toggle" data-p="SHP"><input type="checkbox" id="pSHP" checked><span class="dot"></span>Shopee</label>
+      <label class="chip-toggle" data-p="TTK"><input type="checkbox" id="pTTK" checked><span class="dot"></span>TikTok Shop</label>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-in">
+    <div class="panel-hd">
+      <span class="step">02</span>
+      <h2>Products</h2>
+      <span class="hint">Brand and category are read from the SKU prefix. Star the SKUs you want promos built around.</span>
+    </div>
+
+    <div class="tblwrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34px"></th>
+            <th style="width:46px">Img</th>
+            <th style="width:158px">Seller SKU</th>
+            <th style="min-width:230px">Product name</th>
+            <th style="width:130px">Brand / cat</th>
+            <th style="width:104px" class="t-r">Price (PHP)</th>
+            <th style="width:52px">GWP</th>
+            <th style="width:34px"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <div class="btnrow" style="margin-top:14px">
+      <button class="btn" id="addRow">+ Add row</button>
+      <button class="btn" id="toggleImport">Paste from spreadsheet</button>
+      <button class="btn btn-ghost btn-sm" id="loadDemo">Load sample set</button>
+      <button class="btn btn-ghost btn-sm" id="clearAll">Clear all</button>
+    </div>
+
+    <div class="importbox" id="importbox">
+      <span class="eyebrow">Paste rows — Seller SKU · Product name · Price. Tab, comma or pipe separated; a header row is skipped automatically, and any extra columns are ignored.</span>
+      <textarea id="importta" rows="6" placeholder="SLQ-GLB750-CL	Slique Glass Lunch Box 750ml	399
+QNH-TPF550-TP	Quencha Insulated Tumbler 550ml	549"></textarea>
+      <div class="btnrow" style="margin-top:9px">
+        <button class="btn btn-primary" id="doImport">Import rows</button>
+        <button class="btn btn-ghost" id="cancelImport">Cancel</button>
+      </div>
+    </div>
+
+    <div class="btnrow" style="margin-top:22px; padding-top:18px; border-top:1px solid var(--rule)">
+      <button class="btn btn-primary btn-lg" id="gen">Generate promos</button>
+      <button class="btn" id="reshuffle" title="Same mechanics and math, fresh copy">Reshuffle copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="results">
+  <div class="panel-in">
+    <div class="panel-hd">
+      <span class="step">03</span>
+      <h2 id="resTitle">Promo plan</h2>
+      <span class="hint" id="resHint"></span>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div id="out"></div>
+  </div>
+</section>
+
+<footer>
+  <b>How the numbers work.</b> Every promo price is your listing price less a discount, where the discount is the smaller of
+  what the sale moment normally runs at and your own ceiling — then rounded to a <span class="num">₱x9</span> ending and never taken above list.
+  Bundle and multi-buy figures are built from the component prices you enter. Voucher, free-shipping and gift thresholds are set from the
+  average price of the SKUs in your list, so they only pay out once a buyer adds more than one item.
+  These are selling-price mechanics, not a profit model — sense-check the depth against your own costs before you publish, and confirm
+  current mechanics and campaign requirements in each Seller Centre before submitting.
+</footer>
+
+<div class="toast" id="toast"></div>
+<script>
+/* ============================================================
+   SUNBEAMS PROMO ENGINE
+   ============================================================ */
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+
+/* ---------- deterministic RNG ---------- */
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+const R=s=>mulberry(hash(String(s)));
+function pk(arr,r){return arr[Math.floor(r()*arr.length)%arr.length];}
+function pkN(arr,n,r){const c=arr.slice();const o=[];while(o.length<n&&c.length)o.push(c.splice(Math.floor(r()*c.length),1)[0]);return o;}
+
+/* ---------- money ---------- */
+const peso=n=>'₱'+Number(n).toLocaleString('en-PH',{maximumFractionDigits:(n%1?2:0)});
+const pct=n=>(n*100).toFixed(n*100%1?1:0)+'%';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ============================================================
+   BRANDS
+   ============================================================ */
+const BRANDS={
+  SLQ:['Slique','kitchenware'], QNH:['Quencha','drinkware'], PRM:['Primeo','bedroom'],
+  SBZ:['Scrubz','cleaning'], CRY:['Crysalis','cookware'], FIT:['Fitspire','fitness'],
+  MOD:['Moderno','decor'], MDA:['Moderno','decor'], NDL:['Nest Design Lab','laundry'],
+  SL:['Sunbeams Lifestyle','general'], PVC:['Slique','tableware'], SHLD:['Scrubz Shield','pest'],
+  CUZ:['Cuzzine by Slique','cookware'], UG:['Union Glass','glassware'], GLB:['Gray Label','office'],
+  VAN:['Vanquish','tools'], RSL:['RealSteel','tools'], OSH:['OSH','general']
+};
+const KW=[
+  [/insect|mosquito|pest|bug zap|repellent|rodent/,'pest'],
+  [/yoga|gym|dumbbell|resistance|protein shaker|compression|jump rope|exercise|fitness|workout/,'fitness'],
+  [/hanger|clothes ?line|drying rack|laundry|hamper|garment|closet organiz/,'laundry'],
+  [/monitor stand|laptop stand|desk|pen holder|organizer|organiser|ergonomic|mouse ?pad|file tray/,'office'],
+  [/hammer|plier|screwdriver|wrench|putty|chisel|tape measure|hand saw|tool set/,'tools'],
+  [/pillow|mattress|topper|bed ?sheet|comforter|duvet|bolster|blanket/,'bedroom'],
+  [/towel|bath|shower|soap dish|toothbrush|loofah|bidet|robe/,'bath'],
+  [/photo frame|picture frame|wall clock|vase|wall art|decor|candle holder|mirror|ornament/,'decor'],
+  [/mop|broom|sponge|scourer|dustpan|wipes|squeegee|dehumidifier|scrub|janitor|garden hose|rake|dish drainer/,'cleaning'],
+  [/goblet|decanter|highball|rock glass|juice glass|wine glass|ice bucket|barware|shot glass/,'glassware'],
+  [/tumbler|water bottle|insulated bottle|flask|thermos|sipper|pitcher|\bjug\b|\bmug\b|beach tote|sling bag/,'drinkware'],
+  [/fry ?pan|frying|sauce ?pan|casserole|\bwok\b|kettle|skillet|steamer|griddle|cookware|ceramic pot|\bpot\b/,'cookware'],
+  [/plate|\bbowl\b|cutlery|placemat|dinnerware|serving|platter|chopstick|tableware|table runner/,'tableware'],
+  [/lunch ?box|food storage|container|canister|bento|\bjar\b|knife|chopping|whisk|spatula|ladle|grater|peeler|strainer|colander|baking|utensil|kitchen/,'kitchenware']
+];
+
+/* ============================================================
+   CATEGORY COPY LEXICON
+   ============================================================ */
+const CATS={
+cookware:{label:'Cookware',
+ act:['Sear Like a Pro','Cook Without Sticking','Simmer Low and Slow','Get Even Heat','Skip the Scrubbing'],
+ payoff:['Weeknight Wins','Dinner, Handled','Even Heat, Every Time','Pro Results at Home','No Hot Spots'],
+ pairL:['One Pan','Low Heat','Less Oil','Quick Sear','One Burner'],
+ pairR:['Full Flavour','Even Cook','Big Flavour','Whole Feast','Easy Cleanup'],
+ triad:['Sear','Simmer','Serve','Plate','Sizzle'],
+ benefit:['even heat with no hot spots','non-stick that actually lasts','oven-to-table in one pan','induction-ready base'],
+ hook:['the one-pan era','cooking that cleans up in seconds','sear marks worth posting'],
+ tags:['CookwarePH','KitchenEssentials']},
+
+kitchenware:{label:'Kitchen & Storage',
+ act:['Prep Once, Eat All Week','Pack Baon in Seconds','Stack It, Forget It','Seal It Tight','Sort the Fridge'],
+ payoff:['Baon, Sorted','Fridge Tetris, Solved','Leftovers Upgraded','Meal Prep Made Easy','Nothing Spills'],
+ pairL:['Small Boxes','One Seal','Neat Stacks','Flat Lids','Quick Prep'],
+ pairR:['Big Savings','Zero Spills','More Shelf Space','Easy Reheats','Whole-Week Meals'],
+ triad:['Prep','Pack','Seal','Stack','Serve'],
+ benefit:['leak-proof seal that holds sauce','stacks flat and saves shelf space','microwave and dishwasher safe','clear sides so you see what is inside'],
+ hook:['the meal-prep era','baon that survives the commute','fridge that finally makes sense'],
+ tags:['MealPrepPH','KitchenEssentials']},
+
+tableware:{label:'Tableware',
+ act:['Set the Table Properly','Serve Without Fuss','Host Like It Is Easy','Plate It Beautifully','Make Room for One More'],
+ payoff:['A Fuller Table','Host-Ready','Every Serve Counts','Table Goals, Met','Guests, Impressed'],
+ pairL:['Simple Setting','One Set','Neat Layers','Quick Wipe'],
+ pairR:['Warm Welcome','Whole Table','Full House','Lasting Shine'],
+ triad:['Set','Serve','Share','Gather','Plate'],
+ benefit:['wipe-clean and heat-resistant','stacks without chipping','food-safe finish that keeps its colour'],
+ hook:['the tablescape era','hosting without the panic','plates that photograph well'],
+ tags:['TablewarePH','HostingSeason']},
+
+drinkware:{label:'Drinkware & On-the-Go',
+ act:['Stay Cold All Day','Refill and Go','Carry It One-Handed','Beat the Heat','Skip the Sweat Rings'],
+ payoff:['All-Day Cold','Every Sip, Ice-Cold','Hours of Cold','On-the-Go Ready','No Leaks, No Drama'],
+ pairL:['One Fill','Ice-Cold','Leak-Proof','Slim Grip','Morning Pour'],
+ pairR:['All-Day Cold','Zero Spills','Easy Carry','Still Icy at 6PM','Whole-Day Hydration'],
+ triad:['Fill','Sip','Chill','Carry','Refill'],
+ benefit:['keeps drinks cold for up to 24 hours','leak-proof lid that opens one-handed','sweat-free wall, no wet bag','fits a standard cup holder'],
+ hook:['the hydration-girl era','ice still there at 6PM','the tumbler that never sweats'],
+ tags:['HydrationPH','TumblerPH']},
+
+glassware:{label:'Glassware & Barware',
+ act:['Pour Something Proper','Toast the Occasion','Chill the Room','Serve It Clear'],
+ payoff:['Every Toast Counts','Bar-Cart Ready','Clink-Worthy','Guests, Impressed'],
+ pairL:['Clear Glass','Weighted Base','One Pour','Fine Rim'],
+ pairR:['Bright Table','Sure Grip','Full Toast','Lasting Shine'],
+ triad:['Pour','Toast','Sip','Chill','Serve'],
+ benefit:['thick weighted base that will not tip','crystal-clear finish, no cloudiness','tempered for everyday use'],
+ hook:['the bar-cart era','glassware that makes water feel fancy'],
+ tags:['BarwarePH','GlasswarePH']},
+
+cleaning:{label:'Cleaning',
+ act:['Clean Without Bending','Wipe It and Walk Away','Mop in Minutes','Scrub Less, Shine More','Reach Every Corner'],
+ payoff:['Clean in Seconds','No Bending, No Wringing','Spotless, Fast','Big Clean Energy','Done Before the Ad Ends'],
+ pairL:['One Pass','Quick Wipe','Less Scrub','No Bending','Small Effort'],
+ pairR:['Deep Clean','Full Shine','Spotless Floors','Whole-House Fresh','Big Difference'],
+ triad:['Wipe','Rinse','Shine','Sweep','Reset'],
+ benefit:['wrings dry without touching the head','reaches under low furniture','microfibre that traps dust instead of pushing it'],
+ hook:['big clean energy','the no-bend mop era','cleaning that actually ends'],
+ tags:['CleaningHacksPH','HomeCleaning']},
+
+bath:{label:'Bath',
+ act:['Dry Off Faster','Keep It Fresh','Bring the Spa Home','Sort the Bathroom Shelf'],
+ payoff:['Spa at Home','Soft Every Wash','Dries Fast, Smells Fresh','Bathroom, Upgraded'],
+ pairL:['Soft Cotton','Quick-Dry','Neat Shelf','One Rack'],
+ pairR:['Plush Feel','Fresh Every Day','Calm Corner','More Space'],
+ triad:['Rinse','Wrap','Refresh','Soften'],
+ benefit:['absorbs fast and dries faster','bamboo that resists moisture','stays soft after repeated washes'],
+ hook:['the everything-shower era','hotel-towel energy at home'],
+ tags:['BathEssentialsPH','HomeSpa']},
+
+bedroom:{label:'Bedroom',
+ act:['Sleep Cooler','Soften a Firm Bed','Wake Up Without Aches','Turn Down Properly'],
+ payoff:['Deeper Sleep','Hotel Nights at Home','Every Night, Better','Sleep, Actually Fixed'],
+ pairL:['Soft Layer','Cool Cover','One Topper','Quiet Nights'],
+ pairR:['Deep Sleep','Full Rest','Whole New Bed','Better Mornings'],
+ triad:['Sink','Rest','Wake','Soften'],
+ benefit:['adds real cushioning to a firm mattress','breathable so it sleeps cool','holds its loft instead of flattening'],
+ hook:['the hotel-bed era','sleep-maxxing, minus the price tag'],
+ tags:['SleepBetterPH','BedroomUpgrade']},
+
+decor:{label:'Home Decor',
+ act:['Fill the Blank Wall','Finish the Corner','Give the Room a Point','Warm Up the Space'],
+ payoff:['Instant Character','Blank Wall, Solved','Corner, Completed','A Room That Feels Yours'],
+ pairL:['Small Piece','One Frame','Simple Shape','Bare Wall'],
+ pairR:['Big Character','Whole Room','Warm Corner','Finished Look'],
+ triad:['Hang','Style','Warm','Finish'],
+ benefit:['ready to hang with hardware included','matte finish with no glare','holds its colour away from direct sun'],
+ hook:['the gallery-wall era','decor that does the heavy lifting'],
+ tags:['HomeDecorPH','InteriorPH']},
+
+laundry:{label:'Closet & Laundry',
+ act:['Fit More Per Rail','Dry Indoors on Rainy Days','End the Laundry Pile','Reclaim the Closet'],
+ payoff:['Closet, Sorted','No More Pile','Dries Even Indoors','Space You Did Not Know You Had'],
+ pairL:['Slim Hangers','One Line','Non-Slip Grip','Small Rack'],
+ pairR:['Double the Rail','Whole Load','Nothing Slides','More Room'],
+ triad:['Hang','Sort','Fold','Reset'],
+ benefit:['slim profile so more fits per rail','non-slip notches keep straps up','folds flat when you are done'],
+ hook:['the closet-reset era','laundry that finally has a system'],
+ tags:['LaundryHacksPH','ClosetGoals']},
+
+fitness:{label:'Fitness',
+ act:['Show Up Anyway','Grip Through the Sweat','Train Anywhere','Recover Properly'],
+ payoff:['Session Sorted','Every Rep Counts','Gym Bag Ready','Consistency Made Easy'],
+ pairL:['Light Kit','Sure Grip','Quick-Dry','One Bag'],
+ pairR:['Full Session','No Slipping','Ready Again Tomorrow','Whole Routine'],
+ triad:['Warm Up','Push','Recover','Repeat'],
+ benefit:['non-slip even when the mat is wet','leak-proof mixer that does not clump','quick-dry so it never smells'],
+ hook:['the show-up-anyway era','gym bag that is actually ready'],
+ tags:['FitnessPH','GymEssentials']},
+
+office:{label:'Desk & Office',
+ act:['Clear the Desk','Get the Screen to Eye Level','Tame the Cables','Find Your Focus'],
+ payoff:['Desk, Cleared','Focus Found','Cables Tamed','A Desk That Works'],
+ pairL:['Small Tray','One Stand','Neat Cables','Slim Base'],
+ pairR:['Clear Desk','Better Posture','Whole Setup','Longer Focus'],
+ triad:['Clear','Sort','Set Up','Focus'],
+ benefit:['lifts the screen to eye level','keeps cables off the desktop','compact base that frees up surface'],
+ hook:['the desk-reset era','WFH setup that finally looks sorted'],
+ tags:['WFHSetupPH','DeskSetup']},
+
+tools:{label:'Tools',
+ act:['Fix It on the First Try','Grip It Properly','Get the Job Done','Stop Rounding the Bolt'],
+ payoff:['Job Done','Built to Last','No Wobble, No Slip','Fixed First Try'],
+ pairL:['Sure Grip','One Tool','Solid Steel','Right Size'],
+ pairR:['Job Done','Less Strain','Years of Use','No Slipping'],
+ triad:['Grip','Turn','Tighten','Finish'],
+ benefit:['hardened steel that holds an edge','cushioned grip that resists slipping','sized to the fasteners you actually own'],
+ hook:['the fix-it-yourself era','tools that outlast the project'],
+ tags:['ToolsPH','DIYPH']},
+
+pest:{label:'Pest Control',
+ act:['Sleep Without the Buzzing','Clear the Room Quietly','Skip the Sprays'],
+ payoff:['Bug-Free Nights','No Sprays, No Smell','Quiet All Night','Undisturbed Sleep'],
+ pairL:['No Spray','Quiet Unit','One Plug'],
+ pairR:['Clear Room','Full Night','Whole House'],
+ triad:['Plug','Clear','Sleep'],
+ benefit:['no chemicals and no smell','covers a whole room on low power','safe to leave running overnight'],
+ hook:['the no-more-buzzing era'],
+ tags:['PestControlPH','HomeCare']},
+
+general:{label:'Home Essentials',
+ act:['Upgrade the Everyday','Fix the Small Annoyance','Make the Day Easier'],
+ payoff:['Home, Upgraded','Everyday, Better','Small Change, Big Difference','Worth the Cart'],
+ pairL:['Small Swap','One Buy','Simple Fix'],
+ pairR:['Big Difference','Whole Home','Daily Win'],
+ triad:['Swap','Sort','Enjoy'],
+ benefit:['built for daily use','one job, done properly'],
+ hook:['the sort-your-home era'],
+ tags:['HomeEssentialsPH','SunbeamsLifestyle']}
+};
+
+/* ============================================================
+   PH CAMPAIGN CALENDAR
+   ============================================================ */
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CUE={
+  HIGH:['Save Big','Pasabog Prices','Sulit Na Sulit','Pay Less','Panalo Deals','Mura Na Talaga'],
+  MED:['Save Big','Smart Deals','Pay Less','Big Drop','Lowest Yet','Sulit Buys'],
+  LOW:[]
+};
+function dd(n,disc,extra){return Object.assign({
+  id:n+'.'+n, name:n+'.'+n+' Sale', campaign:n+'.'+n+' SALE', slider:'MED',
+  days:[Math.max(1,n-2),n], disc:disc,
+  frame:['The '+n+'.'+n+' Drop',n+'.'+n+' Is Loading','Cart Locked for '+n+'.'+n,n+'.'+n+' Countdown'],
+  occasion:'the '+n+'.'+n, motifShort:[n+'.'+n,'the countdown','the drop'],
+  triadEnd:['Save','Checkout','Win'], tag:[''+n+n+'Sale','DoubleDaySale'],
+  emphasis:['flash','bundle3','tier','voucher','campaign']
+},extra||{});}
+function pay(mi,disc){const m=MONTHS[mi];return{
+  id:'payday', name:m+' Payday Sale', campaign:'PAYDAY', slider:'HIGH', days:[25,30], disc:disc||0.20,
+  frame:['Sweldo Just Landed','Payday Glow-Up','The Cart Has Been Waiting','Finally, Checkout'],
+  occasion:'Payday', motifShort:['payday','sweldo week','the treat run'],
+  triadEnd:['Treat','Checkout','Enjoy'], tag:['PaydaySale','PaydaySalePH'],
+  emphasis:['voucher','flash','bundle2','freeship'],
+  theme:'Payday treat-yourself'};}
+function mid(mi,disc){const m=MONTHS[mi];return{
+  id:'midmonth', name:m+' Mid-Month Sale', campaign:'MIDMONTH', slider:'HIGH', days:[14,17], disc:disc||0.16,
+  frame:['Mid-Month Refresh','The Halfway Treat','Restock Run','Beat the Mid-Month Slump'],
+  occasion:'Mid-Month', motifShort:['mid-month','the restock run','halfway week'],
+  triadEnd:['Restock','Refresh','Repeat'], tag:['MidMonthSale'],
+  emphasis:['voucher','multiqty','addon','freeship'],
+  theme:'Mid-month restock'};}
+
+const EV={
+1:[dd(1,0.24,{theme:'New Year reset',frame:['A Cleaner Start','New Year, New Setup','Start the Year Sorted','1.1 Reset']}),
+   {id:'newhome',name:'New Year, New Home',campaign:'NEW YEAR NEW HOME',slider:'MED',days:[2,15],disc:0.22,
+    frame:['New Year, New Setup','Start the Year Sorted','The Great January Reset','A Home That Works'],
+    occasion:'the New Year reset',motifShort:['the reset','a fresh start','January'],triadEnd:['Reset','Sort','Begin'],
+    tag:['NewYearNewHome','HomeReset'],emphasis:['bundle3','tier','gwp','voucher'],theme:'Fresh-start home reset'},
+   {id:'fitreset',name:'New Year Fitness Reset',campaign:'FITNESS RESET',slider:'HIGH',days:[2,20],disc:0.22,
+    frame:['This Year You Actually Go','Day One, Again','The January Streak','Start Before Motivation Leaves'],
+    occasion:'the January reset',motifShort:['the reset','January','day one'],triadEnd:['Start','Show Up','Repeat'],
+    tag:['FitnessReset','NewYearNewMe'],emphasis:['bundle2','flash','newcust'],theme:'New-year fitness restart'},
+   {id:'lnyprep',name:'Lunar New Year Build-Up',campaign:'LNY BUILD-UP',slider:'LOW',days:[16,31],disc:0.20,
+    frame:['Before the Reunion Dinner','A Table Ready for Luck','Prepare for a Fuller Year','Set the Table Early'],
+    occasion:'the reunion dinner',motifShort:['the reunion table','a fuller year','the feast'],triadEnd:['Gather','Prosper','Begin'],
+    tag:['LunarNewYear','PamastaSale'],emphasis:['bundle3','gwp','tier'],theme:'Lunar New Year abundance'},
+   pay(0),mid(0)],
+2:[dd(2,0.24,{theme:'Valentine gifting',frame:['2.2 Is Loading','The 2.2 Drop','Sweet Deals, Locked','Cart Locked for 2.2']}),
+   {id:'valentines',name:"Valentine's Day",campaign:"VALENTINES",slider:'LOW',days:[1,14],disc:0.22,
+    frame:['Dinner for Two, Handled','A Cozy Night In','Something Small, Something Thoughtful','Table for Two'],
+    occasion:"Valentine's",motifShort:['the night in','dinner for two','a thoughtful gift'],triadEnd:['Cook','Share','Stay'],
+    tag:['ValentinesGift','DateNightAtHome'],emphasis:['bundle2','gwp','voucher'],theme:'Cozy date-night gifting'},
+   {id:'lny',name:'Lunar / Chinese New Year',campaign:'LNY',slider:'LOW',days:[8,20],disc:0.22,
+    frame:['A Year of Abundance, Served','Set the Table for Good Fortune','A Fuller Table, A Fuller Year','Gather for the Feast'],
+    occasion:'Lunar New Year',motifShort:['the reunion table','a year of plenty','the feast'],triadEnd:['Gather','Feast','Prosper'],
+    tag:['LunarNewYear','ChineseNewYear'],emphasis:['bundle3','gwp','tier'],theme:'Prosperity and the reunion table'},
+   pay(1),mid(1)],
+3:[dd(3,0.26,{theme:'Summer kickoff',frame:['3.3 Is Loading','The 3.3 Drop','Summer Starts at 3.3','Cart Locked for 3.3']}),
+   {id:'summerkick',name:'Summer Kickoff',campaign:'SUMMER SALE',slider:'HIGH',days:[10,31],disc:0.25,
+    frame:['Beach Days, City Ways','The Heat Is Coming','Summer Kit, Sorted','Sun Is Out, Cart Is Open'],
+    occasion:'summer',motifShort:['summer','the heat','beach season'],triadEnd:['Pack','Chill','Go'],
+    tag:['SummerSalePH','SummerReady'],emphasis:['bundle2','flash','tier','freeship'],theme:'PH summer heat and travel'},
+   {id:'womens',name:"Women's Month",campaign:"WOMENS MONTH",slider:'MED',days:[1,31],disc:0.22,
+    frame:['For the One Who Runs the House','Treat, Not Just Manage','A Little Luxury, Daily','She Has Earned This'],
+    occasion:"Women's Month",motifShort:['the month','her routine','a daily treat'],triadEnd:['Treat','Rest','Repeat'],
+    tag:['WomensMonth','TreatHer'],emphasis:['gwp','bundle2','voucher'],theme:'Appreciation and small luxuries'},
+   {id:'grad',name:'Graduation Season',campaign:'GRADUATION',slider:'MED',days:[20,31],disc:0.22,
+    frame:['First Place of Their Own','Starter Kit, Sorted','A Gift That Gets Used','Adulting Begins'],
+    occasion:'graduation',motifShort:['the move-out','the first apartment','the next chapter'],triadEnd:['Pack','Move','Settle'],
+    tag:['GraduationGift','FirstApartment'],emphasis:['bundle3','gwp','tier'],theme:'Graduation and first-home gifting'},
+   pay(2),mid(2)],
+4:[dd(4,0.26,{theme:'Summer travel',frame:['4.4 Is Loading','The 4.4 Drop','Summer Deals, Locked','Cart Locked for 4.4']}),
+   {id:'holyweek',name:'Holy Week Getaway',campaign:'HOLY WEEK',slider:'MED',days:[1,12],disc:0.24,
+    frame:['Pack Light, Travel Easy','Road Trip Kit, Ready','Out of Town, Sorted','Everything Fits'],
+    occasion:'the long weekend',motifShort:['the getaway','the road trip','the long weekend'],triadEnd:['Pack','Drive','Unwind'],
+    tag:['HolyWeekGetaway','SummerTravel'],emphasis:['bundle2','flash','freeship'],theme:'Holy Week travel and out-of-town'},
+   {id:'summerpeak',name:'Summer Peak',campaign:'SUMMER SALE',slider:'HIGH',days:[13,30],disc:0.27,
+    frame:['Peak Heat, Peak Deals','Ice-Cold All April','Beat the 36-Degree Days','Summer, Survived'],
+    occasion:'peak summer',motifShort:['the heat','summer','the dry season'],triadEnd:['Chill','Sip','Repeat'],
+    tag:['SummerSalePH','BeatTheHeat'],emphasis:['flash','tier','bundle2','live'],theme:'Peak PH summer heat'},
+   pay(3),mid(3)],
+5:[dd(5,0.26,{theme:'Mid-year gifting',frame:['5.5 Is Loading','The 5.5 Drop','Mid-Year Deals, Locked','Cart Locked for 5.5']}),
+   {id:'mothers',name:"Mother's Day",campaign:"MOTHERS DAY",slider:'LOW',days:[1,11],disc:0.22,
+    frame:['For the One Who Feeds Everyone','She Deserves the Good Set','Give Her the Easy Way','Thank Her Properly'],
+    occasion:"Mother's Day",motifShort:['her kitchen','her routine','the thank-you'],triadEnd:['Thank','Treat','Gather'],
+    tag:['MothersDayGift','ForMom'],emphasis:['gwp','bundle3','voucher'],theme:'Gratitude and a proper gift'},
+   {id:'laborday',name:'Labor Day Home Projects',campaign:'LABOR DAY',slider:'MED',days:[1,5],disc:0.24,
+    frame:['Long Weekend, Short Project','Fix It This Weekend','The List Finally Gets Done','Three Days, One Project'],
+    occasion:'the long weekend',motifShort:['the long weekend','the to-do list','the project'],triadEnd:['Fix','Finish','Rest'],
+    tag:['LaborDaySale','HomeProject'],emphasis:['bundle2','flash','multiqty'],theme:'Long-weekend home projects'},
+   {id:'btsprep',name:'Back-to-School Prep',campaign:'BACK TO SCHOOL',slider:'HIGH',days:[15,31],disc:0.24,
+    frame:['Campus Cool, Always Fresh','Baon Goals, Locked','Dorm Setup, Sorted','Ready Before Day One'],
+    occasion:'back-to-school',motifShort:['the school run','baon week','day one'],triadEnd:['Pack','Go','Repeat'],
+    tag:['BackToSchoolPH','BaonGoals'],emphasis:['bundle3','tier','multiqty','newcust'],theme:'Back-to-school and baon kit'},
+   pay(4),mid(4)],
+6:[dd(6,0.26,{theme:'Back-to-school tech and kit',frame:['6.6 Is Loading','The 6.6 Drop','School-Ready Deals','Cart Locked for 6.6']}),
+   {id:'fathers',name:"Father's Day",campaign:"FATHERS DAY",slider:'LOW',days:[1,15],disc:0.22,
+    frame:['For the One Who Fixes Everything','Give Him the Proper Kit','He Will Actually Use This','Thank Him With Something Solid'],
+    occasion:"Father's Day",motifShort:['his workbench','his corner','the thank-you'],triadEnd:['Thank','Build','Rest'],
+    tag:['FathersDayGift','ForDad'],emphasis:['gwp','bundle2','voucher'],theme:'A gift he will actually use'},
+   {id:'bts',name:'Back to School',campaign:'BACK TO SCHOOL',slider:'HIGH',days:[1,20],disc:0.25,
+    frame:['Campus Cool, Always Fresh','Baon Goals, Locked','Dorm Setup, Sorted','Ready Before the Bell'],
+    occasion:'back-to-school',motifShort:['the school run','baon week','campus'],triadEnd:['Pack','Go','Repeat'],
+    tag:['BackToSchoolPH','BaonGoals'],emphasis:['bundle3','tier','multiqty','flash'],theme:'Campus-ready and baon kit'},
+   {id:'rainy',name:'Rainy Season Starts',campaign:'RAINY SEASON',slider:'MED',days:[10,30],disc:0.24,
+    frame:['Dries Even When It Pours','Rainy Days, Indoors Sorted','Beat the Damp','Habagat-Proof the House'],
+    occasion:'the rainy season',motifShort:['the rains','habagat','damp days'],triadEnd:['Dry','Sort','Settle'],
+    tag:['RainySeasonPH','HabagatReady'],emphasis:['bundle2','flash','voucher'],theme:'Habagat: damp, drying, indoors'},
+   pay(5),mid(5)],
+7:[dd(7,0.26,{theme:'Mid-year clearance',frame:['7.7 Is Loading','The 7.7 Drop','Mid-Year Clearout','Cart Locked for 7.7']}),
+   {id:'midyear',name:'Mid-Year Clearance',campaign:'MID-YEAR SALE',slider:'MED',days:[1,20],disc:0.30,
+    frame:['Half the Year, Half the Price','Clear the Shelf','Last Call, Mid-Year','Everything Must Move'],
+    occasion:'the mid-year clearout',motifShort:['the clearout','mid-year','last call'],triadEnd:['Grab','Save','Go'],
+    tag:['MidYearSale','ClearanceSale'],emphasis:['flash','tier','multiqty','campaign'],theme:'Mid-year clearance urgency'},
+   {id:'rainypeak',name:'Rainy Season Peak',campaign:'RAINY SEASON',slider:'MED',days:[8,31],disc:0.24,
+    frame:['Dries Even When It Pours','Indoor Days, Sorted','Beat the Damp','Stay In, Stay Dry'],
+    occasion:'the rains',motifShort:['the rains','habagat','damp days'],triadEnd:['Dry','Warm','Settle'],
+    tag:['RainySeasonPH','HabagatReady'],emphasis:['bundle2','voucher','freeship'],theme:'Peak rains and indoor living'},
+   pay(6),mid(6)],
+8:[dd(8,0.28,{theme:'Back-to-school and pre-ber',frame:['8.8 Is Loading','The 8.8 Drop','8.8 Deals, Locked','Cart Locked for 8.8']}),
+   {id:'btsaug',name:'August Back to School',campaign:'BACK TO SCHOOL',slider:'HIGH',days:[1,20],disc:0.26,
+    frame:['Campus Cool, Always Fresh','Baon Goals, Locked','Dorm Setup, Sorted','Ready Before the Bell'],
+    occasion:'back-to-school',motifShort:['the school run','baon week','campus'],triadEnd:['Pack','Go','Repeat'],
+    tag:['BackToSchoolPH','BaonGoals'],emphasis:['bundle3','tier','multiqty','newcust'],theme:'Campus-ready and baon kit'},
+   {id:'buwan',name:'Buwan ng Wika',campaign:'BUWAN NG WIKA',slider:'MED',days:[15,31],disc:0.22,
+    frame:['Pinoy Home, Panalong Deals','Handa ang Hapag','Local Pride, Everyday Use','Sulit na Sulit'],
+    occasion:'Buwan ng Wika',motifShort:['the hapag','the Pinoy home','local pride'],triadEnd:['Handa','Salo','Panalo'],
+    tag:['BuwanNgWika','PinoyHome'],emphasis:['bundle3','voucher','flash'],theme:'Filipino-home pride, light Taglish'},
+   pay(7),mid(7)],
+9:[dd(9,0.30,{theme:'Ber-months kickoff',slider:'MED',frame:['Ber-Months Begin','The 9.9 Drop','9.9 Is Loading','Christmas Is Loading'],
+    occasion:'the 9.9',emphasis:['flash','bundle3','tier','voucher','campaign','live']}),
+   {id:'bermonths',name:'Ber-Months Kickoff',campaign:'BER-MONTHS',slider:'MED',days:[1,15],disc:0.26,
+    frame:['Christmas Is Loading','It Starts in September','Ber-Months, Officially','Early Is Cheaper'],
+    occasion:'the ber-months',motifShort:['the ber-months','September','the countdown'],triadEnd:['Prep','Save','Gather'],
+    tag:['BerMonths','ChristmasIsComing'],emphasis:['bundle3','tier','gwp','voucher'],theme:'Ber-months: Christmas starts early'},
+   {id:'xmasprep',name:'Early Christmas Prep',campaign:'CHRISTMAS PREP',slider:'LOW',days:[16,30],disc:0.24,
+    frame:['Host Before the Rush','A Complete Table, Early','Buy Now, Gift Later','Ready Before December'],
+    occasion:'the hosting season',motifShort:['the hosting season','the feast','December'],triadEnd:['Gather','Host','Share'],
+    tag:['ChristmasPrep','HostingSeason'],emphasis:['bundle3','gwp','tier'],theme:'Early hosting and gifting prep'},
+   pay(8),mid(8)],
+10:[dd(10,0.32,{theme:'11.11 warm-up',frame:['10.10 Is Loading','The 10.10 Drop','Warm-Up to 11.11','Cart Locked for 10.10'],
+    emphasis:['flash','tier','bundle3','voucher','campaign']}),
+   {id:'octfest',name:'Halloween / October Fest',campaign:'OCTOBER FEST',slider:'MED',days:[20,31],disc:0.26,
+    frame:['Treat the Table','Festive, Not Spooky','Gather and Celebrate','Cozy Season Is Here'],
+    occasion:'October Fest',motifShort:['the celebration','festive season','the gathering'],triadEnd:['Gather','Treat','Celebrate'],
+    tag:['OctoberFest','HalloweenPH'],emphasis:['bundle3','gwp','voucher','live'],theme:'Festive gatherings and treats'},
+   {id:'undasprep',name:'Undas Prep',campaign:'UNDAS',slider:'LOW',days:[25,31],disc:0.20,
+    frame:['Home for Undas','A Full House, Again','Everyone Comes Home','Enough for Everyone'],
+    occasion:'Undas',motifShort:['the homecoming','a full house','the family table'],triadEnd:['Come Home','Gather','Remember'],
+    tag:['Undas','FamilyGathering'],emphasis:['bundle3','multiqty','tier'],theme:'Homecoming and the family table'},
+   pay(9),mid(9)],
+11:[dd(11,0.38,{theme:'Biggest sale of the year',slider:'MED',days:[9,11],
+    frame:['11.11 Is Loading','The Lowest Prices of the Year','Cart Locked for 11.11','One Day, Biggest Drop'],
+    occasion:'11.11',emphasis:['flash','campaign','tier','bundle3','voucher','live']}),
+   {id:'undas',name:'Undas',campaign:'UNDAS',slider:'LOW',days:[1,3],disc:0.20,
+    frame:['Home for Undas','A Full House, Again','Everyone Comes Home','Enough for Everyone'],
+    occasion:'Undas',motifShort:['the homecoming','a full house','the family table'],triadEnd:['Come Home','Gather','Remember'],
+    tag:['Undas','FamilyGathering'],emphasis:['bundle3','multiqty','tier'],theme:'Homecoming and the family table'},
+   {id:'13th',name:'13th Month Payday',campaign:'13TH MONTH',slider:'HIGH',days:[20,30],disc:0.26,
+    frame:['13th Month, Well Spent','The Cart Has Been Waiting','Bonus Landed, Cart Ready','Finally, the Good Set'],
+    occasion:'13th month pay',motifShort:['the bonus','13th month','the big treat'],triadEnd:['Treat','Upgrade','Enjoy'],
+    tag:['13thMonth','BonusHaul'],emphasis:['bundle3','tier','voucher','flash'],theme:'Bonus-money upgrade'},
+   {id:'blackfri',name:'Black Friday / Cyber Monday',campaign:'BLACK FRIDAY',slider:'MED',days:[24,30],disc:0.35,
+    frame:['One Weekend, Lowest Prices','Black Friday, Locked','Deeper Than 11.11','Four Days Only'],
+    occasion:'Black Friday',motifShort:['the weekend','Black Friday','the last drop'],triadEnd:['Grab','Save','Done'],
+    tag:['BlackFridayPH','CyberMonday'],emphasis:['flash','campaign','tier','live'],theme:'Deep-discount weekend'},
+   {id:'hosting',name:'Christmas Hosting Build-Up',campaign:'CHRISTMAS',slider:'LOW',days:[12,30],disc:0.24,
+    frame:['A Complete Table by December','Host Like It Is Easy','Room for Everyone','The Feast Starts Here'],
+    occasion:'the hosting season',motifShort:['the feast','hosting season','the full table'],triadEnd:['Gather','Host','Share'],
+    tag:['ChristmasPH','HostingSeason'],emphasis:['bundle3','gwp','tier'],theme:'Hosting season and the complete table'},
+   pay(10),mid(10)],
+12:[dd(12,0.35,{theme:'Last shipping window before Christmas',slider:'MED',
+    frame:['12.12 Is Loading','Last Drop Before Christmas','The Final Cart','Cart Locked for 12.12'],
+    occasion:'12.12',emphasis:['flash','campaign','bundle3','voucher','freeship']}),
+   {id:'xmas',name:'Christmas / Noche Buena',campaign:'CHRISTMAS',slider:'LOW',days:[1,24],disc:0.26,
+    frame:['Noche Buena, Fully Served','A Fuller Table This Christmas','Host the Whole Family','Christmas, Handled'],
+    occasion:'Noche Buena',motifShort:['Noche Buena','the feast','Christmas Eve'],triadEnd:['Gather','Feast','Share'],
+    tag:['NocheBuena','ChristmasPH'],emphasis:['bundle3','gwp','tier','multiqty'],theme:'Noche Buena and family feasting'},
+   {id:'kris',name:'Kris Kringle / Monito-Monita',campaign:'KRIS KRINGLE',slider:'MED',days:[1,20],disc:0.24,
+    frame:['Under the Budget, Over the Expectation','Exchange Gift, Solved','Nobody Guesses the Price','The Gift They Keep'],
+    occasion:'Kris Kringle',motifShort:['the exchange gift','monito-monita','the office party'],triadEnd:['Wrap','Give','Win'],
+    tag:['KrisKringle','ExchangeGift'],emphasis:['multiqty','bundle2','voucher','freeship'],theme:'Budget exchange gifts that look expensive'},
+   {id:'medianoche',name:'Media Noche / New Year Prep',campaign:'MEDIA NOCHE',slider:'LOW',days:[26,31],disc:0.26,
+    frame:['Media Noche, Fully Set','End the Year Full','One More Feast','Into the New Year, Sorted'],
+    occasion:'Media Noche',motifShort:['Media Noche','the last feast','New Year'],triadEnd:['Gather','Toast','Begin'],
+    tag:['MediaNoche','NewYearPH'],emphasis:['bundle3','tier','voucher'],theme:'Year-end feast and fresh start'},
+   {id:'yearend',name:'Year-End Clearance',campaign:'YEAR-END SALE',slider:'MED',days:[26,31],disc:0.34,
+    frame:['Clear the Year Out','Last Prices of the Year','Everything Must Move','Final Call, December'],
+    occasion:'the year-end clearout',motifShort:['the clearout','year-end','last call'],triadEnd:['Grab','Save','Go'],
+    tag:['YearEndSale','ClearanceSale'],emphasis:['flash','tier','multiqty'],theme:'Year-end clearance urgency'},
+   pay(11),mid(11)]
+};
+Object.keys(EV).forEach(k=>EV[k].forEach(e=>{if(!e.theme)e.theme=e.name;}));
+
+/* ============================================================
+   PLATFORMS + TOOL NAMES
+   ============================================================ */
+const PLAT={
+  LZD:{key:'LZD',name:'Lazada',code:'LZD',
+    tools:{flash:'Store Flash Sale · Promotion Price',bundle2:'Bundle Deal · fixed set price',
+      bundle3:'Bundle Deal · fixed set price',multiqty:'Flexi Combo · multi-buy',
+      tier:'Flexi Combo · buy-more-save-more',gwp:'Add-on Deal · Gift with Purchase',
+      voucher:'Collectible Store Voucher',freeship:'Seller-Funded Free Shipping',
+      live:'LazLive Exclusive Voucher',campaign:'Campaign Center submission',
+      addon:'Add-on Deal · discounted add-on',newcust:'New Buyer Voucher',affiliate:'Lazada Affiliate commission'}},
+  SHP:{key:'SHP',name:'Shopee',code:'SHP',
+    tools:{flash:'Discount Promotion + My Flash Deal',bundle2:'Bundle Deal · fixed bundle price',
+      bundle3:'Bundle Deal · fixed bundle price',multiqty:'Bundle Deal · buy more save more',
+      tier:'Bundle Deal · buy more save more',gwp:'Add-on Deal · Gift with Min. Spend',
+      voucher:'Shop Voucher',freeship:'Free Shipping Special',
+      live:'Shopee Live exclusive voucher',campaign:'Campaign registration · Seller Centre',
+      addon:'Add-on Deal · main + add-on',newcust:'Follow Prize · new-follower voucher',affiliate:'Shopee Affiliate commission'}},
+  TTK:{key:'TTK',name:'TikTok Shop',code:'TIKTOK',
+    tools:{flash:'Flash Deal + Product Discount',bundle2:'Bundle Deal · combo price',
+      bundle3:'Bundle Deal · combo price',multiqty:'Bundle Deal · Buy X Get Y',
+      tier:'Spend X Save Y · tiered cart',gwp:'Bundle Deal · free gift add-on',
+      voucher:'Shop Voucher',freeship:'Free Shipping Voucher',
+      live:'LIVE Exclusive Deal',campaign:'Platform campaign registration',
+      addon:'Bundle Deal · add-on discount',newcust:'New Customer Offer',affiliate:'Affiliate commission boost'}}
+};
+const PROMO_TYPE={flash:'Flash Sale',bundle2:'Bundle',bundle3:'Bundle',multiqty:'Multi-Buy',
+  tier:'Buy More Save More',gwp:'GWP',voucher:'Voucher',freeship:'Free Shipping',
+  live:'Live Exclusive',campaign:'Campaign',addon:'Add-on Deal',newcust:'New Customer',affiliate:'Affiliate'};
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const LSK='sl-promo-engine-v2';
+const now=new Date();
+const state={
+  year:now.getFullYear(), month:now.getMonth()+1, eventId:null,
+  ceil:35, themeOv:'',
+  on:{LZD:true,SHP:true,TTK:true},
+  rows:[], seed:7, view:'LZD', result:null
+};
+let uid=1;
+function newRow(o){return Object.assign({id:uid++,sku:'',name:'',price:0,gwp:false,hero:false,img:null},o||{});}
+
+function save(){try{localStorage.setItem(LSK,JSON.stringify({
+  year:state.year,month:state.month,eventId:state.eventId,ceil:state.ceil,
+  themeOv:state.themeOv,on:state.on,seed:state.seed,
+  rows:state.rows.map(r=>({sku:r.sku,name:r.name,price:r.price,gwp:r.gwp,hero:r.hero,img:r.img}))
+}));}catch(e){}}
+function load(){try{const s=localStorage.getItem(LSK);if(!s)return false;const d=JSON.parse(s);
+  ['year','month','eventId','ceil','themeOv','seed'].forEach(k=>{if(d[k]!==undefined)state[k]=d[k];});
+  if(d.on)state.on=Object.assign(state.on,d.on);
+  if(Array.isArray(d.rows)&&d.rows.length)state.rows=d.rows.map(r=>newRow(r));
+  return true;}catch(e){return false;}}
+
+/* ============================================================
+   CLASSIFICATION
+   ============================================================ */
+function brandOf(sku){
+  const p=String(sku||'').trim().toUpperCase().split('+')[0].split(/[-_ ]/)[0];
+  if(BRANDS[p])return{code:p,name:BRANDS[p][0],cat:BRANDS[p][1]};
+  return{code:p||'—',name:p?'Unmapped ('+p+')':'—',cat:'general'};
+}
+function catOf(row){
+  const n=String(row.name||'').toLowerCase();
+  for(const [re,c] of KW){if(re.test(n))return c;}
+  return brandOf(row.sku).cat;
+}
+const cat=row=>CATS[catOf(row)]||CATS.general;
+function shortName(n){
+  let s=String(n||'').replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s+/g,' ').trim();
+  const w=s.split(' ');
+  return w.length>5?w.slice(0,5).join(' '):s;
+}
+
+/* ============================================================
+   MARGIN MATH
+   ============================================================ */
+const CE=()=>clamp(Number(state.ceil||0)/100,0,.9);
+/* nearest ₱x9 ending — rounds to the nearest so it never cuts more than ₱5 extra,
+   with an optional minimum and a hard maximum it will never exceed */
+function psych(raw,min,max){
+  if(!(raw>0))return 0;
+  /* the ₱x9 convention only reads as a price under ₱100 — below that it eats the whole discount */
+  let c=raw<100?Math.round(raw):Math.round((raw-9)/10)*10+9;
+  if(c<1)c=Math.max(1,Math.round(raw));
+  if(min!==undefined&&isFinite(min)){const step=c<100?1:10;let g=0;while(c<min&&g<400){c+=step;g++;}}
+  if(max!==undefined&&isFinite(max)&&c>max)c=Math.round(max);
+  return c;
+}
+/* one place that decides a promo price: the sale moment's suggested depth,
+   capped by your discount ceiling, landed on a ₱x9 ending, never above list */
+function priceFor(list,wantD){
+  const ce=CE(), d=clamp(Math.min(wantD,ce),0,0.9);
+  /* the ₱x9 rounding must never round *down* past the ceiling */
+  const pp=psych(list*(1-d),list*(1-ce),list);
+  return {pp:pp, depth:list>0?1-pp/list:0};
+}
+/* how deep a cut reads to a buyer — used to flag anything unusually aggressive */
+function depthState(d){
+  const ce=CE();
+  if(d>=ce-0.001&&ce>0)return{cls:'warn',lab:'At your ceiling',pill:'Max depth'};
+  if(d>=0.30)return{cls:'warn',lab:'Deep cut',pill:'Deep'};
+  if(d<=0.001)return{cls:'mute',lab:'No price cut',pill:'Full price'};
+  return{cls:'ok',lab:'Within your ceiling of '+pct(ce),pill:pct(d)+' off'};
+}
+
+/* ============================================================
+   COPY ENGINE
+   ============================================================ */
+function slider(ev,p){
+  let s=ev.slider;
+  if(p==='TTK'&&s==='MED')s='HIGH';
+  if(p==='TTK'&&s==='LOW')s='LOW';
+  if(p==='LZD'&&s==='HIGH')s='MED';
+  return s;
+}
+function cues(ev,p){const s=slider(ev,p);const c=CUE[s]||[];return p==='LZD'?c.filter(x=>!/pasabog|sulit|panalo|mura/i.test(x)):c;}
+function ovFrames(){
+  const t=state.themeOv.trim();if(!t)return null;
+  const T=t.replace(/\b\w/g,m=>m.toUpperCase());
+  return{frame:[T,T+', Done Right','Built for '+T,T+' at Home'],occasion:t,motifShort:[t],triadEnd:['Choose','Keep','Enjoy'],tag:[t.replace(/[^a-z0-9]/gi,'')]};
+}
+function evc(ev){const o=ovFrames();return o?Object.assign({},ev,o,{theme:state.themeOv}):ev;}
+
+function thematic(c,ev0,p,r){
+  const ev=evc(ev0), cu=cues(ev,p), s=slider(ev,p);
+  const tri=pkN(c.triad,2,r);
+  const pats=[
+    ()=>noc(pk(ev.frame,r))+', '+noc(pk(c.payoff,r)),
+    ()=>pk(c.pairL,r)+', '+pk(c.pairR,r),
+    ()=>noc(pk(c.act,r))+', '+noc(pk(c.payoff,r)),
+    ()=>noc(pk(c.payoff,r))+' for '+mtitle(pk(ev.motifShort,r)),
+    ()=>tri[0]+'. '+(tri[1]||pk(c.triad,r))+'. '+pk(ev.triadEnd,r)+'.',
+    ()=>noc(pk(ev.frame,r))+', '+pk(c.pairR,r),
+    ()=>pk(c.act,r)+' This '+title((ev.occasion||'Season').replace(/^the /,'')),
+  ];
+  if(cu.length){
+    pats.push(()=>pk(c.pairL,r)+', '+pk(cu,r));
+    pats.push(()=>noc(pk(c.payoff,r))+', '+pk(cu,r));
+    pats.push(()=>noc(pk(ev.frame,r))+', '+pk(cu,r));
+  }
+  if(p==='TTK'&&s==='HIGH'&&c.hook){
+    pats.push(()=>title(pk(c.hook,r)));
+    pats.push(()=>title(pk(c.hook,r))+(cu.length?', '+pk(cu,r):''));
+  }
+  let out='',guard=0;
+  do{out=tidy(pats[Math.floor(r()*pats.length)%pats.length]());guard++;}
+  while(guard<10&&(out.length>52||echoes(out)||USED.has(p+'|'+out)));
+  USED.add(p+'|'+out);
+  return out;
+}
+/* reject a line that repeats a meaningful word or a whole half */
+const USED=new Set();
+function echoes(s){
+  if(/^(.{2,}), \1$/i.test(s))return true;
+  const w=s.toLowerCase().replace(/[^a-z ]/g,'').split(/\s+/).filter(x=>x.length>4);
+  return new Set(w).size!==w.length;
+}
+function title(s){return String(s).replace(/\b([a-z])/g,(m,x)=>x.toUpperCase()).replace(/\b(A|An|The|And|Or|For|At|In|Of|To)\b/g,m=>m.toLowerCase()).replace(/^./,m=>m.toUpperCase());}
+function tidy(s){return s.replace(/\s+/g,' ').replace(/,\s*,/g,',').replace(/\.\s*\./g,'.').trim();}
+function noc(s){return String(s).replace(/,/g,'');}
+/* title case, but a leading article stays lowercase for mid-sentence use */
+function mtitle(s){return title(s).replace(/^(The|A|An) /,(m,w)=>w.toLowerCase()+' ');}
+
+function banner(c,ev,p,r){
+  const cu=cues(ev,p);
+  const opts=[pk(c.pairL,r)+', '+pk(c.pairR,r), pk(c.payoff,r), pk(evc(ev).frame,r)];
+  if(cu.length)opts.push(pk(c.payoff,r)+', '+pk(cu,r));
+  const o=opts[Math.floor(r()*opts.length)%opts.length];
+  return tidy(o.split(' ').slice(0,6).join(' '));
+}
+function push(c,ev,p,r,deal,endTxt){
+  const ev2=evc(ev);
+  const tOpts=[pk(c.payoff,r), pk(ev2.frame,r), title(ev2.occasion.replace(/^the /,''))+' Deal Is Live'];
+  let t=tOpts[Math.floor(r()*tOpts.length)%tOpts.length]; if(t.length>30)t=pk(c.payoff,r); if(t.length>30)t=t.slice(0,29).trim();
+  let b=deal+(endTxt?' Ends '+endTxt+'.':'');
+  if(b.length>90)b=deal.length<=88?deal:deal.slice(0,87).trim()+'…';
+  return{t:t,b:b};
+}
+function social(c,ev,p,r,line,deal){
+  const ev2=evc(ev), brandTags=[], t=[];
+  (ev2.tag||[]).forEach(x=>t.push(x));
+  (c.tags||[]).forEach(x=>t.push(x));
+  t.push('SunbeamsLifestyle');
+  if(p==='TTK')t.push('TikTokShopPH'); if(p==='SHP')t.push('ShopeePH'); if(p==='LZD')t.push('LazadaPH');
+  const tags=pkN(Array.from(new Set(t)),clamp(3+Math.floor(r()*3),3,6),r).map(x=>'#'+x.replace(/[^A-Za-z0-9]/g,''));
+  return{line:line, sub:deal, tags:tags.join(' ')};
+}
+
+/* ============================================================
+   PROMO BUILDERS
+   ============================================================ */
+function fmtD(y,m,d){const dt=new Date(y,m-1,Math.min(d,new Date(y,m,0).getDate()));
+  return dt.toLocaleDateString('en-PH',{month:'short',day:'numeric'});}
+function evWindow(ev){return[fmtD(state.year,state.month,ev.days[0]),fmtD(state.year,state.month,ev.days[1])];}
+
+function mk(o){return o;}
+function storeCode(p,rows){
+  const bs=Array.from(new Set(rows.map(r=>brandOf(r.sku).code)));
+  const b=bs.length===1&&BRANDS[bs[0]]?bs[0]:'SL';
+  return PLAT[p].code+' - '+b+(b==='SL'?'':' (SL)');
+}
+
+function build(p,ev,rows,heroes){
+  const out=[], [ds,de]=evWindow(ev), em=ev.emphasis||[];
+  const avg=rows.reduce((a,x)=>a+Number(x.price),0)/rows.length;
+  const push_=(key,o)=>{o.key=key;o.tool=PLAT[p].tools[key];o.plat=p;o.lead=em.indexOf(key)>-1;
+    o.type=PROMO_TYPE[key];o.start=ds;o.end=de;out.push(o);};
+
+  /* ---- 1. FLASH / DISCOUNT per starred SKU ---- */
+  heroes.forEach(row=>{
+    const c=cat(row), r=R(state.seed+':'+p+':'+ev.id+':flash:'+row.id);
+    const q=priceFor(row.price,ev.disc), pp=q.pp, st=depthState(q.depth);
+    const th=thematic(c,ev,p,r);
+    const deal=shortName(row.name)+' now '+peso(pp)+' — save '+peso(row.price-pp)+'.';
+    push_('flash',mk({title:'Flash price · '+shortName(row.name),rows:[row],
+      mech:'Set <b>'+shortName(row.name)+'</b> to <b>'+peso(pp)+'</b> ('+pct(q.depth)+' off '+peso(row.price)+') for the '+ds+'–'+de+' window.',
+      lines:[['Was',peso(row.price),'strike'],['Promo price',peso(pp)],['Buyer saves',peso(row.price-pp)+' ('+pct(q.depth)+')','save']],
+      depth:q.depth,st:st,
+      copy:{th:th,banner:banner(c,ev,p,r),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:ev.disc>CE()?'The '+ev.name+' normally runs at '+pct(ev.disc)+' — held here to your '+pct(CE())+' ceiling.':'',
+      img:row.img}));
+  });
+
+  /* ---- 2. BUNDLE (2 / 3 SKU) ---- */
+  const mkBundle=(set,key,label)=>{
+    const r=R(state.seed+':'+p+':'+ev.id+':'+key+':'+set.map(x=>x.id).join('-'));
+    const c=cat(set[0]);
+    const list=set.reduce((a,x)=>a+Number(x.price),0);
+    const q=priceFor(list,Math.min(ev.disc+0.03,CE())), pp=q.pp, st=depthState(q.depth);
+    const th=thematic(c,ev,p,r);
+    const deal=label+' bundle at '+peso(pp)+' instead of '+peso(list)+'.';
+    push_(key,mk({title:label+' bundle · '+set.map(x=>shortName(x.name).split(' ').slice(0,3).join(' ')).join(' + '),rows:set,
+      mech:'Bundle <b>'+set.length+' SKUs</b> at a fixed <b>'+peso(pp)+'</b> set price — '+pct(q.depth)+' below the '+peso(list)+' component total. Cross-sells the set instead of discounting each SKU on its own.',
+      lines:[['Component total',peso(list),'strike'],['Bundle price',peso(pp)],['Buyer saves',peso(list-pp)+' ('+pct(q.depth)+')','save'],['AOV lift vs single SKU','+'+peso(pp-Number(set[0].price))]],
+      depth:q.depth,st:st,
+      copy:{th:th,banner:banner(c,ev,p,r),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'A bundle buys depth with volume — the buyer takes '+set.length+' items, so the same discount costs you less per peso of revenue than a single-SKU cut.',
+      img:set[0].img}));
+  };
+  if(heroes.length>=2)mkBundle(heroes.slice(0,2),'bundle2','2-piece');
+  if(heroes.length>=3)mkBundle(heroes.slice(0,3),'bundle3','3-piece set');
+
+  /* ---- 3. MULTI-QTY / BXGY ---- */
+  {
+    const row=heroes[0], c=cat(row), r=R(state.seed+':'+p+':'+ev.id+':multiqty:'+row.id);
+    const qty=3, list=row.price*qty;
+    const q=priceFor(list,Math.min(ev.disc+0.02,CE())), pp=q.pp, st=depthState(q.depth);
+    const th=thematic(c,ev,p,r);
+    const mech=p==='TTK'
+      ?'Buy X Get Y on <b>'+shortName(row.name)+'</b>: buy 2, third unit at '+pct(clamp((list-pp)/row.price,0,1))+' off — effective '+pct(q.depth)+' across the 3-pack.'
+      :'Multi-buy on <b>'+shortName(row.name)+'</b>: buy '+qty+', pay <b>'+peso(pp)+'</b> ('+pct(q.depth)+' off '+peso(list)+'). Moves depth into quantity instead of cutting the single-unit price.';
+    const deal='Buy '+qty+' '+shortName(row.name)+' for '+peso(pp)+' — '+peso(Math.round(pp/qty))+' each.';
+    push_('multiqty',mk({title:'Buy '+qty+' · '+shortName(row.name),rows:[row],mech:mech,
+      lines:[[qty+' at full price',peso(list),'strike'],[qty+'-pack price',peso(pp)],['Per unit',peso(Math.round(pp/qty))],['Buyer saves',peso(list-pp)+' ('+pct(q.depth)+')','save']],
+      depth:q.depth,st:st,
+      copy:{th:th,banner:banner(c,ev,p,r),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Single-unit price stays at '+peso(row.price)+' — protects your base price while lifting units per order.',
+      img:row.img}));
+  }
+
+  /* ---- 4. TIERED (Flexi Combo / BMSM / Spend X Save Y) ---- */
+  {
+    const c=cat(heroes[0]), r=R(state.seed+':'+p+':'+ev.id+':tier');
+    const t1=Math.max(299,Math.round(avg*1.6/50)*50), t2=Math.round(t1*2/50)*50, t3=Math.round(t1*3.2/50)*50;
+    const d3=clamp(Math.min(ev.disc*0.8,CE()),0,0.5);
+    const d1=clamp(Math.min(0.08,ev.disc*0.35),0,0.5), d2=clamp(Math.min(0.13,ev.disc*0.55),0,0.5);
+    const st=depthState(d3);
+    const th=thematic(c,ev,p,r);
+    const label=p==='TTK'?'Spend X Save Y':(p==='LZD'?'Flexi Combo':'Buy More Save More');
+    const deal='Spend '+peso(t1)+' save '+pct(d1)+', '+peso(t2)+' save '+pct(d2)+', '+peso(t3)+' save '+pct(d3)+'.';
+    push_('tier',mk({title:label+' · 3 tiers',rows:rows.slice(0,4),
+      mech:'Cart-level tiers across the whole '+(new Set(rows.map(x=>brandOf(x.sku).name)).size===1?brandOf(rows[0].sku).name:'selected')+' range. Tier 1 sits above your '+peso(Math.round(avg))+' average item price, so it only pays out when the buyer adds a second product.',
+      lines:[['Spend '+peso(t1),'− '+pct(d1)],['Spend '+peso(t2),'− '+pct(d2)],['Spend '+peso(t3),'− '+pct(d3)],['Deepest tier',pct(d3)+' off']],
+      depth:d3,st:st,
+      copy:{th:th,banner:banner(c,ev,p,r),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Only the top tier reaches full depth, and only on a big cart — the blended discount you actually pay out lands well below '+pct(d3)+'.',
+      img:heroes[0].img}));
+  }
+
+  /* ---- 5. GWP ---- */
+  if(rows.length>=2){
+    const gift=rows.find(x=>x.gwp)||rows.slice().sort((a,b)=>a.price-b.price)[0];
+    const anchor=heroes.find(x=>x.id!==gift.id)||heroes[0];
+    if(gift&&anchor&&gift.id!==anchor.id){
+      const c=cat(anchor), r=R(state.seed+':'+p+':'+ev.id+':gwp');
+      const T=Math.max(Math.round(Math.max(anchor.price*1.2,gift.price*2.6)/50)*50,299);
+      const brandN=brandOf(anchor.sku).name;
+      const th='Spend '+peso(T)+' on selected '+brandN+' & get '+shortName(gift.name)+' ('+peso(gift.price)+') for FREE!';
+      const deal='Spend '+peso(T)+', get '+shortName(gift.name)+' free.';
+      push_('gwp',mk({title:'Gift with purchase · '+shortName(gift.name),rows:[anchor,gift],
+        mech:'Min-spend gift: <b>'+peso(T)+'</b> on selected '+brandN+' unlocks <b>'+shortName(gift.name)+'</b> free. Threshold is set above '+shortName(anchor.name)+' at '+peso(anchor.price)+' so it forces a second item into the cart.',
+        lines:[['Min spend',peso(T)],['Gift retail value',peso(gift.price)],['Gift as % of threshold',pct(gift.price/T)],['Buyer perceives',peso(gift.price)+' free','save']],
+        depth:gift.price/T,st:{cls:'ok',lab:'Value given as product, not price',pill:'Free gift'},
+        copy:{th:th,banner:'Free Gift Over '+peso(T),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+        note:'A gift protects your price where a discount resets it — the buyer reads '+peso(gift.price)+' of value, but you give it at your cost, not at retail. Change the gift with the GWP checkbox.',
+        img:gift.img,isGwp:true}));
+    }
+  }
+
+  /* ---- 6. VOUCHER ---- */
+  {
+    const c=cat(heroes[0]), r=R(state.seed+':'+p+':'+ev.id+':voucher');
+    const Y=Math.max(299,Math.round(avg*1.5/50)*50);
+    const dv=clamp(Math.min(ev.disc*0.55,CE()),0.02,0.4);
+    const X=Math.max(20,Math.round(Y*dv/10)*10);
+    const st=depthState(X/Y);
+    const th=thematic(c,ev,p,r);
+    const deal=peso(X)+' off when you spend '+peso(Y)+'.';
+    push_('voucher',mk({title:'Store voucher · '+peso(X)+' off '+peso(Y),rows:rows.slice(0,3),
+      mech:'Collectible voucher: <b>'+peso(X)+' off a minimum spend of '+peso(Y)+'</b> — '+pct(X/Y)+' effective at the threshold, and less on any bigger cart. Stackable on top of the flash price, so check the combined depth before you allow both.',
+      lines:[['Min spend',peso(Y)],['Voucher value',peso(X)],['Effective at threshold',pct(X/Y)],['Buyer pays',peso(Y-X)]],
+      depth:X/Y,st:st,
+      copy:{th:th,banner:peso(X)+' Off '+peso(Y),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Cap the claim count so the exposure is bounded: '+peso(X)+' × claims is your maximum spend on this voucher.',
+      img:heroes[0].img}));
+  }
+
+  /* ---- 7. FREE SHIPPING ---- */
+  {
+    const c=cat(heroes[0]), r=R(state.seed+':'+p+':'+ev.id+':freeship');
+    const Y=Math.max(299,Math.round(avg*1.4/50)*50);
+    const qty=Math.max(1,Math.ceil(Y/Math.max(1,avg)));
+    const th=thematic(c,ev,p,r);
+    const deal='Free shipping on orders '+peso(Y)+' and up.';
+    push_('freeship',mk({title:'Free shipping over '+peso(Y),rows:rows.slice(0,3),
+      mech:'Free shipping above <b>'+peso(Y)+'</b>. The threshold sits above your '+peso(Math.round(avg))+' average item price, so one cheap item cannot trigger it — the buyer has to add a second product to qualify.',
+      lines:[['Threshold',peso(Y)],['Your average item price',peso(Math.round(avg))],['Items needed to qualify',String(qty)],['Buyer pays for shipping','₱0 above '+peso(Y),'save']],
+      depth:0,st:{cls:'mute',lab:'Perk, not a price cut — your listing price holds',pill:'Free shipping'},
+      copy:{th:th,banner:'Free Shipping Over '+peso(Y),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Strongest on the low-ticket SKUs where shipping is the real objection — pair it with the multi-buy above so the buyer clears the threshold on one product.',
+      img:heroes[0].img}));
+  }
+
+  /* ---- 8. LIVE ---- */
+  {
+    const row=heroes[0], c=cat(row), r=R(state.seed+':'+p+':'+ev.id+':live');
+    const q=priceFor(row.price,Math.min(ev.disc+0.05,CE())), pp=q.pp, st=depthState(q.depth);
+    const th=thematic(c,ev,p,r);
+    const host=p==='TTK'?'TikTok LIVE':(p==='SHP'?'Shopee Live':'LazLive');
+    const deal=shortName(row.name)+' at '+peso(pp)+', '+host+' only.';
+    push_('live',mk({title:host+' exclusive · '+shortName(row.name),rows:[row],
+      mech:'Deeper price shown only inside the '+host+' session — <b>'+peso(pp)+'</b> ('+pct(q.depth)+' off). Keeps the deepest cut off your public listing, so it does not reset your 30-day lowest price.',
+      lines:[['Listing price',peso(row.price),'strike'],[host+' price',peso(pp)],['Buyer saves',peso(row.price-pp)+' ('+pct(q.depth)+')','save']],
+      depth:q.depth,st:st,
+      copy:{th:th,banner:host+' Only',push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Cap the redemption count and announce it mid-session — scarcity is what makes the live price work.',
+      img:row.img}));
+  }
+
+  /* ---- 9. NEW CUSTOMER ---- */
+  {
+    const row=heroes[heroes.length-1], c=cat(row), r=R(state.seed+':'+p+':'+ev.id+':newcust');
+    const q=priceFor(row.price,Math.min(0.15,CE())), pp=q.pp, st=depthState(q.depth);
+    const th=thematic(c,ev,p,r);
+    const label=p==='SHP'?'Follow Prize voucher':(p==='TTK'?'New Customer Offer':'New Buyer Voucher');
+    const deal='First order? '+shortName(row.name)+' at '+peso(pp)+'.';
+    push_('newcust',mk({title:label,rows:[row],
+      mech:'Acquisition-only offer at <b>'+pct(q.depth)+'</b> off, gated to first-time buyers'+(p==='SHP'?' / new followers':'')+'. Existing customers cannot claim it, so it does not cannibalise full-price repeat orders.',
+      lines:[['Listing price',peso(row.price),'strike'],['New-buyer price',peso(pp)],['Discount',pct(q.depth)],['Buyer saves',peso(row.price-pp),'save']],
+      depth:q.depth,st:st,
+      copy:{th:th,banner:'New Here? '+peso(row.price-pp)+' Off',push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Treat the gap between this and your flash price as acquisition cost, not lost margin.',
+      img:row.img}));
+  }
+
+  /* ---- 10. CAMPAIGN SUBMISSION (double-day / mega only) ---- */
+  if(em.indexOf('campaign')>-1){
+    const row=heroes[0], c=cat(row), r=R(state.seed+':'+p+':'+ev.id+':campaign');
+    const q=priceFor(row.price,ev.disc), pp=q.pp, st=depthState(q.depth);
+    const th=thematic(c,ev,p,r);
+    const deal=ev.name+': '+shortName(row.name)+' at '+peso(pp)+'.';
+    push_('campaign',mk({title:'Submit to '+ev.name,rows:heroes.slice(0,3),
+      mech:'Register the starred SKUs for <b>'+ev.name+'</b> at <b>'+peso(pp)+'</b> ('+pct(q.depth)+' off the '+peso(row.price)+' listing). Platform campaigns usually require the price to be at or below your 30-day lowest — confirm the exact rule in Seller Centre before locking it.',
+      lines:[['Listing price',peso(row.price),'strike'],['Campaign price',peso(pp)],['Depth',pct(q.depth)],['Submission window',ds+' – '+de]],
+      depth:q.depth,st:st,
+      copy:{th:th,banner:banner(c,ev,p,r),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Submit early — slots and banner placements close well before the sale date.',
+      img:row.img}));
+  }
+
+  /* ---- 11. AFFILIATE / CREATOR COMMISSION ---- */
+  {
+    const row=heroes[0], c=cat(row), r=R(state.seed+':'+p+':'+ev.id+':affiliate');
+    const comm=p==='TTK'?(ev.slider==='HIGH'?0.15:0.12):0.08;
+    const th=thematic(c,ev,p,r);
+    const deal='Creators earn '+pct(comm)+' on '+shortName(row.name)+'.';
+    push_('affiliate',mk({title:'Creator commission · '+pct(comm),rows:[row],
+      mech:'Set commission to <b>'+pct(comm)+'</b> on '+shortName(row.name)+' at full listing price. Paid only on a sale, so it is variable cost — but it stacks with any discount, which is where margins usually break.',
+      lines:[['Listing price',peso(row.price)],['Commission rate',pct(comm)],['You pay per sale',peso(Math.round(row.price*comm))],['Creator keeps',peso(Math.round(row.price*comm))]],
+      depth:comm,st:{cls:'mute',lab:'Paid per sale, not off the price',pill:pct(comm)+' commission'},
+      copy:{th:th,banner:banner(c,ev,p,r),push:push(c,ev,p,r,deal,de),social:social(c,ev,p,r,th,deal)},
+      note:'Do not run the deepest flash price and the top commission on the same SKU at the same time — the two stack against you.',
+      img:row.img}));
+  }
+  out.sort((a,b)=>(b.lead?1:0)-(a.lead?1:0));
+  out.forEach(o=>{o.store=storeCode(p,o.rows);});
+  return out;
+}
+
+/* ============================================================
+   RENDER — SETUP
+   ============================================================ */
+function fillMonths(){
+  const s=$('#month'); s.innerHTML=MONTHS.map((m,i)=>'<option value="'+(i+1)+'">'+m+'</option>').join('');
+  s.value=state.month;
+}
+function fillEvents(){
+  const s=$('#event'), list=EV[state.month]||[];
+  s.innerHTML=list.map(e=>'<option value="'+e.id+'">'+e.name+'</option>').join('');
+  if(!list.some(e=>e.id===state.eventId))state.eventId=list[0].id;
+  s.value=state.eventId;
+}
+function curEv(){const l=EV[state.month]||[];return l.find(e=>e.id===state.eventId)||l[0];}
+function drawCtx(){
+  const e=curEv(), [a,b]=evWindow(e), s=slider(e,'SHP');
+  const th=state.themeOv?state.themeOv:e.theme;
+  $('#ctx').innerHTML=
+    '<div><b>'+MONTHS[state.month-1].slice(0,3).toUpperCase()+' '+state.year+'</b></div>'+
+    '<div class="hot"><b>'+e.name+'</b></div>'+
+    '<div>'+a+' – '+b+'</div>'+
+    '<div>Theme: <b>'+th+'</b></div>'+
+    '<div>Tone: <b>'+s+'</b></div>'+
+    '<div>Depth cap: <b>'+pct(Math.min(e.disc,CE()))+'</b></div>';
+}
+
+/* ============================================================
+   RENDER — PRODUCT ROWS
+   ============================================================ */
+function drawRows(){
+  const tb=$('#rows');
+  if(!state.rows.length){
+    tb.innerHTML='<tr><td colspan="8"><div class="empty">No products yet — add a row, paste from your spreadsheet, or load the sample set.</div></td></tr>';
+    return;
+  }
+  tb.innerHTML=state.rows.map(r=>{
+    const b=brandOf(r.sku), c=CATS[catOf(r)]||CATS.general;
+    return '<tr data-id="'+r.id+'" class="'+(r.hero?'hero':'')+'">'+
+      '<td><button class="starbtn '+(r.hero?'on':'')+'" data-act="hero" title="Build promos around this SKU">'+(r.hero?'★':'☆')+'</button></td>'+
+      '<td><div class="thumb" data-act="img">'+(r.img?'<img src="'+r.img+'" alt="">':'+')+'</div></td>'+
+      '<td><input type="text" data-k="sku" value="'+esc(r.sku)+'" placeholder="SLQ-XXX-YY" style="font-family:var(--f-mono);font-size:12px"></td>'+
+      '<td><input type="text" data-k="name" value="'+esc(r.name)+'" placeholder="Product name"></td>'+
+      '<td><span class="brandtag">'+esc(b.name)+'<br>'+esc(c.label)+'</span></td>'+
+      '<td><input type="number" data-k="price" value="'+(r.price||'')+'" min="0" step="1" style="text-align:right"></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-k="gwp" '+(r.gwp?'checked':'')+' title="Use as the free gift"></td>'+
+      '<td><button class="xbtn" data-act="del" title="Remove row">×</button></td></tr>';
+  }).join('');
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+/* ============================================================
+   RENDER — RESULTS
+   ============================================================ */
+function heroesOf(rows){
+  const h=rows.filter(r=>r.hero);
+  return h.length?h:rows.slice(0,Math.min(3,rows.length));
+}
+function generate(){
+  const rows=state.rows.filter(r=>String(r.name).trim()&&Number(r.price)>0);
+  if(!rows.length){toast('Add at least one product with a name and a price.');return;}
+  USED.clear();
+  const ev=curEv(), heroes=heroesOf(rows), res={};
+  ['LZD','SHP','TTK'].forEach(p=>{if(state.on[p])res[p]=build(p,ev,rows,heroes);});
+  const keys=Object.keys(res);
+  if(!keys.length){toast('Turn on at least one marketplace.');return;}
+  state.result={ev:ev,rows:rows,heroes:heroes,byPlat:res};
+  if(keys.indexOf(state.view)<0&&state.view!=='SHEET')state.view=keys[0];
+  $('#results').classList.add('on');
+  drawTabs(); drawOut();
+  save();
+  $('#results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function drawTabs(){
+  const r=state.result, keys=Object.keys(r.byPlat);
+  $('#tabs').innerHTML=keys.map(p=>'<button class="tab'+(state.view===p?' on':'')+'" data-p="'+p+'" data-v="'+p+'"><span class="dot"></span>'+PLAT[p].name+' <span class="n">'+r.byPlat[p].length+'</span></button>').join('')
+    +'<button class="tab'+(state.view==='SHEET'?' on':'')+'" data-p="SHEET" data-v="SHEET"><span class="dot"></span>Collateral sheet <span class="n">'+keys.reduce((a,p)=>a+r.byPlat[p].length,0)+'</span></button>';
+  const ev=r.ev, [a,b]=evWindow(ev);
+  $('#resTitle').textContent=ev.name+' · '+MONTHS[state.month-1]+' '+state.year;
+  $('#resHint').textContent=r.heroes.length+' starred SKU'+(r.heroes.length>1?'s':'')+' · '+r.rows.length+' in range · window '+a+'–'+b+' · ceiling '+pct(CE());
+}
+function cline(k,html,cp,cc){
+  return '<div class="copyline"><span class="k">'+k+'</span><span class="v">'+html+(cc?' <span class="cc">'+cc+'</span>':'')+'</span>'+
+    (cp?'<button class="cp" data-cp="'+esc(cp)+'">copy</button>':'')+'</div>';
+}
+function cardHTML(o){
+  const cp=o.copy;
+  const ledger='<table class="ledger"><tbody>'+o.lines.map((l,i)=>{
+    const cls=i===o.lines.length-1?'':'';
+    return '<tr class="'+(l[2]==='save'?'tot':'')+'"><td>'+l[0]+'</td><td class="'+(l[2]==='strike'?'strike':l[2]==='save'?'save':'')+'">'+l[1]+'</td></tr>';
+  }).join('')+'</tbody></table>';
+  return '<div class="card">'+
+    '<div class="card-top">'+
+      (o.img?'<div class="thumb"><img src="'+o.img+'" alt=""></div>':'')+
+      '<div class="tt"><h3>'+esc(o.title)+'</h3><span class="tool" data-p="'+o.plat+'">'+esc(o.tool)+'</span>'+
+      (o.lead?' <span class="pill ok" style="vertical-align:2px">Lead play</span>':'')+'</div>'+
+    '</div>'+
+    '<div class="sect"><span class="eyebrow">Mechanic</span><div class="mech">'+o.mech+'</div>'+
+      '<div class="skus">'+o.rows.map(r=>'<span class="sku">'+esc(r.sku||'no SKU')+'</span>').join('')+'</div></div>'+
+    '<div class="sect"><span class="eyebrow">Price ledger</span>'+ledger+
+      '<div class="mnote"><span class="pill '+o.st.cls+'">'+o.st.pill+'</span> <span style="color:var(--ink-3)">'+o.st.lab+'</span></div>'+
+      (o.note?'<div class="mnote" style="color:var(--ink-2)">'+o.note+'</div>':'')+'</div>'+
+    '<div class="sect"><span class="eyebrow">Copy</span>'+
+      cline('Thematic','<span class="thematic">'+esc(cp.th)+'</span>',cp.th)+
+      cline('Banner',esc(cp.banner),cp.banner,cp.banner.length+' ch')+
+      cline('Push','<span class="pushT">'+esc(cp.push.t)+'</span><br>'+esc(cp.push.b),cp.push.t+' — '+cp.push.b,cp.push.t.length+'/'+cp.push.b.length+' ch')+
+      cline('Social',esc(cp.social.line)+'<br>'+esc(cp.social.sub)+'<br><span class="tags">'+esc(cp.social.tags)+'</span>',cp.social.line+'\n'+cp.social.sub+'\n'+cp.social.tags)+
+    '</div>'+
+    '<div class="card-foot"><span class="storecode">'+esc(o.store)+' · '+esc(o.type)+'</span>'+
+      '<span class="storecode">'+o.start+' – '+o.end+'</span></div>'+
+  '</div>';
+}
+function priceTable(p){
+  const ev=state.result.ev;
+  const rows=state.result.rows.map(r=>{
+    const q=priceFor(r.price,ev.disc), b=brandOf(r.sku);
+    return '<tr><td class="mono" style="font-family:var(--f-mono);font-size:11px">'+esc(r.sku)+'</td>'+
+      '<td>'+esc(shortName(r.name))+'</td><td>'+esc(b.name)+'</td>'+
+      '<td class="n">'+peso(r.price)+'</td>'+
+      '<td class="n">'+peso(q.pp)+'</td><td class="n">'+pct(q.depth)+'</td>'+
+      '<td class="n">'+peso(r.price-q.pp)+'</td></tr>';
+  }).join('');
+  return '<div class="pt"><h3>Every SKU at the '+PLAT[p].name+' flash depth</h3><div class="tblwrap"><table>'+
+    '<thead><tr><th>SKU</th><th>Product</th><th>Brand</th><th class="t-r">List</th><th class="t-r">Promo</th><th class="t-r">Off</th><th class="t-r">Buyer saves</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div></div>';
+}
+function drawOut(){
+  const r=state.result;
+  if(state.view==='SHEET'){$('#out').innerHTML=sheetHTML();return;}
+  const list=r.byPlat[state.view]||[];
+  $('#out').innerHTML='<div class="cards">'+list.map(cardHTML).join('')+'</div>'+priceTable(state.view);
+}
+
+/* ============================================================
+   COLLATERAL SHEET
+   ============================================================ */
+const SHEET_COLS=['THEME','STORE','Campaign','DEADLINE','Promo Type','Start','End','Thematic Name','Short Promotional Content','SKU Featured','Promotion/Deals'];
+function sheetRows(){
+  const r=state.result, ev=r.ev, out=[];
+  const theme=state.themeOv?state.themeOv:ev.theme;
+  Object.keys(r.byPlat).forEach(p=>{
+    r.byPlat[p].forEach(o=>{
+      out.push([theme,o.store,ev.campaign,'',o.type,o.start,o.end,o.copy.th,
+        o.rows.map(x=>x.name).join(', '),o.rows.map(x=>x.sku).join(', '),
+        o.mech.replace(/<[^>]+>/g,'')]);
+    });
+  });
+  return out;
+}
+function sheetHTML(){
+  const rs=sheetRows();
+  return '<div class="sheetnote"><b>Paste-ready for STORE_COLLATERAL_PROMOTIONS.xlsx.</b> Same eleven columns in the same order, '+
+    '<span class="num">'+rs.length+'</span> rows. <b>Thematic Name</b> holds the tagline, <b>Short Promotional Content</b> holds the product names and <b>Promotion/Deals</b> holds the mechanic — product names and SKUs are copied verbatim from your table. DEADLINE is left blank for you to fill.</div>'+
+    '<div class="btnrow" style="margin-bottom:14px">'+
+      '<button class="btn btn-primary" id="copyTsv">Copy all rows (tab-separated)</button>'+
+      '<button class="btn" id="dlCsv" style="display:none">Download CSV</button>'+
+      '<button class="btn btn-ghost" id="copyThem">Copy thematic names only</button></div>'+
+    '<div class="tblwrap" id="sheetTbl"><table><thead><tr>'+SHEET_COLS.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>'+
+    rs.map(row=>'<tr>'+row.map((c,i)=>'<td class="'+(i===7?'them':(i===1||i===9?'mono':''))+'">'+esc(c)+'</td>').join('')+'</tr>').join('')+
+    '</tbody></table></div>';
+}
+function tsv(){return [SHEET_COLS.join('\t')].concat(sheetRows().map(r=>r.map(c=>String(c).replace(/[\t\n\r]+/g,' ')).join('\t'))).join('\n');}
+function csv(){const q=c=>'"'+String(c).replace(/"/g,'""').replace(/[\r\n]+/g,' ')+'"';
+  return [SHEET_COLS.map(q).join(',')].concat(sheetRows().map(r=>r.map(q).join(','))).join('\r\n');}
+
+/* ============================================================
+   DOWNLOADS CAPABILITY
+   ============================================================ */
+let DL=null;
+(async()=>{try{if(window.claude&&typeof window.claude.use==='function')DL=await window.claude.use('downloads');}catch(e){DL=null;}
+  refreshDl();})();
+function refreshDl(){const b=$('#dlCsv');if(b)b.style.display=DL?'inline-flex':'none';}
+
+/* ============================================================
+   UTIL: clipboard + toast
+   ============================================================ */
+let tt=null;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2100);}
+async function copy(text,btn){
+  let ok=false;
+  try{await navigator.clipboard.writeText(text);ok=true;}
+  catch(e){try{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();ok=document.execCommand('copy');document.body.removeChild(ta);}catch(e2){ok=false;}}
+  if(btn&&ok){btn.classList.add('done');btn.textContent='copied';setTimeout(()=>{btn.classList.remove('done');btn.textContent='copy';},1300);}
+  toast(ok?'Copied to clipboard':'Could not reach the clipboard — select the text and copy manually');
+}
+
+/* ============================================================
+   IMPORT
+   ============================================================ */
+function parseImport(txt){
+  const lines=String(txt).split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const out=[];
+  lines.forEach((l,i)=>{
+    const d=l.indexOf('\t')>-1?'\t':(l.indexOf('|')>-1?'|':',');
+    const c=l.split(d).map(x=>x.trim().replace(/^"|"$/g,''));
+    if(i===0&&/sku|product|name|price/i.test(c[0]+' '+(c[1]||'')))return;
+    if(c.length<2)return;
+    const num=s=>{const n=parseFloat(String(s||'').replace(/[^0-9.]/g,''));return isFinite(n)?n:0;};
+    out.push(newRow({sku:c[0],name:c[1],price:num(c[2])}));
+  });
+  return out;
+}
+const DEMO=[
+  {sku:'SLQ-GLB750-CL',name:'Slique Glass Lunch Box 750ml with Vented Lid',price:399,hero:true},
+  {sku:'QNH-TPF550-TP',name:'Quencha Insulated Tumbler 550ml, Taupe',price:549,hero:true},
+  {sku:'SBZ-SPM360-GY',name:'Scrubz Spin Mop Set 360 with Bucket',price:899,hero:true},
+  {sku:'CRY-DCT900-CL',name:'Crysalis Glass Decanter 900ml',price:749},
+  {sku:'NDL-HNG24-BK',name:'Nest Design Lab Slim Velvet Hangers 24pcs',price:299},
+  {sku:'PRM-TWL70-WH',name:'Primeo Quick-Dry Bath Towel 70x140, White',price:349},
+  {sku:'MOD-WCL30-BK',name:'Moderno Silent Wall Clock 30cm',price:459},
+  {sku:'SLQ-CUT16-SS',name:'Slique Persona Cutlery 16pcs Set',price:1099},
+  {sku:'FIT-GTW-NV',name:'Fitspire Quick-Dry Gym Towel, Navy',price:199,gwp:true}
+];
+
+/* ============================================================
+   EVENTS / WIRING
+   ============================================================ */
+function syncInputs(){
+  $('#year').value=state.year; $('#ceil').value=state.ceil;
+  $('#themeOv').value=state.themeOv;
+  ['LZD','SHP','TTK'].forEach(p=>{$('#p'+p).checked=state.on[p];
+    $('#p'+p).closest('.chip-toggle').classList.toggle('off',!state.on[p]);});
+}
+function regen(){if(state.result)generate();}
+
+var inited=false;
+document.addEventListener('DOMContentLoaded',init);
+if(document.readyState!=='loading')init();
+function init(){
+  if(inited)return; inited=true;
+  const had=load();
+  if(!state.rows.length)state.rows=DEMO.map(d=>newRow(d));
+  fillMonths(); fillEvents(); syncInputs(); drawCtx(); drawRows();
+
+  $('#month').addEventListener('change',e=>{state.month=+e.target.value;fillEvents();drawCtx();save();regen();});
+  $('#event').addEventListener('change',e=>{state.eventId=e.target.value;drawCtx();save();regen();});
+  $('#year').addEventListener('input',e=>{state.year=+e.target.value||now.getFullYear();drawCtx();save();regen();});
+  $('#themeOv').addEventListener('input',e=>{state.themeOv=e.target.value;drawCtx();save();});
+  $('#themeOv').addEventListener('change',regen);
+  [['ceil','ceil']].forEach(([id,k])=>{
+    $('#'+id).addEventListener('input',e=>{state[k]=+e.target.value||0;drawCtx();save();regen();});});
+  ['LZD','SHP','TTK'].forEach(p=>{
+    $('#p'+p).addEventListener('change',e=>{state.on[p]=e.target.checked;
+      e.target.closest('.chip-toggle').classList.toggle('off',!e.target.checked);save();regen();});});
+
+  $('#addRow').addEventListener('click',()=>{state.rows.push(newRow());drawRows();save();});
+  $('#loadDemo').addEventListener('click',()=>{state.rows=DEMO.map(d=>newRow(d));drawRows();save();regen();toast('Sample set loaded');});
+  $('#clearAll').addEventListener('click',()=>{state.rows=[newRow()];state.result=null;$('#results').classList.remove('on');drawRows();save();});
+  $('#toggleImport').addEventListener('click',()=>$('#importbox').classList.toggle('open'));
+  $('#cancelImport').addEventListener('click',()=>{$('#importbox').classList.remove('open');$('#importta').value='';});
+  $('#doImport').addEventListener('click',()=>{
+    const rows=parseImport($('#importta').value);
+    if(!rows.length){toast('Nothing parsed — check that each line has at least a SKU and a product name.');return;}
+    rows.slice(0,3).forEach(r=>r.hero=true);
+    state.rows=rows; drawRows(); save();
+    $('#importbox').classList.remove('open'); $('#importta').value='';
+    toast(rows.length+' row'+(rows.length>1?'s':'')+' imported');
+  });
+
+  $('#rows').addEventListener('input',e=>{
+    const tr=e.target.closest('tr'); if(!tr)return;
+    const row=state.rows.find(x=>x.id==tr.dataset.id); if(!row)return;
+    const k=e.target.dataset.k; if(!k)return;
+    if(k==='gwp'){state.rows.forEach(x=>x.gwp=false);row.gwp=e.target.checked;drawRows();}
+    else if(k==='price')row[k]=+e.target.value||0;
+    else{row[k]=e.target.value;
+      const b=brandOf(row.sku),c=CATS[catOf(row)]||CATS.general;
+      const cell=tr.children[4].querySelector('.brandtag');
+      if(cell)cell.innerHTML=esc(b.name)+'<br>'+esc(c.label);}
+    save();
+  });
+  $('#rows').addEventListener('click',e=>{
+    const tr=e.target.closest('tr'); if(!tr)return;
+    const row=state.rows.find(x=>x.id==tr.dataset.id); if(!row)return;
+    const act=e.target.closest('[data-act]'); if(!act)return;
+    if(act.dataset.act==='hero'){row.hero=!row.hero;drawRows();save();regen();}
+    if(act.dataset.act==='del'){state.rows=state.rows.filter(x=>x.id!==row.id);drawRows();save();}
+    if(act.dataset.act==='img'){pickImg(row);}
+  });
+
+  $('#gen').addEventListener('click',generate);
+  $('#reshuffle').addEventListener('click',()=>{state.seed=Math.floor(Math.random()*1e9);save();
+    if(state.result)generate(); else toast('Generate a plan first, then reshuffle the copy.');});
+
+  $('#tabs').addEventListener('click',e=>{
+    const t=e.target.closest('.tab'); if(!t)return;
+    state.view=t.dataset.v; drawTabs(); drawOut();
+  });
+  $('#out').addEventListener('click',async e=>{
+    const cp=e.target.closest('[data-cp]');
+    if(cp){copy(cp.dataset.cp,cp);return;}
+    if(e.target.id==='copyTsv'){copy(tsv());return;}
+    if(e.target.id==='copyThem'){copy(sheetRows().map(r=>r[7]).join('\n'));return;}
+    if(e.target.id==='dlCsv'){
+      if(!DL){toast('Download is not available here — use Copy all rows instead.');return;}
+      try{await DL.save({filename:'Promo_Collaterals_'+(state.result.ev.campaign||'CAMPAIGN').replace(/[^A-Za-z0-9]+/g,'_')+'_'+state.year+'-'+String(state.month).padStart(2,'0')+'.csv',data:csv()});
+        toast('CSV sent to your downloads');}
+      catch(err){toast('Download declined or unavailable — use Copy all rows instead.');}
+      return;
+    }
+  });
+  new MutationObserver(refreshDl).observe($('#out'),{childList:true});
+}
+
+function pickImg(row){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='image/*';
+  inp.addEventListener('change',()=>{
+    const file=inp.files&&inp.files[0]; if(!file)return;
+    const img=new Image(), fr=new FileReader();
+    fr.onload=()=>{img.onload=()=>{
+      const max=240, s=Math.min(1,max/Math.max(img.width,img.height));
+      const cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.round(img.width*s)); cv.height=Math.max(1,Math.round(img.height*s));
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      row.img=cv.toDataURL('image/jpeg',0.72);
+      drawRows(); save(); if(state.result)generate();
+    }; img.onerror=()=>toast('That file could not be read as an image.'); img.src=fr.result;};
+    fr.onerror=()=>toast('That file could not be read.');
+    fr.readAsDataURL(file);
+  });
+  inp.click();
+}
+</script>
+
+</body>
+</html>
