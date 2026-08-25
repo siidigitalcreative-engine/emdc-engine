@@ -969,20 +969,73 @@ function arrayFromSkuPayload(value){
   if(Array.isArray(value&&value.appState&&value.appState.skuItems))return value.appState.skuItems;
   return [];
 }
-function readEmdcSkuStorage(){
+function readLocalEmdcSkuStorage(){
   let rows=[];
   try{rows=arrayFromSkuPayload(parseJsonSafe(localStorage.getItem(EMDC_SKU_KEY)));}catch(e){}
   if(!rows.length){try{rows=arrayFromSkuPayload(parseJsonSafe(localStorage.getItem(EMDC_SKU_LAST_GOOD_KEY)));}catch(e){}}
   if(!rows.length){try{rows=arrayFromSkuPayload(parseJsonSafe(localStorage.getItem(EMDC_APP_STATE_KEY)));}catch(e){}}
   return Array.isArray(rows)?rows.filter(x=>x&&String(x.sku||'').trim()):[];
 }
-function readEmdcBrandMap(){
+function readLocalEmdcBrandMap(){
   const map={};
   try{
     const app=parseJsonSafe(localStorage.getItem(EMDC_APP_STATE_KEY));
     const brands=Array.isArray(app&&app.brands)?app.brands:[];
     brands.forEach(b=>{if(b&&b.id)map[String(b.id)]=String(b.name||'').trim();});
   }catch(e){}
+  return map;
+}
+async function fetchCloudEmdcSkuStorage(){
+  const res=await fetch('/api/sku-items-fast',{
+    method:'GET',
+    cache:'no-store',
+    headers:{
+      'Cache-Control':'no-cache, no-store, max-age=0',
+      'Pragma':'no-cache'
+    }
+  });
+
+  const json=await res.json().catch(()=>null);
+
+  if(!res.ok||!json||json.ok!==true||!Array.isArray(json.skuItems)){
+    throw new Error(
+      (json&&json.error) ||
+      'Unable to load synced SKU Storage.'
+    );
+  }
+
+  return json.skuItems.filter(
+    row=>row&&String(row.sku||'').trim()
+  );
+}
+async function fetchCloudBrandMap(){
+  const map={};
+
+  try{
+    const res=await fetch('/api/emdc-bootstrap-lite',{
+      method:'GET',
+      cache:'no-store',
+      headers:{
+        'Cache-Control':'no-cache, no-store, max-age=0',
+        'Pragma':'no-cache'
+      }
+    });
+
+    const json=await res.json().catch(()=>null);
+    const appState=json&&json.ok&&json.data&&json.data.appState
+      ? json.data.appState
+      : null;
+    const brands=Array.isArray(appState&&appState.skuBrands)
+      ? appState.skuBrands
+      : Array.isArray(appState&&appState.brands)
+        ? appState.brands
+        : [];
+
+    brands.forEach(b=>{
+      if(b&&b.id)map[String(b.id)]=String(b.name||'').trim();
+    });
+  }catch(e){}
+
   return map;
 }
 function skuExtraValue(row,keys){
@@ -1017,29 +1070,94 @@ function skuBrandName(row,brandMap){
 function skuIdentity(row){return String((row&&row.id)||(row&&row.sku)||'').trim();}
 function normalizedSearch(v){return String(v||'').trim().toLowerCase();}
 
-function loadSkuStoragePicker(showToast){
-  const brandMap=readEmdcBrandMap();
-  skuLinkState.rows=readEmdcSkuStorage().map(row=>({
-    source:row,
-    id:skuIdentity(row),
-    sku:String(row.sku||'').trim(),
-    name:String(row.productName||row.product||row.name||'').trim(),
-    brand:skuBrandName(row,brandMap),
-    category:skuCollection(row),
-    tag:skuTags(row),
-    price:skuPrice(row),
-    image:skuImage(row),
-    stock:skuStock(row)
-  })).filter(row=>row.sku&&row.name);
+async function loadSkuStoragePicker(showToast){
+  const meta=$('#skuStorageMeta');
+  const results=$('#skuStorageResults');
+  const refresh=$('#refreshSkuStorage');
 
-  const validIds=new Set(skuLinkState.rows.map(row=>row.id));
-  skuLinkState.selected=new Set(Array.from(skuLinkState.selected).filter(id=>validIds.has(id)));
-  drawSkuStorageResults();
+  if(meta)meta.textContent='Loading synced SKUs…';
+  if(results)results.innerHTML='<div class="sku-empty">Loading synced SKU Storage…</div>';
+  if(refresh)refresh.disabled=true;
 
-  if(showToast){
-    toast(skuLinkState.rows.length
-      ? skuLinkState.rows.length+' SKU'+(skuLinkState.rows.length===1?'':'s')+' loaded from SKU Storage'
-      : 'No SKU Storage records found on this device');
+  try{
+    let sourceRows=[];
+    let sourceLabel='Cloud';
+
+    try{
+      sourceRows=await fetchCloudEmdcSkuStorage();
+    }catch(cloudError){
+      sourceRows=readLocalEmdcSkuStorage();
+      sourceLabel=sourceRows.length?'Local fallback':'Unavailable';
+
+      if(!sourceRows.length)throw cloudError;
+    }
+
+    const cloudBrandMap=await fetchCloudBrandMap();
+    const localBrandMap=readLocalEmdcBrandMap();
+    const brandMap=Object.assign({},localBrandMap,cloudBrandMap);
+
+    skuLinkState.rows=sourceRows.map(row=>({
+      source:row,
+      id:skuIdentity(row),
+      sku:String(row.sku||'').trim(),
+      name:String(row.productName||row.product||row.name||'').trim(),
+      brand:skuBrandName(row,brandMap),
+      category:skuCollection(row),
+      tag:skuTags(row),
+      price:skuPrice(row),
+      image:skuImage(row),
+      stock:skuStock(row)
+    })).filter(row=>row.sku&&row.name);
+
+    const validIds=new Set(skuLinkState.rows.map(row=>row.id));
+    skuLinkState.selected=new Set(
+      Array.from(skuLinkState.selected).filter(id=>validIds.has(id))
+    );
+
+    drawSkuStorageResults();
+
+    if(meta){
+      meta.textContent=
+        skuLinkState.rows.length+
+        ' synced SKU'+
+        (skuLinkState.rows.length===1?'':'s')+
+        ' · '+
+        sourceLabel;
+    }
+
+    if(showToast){
+      toast(
+        skuLinkState.rows.length+
+        ' SKU'+
+        (skuLinkState.rows.length===1?'':'s')+
+        ' loaded from synced SKU Storage'
+      );
+    }
+  }catch(error){
+    skuLinkState.rows=[];
+    skuLinkState.selected.clear();
+
+    if(meta)meta.textContent='Could not load synced SKUs';
+    if(results){
+      results.innerHTML=
+        '<div class="sku-empty">'+
+        'Could not load the synced SKU Storage. Try Refresh. '+
+        'If the main SKU Storage page is loading normally, redeploy this file and try again.'+
+        '</div>';
+    }
+
+    $('#skuSelectedCount').textContent='0 selected';
+    $('#addSelectedSkus').disabled=true;
+
+    if(showToast){
+      toast(
+        error&&error.message
+          ? error.message
+          : 'Unable to load synced SKU Storage'
+      );
+    }
+  }finally{
+    if(refresh)refresh.disabled=false;
   }
 }
 function filteredSkuStorageRows(){
@@ -1758,7 +1876,7 @@ function init(){
     $('#toggleSkuStorage').classList.toggle('on',willOpen);
     $('#toggleImport').classList.remove('on');
     if(willOpen){
-      loadSkuStoragePicker(false);
+      void loadSkuStoragePicker(false);
       setTimeout(()=>$('#skuStorageSearch').focus(),0);
     }
   });
@@ -1774,7 +1892,7 @@ function init(){
     $('#toggleSkuStorage').classList.remove('on');
   });
 
-  $('#refreshSkuStorage').addEventListener('click',()=>loadSkuStoragePicker(true));
+  $('#refreshSkuStorage').addEventListener('click',()=>{void loadSkuStoragePicker(true);});
 
   $('#skuStorageSearch').addEventListener('input',e=>{
     skuLinkState.query=e.target.value;
