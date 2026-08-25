@@ -6577,213 +6577,246 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                       <div
                         style={{
                           display:"flex",
-                          gap:3,
-                          padding:3,
+                          flexDirection:"column",
+                          gap:5,
+                          padding:5,
                           border:`1px solid ${C.border}`,
-                          borderRadius:7,
+                          borderRadius:8,
                           background:C.surfaceAlt,
-                          flexWrap:"wrap",
-                          alignItems:"center",
-                          justifyContent:"flex-end",
+                          width:"100%",
+                          minWidth:0,
                         }}
                       >
-                        <select
-                          value={recommendedProductsTextModel}
-                          onChange={(e:any)=>
-                            setRecommendedProductsTextModel(
-                              e.target.value
-                            )
-                          }
-                          title="Select another model when the current model quota is reached."
-                          aria-label="Recommended Products Gemini model"
-                          disabled={
-                            !!generatingProductsFor ||
-                            !!generatingStoredSkuProductsFor
-                          }
+                        <div
                           style={{
-                            width:isMobile?138:152,
-                            minWidth:0,
-                            height:28,
-                            minHeight:28,
-                            border:`1px solid ${C.border}`,
-                            borderRadius:5,
-                            background:C.surface,
-                            color:C.textSub,
-                            padding:"3px 24px 3px 7px",
-                            fontSize:9.5,
-                            fontWeight:750,
-                            outline:"none",
-                            cursor:
-                              (
-                                !!generatingProductsFor ||
-                                !!generatingStoredSkuProductsFor
-                              )
-                                ? "not-allowed"
-                                : "pointer",
-                          }}
-                        >
-                          {recommendedProductsTextModels.map(
-                            (model:any)=>(
-                              <option
-                                key={model.value || "default"}
-                                value={model.value}
-                              >
-                                {model.label}
-                              </option>
-                            )
-                          )}
-                        </select>
-
-                        <button
-                          type="button"
-                          onClick={()=>{
-                            setEventProductView((previous:any)=>({
-                              ...previous,
-                              [ev.id]:"market",
-                            }));
-                            setProductGenerationError((previous:any)=>({
-                              ...previous,
-                              [ev.id]:"",
-                            }));
-                          }}
-                          disabled={
-                            !!generatingProductsFor ||
-                            !!generatingStoredSkuProductsFor
-                          }
-                          style={{
-                            border:0,
-                            borderRadius:5,
-                            padding:"5px 8px",
-                            background:
-                              (eventProductView?.[ev.id] || "market")==="market"
-                                ? C.accent
-                                : "transparent",
-                            color:
-                              (eventProductView?.[ev.id] || "market")==="market"
-                                ? "#FFFFFF"
-                                : C.textSub,
-                            fontSize:10,
-                            fontWeight:800,
-                            cursor:
-                              (
-                                !!generatingProductsFor ||
-                                !!generatingStoredSkuProductsFor
-                              )
-                                ? "not-allowed"
-                                : "pointer",
-                          }}
-                        >
-                          Market Ideas
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={()=>{
-                            setEventProductView((previous:any)=>({
-                              ...previous,
-                              [ev.id]:"sku",
-                            }));
-                            setProductGenerationError((previous:any)=>({
-                              ...previous,
-                              [ev.id]:"",
-                            }));
-                          }}
-                          disabled={
-                            !!generatingProductsFor ||
-                            !!generatingStoredSkuProductsFor
-                          }
-                          style={{
-                            border:0,
-                            borderRadius:5,
-                            padding:"5px 8px",
-                            background:
-                              eventProductView?.[ev.id]==="sku"
-                                ? C.accent
-                                : "transparent",
-                            color:
-                              eventProductView?.[ev.id]==="sku"
-                                ? "#FFFFFF"
-                                : C.textSub,
-                            fontSize:10,
-                            fontWeight:800,
-                            cursor:
-                              (
-                                !!generatingProductsFor ||
-                                !!generatingStoredSkuProductsFor
-                              )
-                                ? "not-allowed"
-                                : "pointer",
-                          }}
-                        >
-                          From SKU Storage
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={()=>{
-                            const selectedView =
-                              eventProductView?.[ev.id] || "market";
-
-                            if(selectedView==="sku"){
-                              void generateRecommendedStoredSkuProducts(ev);
-                            } else {
-                              void generateRecommendedProducts(ev);
-                            }
-                          }}
-                          disabled={
-                            !!generatingProductsFor ||
-                            !!generatingStoredSkuProductsFor
-                          }
-                          title={
-                            (eventProductView?.[ev.id] || "market")==="sku"
-                              ? "Generate recommendations from SKU Storage"
-                              : "Generate Market Ideas"
-                          }
-                          aria-label={
-                            (eventProductView?.[ev.id] || "market")==="sku"
-                              ? "Generate recommendations from SKU Storage"
-                              : "Generate Market Ideas"
-                          }
-                          style={{
-                            width:28,
-                            minWidth:28,
-                            height:28,
-                            minHeight:28,
-                            display:"inline-flex",
+                            display:"flex",
                             alignItems:"center",
-                            justifyContent:"center",
-                            padding:0,
-                            border:"none",
-                            borderRadius:5,
-                            background:C.accent,
-                            color:"#FFFFFF",
-                            fontSize:14,
-                            fontWeight:900,
-                            lineHeight:1,
-                            cursor:
-                              (
-                                !!generatingProductsFor ||
-                                !!generatingStoredSkuProductsFor
-                              )
-                                ? "not-allowed"
-                                : "pointer",
-                            opacity:
-                              (
-                                !!generatingProductsFor ||
-                                !!generatingStoredSkuProductsFor
-                              )
-                                ? .55
-                                : 1,
-                            flexShrink:0,
+                            gap:5,
+                            width:"100%",
+                            minWidth:0,
                           }}
                         >
-                          {
-                            generatingProductsFor===String(ev.id) ||
-                            generatingStoredSkuProductsFor===String(ev.id)
-                              ? "…"
-                              : "✦"
-                          }
-                        </button>
+                          <select
+                            value={recommendedProductsTextModel}
+                            onChange={(e:any)=>
+                              setRecommendedProductsTextModel(
+                                e.target.value
+                              )
+                            }
+                            title="Select another model when the current model quota is reached."
+                            aria-label="Recommended Products Gemini model"
+                            disabled={
+                              !!generatingProductsFor ||
+                              !!generatingStoredSkuProductsFor
+                            }
+                            style={{
+                              flex:"1 1 auto",
+                              width:"100%",
+                              minWidth:0,
+                              height:30,
+                              minHeight:30,
+                              border:`1px solid ${C.border}`,
+                              borderRadius:6,
+                              background:C.surface,
+                              color:C.textSub,
+                              padding:"3px 28px 3px 9px",
+                              fontSize:9.5,
+                              fontWeight:750,
+                              outline:"none",
+                              cursor:
+                                (
+                                  !!generatingProductsFor ||
+                                  !!generatingStoredSkuProductsFor
+                                )
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            {recommendedProductsTextModels.map(
+                              (model:any)=>(
+                                <option
+                                  key={model.value || "default"}
+                                  value={model.value}
+                                >
+                                  {model.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={()=>{
+                              const selectedView =
+                                eventProductView?.[ev.id] || "market";
+
+                              if(selectedView==="sku"){
+                                void generateRecommendedStoredSkuProducts(ev);
+                              } else {
+                                void generateRecommendedProducts(ev);
+                              }
+                            }}
+                            disabled={
+                              !!generatingProductsFor ||
+                              !!generatingStoredSkuProductsFor
+                            }
+                            title={
+                              (eventProductView?.[ev.id] || "market")==="sku"
+                                ? "Generate recommendations from SKU Storage"
+                                : "Generate Market Ideas"
+                            }
+                            aria-label={
+                              (eventProductView?.[ev.id] || "market")==="sku"
+                                ? "Generate recommendations from SKU Storage"
+                                : "Generate Market Ideas"
+                            }
+                            style={{
+                              width:30,
+                              minWidth:30,
+                              height:30,
+                              minHeight:30,
+                              display:"inline-flex",
+                              alignItems:"center",
+                              justifyContent:"center",
+                              padding:0,
+                              border:"none",
+                              borderRadius:6,
+                              background:C.accent,
+                              color:"#FFFFFF",
+                              fontSize:14,
+                              fontWeight:900,
+                              lineHeight:1,
+                              cursor:
+                                (
+                                  !!generatingProductsFor ||
+                                  !!generatingStoredSkuProductsFor
+                                )
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity:
+                                (
+                                  !!generatingProductsFor ||
+                                  !!generatingStoredSkuProductsFor
+                                )
+                                  ? .55
+                                  : 1,
+                              flexShrink:0,
+                              boxShadow:"0 1px 2px rgba(15,23,42,.08)",
+                            }}
+                          >
+                            {
+                              generatingProductsFor===String(ev.id) ||
+                              generatingStoredSkuProductsFor===String(ev.id)
+                                ? "…"
+                                : "✦"
+                            }
+                          </button>
+                        </div>
+
+                        <div
+                          style={{
+                            display:"grid",
+                            gridTemplateColumns:"1fr 1fr",
+                            gap:3,
+                            width:"100%",
+                            padding:3,
+                            borderRadius:6,
+                            background:C.surface,
+                            border:`1px solid ${C.border}`,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={()=>{
+                              setEventProductView((previous:any)=>({
+                                ...previous,
+                                [ev.id]:"market",
+                              }));
+                              setProductGenerationError((previous:any)=>({
+                                ...previous,
+                                [ev.id]:"",
+                              }));
+                            }}
+                            disabled={
+                              !!generatingProductsFor ||
+                              !!generatingStoredSkuProductsFor
+                            }
+                            style={{
+                              width:"100%",
+                              minWidth:0,
+                              height:26,
+                              border:0,
+                              borderRadius:5,
+                              padding:"4px 6px",
+                              background:
+                                (eventProductView?.[ev.id] || "market")==="market"
+                                  ? C.accent
+                                  : "transparent",
+                              color:
+                                (eventProductView?.[ev.id] || "market")==="market"
+                                  ? "#FFFFFF"
+                                  : C.textSub,
+                              fontSize:9.5,
+                              fontWeight:800,
+                              whiteSpace:"nowrap",
+                              cursor:
+                                (
+                                  !!generatingProductsFor ||
+                                  !!generatingStoredSkuProductsFor
+                                )
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            Market Ideas
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={()=>{
+                              setEventProductView((previous:any)=>({
+                                ...previous,
+                                [ev.id]:"sku",
+                              }));
+                              setProductGenerationError((previous:any)=>({
+                                ...previous,
+                                [ev.id]:"",
+                              }));
+                            }}
+                            disabled={
+                              !!generatingProductsFor ||
+                              !!generatingStoredSkuProductsFor
+                            }
+                            style={{
+                              width:"100%",
+                              minWidth:0,
+                              height:26,
+                              border:0,
+                              borderRadius:5,
+                              padding:"4px 6px",
+                              background:
+                                eventProductView?.[ev.id]==="sku"
+                                  ? C.accent
+                                  : "transparent",
+                              color:
+                                eventProductView?.[ev.id]==="sku"
+                                  ? "#FFFFFF"
+                                  : C.textSub,
+                              fontSize:9.5,
+                              fontWeight:800,
+                              whiteSpace:"nowrap",
+                              cursor:
+                                (
+                                  !!generatingProductsFor ||
+                                  !!generatingStoredSkuProductsFor
+                                )
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            From SKU Storage
+                          </button>
+                        </div>
                       </div>
                     </div>
 
