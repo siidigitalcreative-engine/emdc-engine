@@ -6641,15 +6641,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                               ...previous,
                               [ev.id]:"market",
                             }));
-
-                            const hasMarketIdeas = evProducts.some(
-                              (item:any)=>
-                                !String(item || "").includes("SKU:")
-                            );
-
-                            if(!hasMarketIdeas){
-                              void generateRecommendedProducts(ev);
-                            }
+                            setProductGenerationError((previous:any)=>({
+                              ...previous,
+                              [ev.id]:"",
+                            }));
                           }}
                           disabled={
                             !!generatingProductsFor ||
@@ -6669,12 +6664,16 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                                 : C.textSub,
                             fontSize:10,
                             fontWeight:800,
-                            cursor:"pointer",
+                            cursor:
+                              (
+                                !!generatingProductsFor ||
+                                !!generatingStoredSkuProductsFor
+                              )
+                                ? "not-allowed"
+                                : "pointer",
                           }}
                         >
-                          {generatingProductsFor===ev.id
-                            ? "Generating..."
-                            : "Market Ideas"}
+                          Market Ideas
                         </button>
 
                         <button
@@ -6684,15 +6683,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                               ...previous,
                               [ev.id]:"sku",
                             }));
-
-                            const hasSkuIdeas = evProducts.some(
-                              (item:any)=>
-                                String(item || "").includes("SKU:")
-                            );
-
-                            if(!hasSkuIdeas){
-                              void generateRecommendedStoredSkuProducts(ev);
-                            }
+                            setProductGenerationError((previous:any)=>({
+                              ...previous,
+                              [ev.id]:"",
+                            }));
                           }}
                           disabled={
                             !!generatingProductsFor ||
@@ -6712,12 +6706,83 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                                 : C.textSub,
                             fontSize:10,
                             fontWeight:800,
-                            cursor:"pointer",
+                            cursor:
+                              (
+                                !!generatingProductsFor ||
+                                !!generatingStoredSkuProductsFor
+                              )
+                                ? "not-allowed"
+                                : "pointer",
                           }}
                         >
-                          {generatingStoredSkuProductsFor===ev.id
-                            ? "Checking..."
-                            : "From SKU Storage"}
+                          From SKU Storage
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={()=>{
+                            const selectedView =
+                              eventProductView?.[ev.id] || "market";
+
+                            if(selectedView==="sku"){
+                              void generateRecommendedStoredSkuProducts(ev);
+                            } else {
+                              void generateRecommendedProducts(ev);
+                            }
+                          }}
+                          disabled={
+                            !!generatingProductsFor ||
+                            !!generatingStoredSkuProductsFor
+                          }
+                          title={
+                            (eventProductView?.[ev.id] || "market")==="sku"
+                              ? "Generate recommendations from SKU Storage"
+                              : "Generate Market Ideas"
+                          }
+                          aria-label={
+                            (eventProductView?.[ev.id] || "market")==="sku"
+                              ? "Generate recommendations from SKU Storage"
+                              : "Generate Market Ideas"
+                          }
+                          style={{
+                            width:28,
+                            minWidth:28,
+                            height:28,
+                            minHeight:28,
+                            display:"inline-flex",
+                            alignItems:"center",
+                            justifyContent:"center",
+                            padding:0,
+                            border:"none",
+                            borderRadius:5,
+                            background:C.accent,
+                            color:"#FFFFFF",
+                            fontSize:14,
+                            fontWeight:900,
+                            lineHeight:1,
+                            cursor:
+                              (
+                                !!generatingProductsFor ||
+                                !!generatingStoredSkuProductsFor
+                              )
+                                ? "not-allowed"
+                                : "pointer",
+                            opacity:
+                              (
+                                !!generatingProductsFor ||
+                                !!generatingStoredSkuProductsFor
+                              )
+                                ? .55
+                                : 1,
+                            flexShrink:0,
+                          }}
+                        >
+                          {
+                            generatingProductsFor===String(ev.id) ||
+                            generatingStoredSkuProductsFor===String(ev.id)
+                              ? "…"
+                              : "✦"
+                          }
                         </button>
                       </div>
                     </div>
