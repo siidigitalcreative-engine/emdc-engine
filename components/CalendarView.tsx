@@ -5912,6 +5912,185 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
       );
   };
 
+  const parseGeneratedSkuRecommendations = (
+    rawValue:any,
+    availableSkus:any[]=[]
+  ) => {
+    const rawOriginal = String(rawValue || "").trim();
+    if(!rawOriginal) return [];
+
+    const normalizeSku = (value:any) =>
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g,"");
+
+    const skuMap = new Map(
+      (availableSkus || [])
+        .filter((item:any)=>item?.sku)
+        .map((item:any)=>[
+          normalizeSku(item.sku),
+          item,
+        ])
+    );
+
+    const cleaned = rawOriginal
+      .replace(/```(?:json)?/gi,"")
+      .trim();
+
+    const candidates:string[] = [cleaned];
+
+    const arrayStart = cleaned.indexOf("[");
+    const arrayEnd = cleaned.lastIndexOf("]");
+    if(arrayStart>=0 && arrayEnd>arrayStart){
+      candidates.push(cleaned.slice(arrayStart,arrayEnd+1));
+    }
+
+    const objectStart = cleaned.indexOf("{");
+    const objectEnd = cleaned.lastIndexOf("}");
+    if(objectStart>=0 && objectEnd>objectStart){
+      candidates.push(cleaned.slice(objectStart,objectEnd+1));
+    }
+
+    let parsedList:any[] = [];
+
+    for(const candidate of candidates){
+      try {
+        const parsed:any = JSON.parse(candidate);
+        const list = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.products)
+            ? parsed.products
+            : Array.isArray(parsed?.recommendations)
+              ? parsed.recommendations
+              : Array.isArray(parsed?.items)
+                ? parsed.items
+                : Array.isArray(parsed?.results)
+                  ? parsed.results
+                  : [];
+
+        if(list.length){
+          parsedList = list;
+          break;
+        }
+      } catch {}
+    }
+
+    const resolved:any[] = [];
+    const used = new Set<string>();
+
+    const pushResolved = (
+      rawSku:any,
+      rawProduct:any="",
+      rawBrand:any="",
+      rawReason:any=""
+    ) => {
+      const skuKey = normalizeSku(rawSku);
+      let stored:any = skuKey ? skuMap.get(skuKey) : null;
+
+      if(!stored && rawProduct){
+        const productKey = String(rawProduct || "")
+          .trim()
+          .toLowerCase();
+
+        stored = (availableSkus || []).find(
+          (item:any)=>
+            String(item?.product || "")
+              .trim()
+              .toLowerCase() === productKey
+        );
+      }
+
+      if(!stored) return;
+
+      const actualSku = String(stored?.sku || "").trim();
+      const actualProduct = String(stored?.product || rawProduct || "").trim();
+      const actualBrand = String(stored?.brand || rawBrand || "").trim();
+      const reason = String(rawReason || "").trim();
+      const key = normalizeSku(actualSku);
+
+      if(!actualSku || !actualProduct || used.has(key)) return;
+
+      used.add(key);
+
+      resolved.push(
+        [
+          actualBrand,
+          actualProduct,
+          `SKU: ${actualSku}`,
+          reason,
+        ]
+          .filter(Boolean)
+          .join(" | ")
+      );
+    };
+
+    parsedList.forEach((item:any)=>{
+      if(typeof item === "string"){
+        const matchedSku = (availableSkus || []).find(
+          (stored:any)=>{
+            const sku = String(stored?.sku || "").trim();
+            return sku && String(item).toLowerCase().includes(sku.toLowerCase());
+          }
+        );
+
+        if(matchedSku){
+          pushResolved(
+            matchedSku.sku,
+            matchedSku.product,
+            matchedSku.brand,
+            ""
+          );
+        }
+        return;
+      }
+
+      pushResolved(
+        item?.sku ??
+        item?.skuCode ??
+        item?.sku_code ??
+        item?.code ??
+        "",
+        item?.product ??
+        item?.productName ??
+        item?.product_name ??
+        item?.name ??
+        item?.title ??
+        "",
+        item?.brand ??
+        item?.brandName ??
+        item?.brand_name ??
+        "",
+        item?.reason ??
+        item?.why ??
+        item?.rationale ??
+        item?.relevance ??
+        item?.description ??
+        ""
+      );
+    });
+
+    if(!resolved.length){
+      const rawLower = rawOriginal.toLowerCase();
+
+      (availableSkus || []).forEach((stored:any)=>{
+        const sku = String(stored?.sku || "").trim();
+        if(!sku) return;
+
+        if(rawLower.includes(sku.toLowerCase())){
+          pushResolved(
+            sku,
+            stored?.product,
+            stored?.brand,
+            ""
+          );
+        }
+      });
+    }
+
+    return resolved;
+  };
+
   const generateRecommendedProducts = async (ev:any) => {
     const eventId = String(ev?.id || "");
     if(!eventId || generatingProductsFor) return;
@@ -6123,10 +6302,11 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
         "Consider Filipino weather, school calendar, payday and sale periods, family occasions, home and lifestyle demand, and local cultural habits.",
         "Select 8 to 15 products when enough relevant SKUs are available.",
         "Avoid duplicates and do not repeat products already listed.",
-        "Return only a valid JSON array.",
+        "Return only a valid JSON array, not an object.",
+        "Copy the SKU code and product name exactly as they appear in the supplied SKU Storage list. Do not rewrite, shorten, translate, or alter them.",
         "Each item must use this exact format:",
         '{"sku":"SKU CODE","product":"Product Name","brand":"Brand","reason":"Concise reason"}',
-        "No markdown and no explanation outside the JSON array.",
+        "No markdown, no code fences, and no explanation outside the JSON array.",
       ].join("\n");
 
       const response = await fetch(
@@ -6200,64 +6380,34 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
         );
       }
 
-      const raw = String(
+      const rawAiText = String(
         payload?.text ||
         payload?.output ||
         payload?.content ||
         ""
-      )
-        .replace(/^```(?:json)?/i,"")
-        .replace(/```$/,"")
-        .trim();
+      ).trim();
 
-      let parsed:any[] = [];
-
-      try {
-        const value = JSON.parse(raw);
-        parsed = Array.isArray(value)
-          ? value
-          : Array.isArray(value?.products)
-            ? value.products
-            : [];
-      } catch {
-        parsed = [];
-      }
-
-      const generated = parsed
-        .map((item:any)=>{
-          const sku = String(
-            item?.sku || ""
-          ).trim();
-          const product = String(
-            item?.product ||
-            item?.name ||
-            ""
-          ).trim();
-          const brand = String(
-            item?.brand || ""
-          ).trim();
-          const reason = String(
-            item?.reason || ""
-          ).trim();
-
-          if(!sku || !product){
-            return "";
-          }
-
-          return [
-            brand,
-            product,
-            `SKU: ${sku}`,
-            reason,
-          ]
-            .filter(Boolean)
-            .join(" | ");
-        })
-        .filter(Boolean);
+      const generated =
+        parseGeneratedSkuRecommendations(
+          rawAiText,
+          availableSkus
+        );
 
       if(!generated.length){
+        const finishReason = String(
+          payload?.finishReason ||
+          payload?.raw?.candidates?.[0]?.finishReason ||
+          ""
+        ).trim();
+
         throw new Error(
-          "AI returned no usable SKU Storage recommendations."
+          finishReason
+            ? `${getRecommendedProductsTextModelLabel(
+                recommendedProductsTextModel
+              )} returned no usable SKU Storage recommendations (${finishReason}). Try another model.`
+            : `${getRecommendedProductsTextModelLabel(
+                recommendedProductsTextModel
+              )} returned a response that could not be matched to SKU Storage. Try again or select another model.`
         );
       }
 
