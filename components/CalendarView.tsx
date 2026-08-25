@@ -5605,6 +5605,72 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
   const [generatingStoredSkuProductsFor,setGeneratingStoredSkuProductsFor] = useState<any>(null);
   const [eventProductView,setEventProductView] = useState<any>({});
   const [productGenerationError,setProductGenerationError] = useState<any>({});
+  const [recommendedProductsTextModel,setRecommendedProductsTextModel] = useState("");
+
+  const recommendedProductsTextModels = [
+    {
+      value:"",
+      label:"Default Model (Vercel)",
+    },
+    {
+      value:"gemini-3.5-flash-lite",
+      label:"Gemini 3.5 Flash-Lite",
+    },
+    {
+      value:"gemini-3.1-flash-lite",
+      label:"Gemini 3.1 Flash-Lite",
+    },
+    {
+      value:"gemini-3.5-flash",
+      label:"Gemini 3.5 Flash",
+    },
+    {
+      value:"gemini-3.6-flash",
+      label:"Gemini 3.6 Flash",
+    },
+  ];
+
+  const getRecommendedProductsTextModelLabel = (modelValue:any) =>
+    recommendedProductsTextModels.find(
+      (model:any)=>
+        model.value === String(modelValue || "")
+    )?.label ||
+    "Default Model (Vercel)";
+
+  const getRecommendedProductsAiError = (
+    payload:any,
+    fallback:string
+  ) => {
+    const selectedModelLabel =
+      getRecommendedProductsTextModelLabel(
+        recommendedProductsTextModel
+      );
+
+    const message = String(
+      payload?.error ||
+      payload?.message ||
+      fallback
+    );
+
+    if(
+      /quota|resource exhausted|rate limit|too many requests|429/i.test(
+        message
+      )
+    ){
+      return `${selectedModelLabel} has reached its current quota or rate limit. Select another model and try again.`;
+    }
+
+    if(
+      /high demand|overload|unavailable|capacity|503/i.test(
+        message
+      )
+    ){
+      return `${selectedModelLabel} is temporarily experiencing high demand. Select another model and try again.`;
+    }
+
+    return message;
+  };
+
   const [evForm,setEvForm] = useState({ name:"",date:"",type:eventTypes[0]?.id||"task",color:eventTypes[0]?.color||"#374151",desc:"",calDate:"",calDateEnd:"",months:[] });
 
   const normalizeTagLabel = (id:any) => String(id || "event")
@@ -5883,6 +5949,9 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
             task:"philippines_seasonal_product_recommendations",
             taskLabel:"Generate Recommended Products",
             tone:"commercial and practical",
+            model:String(
+              recommendedProductsTextModel || ""
+            ).trim(),
             instruction,
             input:JSON.stringify({
               market:"Philippines",
@@ -5919,9 +5988,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
 
       if(!response.ok){
         throw new Error(
-          payload?.error ||
-          payload?.message ||
-          "Unable to generate recommendations."
+          getRecommendedProductsAiError(
+            payload,
+            "Unable to generate recommendations."
+          )
         );
       }
 
@@ -6073,6 +6143,9 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
               "Recommend Products from SKU Storage",
             tone:
               "commercial and practical",
+            model:String(
+              recommendedProductsTextModel || ""
+            ).trim(),
             instruction,
             input:JSON.stringify({
               market:"Philippines",
@@ -6120,9 +6193,10 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
 
       if(!response.ok){
         throw new Error(
-          payload?.error ||
-          payload?.message ||
-          "Unable to generate SKU Storage recommendations."
+          getRecommendedProductsAiError(
+            payload,
+            "Unable to generate SKU Storage recommendations."
+          )
         );
       }
 
@@ -6352,14 +6426,64 @@ const EventsView = ({ skuStorage, brands, onStateChange, events, setEvents, even
                       </p>
                       <div
                         style={{
-                          display:"inline-flex",
+                          display:"flex",
                           gap:3,
                           padding:3,
                           border:`1px solid ${C.border}`,
                           borderRadius:7,
                           background:C.surfaceAlt,
+                          flexWrap:"wrap",
+                          alignItems:"center",
+                          justifyContent:"flex-end",
                         }}
                       >
+                        <select
+                          value={recommendedProductsTextModel}
+                          onChange={(e:any)=>
+                            setRecommendedProductsTextModel(
+                              e.target.value
+                            )
+                          }
+                          title="Select another model when the current model quota is reached."
+                          aria-label="Recommended Products Gemini model"
+                          disabled={
+                            !!generatingProductsFor ||
+                            !!generatingStoredSkuProductsFor
+                          }
+                          style={{
+                            width:isMobile?138:152,
+                            minWidth:0,
+                            height:28,
+                            minHeight:28,
+                            border:`1px solid ${C.border}`,
+                            borderRadius:5,
+                            background:C.surface,
+                            color:C.textSub,
+                            padding:"3px 24px 3px 7px",
+                            fontSize:9.5,
+                            fontWeight:750,
+                            outline:"none",
+                            cursor:
+                              (
+                                !!generatingProductsFor ||
+                                !!generatingStoredSkuProductsFor
+                              )
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {recommendedProductsTextModels.map(
+                            (model:any)=>(
+                              <option
+                                key={model.value || "default"}
+                                value={model.value}
+                              >
+                                {model.label}
+                              </option>
+                            )
+                          )}
+                        </select>
+
                         <button
                           type="button"
                           onClick={()=>{
