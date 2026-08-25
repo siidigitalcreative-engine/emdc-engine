@@ -47,15 +47,35 @@ export default function AppTopBar() {
 
   useEffect(() => {
     const updateActiveSection = () => {
+      const pathname = String(window.location.pathname || "/");
+
+      if (
+        pathname === "/promo-engine" ||
+        pathname.startsWith("/promo-engine/")
+      ) {
+        setActiveSection("promo");
+        return;
+      }
+
       const rawHash = String(window.location.hash || "").replace(/^#\/?/, "");
       const section = rawHash.split("?")[0] || "calendar";
       const allowed = ["calendar", "events", "checklists", "skus", "ai"];
-      setActiveSection(allowed.includes(section) ? section : "calendar");
+
+      setActiveSection(
+        allowed.includes(section)
+          ? section
+          : "calendar"
+      );
     };
 
     updateActiveSection();
     window.addEventListener("hashchange", updateActiveSection);
-    return () => window.removeEventListener("hashchange", updateActiveSection);
+    window.addEventListener("popstate", updateActiveSection);
+
+    return () => {
+      window.removeEventListener("hashchange", updateActiveSection);
+      window.removeEventListener("popstate", updateActiveSection);
+    };
   }, []);
 
   useEffect(() => {
@@ -156,6 +176,15 @@ export default function AppTopBar() {
     justifyContent: "center",
     padding: 0,
   } as React.CSSProperties;
+
+  const topNavItems = [
+    { id: "calendar", label: "Calendar", href: "/#/calendar" },
+    { id: "events", label: "Events & Seasons", href: "/#/events" },
+    { id: "checklists", label: "Checklists", href: "/#/checklists" },
+    { id: "skus", label: "SKU Storage", href: "/#/skus" },
+    { id: "promo", label: "Promo Engine", href: "/promo-engine" },
+    { id: "ai", label: "AI Engine", href: "/#/ai" },
+  ];
 
   return (
     <>
@@ -417,13 +446,7 @@ export default function AppTopBar() {
               overflowX: "auto",
             }}
           >
-            {[
-              { id: "calendar", label: "Calendar" },
-              { id: "events", label: "Events & Seasons" },
-              { id: "checklists", label: "Checklists" },
-              { id: "skus", label: "SKU Storage" },
-              { id: "ai", label: "AI Engine" },
-            ].map((item) => {
+            {topNavItems.map((item) => {
               const active = activeSection === item.id;
 
               return (
@@ -431,7 +454,7 @@ export default function AppTopBar() {
                   key={item.id}
                   type="button"
                   onClick={() => {
-                    window.location.href = `/#/${item.id}`;
+                    window.location.href = item.href;
                   }}
                   style={{
                     height: "100%",
