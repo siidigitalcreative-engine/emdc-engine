@@ -214,6 +214,32 @@ tbody td input:focus{background:var(--sheet); border-color:var(--accent)}
 .importbox.open{display:block}
 .importbox .eyebrow{display:block; margin-bottom:6px}
 
+.sourcebox{margin-top:14px;display:none;border:1px solid var(--rule);border-radius:var(--r);background:var(--sheet);overflow:hidden}
+.sourcebox.open{display:block}
+.sourcebox-hd{padding:12px 14px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--sheet-2)}
+.sourcebox-hd .meta{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3)}
+.sku-search-tools{padding:12px 14px;border-bottom:1px solid var(--rule);display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+@media(max-width:700px){.sku-search-tools{grid-template-columns:1fr 1fr}.sku-search-tools .search{grid-column:1 / -1}}
+.sku-results{max-height:360px;overflow:auto;-webkit-overflow-scrolling:touch}
+.sku-result{width:100%;display:grid;grid-template-columns:24px 42px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 12px;border:0;border-bottom:1px solid var(--rule);background:var(--sheet);color:var(--ink);text-align:left;cursor:pointer}
+.sku-result:last-child{border-bottom:0}
+.sku-result:hover{background:var(--sheet-2)}
+.sku-result.sel{background:var(--accent-soft)}
+.sku-check{width:17px;height:17px;border:1.5px solid var(--rule-2);border-radius:2px;display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--on-accent);background:var(--sheet)}
+.sku-result.sel .sku-check{background:var(--accent);border-color:var(--accent)}
+.sku-mini-img{width:42px;height:42px;border:1px solid var(--rule);background:var(--sheet-2);display:grid;place-items:center;overflow:hidden;color:var(--ink-3);font-family:var(--f-mono);font-size:9px}
+.sku-mini-img img{width:100%;height:100%;object-fit:cover;display:block}
+.sku-result-main{min-width:0}
+.sku-result-name{font-weight:600;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sku-result-sub{margin-top:2px;display:flex;flex-wrap:wrap;gap:5px 9px;align-items:center;color:var(--ink-3);font-family:var(--f-mono);font-size:10px}
+.sku-result-price{text-align:right;white-space:nowrap}
+.sku-result-price b{display:block;font-family:var(--f-mono);font-size:12px}
+.sku-result-price span{display:block;margin-top:2px;color:var(--ink-3);font-family:var(--f-mono);font-size:9.5px}
+.sku-empty{padding:26px 16px;text-align:center;color:var(--ink-3);font-size:12.5px}
+.source-tabs{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--rule);background:var(--sheet-2);border-radius:var(--r)}
+.source-tab{border:0;background:transparent;color:var(--ink-2);padding:6px 10px;border-radius:2px;cursor:pointer;font-size:12px;font-weight:600}
+.source-tab.on{background:var(--accent);color:var(--on-accent)}
+
 .empty{padding:30px 16px; text-align:center; color:var(--ink-3); font-size:13.5px}
 
 /* ============ RESULTS ============ */
@@ -407,11 +433,18 @@ footer b{color:var(--ink-2)}
       </table>
     </div>
 
-    <div class="btnrow" style="margin-top:14px">
-      <button class="btn" id="addRow">+ Add row</button>
-      <button class="btn" id="toggleImport">Paste from spreadsheet</button>
-      <button class="btn btn-ghost btn-sm" id="loadDemo">Load sample set</button>
-      <button class="btn btn-ghost btn-sm" id="clearAll">Clear all</button>
+    <div class="btnrow" style="margin-top:14px; justify-content:space-between">
+      <div class="btnrow">
+        <button class="btn" id="addRow">+ Add row</button>
+        <div class="source-tabs" aria-label="Product input source">
+          <button class="source-tab" id="toggleImport" type="button">Paste from spreadsheet</button>
+          <button class="source-tab" id="toggleSkuStorage" type="button">Search SKU Storage</button>
+        </div>
+      </div>
+      <div class="btnrow">
+        <button class="btn btn-ghost btn-sm" id="loadDemo">Load sample set</button>
+        <button class="btn btn-ghost btn-sm" id="clearAll">Clear all</button>
+      </div>
     </div>
 
     <div class="importbox" id="importbox">
@@ -421,6 +454,31 @@ QNH-TPF550-TP	Quencha Insulated Tumbler 550ml	549"></textarea>
       <div class="btnrow" style="margin-top:9px">
         <button class="btn btn-primary" id="doImport">Import rows</button>
         <button class="btn btn-ghost" id="cancelImport">Cancel</button>
+      </div>
+    </div>
+
+    <div class="sourcebox" id="skuStorageBox">
+      <div class="sourcebox-hd">
+        <div>
+          <div class="eyebrow">From EMDC SKU Storage</div>
+          <div style="font-size:12px;color:var(--ink-2);margin-top:3px">Search your saved SKU catalog and add products directly to this promo plan.</div>
+        </div>
+        <div class="meta" id="skuStorageMeta">Not loaded</div>
+      </div>
+
+      <div class="sku-search-tools">
+        <input class="search" type="text" id="skuStorageSearch" placeholder="Search SKU, product, brand, category or tag..." autocomplete="off">
+        <button class="btn btn-sm" id="refreshSkuStorage" type="button">Refresh</button>
+        <button class="btn btn-primary btn-sm" id="addSelectedSkus" type="button" disabled>Add selected</button>
+      </div>
+
+      <div class="sku-results" id="skuStorageResults">
+        <div class="sku-empty">Open SKU Storage search to load your saved products.</div>
+      </div>
+
+      <div class="card-foot">
+        <span class="storecode" id="skuSelectedCount">0 selected</span>
+        <button class="btn btn-ghost btn-sm" id="closeSkuStorage" type="button">Close</button>
       </div>
     </div>
 
@@ -892,6 +950,191 @@ const state={
 };
 let uid=1;
 function newRow(o){return Object.assign({id:uid++,sku:'',name:'',price:0,gwp:false,hero:false,img:null},o||{});}
+
+/* ============================================================
+   EMDC SKU STORAGE LINK
+   Read-only: this promo page never edits the SKU Storage source.
+   ============================================================ */
+const EMDC_SKU_KEY='emdc_sku_items_v1';
+const EMDC_SKU_LAST_GOOD_KEY='emdc_sku_items_last_good_v1';
+const EMDC_APP_STATE_KEY='emdc_app_state_v1';
+
+const skuLinkState={rows:[],selected:new Set(),query:''};
+
+function parseJsonSafe(raw){try{return raw?JSON.parse(raw):null;}catch(e){return null;}}
+function arrayFromSkuPayload(value){
+  if(Array.isArray(value))return value;
+  if(Array.isArray(value&&value.items))return value.items;
+  if(Array.isArray(value&&value.skuItems))return value.skuItems;
+  if(Array.isArray(value&&value.appState&&value.appState.skuItems))return value.appState.skuItems;
+  return [];
+}
+function readEmdcSkuStorage(){
+  let rows=[];
+  try{rows=arrayFromSkuPayload(parseJsonSafe(localStorage.getItem(EMDC_SKU_KEY)));}catch(e){}
+  if(!rows.length){try{rows=arrayFromSkuPayload(parseJsonSafe(localStorage.getItem(EMDC_SKU_LAST_GOOD_KEY)));}catch(e){}}
+  if(!rows.length){try{rows=arrayFromSkuPayload(parseJsonSafe(localStorage.getItem(EMDC_APP_STATE_KEY)));}catch(e){}}
+  return Array.isArray(rows)?rows.filter(x=>x&&String(x.sku||'').trim()):[];
+}
+function readEmdcBrandMap(){
+  const map={};
+  try{
+    const app=parseJsonSafe(localStorage.getItem(EMDC_APP_STATE_KEY));
+    const brands=Array.isArray(app&&app.brands)?app.brands:[];
+    brands.forEach(b=>{if(b&&b.id)map[String(b.id)]=String(b.name||'').trim();});
+  }catch(e){}
+  return map;
+}
+function skuExtraValue(row,keys){
+  const extra=row&&row.extraFields&&typeof row.extraFields==='object'?row.extraFields:{};
+  const normalized={};
+  Object.keys(extra).forEach(k=>{normalized[String(k).toLowerCase().replace(/[^a-z0-9]/g,'')]=extra[k];});
+  for(const key of keys){
+    const clean=String(key).toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(normalized[clean]!==undefined&&normalized[clean]!==null&&String(normalized[clean]).trim()!=='')return normalized[clean];
+  }
+  return '';
+}
+function skuPrice(row){
+  const raw=row&&row.srp!==undefined&&row.srp!==null&&String(row.srp).trim()!==''?row.srp:skuExtraValue(row,['SRP','Price','Selling Price']);
+  const n=parseFloat(String(raw||'').replace(/[^0-9.]/g,''));
+  return Number.isFinite(n)?n:0;
+}
+function skuImage(row){return String((row&&row.imageLink)||(row&&row.imageUrl)||skuExtraValue(row,['Image Link','Image URL','Image'])||'').trim();}
+function skuCollection(row){return String((row&&row.collection)||(row&&row.category)||(row&&row.productCategory)||skuExtraValue(row,['Category','Collection','Product Category'])||'').trim();}
+function skuTags(row){return String((row&&row.tag)||(row&&row.tags)||skuExtraValue(row,['Tag','Tags'])||'').trim();}
+function skuStock(row){
+  const n=Number(row&&row.inventory!==undefined?row.inventory:skuExtraValue(row,['Stock','Inventory','Qty']));
+  return Number.isFinite(n)?n:0;
+}
+function skuBrandName(row,brandMap){
+  const direct=String((row&&row.brand)||'').trim();
+  if(direct)return direct;
+  const mapped=brandMap[String((row&&row.brandId)||'')];
+  if(mapped)return mapped;
+  return brandOf(row&&row.sku).name;
+}
+function skuIdentity(row){return String((row&&row.id)||(row&&row.sku)||'').trim();}
+function normalizedSearch(v){return String(v||'').trim().toLowerCase();}
+
+function loadSkuStoragePicker(showToast){
+  const brandMap=readEmdcBrandMap();
+  skuLinkState.rows=readEmdcSkuStorage().map(row=>({
+    source:row,
+    id:skuIdentity(row),
+    sku:String(row.sku||'').trim(),
+    name:String(row.productName||row.product||row.name||'').trim(),
+    brand:skuBrandName(row,brandMap),
+    category:skuCollection(row),
+    tag:skuTags(row),
+    price:skuPrice(row),
+    image:skuImage(row),
+    stock:skuStock(row)
+  })).filter(row=>row.sku&&row.name);
+
+  const validIds=new Set(skuLinkState.rows.map(row=>row.id));
+  skuLinkState.selected=new Set(Array.from(skuLinkState.selected).filter(id=>validIds.has(id)));
+  drawSkuStorageResults();
+
+  if(showToast){
+    toast(skuLinkState.rows.length
+      ? skuLinkState.rows.length+' SKU'+(skuLinkState.rows.length===1?'':'s')+' loaded from SKU Storage'
+      : 'No SKU Storage records found on this device');
+  }
+}
+function filteredSkuStorageRows(){
+  const q=normalizedSearch(skuLinkState.query);
+  if(!q)return skuLinkState.rows.slice(0,120);
+  const terms=q.split(/\s+/).filter(Boolean);
+  return skuLinkState.rows.filter(row=>{
+    const hay=[row.sku,row.name,row.brand,row.category,row.tag].join(' ').toLowerCase();
+    return terms.every(term=>hay.includes(term));
+  }).slice(0,120);
+}
+function drawSkuStorageResults(){
+  const wrap=$('#skuStorageResults');
+  if(!wrap)return;
+
+  const total=skuLinkState.rows.length;
+  const shown=filteredSkuStorageRows();
+
+  $('#skuStorageMeta').textContent=total?total+' saved SKU'+(total===1?'':'s'):'No saved SKUs found';
+  $('#skuSelectedCount').textContent=skuLinkState.selected.size+' selected';
+  $('#addSelectedSkus').disabled=skuLinkState.selected.size===0;
+
+  if(!total){
+    wrap.innerHTML='<div class="sku-empty">No SKU Storage data was found. Open the EMDC SKU Storage page on this browser, then click <b>Refresh</b>.</div>';
+    return;
+  }
+  if(!shown.length){
+    wrap.innerHTML='<div class="sku-empty">No SKU Storage results match your search.</div>';
+    return;
+  }
+
+  wrap.innerHTML=shown.map(row=>{
+    const selected=skuLinkState.selected.has(row.id);
+    const stockLabel=row.stock>0?row.stock+' in stock':'Stock not set';
+    return '<button type="button" class="sku-result '+(selected?'sel':'')+'" data-sku-pick="'+esc(row.id)+'">'+
+      '<span class="sku-check">'+(selected?'✓':'')+'</span>'+
+      '<span class="sku-mini-img">'+(row.image?'<img src="'+esc(row.image)+'" alt="">':'IMG')+'</span>'+
+      '<span class="sku-result-main">'+
+        '<span class="sku-result-name">'+esc(row.name)+'</span>'+
+        '<span class="sku-result-sub">'+
+          '<span>'+esc(row.sku)+'</span>'+
+          (row.brand?'<span>'+esc(row.brand)+'</span>':'')+
+          (row.category?'<span>'+esc(row.category)+'</span>':'')+
+          (row.tag?'<span>'+esc(row.tag)+'</span>':'')+
+        '</span>'+
+      '</span>'+
+      '<span class="sku-result-price"><b>'+(row.price>0?peso(row.price):'No SRP')+'</b><span>'+esc(stockLabel)+'</span></span>'+
+    '</button>';
+  }).join('');
+}
+function toggleSkuStoragePick(id){
+  if(skuLinkState.selected.has(id))skuLinkState.selected.delete(id);
+  else skuLinkState.selected.add(id);
+  drawSkuStorageResults();
+}
+function addSelectedSkuStorageRows(){
+  const selectedRows=skuLinkState.rows.filter(row=>skuLinkState.selected.has(row.id));
+  if(!selectedRows.length)return;
+
+  const existingSkuSet=new Set(state.rows.map(row=>String(row.sku||'').trim().toLowerCase()).filter(Boolean));
+  const currentlyHasHero=state.rows.some(row=>row.hero);
+  let heroSlots=currentlyHasHero?0:3;
+  let added=0, skipped=0, missingPrice=0;
+
+  selectedRows.forEach(row=>{
+    const skuKey=row.sku.toLowerCase();
+    if(existingSkuSet.has(skuKey)){skipped++;return;}
+
+    state.rows.push(newRow({
+      sku:row.sku,
+      name:row.name,
+      price:row.price,
+      img:row.image||null,
+      hero:heroSlots>0
+    }));
+
+    if(heroSlots>0)heroSlots--;
+    if(!(row.price>0))missingPrice++;
+    existingSkuSet.add(skuKey);
+    added++;
+  });
+
+  skuLinkState.selected.clear();
+  drawRows();
+  drawSkuStorageResults();
+  save();
+
+  if(state.result&&added)regen();
+
+  const parts=[];
+  if(added)parts.push(added+' SKU'+(added===1?'':'s')+' added');
+  if(skipped)parts.push(skipped+' duplicate'+(skipped===1?'':'s')+' skipped');
+  if(missingPrice)parts.push(missingPrice+' without SRP');
+  toast(parts.join(' · ')||'No new SKUs added');
+}
 
 function save(){try{localStorage.setItem(LSK,JSON.stringify({
   year:state.year,month:state.month,eventId:state.eventId,ceil:state.ceil,
@@ -1498,14 +1741,62 @@ function init(){
   $('#addRow').addEventListener('click',()=>{state.rows.push(newRow());drawRows();save();});
   $('#loadDemo').addEventListener('click',()=>{state.rows=DEMO.map(d=>newRow(d));drawRows();save();regen();toast('Sample set loaded');});
   $('#clearAll').addEventListener('click',()=>{state.rows=[newRow()];state.result=null;$('#results').classList.remove('on');drawRows();save();});
-  $('#toggleImport').addEventListener('click',()=>$('#importbox').classList.toggle('open'));
-  $('#cancelImport').addEventListener('click',()=>{$('#importbox').classList.remove('open');$('#importta').value='';});
+
+  $('#toggleImport').addEventListener('click',()=>{
+    const willOpen=!$('#importbox').classList.contains('open');
+    $('#importbox').classList.toggle('open',willOpen);
+    $('#skuStorageBox').classList.remove('open');
+    $('#toggleImport').classList.toggle('on',willOpen);
+    $('#toggleSkuStorage').classList.remove('on');
+    if(willOpen)$('#importta').focus();
+  });
+
+  $('#toggleSkuStorage').addEventListener('click',()=>{
+    const willOpen=!$('#skuStorageBox').classList.contains('open');
+    $('#skuStorageBox').classList.toggle('open',willOpen);
+    $('#importbox').classList.remove('open');
+    $('#toggleSkuStorage').classList.toggle('on',willOpen);
+    $('#toggleImport').classList.remove('on');
+    if(willOpen){
+      loadSkuStoragePicker(false);
+      setTimeout(()=>$('#skuStorageSearch').focus(),0);
+    }
+  });
+
+  $('#cancelImport').addEventListener('click',()=>{
+    $('#importbox').classList.remove('open');
+    $('#toggleImport').classList.remove('on');
+    $('#importta').value='';
+  });
+
+  $('#closeSkuStorage').addEventListener('click',()=>{
+    $('#skuStorageBox').classList.remove('open');
+    $('#toggleSkuStorage').classList.remove('on');
+  });
+
+  $('#refreshSkuStorage').addEventListener('click',()=>loadSkuStoragePicker(true));
+
+  $('#skuStorageSearch').addEventListener('input',e=>{
+    skuLinkState.query=e.target.value;
+    drawSkuStorageResults();
+  });
+
+  $('#skuStorageResults').addEventListener('click',e=>{
+    const row=e.target.closest('[data-sku-pick]');
+    if(!row)return;
+    toggleSkuStoragePick(row.dataset.skuPick);
+  });
+
+  $('#addSelectedSkus').addEventListener('click',addSelectedSkuStorageRows);
+
   $('#doImport').addEventListener('click',()=>{
     const rows=parseImport($('#importta').value);
     if(!rows.length){toast('Nothing parsed — check that each line has at least a SKU and a product name.');return;}
     rows.slice(0,3).forEach(r=>r.hero=true);
     state.rows=rows; drawRows(); save();
-    $('#importbox').classList.remove('open'); $('#importta').value='';
+    $('#importbox').classList.remove('open');
+    $('#toggleImport').classList.remove('on');
+    $('#importta').value='';
     toast(rows.length+' row'+(rows.length>1?'s':'')+' imported');
   });
 
