@@ -876,6 +876,133 @@ const normalizeChecklistTypeIdentity = (value:any) =>
     .replace(/\s+/g," ")
     .trim();
 
+const hasSpecialCampaignGroupSignals = (
+  group:any,
+  launchTypes:any=LAUNCH_TYPES
+) => {
+  if(
+    !group ||
+    typeof group!=="object" ||
+    Array.isArray(group)
+  ){
+    return false;
+  }
+
+  const rawKey = String(
+    group?.launchType ||
+    group?.checklistType ||
+    group?.groupType ||
+    group?.type ||
+    ""
+  ).trim();
+
+  const configuredType =
+    launchTypes?.[rawKey] ||
+    (LAUNCH_TYPES as any)?.[rawKey] ||
+    {};
+
+  const configuredIdentity =
+    normalizeChecklistTypeIdentity(
+      [
+        rawKey,
+        configuredType?.label,
+        configuredType?.tag,
+        group?.launchTypeLabel,
+        group?.checklistTypeLabel,
+        group?.groupTypeLabel,
+        group?.typeLabel,
+        group?.templateType,
+        group?.category,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+  if(
+    rawKey==="specialcampaign" ||
+    rawKey==="special-campaign" ||
+    (
+      configuredIdentity.includes("special") &&
+      configuredIdentity.includes("campaign")
+    )
+  ){
+    return true;
+  }
+
+  const ecommerceWorkspace =
+    group?.aiWorkspace?.ecommerce ||
+    {};
+
+  const overviewRows =
+    group?.aiWorkspace?.overview?.items ||
+    group?.aiWorkspace?.overviewRows ||
+    [];
+
+  const hasSpecialWorkspace =
+    !!(
+      ecommerceWorkspace?.specialCampaignTracker ||
+      group?.specialCampaignTracker ||
+      ecommerceWorkspace?.campaignBriefSellerKit ||
+      ecommerceWorkspace?.assetRequirementsTracker
+    ) ||
+    (
+      Array.isArray(overviewRows) &&
+      overviewRows.some((row:any)=>{
+        const sourceType =
+          normalizeChecklistTypeIdentity(
+            row?.sourceRef?.type ||
+            row?.type ||
+            ""
+          );
+
+        return (
+          sourceType.includes("special campaign") ||
+          sourceType.includes("specialcampaign")
+        );
+      })
+    );
+
+  if(hasSpecialWorkspace){
+    return true;
+  }
+
+  // The fast checklist index intentionally carries a lightweight group row.
+  // For older Special Campaign records, the operational type may only become
+  // explicit after the full group detail is opened. Recover those records from
+  // their durable campaign naming convention so the card is correct immediately
+  // after refresh instead of temporarily falling back to Product Introduction.
+  const groupName =
+    normalizeChecklistTypeIdentity(
+      group?.groupName ||
+      group?.name ||
+      group?.title ||
+      ""
+    );
+
+  const obviousSpecialCampaignName =
+    groupName.includes("special campaign") ||
+    groupName.includes("campaign brief") ||
+    groupName.includes("seller kit") ||
+    groupName.includes("asset requirement") ||
+    groupName.includes("collateral tracker");
+
+  if(obviousSpecialCampaignName){
+    return true;
+  }
+
+  const isPlatformExclusive =
+    groupName.includes("exclusive") &&
+    (
+      groupName.includes("shopee") ||
+      groupName.includes("lazada") ||
+      groupName.includes("tiktok") ||
+      groupName.includes("tiktok shop") ||
+      groupName.includes("landers")
+    );
+
+  return isPlatformExclusive;
+};
+
 const resolveCanonicalChecklistTypeKey = (
   groupOrValue:any,
   launchTypes:any=LAUNCH_TYPES
@@ -918,15 +1045,11 @@ const resolveCanonicalChecklistTypeKey = (
       .join(" ")
   );
 
-  const hasSpecialCampaignWorkspace =
-    !!(
-      group?.aiWorkspace
-        ?.ecommerce
-        ?.specialCampaignTracker
-    );
-
   if(
-    hasSpecialCampaignWorkspace ||
+    hasSpecialCampaignGroupSignals(
+      group,
+      launchTypes
+    ) ||
     (
       identity.includes("special") &&
       identity.includes("campaign")
