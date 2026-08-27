@@ -489,15 +489,16 @@ export default function CampaignPlannerPage() {
   };
 
   const btn = (selected = false): React.CSSProperties => ({
-    border: `1px solid ${selected ? C.borderStrong : C.border}`,
+    border: `1px solid ${C.dark}`,
     borderRadius: 8,
-    background: selected ? C.surfaceAlt : C.card,
-    color: selected ? C.text : C.textSub,
+    background: C.dark,
+    color: "#FFFFFF",
     padding: "8px 12px",
     fontWeight: 600,
     fontSize: 12,
     cursor: "pointer",
     boxShadow: "none",
+    opacity: selected ? 1 : 0.92,
   });
 
   return (
@@ -602,7 +603,7 @@ export default function CampaignPlannerPage() {
                     <button style={{...btn(),color:"#B42318"}} onClick={()=>setProducts(prev=>prev.filter(x=>x.id!==p.id))}>Remove</button>
                   </div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:9 }}>{TAGS.map(tag=>{
-                    const on=p.tags.includes(tag); return <button key={tag} onClick={()=>toggleTag(p.id,tag)} style={{border:`1px solid ${on?C.borderStrong:C.border}`,borderRadius:999,padding:"5px 8px",fontSize:10,fontWeight:600,background:on?C.surfaceAlt:C.card,color:on?C.text:C.textSub,cursor:"pointer"}}>{tag}</button>
+                    const on=p.tags.includes(tag); return <button key={tag} onClick={()=>toggleTag(p.id,tag)} style={{border:`1px solid ${on?C.dark:C.border}`,borderRadius:999,padding:"5px 8px",fontSize:10,fontWeight:600,background:on?C.dark:C.card,color:on?"#FFFFFF":C.textSub,cursor:"pointer"}}>{tag}</button>
                   })}</div>
                 </div>)}
               </div> : <div style={{padding:28,textAlign:"center",color:C.sub,fontSize:12}}>Add your fast movers, new products, slow movers and priority products from the left panel.</div>}
@@ -676,10 +677,10 @@ function EmptyPlan({ onGenerate, busy }: { onGenerate:()=>void; busy:boolean }) 
       onClick={onGenerate}
       disabled={busy}
       style={{
-        border:`1px solid ${C.borderStrong}`,
+        border:`1px solid ${busy?C.border:C.dark}`,
         borderRadius:8,
-        background:busy?"#F9FAFB":C.surfaceAlt,
-        color:busy?"#9CA3AF":C.textSub,
+        background:busy?"#F3F4F6":C.dark,
+        color:busy?"#9CA3AF":"#FFFFFF",
         padding:"9px 14px",
         fontWeight:600,
         fontSize:12,
@@ -698,10 +699,10 @@ function PlanCard({ title, section, locked, onLock, children }: any) {
       <button
         onClick={()=>onLock(section)}
         style={{
-          border:`1px solid ${locked?C.borderStrong:C.border}`,
+          border:`1px solid ${locked?C.dark:C.border}`,
           borderRadius:7,
-          background:locked?C.surfaceAlt:C.card,
-          color:C.textSub,
+          background:locked?C.dark:C.card,
+          color:locked?"#FFFFFF":C.textSub,
           padding:"5px 8px",
           fontSize:10,
           fontWeight:600,
@@ -751,11 +752,11 @@ function ExportCard({title,description,button,onClick,disabled}:any){
       disabled={disabled}
       onClick={onClick}
       style={{
-        border:`1px solid ${disabled?C.border:C.borderStrong}`,
+        border:`1px solid ${disabled?C.border:C.dark}`,
         borderRadius:8,
         padding:"9px 12px",
-        background:disabled?"#F9FAFB":C.surfaceAlt,
-        color:disabled?"#9CA3AF":C.textSub,
+        background:disabled?"#F9FAFB":C.dark,
+        color:disabled?"#9CA3AF":"#FFFFFF",
         fontWeight:600,
         fontSize:12,
         cursor:disabled?"not-allowed":"pointer"
@@ -769,8 +770,10 @@ function ExportCard({title,description,button,onClick,disabled}:any){
 
 
 
+
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
 ACTION: Replace the existing Campaign Planner page with this full code.
-UI UPDATE: Uses the same light EMDC visual language; no black/heavy button styling.
+UI UPDATE: Buttons use black backgrounds with white text while keeping the lighter EMDC font weight.
 */
