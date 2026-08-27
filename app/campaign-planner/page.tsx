@@ -111,17 +111,40 @@ function normalizeSku(item: any): PlannerProduct {
   };
 }
 
-function parseJsonFromText(text: string) {
-  const cleaned = String(text || "")
+function cleanJsonText(text: string) {
+  return String(text || "")
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
-  try { return JSON.parse(cleaned); } catch {}
+}
+
+function tryParseJsonFromText(text: string): CampaignPlan | null {
+  const cleaned = cleanJsonText(text);
+  if (!cleaned) return null;
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {}
+
   const a = cleaned.indexOf("{");
   const b = cleaned.lastIndexOf("}");
-  if (a >= 0 && b > a) return JSON.parse(cleaned.slice(a, b + 1));
-  throw new Error("The AI response was not valid campaign JSON. Generate again.");
+  if (a >= 0 && b > a) {
+    try {
+      return JSON.parse(cleaned.slice(a, b + 1));
+    } catch {}
+  }
+
+  return null;
+}
+
+function parseJsonFromText(text: string) {
+  const parsed = tryParseJsonFromText(text);
+  if (parsed) return parsed;
+
+  throw new Error(
+    "The AI returned an incomplete or malformed campaign plan. EMDC will automatically try to repair it."
+  );
 }
 
 function productLabel(p: PlannerProduct) {
@@ -309,6 +332,95 @@ export default function CampaignPlannerPage() {
     }));
   }
 
+  async function callCampaignAi({
+    instruction,
+    input,
+    maxOutputTokens = 20000,
+  }: {
+    instruction: string;
+    input: any;
+    maxOutputTokens?: number;
+  }) {
+    const res = await fetch("/api/ai/generate-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task: "campaign_strategy_builder",
+        taskLabel: "Campaign Strategy Builder",
+        tone: "professional",
+        model: brief.textModel,
+        instruction,
+        input: typeof input === "string" ? input : JSON.stringify(input, null, 2),
+        maxOutputTokens,
+      }),
+    });
+
+    const raw = await res.text();
+    let payload: any = {};
+
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      throw new Error(raw || "Campaign generation failed.");
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        payload?.error ||
+        payload?.message ||
+        "Campaign generation failed."
+      );
+    }
+
+    return payload;
+  }
+
+  async function repairCampaignJson(
+    brokenText: string,
+    originalInput: any,
+    originalInstruction: string
+  ) {
+    const repairInstruction = `You are a strict JSON repair engine for the EMDC Campaign Strategy Builder.
+
+The previous AI response contains a complete or nearly complete campaign plan but its JSON syntax is invalid.
+
+YOUR JOB:
+1. Return ONLY one valid JSON object. No markdown fences. No explanation.
+2. Repair missing commas, quotes, brackets, braces, escaping, or other JSON syntax errors.
+3. Preserve the original campaign strategy content as much as possible.
+4. Do not remove selected products from productPlan.
+5. Do not invent new product facts, cost, margin, stock, historical sales, or technical specs.
+6. If the previous response was cut off, reconstruct only the missing structure using ORIGINAL INPUT and ORIGINAL INSTRUCTION.
+7. Keep all strings valid JSON strings. Escape internal quotation marks correctly.
+8. Keep the exact Campaign Strategy Builder top-level keys whenever they are present:
+campaignConcept, executiveSummary, coreStrategy, funnel, pillars, productPlan, bundles, platformPlan, timeline, kpis, budgetGuidance, teamActions, presentationSlides.
+9. Output valid JSON parseable by JSON.parse().
+
+ORIGINAL INSTRUCTION:
+${originalInstruction}
+
+ORIGINAL INPUT:
+${JSON.stringify(originalInput, null, 2)}
+
+MALFORMED RESPONSE TO REPAIR:
+${cleanJsonText(brokenText)}`;
+
+    const repairedPayload = await callCampaignAi({
+      instruction: repairInstruction,
+      input: "Repair the malformed Campaign Strategy Builder JSON above.",
+      maxOutputTokens: 24000,
+    });
+
+    const repaired = tryParseJsonFromText(repairedPayload?.text || "");
+    if (!repaired) {
+      throw new Error(
+        "The AI returned malformed JSON twice. Please click Generate Campaign again or switch the Text AI Model and retry."
+      );
+    }
+
+    return repaired;
+  }
+
   async function generatePlan(regenerateUnlocked = false) {
     setError("");
     if (!brief.campaignName.trim()) return setError("Enter a campaign name first.");
@@ -333,24 +445,22 @@ export default function CampaignPlannerPage() {
         CURRENT_PLAN: regenerateUnlocked ? plan : undefined,
       };
 
-      const res = await fetch("/api/ai/generate-text", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task: "campaign_strategy_builder",
-          taskLabel: "Campaign Strategy Builder",
-          tone: "professional",
-          model: brief.textModel,
-          instruction,
-          input: JSON.stringify(input, null, 2),
-          maxOutputTokens: 8192,
-        }),
+      const payload = await callCampaignAi({
+        instruction,
+        input,
+        maxOutputTokens: 20000,
       });
-      const raw = await res.text();
-      let payload: any = {};
-      try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error(raw || "Campaign generation failed."); }
-      if (!res.ok) throw new Error(payload?.error || payload?.message || "Campaign generation failed.");
-      const parsed = parseJsonFromText(payload?.text || "");
+
+      let parsed = tryParseJsonFromText(payload?.text || "");
+
+      if (!parsed) {
+        parsed = await repairCampaignJson(
+          payload?.text || "",
+          input,
+          instruction
+        );
+      }
+
       setPlan(parsed);
       setActiveTab("plan");
     } catch (e: any) {
@@ -537,7 +647,7 @@ export default function CampaignPlannerPage() {
       )}
 
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "18px" }}>
-        {error ? <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.red, color: "#B42318", fontSize: 12, fontWeight: 700 }}>{error}</div> : null}
+        {error ? <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.red, color: "#B42318", fontSize: 12, fontWeight: 600 }}>{error}</div> : null}
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           {[['brief','1. Campaign Brief'],['products','2. Product Input'],['plan','3. Marketing Plan'],['deals','4. Promo Deals'],['calendar','5. Calendar'],['exports','6. Exports']].map(([key,label]) => (
@@ -773,8 +883,11 @@ function ExportCard({title,description,button,onClick,disabled}:any){
 
 
 
+
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
 ACTION: Replace the existing Campaign Planner page with this full code.
-UI UPDATE: Selected option buttons are black with white text. Unselected option buttons are white with gray text/border.
+FIX: Automatically repairs malformed AI JSON instead of showing raw JSON.parse syntax errors.
+UI: Selected option buttons remain black with white text; unselected option buttons remain white with gray text.
 */
