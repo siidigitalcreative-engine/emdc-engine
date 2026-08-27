@@ -48873,14 +48873,6 @@ export default function App({
               <span style={{ fontSize:11,color:cloudSyncStatus==="Sync save failed" || cloudSyncStatus==="Backup export failed" || cloudSyncStatus==="Backup import failed" ? "#DC2626" : C.faint }}>
                 Shared Sync: {cloudSyncStatus}
               </span>
-              <button
-                type="button"
-                onClick={()=>{ if(typeof window!=="undefined") window.location.href="/campaign-planner"; }}
-                title="Open Campaign Planner"
-                style={{ border:`1px solid ${C.accent}`,background:C.accent,borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:800,color:"#FFFFFF",cursor:"pointer" }}
-              >
-                ✦ Campaign Planner
-              </button>
               <button className="emdc-date-display-v3" type="button" onClick={exportFullBackup}
                 style={{ border:`1px solid ${C.border}`,background:C.surface,borderRadius:7,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.textSub,cursor:"pointer" }}>
                 Export Full Backup
@@ -48906,3 +48898,9 @@ export default function App({
 }
 
 // LOCATION PATH: components/CalendarView.tsx
+
+
+/*
+LOCATION PATH: components/CalendarView.tsx
+ACTION: Replace the existing file. This only removes the old inline Campaign Planner button; the planner is now in the top navigation.
+*/
