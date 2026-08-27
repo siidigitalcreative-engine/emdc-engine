@@ -57,6 +57,14 @@ export default function AppTopBar() {
         return;
       }
 
+      if (
+        pathname === "/campaign-planner" ||
+        pathname.startsWith("/campaign-planner/")
+      ) {
+        setActiveSection("campaign-planner");
+        return;
+      }
+
       const rawHash = String(window.location.hash || "").replace(/^#\/?/, "");
       const section = rawHash.split("?")[0] || "calendar";
       const allowed = ["calendar", "events", "checklists", "skus", "ai"];
@@ -183,6 +191,7 @@ export default function AppTopBar() {
     { id: "checklists", label: "Checklists", href: "/#/checklists" },
     { id: "skus", label: "SKU Storage", href: "/#/skus" },
     { id: "promo", label: "Promo Engine", href: "/promo-engine" },
+    { id: "campaign-planner", label: "Campaign Planner", href: "/campaign-planner" },
     { id: "ai", label: "AI Engine", href: "/#/ai" },
   ];
 
@@ -483,3 +492,9 @@ export default function AppTopBar() {
     </>
   );
 }
+
+
+/*
+LOCATION PATH: components/AppTopBar.tsx
+ACTION: Replace the existing file with this full code.
+*/
