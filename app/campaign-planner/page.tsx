@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import AppTopBar from "@/components/AppTopBar";
 
 type ProductTag = "Best Seller / Fast Mover" | "New Product" | "Slow Mover" | "Priority Push" | "Supporting";
 
@@ -468,8 +469,10 @@ export default function CampaignPlannerPage() {
   const btn = (primary = false): React.CSSProperties => ({ border: primary ? "1px solid #182033" : `1px solid ${C.border}`, borderRadius: 9, background: primary ? C.dark : "#fff", color: primary ? "#fff" : C.text, padding: "9px 13px", fontWeight: 800, fontSize: 12, cursor: "pointer" });
 
   return (
-    <main style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "Inter, system-ui, sans-serif" }}>
-      <header style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(255,255,255,.96)", borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
+    <>
+      <AppTopBar />
+      <main style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "Inter, system-ui, sans-serif" }}>
+      <header style={{ position: "relative", zIndex: 20, background: "rgba(255,255,255,.96)", borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <div style={{ maxWidth: 1500, margin: "0 auto", padding: "13px 18px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <Link href="/" style={{ textDecoration: "none", color: C.sub, fontSize: 12, fontWeight: 800 }}>← EMDC Engine</Link>
           <div style={{ width: 1, height: 24, background: C.border }} />
@@ -627,7 +630,8 @@ export default function CampaignPlannerPage() {
           </section>
         )}
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 
@@ -645,7 +649,8 @@ function DataTable({ columns, rows }: { columns:string[]; rows:any[][] }) {
 
 function ExportCard({title,description,button,onClick,disabled}:any){return <div style={{border:`1px solid ${C.border}`,borderRadius:12,padding:16,display:"flex",flexDirection:"column",minHeight:180}}><div style={{fontWeight:900,fontSize:16}}>{title}</div><div style={{fontSize:12,color:C.sub,lineHeight:1.55,marginTop:7,flex:1}}>{description}</div><button disabled={disabled} onClick={onClick} style={{border:0,borderRadius:9,padding:"10px 12px",background:disabled?"#D0D5DD":C.dark,color:"#fff",fontWeight:900,cursor:disabled?"not-allowed":"pointer"}}>{button}</button></div>}
 
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
-ACTION: Create this as a NEW file.
+ACTION: Replace the existing Campaign Planner page with this full code.
 */
