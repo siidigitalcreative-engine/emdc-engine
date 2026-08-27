@@ -489,16 +489,15 @@ export default function CampaignPlannerPage() {
   };
 
   const btn = (selected = false): React.CSSProperties => ({
-    border: `1px solid ${C.dark}`,
+    border: `1px solid ${selected ? C.dark : C.border}`,
     borderRadius: 8,
-    background: C.dark,
-    color: "#FFFFFF",
+    background: selected ? C.dark : C.card,
+    color: selected ? "#FFFFFF" : C.textSub,
     padding: "8px 12px",
     fontWeight: 600,
     fontSize: 12,
     cursor: "pointer",
     boxShadow: "none",
-    opacity: selected ? 1 : 0.92,
   });
 
   return (
@@ -772,8 +771,10 @@ function ExportCard({title,description,button,onClick,disabled}:any){
 
 
 
+
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
 ACTION: Replace the existing Campaign Planner page with this full code.
-UI UPDATE: Buttons use black backgrounds with white text while keeping the lighter EMDC font weight.
+UI UPDATE: Selected option buttons are black with white text. Unselected option buttons are white with gray text/border.
 */
