@@ -77,16 +77,19 @@ const MODELS = [
 ];
 
 const C = {
-  bg: "#F6F7F9",
+  bg: "#F8F9FA",
   card: "#FFFFFF",
+  surfaceAlt: "#F3F4F6",
   text: "#111827",
-  sub: "#667085",
+  textSub: "#374151",
+  sub: "#6B7280",
   border: "#E5E7EB",
-  dark: "#182033",
-  gold: "#D6A84B",
-  blue: "#EEF4FF",
-  green: "#ECFDF3",
-  orange: "#FFF7E8",
+  borderStrong: "#D1D5DB",
+  dark: "#111827",
+  gold: "#6B7280",
+  blue: "#F3F4F6",
+  green: "#F3F4F6",
+  orange: "#F9FAFB",
   red: "#FEF2F2",
 };
 
@@ -464,20 +467,49 @@ export default function CampaignPlannerPage() {
     setLockedSections((prev) => prev.includes(section) ? prev.filter((x) => x !== section) : [...prev, section]);
   }
 
-  const inputStyle: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 11px", fontSize: 13, color: C.text, background: "#fff", outline: "none" };
-  const labelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 800, color: "#344054" };
-  const btn = (primary = false): React.CSSProperties => ({ border: primary ? "1px solid #182033" : `1px solid ${C.border}`, borderRadius: 9, background: primary ? C.dark : "#fff", color: primary ? "#fff" : C.text, padding: "9px 13px", fontWeight: 800, fontSize: 12, cursor: "pointer" });
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    boxSizing: "border-box",
+    border: `1px solid ${C.border}`,
+    borderRadius: 8,
+    padding: "10px 11px",
+    fontSize: 13,
+    color: C.text,
+    background: C.card,
+    outline: "none",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#374151",
+  };
+
+  const btn = (selected = false): React.CSSProperties => ({
+    border: `1px solid ${selected ? C.borderStrong : C.border}`,
+    borderRadius: 8,
+    background: selected ? C.surfaceAlt : C.card,
+    color: selected ? C.text : C.textSub,
+    padding: "8px 12px",
+    fontWeight: 600,
+    fontSize: 12,
+    cursor: "pointer",
+    boxShadow: "none",
+  });
 
   return (
     <>
       <AppTopBar />
       <main style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "Inter, system-ui, sans-serif" }}>
       <header style={{ position: "relative", zIndex: 20, background: "rgba(255,255,255,.96)", borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
-        <div style={{ maxWidth: 1500, margin: "0 auto", padding: "13px 18px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <Link href="/" style={{ textDecoration: "none", color: C.sub, fontSize: 12, fontWeight: 800 }}>← EMDC Engine</Link>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "13px 18px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Link href="/" style={{ textDecoration: "none", color: C.sub, fontSize: 12, fontWeight: 500 }}>Campaign Planner</Link>
           <div style={{ width: 1, height: 24, background: C.border }} />
           <div style={{ flex: 1, minWidth: 240 }}>
-            <div style={{ fontWeight: 900, fontSize: 18 }}>Campaign Strategy Builder</div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>Campaign Strategy Builder</div>
             <div style={{ color: C.sub, fontSize: 11 }}>Product Intelligence → Promo Strategy → Marketing Plan → Excel → Team Deck</div>
           </div>
           <button style={btn()} onClick={() => setShowLibrary((v) => !v)}>Campaign Library</button>
@@ -488,14 +520,14 @@ export default function CampaignPlannerPage() {
       </header>
 
       {showLibrary && (
-        <div style={{ maxWidth: 1500, margin: "14px auto 0", padding: "0 18px" }}>
+        <div style={{ maxWidth: 1280, margin: "14px auto 0", padding: "0 18px" }}>
           <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <b>Campaign Library</b><span style={{ fontSize: 11, color: C.sub }}>{library.length} saved</span>
             </div>
             {library.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 10 }}>
               {library.map((c) => <button key={c.id} onClick={() => openCampaign(c.id)} style={{ textAlign: "left", border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, background: "#fff", cursor: "pointer" }}>
-                <div style={{ fontWeight: 900, fontSize: 13 }}>{c.name}</div>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{c.name}</div>
                 <div style={{ color: C.sub, fontSize: 11, marginTop: 4 }}>{c.theme || "Campaign"} • {c.productCount} products</div>
                 <div style={{ color: C.sub, fontSize: 10, marginTop: 5 }}>{c.startDate || "No start date"} {c.endDate ? `→ ${c.endDate}` : ""}</div>
               </button>)}
@@ -504,18 +536,18 @@ export default function CampaignPlannerPage() {
         </div>
       )}
 
-      <div style={{ maxWidth: 1500, margin: "0 auto", padding: "18px" }}>
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "18px" }}>
         {error ? <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.red, color: "#B42318", fontSize: 12, fontWeight: 700 }}>{error}</div> : null}
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           {[['brief','1. Campaign Brief'],['products','2. Product Input'],['plan','3. Marketing Plan'],['deals','4. Promo Deals'],['calendar','5. Calendar'],['exports','6. Exports']].map(([key,label]) => (
-            <button key={key} onClick={() => setActiveTab(key)} style={{ ...btn(activeTab === key), background: activeTab === key ? C.dark : "#fff" }}>{label}</button>
+            <button key={key} onClick={() => setActiveTab(key)} style={{ ...btn(activeTab === key) }}>{label}</button>
           ))}
         </div>
 
         {activeTab === "brief" && (
           <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-            <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 4 }}>Campaign Brief</div>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Campaign Brief</div>
             <div style={{ color: C.sub, fontSize: 12, marginBottom: 18 }}>Set the commercial goal and constraints before selecting products.</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 13 }}>
               <label style={labelStyle}>Campaign Name<input style={inputStyle} value={brief.campaignName} onChange={(e) => setBriefField("campaignName", e.target.value)} placeholder="e.g. 10.10 Home Upgrade Festival" /></label>
@@ -531,12 +563,12 @@ export default function CampaignPlannerPage() {
               <label style={labelStyle}>Minimum Margin (%)<input type="number" style={inputStyle} value={brief.minimumMargin} onChange={(e) => setBriefField("minimumMargin", e.target.value)} placeholder="Optional guardrail" /></label>
             </div>
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>Platforms</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{PLATFORMS.map(x=><button key={x} onClick={()=>toggleBriefArray("platforms",x)} style={{...btn(brief.platforms.includes(x)), background: brief.platforms.includes(x) ? C.dark : "#fff"}}>{x}</button>)}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Platforms</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{PLATFORMS.map(x=><button key={x} onClick={()=>toggleBriefArray("platforms",x)} style={{...btn(brief.platforms.includes(x))}}>{x}</button>)}</div>
             </div>
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>Objectives</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{OBJECTIVES.map(x=><button key={x} onClick={()=>toggleBriefArray("objectives",x)} style={{...btn(brief.objectives.includes(x)), background: brief.objectives.includes(x) ? C.dark : "#fff"}}>{x}</button>)}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Objectives</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{OBJECTIVES.map(x=><button key={x} onClick={()=>toggleBriefArray("objectives",x)} style={{...btn(brief.objectives.includes(x))}}>{x}</button>)}</div>
             </div>
             <label style={{ ...labelStyle, marginTop: 16 }}>Campaign Notes<textarea rows={4} style={{...inputStyle, resize:"vertical"}} value={brief.notes} onChange={(e)=>setBriefField("notes",e.target.value)} placeholder="Special priorities, price targets, products you really want to move, campaign rules, etc." /></label>
           </section>
@@ -545,32 +577,32 @@ export default function CampaignPlannerPage() {
         {activeTab === "products" && (
           <div style={{ display: "grid", gridTemplateColumns: "360px minmax(0,1fr)", gap: 14, alignItems: "start" }}>
             <section style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:16, position:"sticky", top:84 }}>
-              <div style={{ fontWeight:900, fontSize:16 }}>Add Products</div>
+              <div style={{ fontWeight:700, fontSize:16 }}>Add Products</div>
               <div style={{ fontSize:11, color:C.sub, margin:"4px 0 12px" }}>Search SKU Storage or paste a sheet.</div>
               <input style={inputStyle} value={search} onChange={(e)=>setSearch(e.target.value)} placeholder={`Search ${skuItems.length.toLocaleString()} SKU Storage records…`} />
               {searchResults.length ? <div style={{ border:`1px solid ${C.border}`, borderRadius:10, marginTop:8, maxHeight:300, overflow:"auto" }}>
                 {searchResults.map((p)=><div key={p.id} style={{ padding:10, borderBottom:`1px solid ${C.border}`, display:"flex", gap:8, alignItems:"center" }}>
-                  <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{p.productName}</div><div style={{fontSize:10,color:C.sub}}>{p.sku} • {p.brand}</div></div>
+                  <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{p.productName}</div><div style={{fontSize:10,color:C.sub}}>{p.sku} • {p.brand}</div></div>
                   <button style={btn()} onClick={()=>addProduct(p)}>Add</button>
                 </div>)}
               </div> : null}
-              <div style={{ margin:"16px 0 7px", fontSize:12, fontWeight:900 }}>Paste Sheet</div>
+              <div style={{ margin:"16px 0 7px", fontSize:12, fontWeight:700 }}>Paste Sheet</div>
               <textarea style={{...inputStyle, resize:"vertical"}} rows={7} value={pasteText} onChange={(e)=>setPasteText(e.target.value)} placeholder={'One product per line:\nSKU | Product Name | Brand | Category | SRP\n\nSKU-only lines will match SKU Storage when possible.'} />
               <button style={{...btn(true), marginTop:8, width:"100%"}} onClick={addPastedProducts}>Add Pasted Products</button>
             </section>
 
             <section style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:16 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:12 }}><div><div style={{fontWeight:900,fontSize:16}}>Campaign Products</div><div style={{fontSize:11,color:C.sub}}>Classify products. One product can have multiple tags.</div></div><b>{products.length}</b></div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:12 }}><div><div style={{fontWeight:700,fontSize:16}}>Campaign Products</div><div style={{fontSize:11,color:C.sub}}>Classify products. One product can have multiple tags.</div></div><b>{products.length}</b></div>
               {products.length ? <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {products.map((p)=><div key={p.id} style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:12 }}>
                   <div style={{ display:"grid", gridTemplateColumns:"1.2fr .8fr .8fr 100px", gap:8, alignItems:"start" }}>
-                    <div><div style={{fontWeight:900,fontSize:13}}>{p.productName}</div><div style={{fontSize:10,color:C.sub,marginTop:3}}>{p.sku || "No SKU"} • {p.brand || "No brand"} • {p.category || "No category"}</div></div>
+                    <div><div style={{fontWeight:700,fontSize:13}}>{p.productName}</div><div style={{fontSize:10,color:C.sub,marginTop:3}}>{p.sku || "No SKU"} • {p.brand || "No brand"} • {p.category || "No category"}</div></div>
                     <input style={inputStyle} value={p.srp} onChange={(e)=>updateProduct(p.id,{srp:e.target.value})} placeholder="SRP" />
                     <input style={inputStyle} value={p.notes} onChange={(e)=>updateProduct(p.id,{notes:e.target.value})} placeholder="Product note / exact price target" />
                     <button style={{...btn(),color:"#B42318"}} onClick={()=>setProducts(prev=>prev.filter(x=>x.id!==p.id))}>Remove</button>
                   </div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:9 }}>{TAGS.map(tag=>{
-                    const on=p.tags.includes(tag); return <button key={tag} onClick={()=>toggleTag(p.id,tag)} style={{border:`1px solid ${on?C.dark:C.border}`,borderRadius:999,padding:"5px 8px",fontSize:10,fontWeight:800,background:on?C.dark:"#fff",color:on?"#fff":C.text,cursor:"pointer"}}>{tag}</button>
+                    const on=p.tags.includes(tag); return <button key={tag} onClick={()=>toggleTag(p.id,tag)} style={{border:`1px solid ${on?C.borderStrong:C.border}`,borderRadius:999,padding:"5px 8px",fontSize:10,fontWeight:600,background:on?C.surfaceAlt:C.card,color:on?C.text:C.textSub,cursor:"pointer"}}>{tag}</button>
                   })}</div>
                 </div>)}
               </div> : <div style={{padding:28,textAlign:"center",color:C.sub,fontSize:12}}>Add your fast movers, new products, slow movers and priority products from the left panel.</div>}
@@ -582,7 +614,7 @@ export default function CampaignPlannerPage() {
           <section style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:18 }}>
             {!plan ? <EmptyPlan onGenerate={()=>generatePlan(false)} busy={!!busy} /> : <>
               <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap"}}>
-                <div><div style={{fontSize:11,fontWeight:900,color:C.gold,textTransform:"uppercase",letterSpacing:".08em"}}>Campaign Strategy</div><h1 style={{margin:"4px 0 4px",fontSize:28}}>{plan.campaignConcept?.name || brief.campaignName}</h1><div style={{color:C.sub,fontSize:13}}>{plan.campaignConcept?.tagline}</div></div>
+                <div><div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:".05em"}}>Campaign Strategy</div><h1 style={{margin:"4px 0 4px",fontSize:28}}>{plan.campaignConcept?.name || brief.campaignName}</h1><div style={{color:C.sub,fontSize:13}}>{plan.campaignConcept?.tagline}</div></div>
                 <div style={{display:"flex",gap:7,flexWrap:"wrap"}}><button style={btn()} onClick={()=>generatePlan(true)} disabled={!!busy}>{busy==="generate"?"Regenerating…":"Regenerate Unlocked"}</button><button style={btn(true)} onClick={saveCampaign}>Save</button></div>
               </div>
               <div style={{marginTop:18,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -590,7 +622,7 @@ export default function CampaignPlannerPage() {
                 <PlanCard title="Core Strategy" section="coreStrategy" locked={lockedSections.includes("coreStrategy")} onLock={toggleLock}><p>{plan.coreStrategy}</p></PlanCard>
               </div>
               <div style={{marginTop:12}}><PlanCard title="Campaign Pillars" section="pillars" locked={lockedSections.includes("pillars")} onLock={toggleLock}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:10}}>{(plan.pillars||[]).map((x,i)=><div key={i} style={{border:`1px solid ${C.border}`,borderRadius:10,padding:11}}><b>{x.name}</b><p style={{fontSize:12}}>{x.purpose}</p><small>Heroes: {(x.heroProducts||[]).join(", ")}</small><br/><small>Attach: {(x.attachProducts||[]).join(", ")}</small><p style={{fontSize:11,color:C.sub}}>{x.message}</p></div>)}</div></PlanCard></div>
-              <div style={{marginTop:12}}><PlanCard title="Funnel" section="funnel" locked={lockedSections.includes("funnel")} onLock={toggleLock}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:8}}>{(plan.funnel||[]).map((x,i)=><div key={i} style={{background:C.blue,borderRadius:10,padding:11}}><b>{x.stage}</b><div style={{fontSize:11,marginTop:5}}>{x.objective}</div><div style={{fontSize:11,color:C.sub,marginTop:5}}>{x.execution}</div><div style={{fontSize:10,fontWeight:800,marginTop:7}}>KPI: {x.kpi}</div></div>)}</div></PlanCard></div>
+              <div style={{marginTop:12}}><PlanCard title="Funnel" section="funnel" locked={lockedSections.includes("funnel")} onLock={toggleLock}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:8}}>{(plan.funnel||[]).map((x,i)=><div key={i} style={{background:C.blue,borderRadius:10,padding:11}}><b>{x.stage}</b><div style={{fontSize:11,marginTop:5}}>{x.objective}</div><div style={{fontSize:11,color:C.sub,marginTop:5}}>{x.execution}</div><div style={{fontSize:10,fontWeight:500,marginTop:7}}>KPI: {x.kpi}</div></div>)}</div></PlanCard></div>
               <div style={{marginTop:12}}><PlanCard title="Platform Strategy" section="platformPlan" locked={lockedSections.includes("platformPlan")} onLock={toggleLock}><DataTable columns={["Platform","Role","Priority Products","Execution","Offer Formula","KPIs"]} rows={(plan.platformPlan||[]).map(x=>[x.platform,x.role,x.priorityProducts,x.execution,x.offerFormula,x.kpis])}/></PlanCard></div>
               <div style={{marginTop:12}}><PlanCard title="Team Actions" section="teamActions" locked={lockedSections.includes("teamActions")} onLock={toggleLock}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:9}}>{(plan.teamActions||[]).map((x,i)=><div key={i} style={{border:`1px solid ${C.border}`,borderRadius:10,padding:11}}><b>{x.team}</b><ul style={{paddingLeft:18,fontSize:12,lineHeight:1.6}}>{(x.actions||[]).map((a,j)=><li key={j}>{a}</li>)}</ul></div>)}</div></PlanCard></div>
               <div style={{marginTop:12,padding:11,borderRadius:10,background:C.orange,fontSize:11,color:"#7A4B00"}}>Locked sections are preserved when you click <b>Regenerate Unlocked</b>. Use this after approving parts of the plan.</div>
@@ -601,9 +633,9 @@ export default function CampaignPlannerPage() {
         {activeTab === "deals" && (
           <section style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,overflow:"hidden" }}>
             {!plan ? <EmptyPlan onGenerate={()=>generatePlan(false)} busy={!!busy}/> : <>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div><div style={{fontWeight:900,fontSize:17}}>Promo Deal Matrix</div><div style={{fontSize:11,color:C.sub}}>Best sellers pull traffic. New/slow/priority products are deliberately attached.</div></div><button style={btn(lockedSections.includes("productPlan"))} onClick={()=>toggleLock("productPlan")}>{lockedSections.includes("productPlan")?"🔒 Locked":"🔓 Lock Section"}</button></div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div><div style={{fontWeight:700,fontSize:17}}>Promo Deal Matrix</div><div style={{fontSize:11,color:C.sub}}>Best sellers pull traffic. New/slow/priority products are deliberately attached.</div></div><button style={btn(lockedSections.includes("productPlan"))} onClick={()=>toggleLock("productPlan")}>{lockedSections.includes("productPlan")?"🔒 Locked":"🔓 Lock Section"}</button></div>
               <DataTable columns={["Product","Class / Role","Priority","Platform","Promo Deal","Discount Guardrail","Target Deal Price","Attach / Bundle","Campaign Strategy","Post-Campaign","Content Hook"]} rows={(plan.productPlan||[]).map(x=>[x.product,`${x.classification||""} / ${x.commercialRole}`,String(x.priority),x.primaryPlatform,x.promoDeal,x.discountGuardrail,x.targetDealPrice||"",x.attachBundleWith,x.campaignStrategy,x.postCampaignStrategy,x.contentHook])}/>
-              <div style={{marginTop:16,fontWeight:900}}>Bundle & Offer Library</div>
+              <div style={{marginTop:16,fontWeight:700}}>Bundle & Offer Library</div>
               <div style={{marginTop:8}}><DataTable columns={["Bundle","Hero","Attach Products","Mechanic","Saving","Goal","Platform","Message"]} rows={(plan.bundles||[]).map(x=>[x.name,x.heroProduct,x.attachProducts,x.mechanic,x.saving,x.goal,x.platform,x.message])}/></div>
             </>}
           </section>
@@ -612,7 +644,7 @@ export default function CampaignPlannerPage() {
         {activeTab === "calendar" && (
           <section style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
             {!plan ? <EmptyPlan onGenerate={()=>generatePlan(false)} busy={!!busy}/> : <>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div><div style={{fontWeight:900,fontSize:17}}>Campaign Calendar</div><div style={{fontSize:11,color:C.sub}}>Pre-sale → peak → post-sale → payday/continuation.</div></div><button style={btn(lockedSections.includes("timeline"))} onClick={()=>toggleLock("timeline")}>{lockedSections.includes("timeline")?"🔒 Locked":"🔓 Lock Section"}</button></div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div><div style={{fontWeight:700,fontSize:17}}>Campaign Calendar</div><div style={{fontSize:11,color:C.sub}}>Pre-sale → peak → post-sale → payday/continuation.</div></div><button style={btn(lockedSections.includes("timeline"))} onClick={()=>toggleLock("timeline")}>{lockedSections.includes("timeline")?"🔒 Locked":"🔓 Lock Section"}</button></div>
               <DataTable columns={["Period","Theme","Goal","Hero Products","Attach Products","External Traffic","In-Platform","Conversion Action","KPI"]} rows={(plan.timeline||[]).map(x=>[x.period,x.theme,x.goal,x.heroProducts,x.attachProducts,x.externalTraffic,x.inPlatform,x.conversionAction,x.kpi])}/>
             </>}
           </section>
@@ -620,7 +652,7 @@ export default function CampaignPlannerPage() {
 
         {activeTab === "exports" && (
           <section style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:18}}>
-            <div style={{fontWeight:900,fontSize:18}}>Final Outputs</div><div style={{fontSize:12,color:C.sub,marginTop:4}}>Generate the same three deliverables for every future campaign.</div>
+            <div style={{fontWeight:700,fontSize:18}}>Final Outputs</div><div style={{fontSize:12,color:C.sub,marginTop:4}}>Generate the same three deliverables for every future campaign.</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:12,marginTop:16}}>
               <ExportCard title="Marketing Plan" description="Executive strategy, pillars, funnel, platform plan, timeline and team actions." button="Download Marketing Plan" onClick={exportMarketingPlan} disabled={!plan||!!busy}/>
               <ExportCard title="Excel Promo Strategy" description="Product deal matrix, bundle library, timeline, platform plan and KPI tabs." button={busy==="excel"?"Creating Excel…":"Export Excel"} onClick={()=>exportFile("excel")} disabled={!plan||!!busy}/>
@@ -636,21 +668,109 @@ export default function CampaignPlannerPage() {
 }
 
 function EmptyPlan({ onGenerate, busy }: { onGenerate:()=>void; busy:boolean }) {
-  return <div style={{padding:"55px 20px",textAlign:"center"}}><div style={{fontSize:28}}>✦</div><div style={{fontWeight:900,fontSize:18,marginTop:8}}>No campaign plan generated yet</div><div style={{fontSize:12,color:C.sub,margin:"6px auto 15px",maxWidth:520}}>Complete the campaign brief, add and classify your products, then generate the full strategy.</div><button onClick={onGenerate} disabled={busy} style={{border:0,borderRadius:9,background:C.dark,color:"#fff",padding:"10px 15px",fontWeight:900,cursor:"pointer"}}>{busy?"Generating…":"Generate Campaign"}</button></div>
+  return <div style={{padding:"55px 20px",textAlign:"center"}}>
+    <div style={{fontSize:28,color:C.sub}}>✦</div>
+    <div style={{fontWeight:700,fontSize:18,marginTop:8}}>No campaign plan generated yet</div>
+    <div style={{fontSize:12,color:C.sub,margin:"6px auto 15px",maxWidth:520}}>Complete the campaign brief, add and classify your products, then generate the full strategy.</div>
+    <button
+      onClick={onGenerate}
+      disabled={busy}
+      style={{
+        border:`1px solid ${C.borderStrong}`,
+        borderRadius:8,
+        background:busy?"#F9FAFB":C.surfaceAlt,
+        color:busy?"#9CA3AF":C.textSub,
+        padding:"9px 14px",
+        fontWeight:600,
+        fontSize:12,
+        cursor:busy?"not-allowed":"pointer",
+      }}
+    >
+      {busy?"Generating…":"Generate Campaign"}
+    </button>
+  </div>
 }
 
 function PlanCard({ title, section, locked, onLock, children }: any) {
-  return <div style={{border:`1px solid ${C.border}`,borderRadius:12,padding:13,height:"100%",boxSizing:"border-box"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}><b style={{fontSize:13}}>{title}</b><button onClick={()=>onLock(section)} style={{border:`1px solid ${C.border}`,borderRadius:8,background:locked?C.dark:"#fff",color:locked?"#fff":C.sub,padding:"5px 8px",fontSize:10,fontWeight:800,cursor:"pointer"}}>{locked?"🔒 Locked":"🔓 Lock"}</button></div><div style={{fontSize:12,lineHeight:1.55}}>{children}</div></div>
+  return <div style={{border:`1px solid ${C.border}`,borderRadius:10,padding:13,height:"100%",boxSizing:"border-box",background:C.card}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.text}}>{title}</div>
+      <button
+        onClick={()=>onLock(section)}
+        style={{
+          border:`1px solid ${locked?C.borderStrong:C.border}`,
+          borderRadius:7,
+          background:locked?C.surfaceAlt:C.card,
+          color:C.textSub,
+          padding:"5px 8px",
+          fontSize:10,
+          fontWeight:600,
+          cursor:"pointer"
+        }}
+      >
+        {locked?"🔒 Locked":"🔓 Lock"}
+      </button>
+    </div>
+    <div style={{fontSize:12,lineHeight:1.55}}>{children}</div>
+  </div>
 }
 
 function DataTable({ columns, rows }: { columns:string[]; rows:any[][] }) {
-  return <div style={{overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:10}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:900}}><thead><tr>{columns.map(c=><th key={c} style={{position:"sticky",top:0,textAlign:"left",padding:"9px 10px",background:C.dark,color:"#fff",fontSize:10,whiteSpace:"nowrap"}}>{c}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i} style={{background:i%2?"#FAFBFC":"#fff"}}>{r.map((v,j)=><td key={j} style={{padding:"8px 10px",borderTop:`1px solid ${C.border}`,verticalAlign:"top",minWidth:j===0?150:110,maxWidth:280,lineHeight:1.4}}>{String(v??"")}</td>)}</tr>):<tr><td colSpan={columns.length} style={{padding:20,textAlign:"center",color:C.sub}}>No rows generated.</td></tr>}</tbody></table></div>
+  return <div style={{overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:9,background:C.card}}>
+    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:900}}>
+      <thead>
+        <tr>
+          {columns.map(c=><th key={c} style={{
+            position:"sticky",
+            top:0,
+            textAlign:"left",
+            padding:"9px 10px",
+            background:C.surfaceAlt,
+            color:C.textSub,
+            fontSize:10,
+            fontWeight:600,
+            whiteSpace:"nowrap",
+            borderBottom:`1px solid ${C.border}`
+          }}>{c}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length?rows.map((r,i)=><tr key={i} style={{background:i%2?"#FAFAFA":C.card}}>
+          {r.map((v,j)=><td key={j} style={{padding:"8px 10px",borderTop:`1px solid ${C.border}`,verticalAlign:"top",minWidth:j===0?150:110,maxWidth:280,lineHeight:1.4,color:C.textSub}}>{String(v??"")}</td>)}
+        </tr>):<tr><td colSpan={columns.length} style={{padding:20,textAlign:"center",color:C.sub}}>No rows generated.</td></tr>}
+      </tbody>
+    </table>
+  </div>
 }
 
-function ExportCard({title,description,button,onClick,disabled}:any){return <div style={{border:`1px solid ${C.border}`,borderRadius:12,padding:16,display:"flex",flexDirection:"column",minHeight:180}}><div style={{fontWeight:900,fontSize:16}}>{title}</div><div style={{fontSize:12,color:C.sub,lineHeight:1.55,marginTop:7,flex:1}}>{description}</div><button disabled={disabled} onClick={onClick} style={{border:0,borderRadius:9,padding:"10px 12px",background:disabled?"#D0D5DD":C.dark,color:"#fff",fontWeight:900,cursor:disabled?"not-allowed":"pointer"}}>{button}</button></div>}
+function ExportCard({title,description,button,onClick,disabled}:any){
+  return <div style={{border:`1px solid ${C.border}`,borderRadius:10,padding:16,display:"flex",flexDirection:"column",minHeight:180,background:C.card}}>
+    <div style={{fontWeight:700,fontSize:16,color:C.text}}>{title}</div>
+    <div style={{fontSize:12,color:C.sub,lineHeight:1.55,marginTop:7,flex:1}}>{description}</div>
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        border:`1px solid ${disabled?C.border:C.borderStrong}`,
+        borderRadius:8,
+        padding:"9px 12px",
+        background:disabled?"#F9FAFB":C.surfaceAlt,
+        color:disabled?"#9CA3AF":C.textSub,
+        fontWeight:600,
+        fontSize:12,
+        cursor:disabled?"not-allowed":"pointer"
+      }}
+    >
+      {button}
+    </button>
+  </div>
+}
+
+
 
 
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
 ACTION: Replace the existing Campaign Planner page with this full code.
+UI UPDATE: Uses the same light EMDC visual language; no black/heavy button styling.
 */
