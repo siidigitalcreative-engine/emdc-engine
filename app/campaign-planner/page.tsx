@@ -720,7 +720,6 @@ ${cleanJsonText(brokenText)}`;
             <div style={{ color: C.sub, fontSize: 12, marginBottom: 18 }}>Set the commercial goal and constraints before selecting products.</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 13 }}>
               <label style={labelStyle}>Campaign Name<input style={inputStyle} value={brief.campaignName} onChange={(e) => setBriefField("campaignName", e.target.value)} placeholder="e.g. 10.10 Home Upgrade Festival" /></label>
-              <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e) => setBriefField("theme", e.target.value)}>{["Double Digit Sale","Payday Sale","Product Launch","Bundle Promo","Clearance / Phase-Out","Back to School","Rainy Season","Christmas / Ber Months","Custom"].map(x=><option key={x}>{x}</option>)}</select></label>
               <label style={labelStyle}>AI Model<select style={inputStyle} value={brief.textModel} onChange={(e) => setBriefField("textModel", e.target.value)}>{MODELS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
               <label style={labelStyle}>Campaign Month<input type="month" style={inputStyle} value={brief.month} onChange={(e)=>setBriefField("month", e.target.value)} /></label>
               <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e)=>setBriefField("theme", e.target.value)}>
@@ -981,7 +980,6 @@ UPDATE:
 - Fixed defaultProductTags reference.
 */
 
-// NOTE: Top Campaign Theme field pattern was not found automatically.
 
 
 /*
@@ -991,4 +989,14 @@ UI UPDATE:
 - Removed the duplicate Campaign Theme field beside Campaign Name.
 - Kept the month-dependent Campaign Theme dropdown only.
 - Campaign Theme now belongs under Campaign Month.
+*/
+
+
+/*
+LOCATION PATH: app/campaign-planner/page.tsx
+
+FINAL UI FIX:
+- Removed the duplicate Campaign Theme field beside Campaign Name.
+- Kept only the month-dependent Campaign Theme dropdown under Campaign Month.
+- Campaign Theme options continue to use CAMPAIGN_THEMES_BY_MONTH.
 */
