@@ -21,9 +21,8 @@ type PlannerProduct = {
 type CampaignBrief = {
   campaignName: string;
   theme: string;
-  startDate: string;
-  peakDate: string;
-  endDate: string;
+  month: string;
+  moments: string[];
   platforms: string[];
   objectives: string[];
   budget: string;
@@ -106,8 +105,7 @@ function normalizeSku(item: any): PlannerProduct {
     category: String(item?.category || item?.categoryName || "").trim(),
     collection: String(item?.collection || item?.collectionName || "").trim(),
     srp: String(item?.srp || item?.price || "").trim(),
-    tags: ["Supporting"],
-    notes: "",
+    tags: defaultProductTags.length ? defaultProductTags : ["Supporting"],
   };
 }
 
@@ -214,9 +212,8 @@ export default function CampaignPlannerPage() {
   const [brief, setBrief] = useState<CampaignBrief>({
     campaignName: "",
     theme: "Double Digit Sale",
-    startDate: "",
-    peakDate: "",
-    endDate: "",
+    month: "",
+    moments: [],
     platforms: ["Lazada", "Shopee", "TikTok Shop", "Meta Ads"],
     objectives: ["GMV Growth", "Inventory Movement"],
     budget: "",
@@ -224,17 +221,19 @@ export default function CampaignPlannerPage() {
     targetAOV: "",
     maxDiscount: "",
     minimumMargin: "",
-    notes: "",
     textModel: "",
   });
   const [skuItems, setSkuItems] = useState<PlannerProduct[]>([]);
   const [products, setProducts] = useState<PlannerProduct[]>([]);
+  const [defaultProductTags, setDefaultProductTags] = useState<string[]>(["Best Seller"]);
   const [search, setSearch] = useState("");
   const [pasteText, setPasteText] = useState("");
   const [plan, setPlan] = useState<CampaignPlan | null>(null);
   const [lockedSections, setLockedSections] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("brief");
   const [busy, setBusy] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
   const [error, setError] = useState("");
   const [campaignId, setCampaignId] = useState("");
   const [library, setLibrary] = useState<any[]>([]);
@@ -243,6 +242,25 @@ export default function CampaignPlannerPage() {
   useEffect(() => {
     loadSkuStorage();
     loadLibrary();
+  }, []);
+
+  useEffect(() => {
+    const draft = { brief, products, plan, lockedSections, activeTab, defaultProductTags };
+    localStorage.setItem("emdc_campaign_planner_draft", JSON.stringify(draft));
+  }, [brief, products, plan, lockedSections, activeTab, defaultProductTags]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("emdc_campaign_planner_draft") || "null");
+      if (saved) {
+        if (saved.brief) setBrief(saved.brief);
+        if (saved.products) setProducts(saved.products);
+        if (saved.plan) setPlan(saved.plan);
+        if (saved.lockedSections) setLockedSections(saved.lockedSections);
+        if (saved.activeTab) setActiveTab(saved.activeTab);
+        if (saved.defaultProductTags) setDefaultProductTags(saved.defaultProductTags);
+      }
+    } catch {}
   }, []);
 
   async function loadSkuStorage() {
@@ -306,7 +324,7 @@ export default function CampaignPlannerPage() {
       const matched = skuItems.find((s) => s.sku && s.sku.toLowerCase() === String(sku || "").toLowerCase());
       next.push(matched || {
         id: uid(), sku: sku || "", productName: productName || sku || "Pasted Product", brand: brand || "",
-        category: category || "", collection: "", srp: srp || "", tags: ["Supporting"], notes: "",
+        category: category || "", collection: "", srp: srp || "", tags: defaultProductTags.length ? defaultProductTags : ["Supporting"], notes: "",
       });
     }
     setProducts((prev) => {
@@ -428,6 +446,8 @@ ${cleanJsonText(brokenText)}`;
     if (!brief.platforms.length) return setError("Select at least one platform.");
 
     setBusy("generate");
+      setProgress(5);
+      setProgressLabel("Preparing campaign inputs...");
     try {
       const instruction = buildInstruction(regenerateUnlocked ? lockedSections : [], regenerateUnlocked ? plan : null);
       const input = {
@@ -445,6 +465,8 @@ ${cleanJsonText(brokenText)}`;
         CURRENT_PLAN: regenerateUnlocked ? plan : undefined,
       };
 
+      setProgress(35);
+      setProgressLabel("Analyzing products and strategy...");
       const payload = await callCampaignAi({
         instruction,
         input,
@@ -461,6 +483,8 @@ ${cleanJsonText(brokenText)}`;
         );
       }
 
+      setProgress(100);
+      setProgressLabel("Campaign complete");
       setPlan(parsed);
       setActiveTab("plan");
     } catch (e: any) {
@@ -647,6 +671,7 @@ ${cleanJsonText(brokenText)}`;
       )}
 
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "18px" }}>
+        {busy === "generate" ? <div style={{marginBottom:12,padding:"10px",borderRadius:10,background:C.card,border:`1px solid ${C.border}`}}>Generating Campaign {progress}% — {progressLabel}</div> : null}
         {error ? <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.red, color: "#B42318", fontSize: 12, fontWeight: 600 }}>{error}</div> : null}
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
@@ -663,9 +688,8 @@ ${cleanJsonText(brokenText)}`;
               <label style={labelStyle}>Campaign Name<input style={inputStyle} value={brief.campaignName} onChange={(e) => setBriefField("campaignName", e.target.value)} placeholder="e.g. 10.10 Home Upgrade Festival" /></label>
               <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e) => setBriefField("theme", e.target.value)}>{["Double Digit Sale","Payday Sale","Product Launch","Bundle Promo","Clearance / Phase-Out","Back to School","Rainy Season","Christmas / Ber Months","Custom"].map(x=><option key={x}>{x}</option>)}</select></label>
               <label style={labelStyle}>AI Model<select style={inputStyle} value={brief.textModel} onChange={(e) => setBriefField("textModel", e.target.value)}>{MODELS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
-              <label style={labelStyle}>Start Date<input type="date" style={inputStyle} value={brief.startDate} onChange={(e) => setBriefField("startDate", e.target.value)} /></label>
-              <label style={labelStyle}>Peak / Main Sale Date<input type="date" style={inputStyle} value={brief.peakDate} onChange={(e) => setBriefField("peakDate", e.target.value)} /></label>
-              <label style={labelStyle}>End Date<input type="date" style={inputStyle} value={brief.endDate} onChange={(e) => setBriefField("endDate", e.target.value)} /></label>
+              <label style={labelStyle}>Campaign Month<input type="month" style={inputStyle} value={brief.month} onChange={(e)=>setBriefField("month", e.target.value)} /></label>
+              <label style={labelStyle}>Campaign Moments<select multiple style={{...inputStyle,height:80}} value={brief.moments} onChange={(e)=>setBriefField("moments",Array.from(e.target.selectedOptions).map(o=>o.value))}>{["Double Digit Sale","Payday Sale","Ber Months","Holiday Preparation","Rainy Season","Back to School","Home Upgrade","Kitchen Campaign"].map(x=><option key={x}>{x}</option>)}</select></label>
               <label style={labelStyle}>Campaign Budget (₱)<input type="number" style={inputStyle} value={brief.budget} onChange={(e) => setBriefField("budget", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target GMV (₱)<input type="number" style={inputStyle} value={brief.targetGMV} onChange={(e) => setBriefField("targetGMV", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target AOV (₱)<input type="number" style={inputStyle} value={brief.targetAOV} onChange={(e) => setBriefField("targetAOV", e.target.value)} placeholder="Optional" /></label>
@@ -680,7 +704,6 @@ ${cleanJsonText(brokenText)}`;
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Objectives</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{OBJECTIVES.map(x=><button key={x} onClick={()=>toggleBriefArray("objectives",x)} style={{...btn(brief.objectives.includes(x))}}>{x}</button>)}</div>
             </div>
-            <label style={{ ...labelStyle, marginTop: 16 }}>Campaign Notes<textarea rows={4} style={{...inputStyle, resize:"vertical"}} value={brief.notes} onChange={(e)=>setBriefField("notes",e.target.value)} placeholder="Special priorities, price targets, products you really want to move, campaign rules, etc." /></label>
           </section>
         )}
 
@@ -885,9 +908,8 @@ function ExportCard({title,description,button,onClick,disabled}:any){
 
 
 
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
-ACTION: Replace the existing Campaign Planner page with this full code.
-FIX: Automatically repairs malformed AI JSON instead of showing raw JSON.parse syntax errors.
-UI: Selected option buttons remain black with white text; unselected option buttons remain white with gray text.
+UPDATE: Campaign name/month/moments input, product default tags, autosave draft, generation progress.
 */
