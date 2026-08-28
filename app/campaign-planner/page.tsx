@@ -980,3 +980,15 @@ UPDATE:
 - Individual product tags remain editable.
 - Fixed defaultProductTags reference.
 */
+
+// NOTE: Top Campaign Theme field pattern was not found automatically.
+
+
+/*
+LOCATION PATH: app/campaign-planner/page.tsx
+
+UI UPDATE:
+- Removed the duplicate Campaign Theme field beside Campaign Name.
+- Kept the month-dependent Campaign Theme dropdown only.
+- Campaign Theme now belongs under Campaign Month.
+*/
