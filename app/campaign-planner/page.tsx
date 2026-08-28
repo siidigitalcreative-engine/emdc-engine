@@ -682,6 +682,16 @@ ${cleanJsonText(brokenText)}`;
           </div>
           <button style={btn()} onClick={() => setShowLibrary((v) => !v)}>Campaign Library</button>
           <button style={btn()} onClick={newCampaign}>New Campaign</button>
+          <label style={{...labelStyle, flexDirection:"row", alignItems:"center", gap:8, marginLeft:"auto"}}>
+            <span style={{fontSize:12, fontWeight:700, color:C.textSub}}>AI Model</span>
+            <select
+              style={{...inputStyle, width:210, padding:"8px 10px"}}
+              value={brief.textModel}
+              onChange={(e)=>setBriefField("textModel", e.target.value)}
+            >
+              {MODELS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </label>
           <button style={btn()} onClick={saveCampaign} disabled={!!busy}>{busy === "save" ? "Saving…" : "Save Campaign"}</button>
           <button style={btn(true)} onClick={() => generatePlan(false)} disabled={!!busy}>{busy === "generate" ? "Generating…" : "Generate Campaign"}</button>
         </div>
@@ -720,7 +730,6 @@ ${cleanJsonText(brokenText)}`;
             <div style={{ color: C.sub, fontSize: 12, marginBottom: 18 }}>Set the commercial goal and constraints before selecting products.</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 13 }}>
               <label style={labelStyle}>Campaign Name<input style={inputStyle} value={brief.campaignName} onChange={(e) => setBriefField("campaignName", e.target.value)} placeholder="e.g. 10.10 Home Upgrade Festival" /></label>
-              <label style={labelStyle}>AI Model<select style={inputStyle} value={brief.textModel} onChange={(e) => setBriefField("textModel", e.target.value)}>{MODELS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
               <label style={labelStyle}>Campaign Month<input type="month" style={inputStyle} value={brief.month} onChange={(e)=>setBriefField("month", e.target.value)} /></label>
               <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e)=>setBriefField("theme", e.target.value)}>
 {(CAMPAIGN_THEMES_BY_MONTH[brief.month?.slice(5,7)] || []).map(x=><option key={x}>{x}</option>)}
