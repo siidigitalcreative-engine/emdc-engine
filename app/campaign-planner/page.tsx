@@ -252,7 +252,8 @@ export default function CampaignPlannerPage() {
         products: products.map((p:any) => ({
           id: p.id,
           sku: p.sku,
-          productName: p.productName,\n          name: p.productName,
+          productName: p.productName,
+          name: p.productName,
           tags: p.tags,
         })),
         activeTab,
