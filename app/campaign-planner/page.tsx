@@ -96,7 +96,7 @@ function uid() {
   return `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function normalizeSku(item: any): PlannerProduct {
+function normalizeSku(item: any, defaultTags: ProductTag[] = ["Supporting"]): PlannerProduct {
   return {
     id: String(item?.id || item?.sourceId || item?.sku || item?.skuCode || uid()),
     sku: String(item?.sku || item?.skuCode || item?.value || "").trim(),
@@ -105,7 +105,7 @@ function normalizeSku(item: any): PlannerProduct {
     category: String(item?.category || item?.categoryName || "").trim(),
     collection: String(item?.collection || item?.collectionName || "").trim(),
     srp: String(item?.srp || item?.price || "").trim(),
-    tags: defaultProductTags.length ? defaultProductTags : ["Supporting"],
+    tags: defaultTags.length ? defaultTags : ["Supporting"],
   };
 }
 
@@ -225,7 +225,7 @@ export default function CampaignPlannerPage() {
   });
   const [skuItems, setSkuItems] = useState<PlannerProduct[]>([]);
   const [products, setProducts] = useState<PlannerProduct[]>([]);
-  const [defaultProductTags, setDefaultProductTags] = useState<string[]>(["Best Seller"]);
+  const [defaultProductTags, setDefaultProductTags] = useState<ProductTag[]>(["Best Seller / Fast Mover"]);
   const [search, setSearch] = useState("");
   const [pasteText, setPasteText] = useState("");
   const [plan, setPlan] = useState<CampaignPlan | null>(null);
@@ -252,7 +252,7 @@ export default function CampaignPlannerPage() {
         products: products.map((p:any) => ({
           id: p.id,
           sku: p.sku,
-          name: p.name,
+          productName: p.productName,\n          name: p.productName,
           tags: p.tags,
         })),
         activeTab,
@@ -263,7 +263,7 @@ export default function CampaignPlannerPage() {
         JSON.stringify(lightweightDraft)
       );
     } catch {
-      localStorage.removeItem("emdc_campaign_planner_draft");
+      try { localStorage.removeItem("emdc_campaign_planner_draft"); } catch {}
     }
   }, [brief, products, plan, lockedSections, activeTab, defaultProductTags]);
 
@@ -292,7 +292,7 @@ export default function CampaignPlannerPage() {
         : Array.isArray(data?.appState?.skuItems)
           ? data.appState.skuItems
           : [];
-      setSkuItems(items.map(normalizeSku));
+      setSkuItems(items.map((item: any) => normalizeSku(item, defaultProductTags as ProductTag[])));
     } catch (e: any) {
       setError(e?.message || "Unable to load SKU Storage.");
     }
@@ -342,7 +342,7 @@ export default function CampaignPlannerPage() {
       const matched = skuItems.find((s) => s.sku && s.sku.toLowerCase() === String(sku || "").toLowerCase());
       next.push(matched || {
         id: uid(), sku: sku || "", productName: productName || sku || "Pasted Product", brand: brand || "",
-        category: category || "", collection: "", srp: srp || "", tags: defaultProductTags.length ? defaultProductTags : ["Supporting"], notes: "",
+        category: category || "", collection: "", srp: srp || "", tags: defaultTags.length ? defaultTags : ["Supporting"], notes: "",
       });
     }
     setProducts((prev) => {
@@ -707,7 +707,7 @@ ${cleanJsonText(brokenText)}`;
               <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e) => setBriefField("theme", e.target.value)}>{["Double Digit Sale","Payday Sale","Product Launch","Bundle Promo","Clearance / Phase-Out","Back to School","Rainy Season","Christmas / Ber Months","Custom"].map(x=><option key={x}>{x}</option>)}</select></label>
               <label style={labelStyle}>AI Model<select style={inputStyle} value={brief.textModel} onChange={(e) => setBriefField("textModel", e.target.value)}>{MODELS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
               <label style={labelStyle}>Campaign Month<input type="month" style={inputStyle} value={brief.month} onChange={(e)=>setBriefField("month", e.target.value)} /></label>
-              <label style={labelStyle}>Campaign Moments<select multiple style={{...inputStyle,height:80}} value={brief.moments} onChange={(e)=>setBriefField("moments",Array.from(e.target.selectedOptions).map(o=>o.value))}>{["Double Digit Sale","Payday Sale","Ber Months","Holiday Preparation","Rainy Season","Back to School","Home Upgrade","Kitchen Campaign"].map(x=><option key={x}>{x}</option>)}</select></label>
+              <label style={labelStyle}>Campaign Theme<select multiple style={{...inputStyle,height:80}} value={brief.moments} onChange={(e)=>setBriefField("moments",Array.from(e.target.selectedOptions).map(o=>o.value))}>{["Double Digit Sale","Payday Sale","Ber Months","Holiday Preparation","Rainy Season","Back to School","Home Upgrade","Kitchen Campaign"].map(x=><option key={x}>{x}</option>)}</select></label>
               <label style={labelStyle}>Campaign Budget (₱)<input type="number" style={inputStyle} value={brief.budget} onChange={(e) => setBriefField("budget", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target GMV (₱)<input type="number" style={inputStyle} value={brief.targetGMV} onChange={(e) => setBriefField("targetGMV", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target AOV (₱)<input type="number" style={inputStyle} value={brief.targetAOV} onChange={(e) => setBriefField("targetAOV", e.target.value)} placeholder="Optional" /></label>
@@ -929,13 +929,13 @@ function ExportCard({title,description,button,onClick,disabled}:any){
 
 
 
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
-
-FIX:
-- Removed large localStorage campaign plan saving.
-- Prevents QuotaExceededError crashes.
-- Saves only lightweight campaign inputs locally.
-- Clears corrupted drafts safely.
-- Generated campaign outputs remain in application state.
+FIXES:
+- Fixed defaultProductTags ReferenceError causing SKU selector/search crash.
+- SKU selector now loads products correctly.
+- Default product tags use ProductTag type.
+- Draft save keeps productName correctly.
+- Campaign theme wording updated.
 */
