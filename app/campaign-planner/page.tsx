@@ -67,6 +67,21 @@ type CampaignPlan = {
 const TAGS: ProductTag[] = ["Best Seller / Fast Mover", "New Product", "Slow Mover", "Priority Push", "Supporting"];
 const PLATFORMS = ["Lazada", "Shopee", "TikTok Shop", "Meta Ads", "Shopify"];
 const OBJECTIVES = ["GMV Growth", "Inventory Movement", "New Product Launch", "AOV Growth", "Customer Acquisition", "Category Growth"];
+const CAMPAIGN_THEMES_BY_MONTH: Record<string, string[]> = {
+  "01": ["1.1 Sale", "New Year Refresh", "Home Organization"],
+  "02": ["2.2 Sale", "Valentine Campaign", "Home Refresh"],
+  "03": ["3.3 Sale", "Summer Essentials", "Home Upgrade"],
+  "04": ["4.4 Sale", "Summer Sale", "Kitchen Upgrade"],
+  "05": ["5.5 Sale", "Mother's Day", "Home Essentials"],
+  "06": ["6.6 Sale", "Mid-Year Sale", "Rainy Season Preparation"],
+  "07": ["7.7 Sale", "Back to School", "Home Organization"],
+  "08": ["8.8 Sale", "Buwan ng Wika", "August Payday Sale", "August Mid-Month Sale"],
+  "09": ["9.9 Sale", "Ber Months Launch", "Home Refresh Season", "September Payday Sale"],
+  "10": ["10.10 Sale", "Holiday Preparation", "Home Upgrade Festival"],
+  "11": ["11.11 Sale", "Christmas Shopping Preparation", "Big Gift Guide"],
+  "12": ["12.12 Sale", "Christmas Shopping", "Holiday Entertaining", "Year-End Sale"],
+};
+
 const MODELS = [
   { value: "", label: "Default Model (Vercel)" },
   { value: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite" },
@@ -105,7 +120,7 @@ function normalizeSku(item: any, defaultTags: ProductTag[] = ["Supporting"]): Pl
     category: String(item?.category || item?.categoryName || "").trim(),
     collection: String(item?.collection || item?.collectionName || "").trim(),
     srp: String(item?.srp || item?.price || "").trim(),
-    tags: defaultProductTags.length ? defaultProductTags : ["Supporting"],
+    tags: defaultTags.length ? defaultTags : ["Supporting"],
   };
 }
 
@@ -708,7 +723,9 @@ ${cleanJsonText(brokenText)}`;
               <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e) => setBriefField("theme", e.target.value)}>{["Double Digit Sale","Payday Sale","Product Launch","Bundle Promo","Clearance / Phase-Out","Back to School","Rainy Season","Christmas / Ber Months","Custom"].map(x=><option key={x}>{x}</option>)}</select></label>
               <label style={labelStyle}>AI Model<select style={inputStyle} value={brief.textModel} onChange={(e) => setBriefField("textModel", e.target.value)}>{MODELS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
               <label style={labelStyle}>Campaign Month<input type="month" style={inputStyle} value={brief.month} onChange={(e)=>setBriefField("month", e.target.value)} /></label>
-              <label style={labelStyle}>Campaign Theme<select multiple style={{...inputStyle,height:80}} value={brief.moments} onChange={(e)=>setBriefField("moments",Array.from(e.target.selectedOptions).map(o=>o.value))}>{["Double Digit Sale","Payday Sale","Ber Months","Holiday Preparation","Rainy Season","Back to School","Home Upgrade","Kitchen Campaign"].map(x=><option key={x}>{x}</option>)}</select></label>
+              <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e)=>setBriefField("theme", e.target.value)}>
+{(CAMPAIGN_THEMES_BY_MONTH[brief.month?.slice(5,7)] || []).map(x=><option key={x}>{x}</option>)}
+</select></label>
               <label style={labelStyle}>Campaign Budget (₱)<input type="number" style={inputStyle} value={brief.budget} onChange={(e) => setBriefField("budget", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target GMV (₱)<input type="number" style={inputStyle} value={brief.targetGMV} onChange={(e) => setBriefField("targetGMV", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target AOV (₱)<input type="number" style={inputStyle} value={brief.targetAOV} onChange={(e) => setBriefField("targetAOV", e.target.value)} placeholder="Optional" /></label>
