@@ -209,7 +209,23 @@ ${lockedText}`;
 }
 
 export default function CampaignPlannerPage() {
-  const [brief, setBrief] = useState<CampaignBrief>({
+  
+const CAMPAIGN_THEMES_BY_MONTH: Record<string, string[]> = {
+  "01": ["New Year Sale", "Organization Reset", "Back to School", "Payday Sale"],
+  "02": ["Valentine's Sale", "Home Refresh", "Payday Sale"],
+  "03": ["Summer Sale", "Travel Essentials", "Payday Sale"],
+  "04": ["Summer Essentials", "Home Upgrade", "Payday Sale"],
+  "05": ["Mother's Day", "Summer Sale", "Home Refresh"],
+  "06": ["Mid-Year Sale", "School Preparation", "Payday Sale"],
+  "07": ["Mid-Year Sale", "Back to School", "Rainy Season Essentials"],
+  "08": ["8.8 Sale", "August Back to School", "Buwan ng Wika", "August Payday Sale", "August Mid-Month Sale", "Rainy Season Essentials"],
+  "09": ["9.9 Sale", "Ber Months Launch", "Home Refresh Season", "Kitchen Upgrade Season", "September Payday Sale"],
+  "10": ["10.10 Sale", "Halloween Sale", "Home Upgrade", "Payday Sale"],
+  "11": ["11.11 Sale", "Christmas Preparation", "Gift Giving Season", "Payday Sale"],
+  "12": ["12.12 Sale", "Christmas Shopping", "Holiday Entertaining", "Year-End Sale"],
+};
+
+const [brief, setBrief] = useState<CampaignBrief>({
     campaignName: "",
     theme: "Double Digit Sale",
     month: "",
@@ -705,10 +721,10 @@ ${cleanJsonText(brokenText)}`;
             <div style={{ color: C.sub, fontSize: 12, marginBottom: 18 }}>Set the commercial goal and constraints before selecting products.</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 13 }}>
               <label style={labelStyle}>Campaign Name<input style={inputStyle} value={brief.campaignName} onChange={(e) => setBriefField("campaignName", e.target.value)} placeholder="e.g. 10.10 Home Upgrade Festival" /></label>
-              <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e) => setBriefField("theme", e.target.value)}>{["Double Digit Sale","Payday Sale","Product Launch","Bundle Promo","Clearance / Phase-Out","Back to School","Rainy Season","Christmas / Ber Months","Custom"].map(x=><option key={x}>{x}</option>)}</select></label>
+              <label style={labelStyle}>Campaign Theme<select style={inputStyle} value={brief.theme} onChange={(e) => setBriefField("theme", e.target.value)}>{(CAMPAIGN_THEMES_BY_MONTH[brief.month.split("-")[1]] || ["Double Digit Sale","Payday Sale","Product Launch","Bundle Promo","Custom"]).map(x=><option key={x}>{x}</option>)}</select></label>
               <label style={labelStyle}>AI Model<select style={inputStyle} value={brief.textModel} onChange={(e) => setBriefField("textModel", e.target.value)}>{MODELS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
               <label style={labelStyle}>Campaign Month<input type="month" style={inputStyle} value={brief.month} onChange={(e)=>setBriefField("month", e.target.value)} /></label>
-              <label style={labelStyle}>Campaign Theme<select multiple style={{...inputStyle,height:80}} value={brief.moments} onChange={(e)=>setBriefField("moments",Array.from(e.target.selectedOptions).map(o=>o.value))}>{["Double Digit Sale","Payday Sale","Ber Months","Holiday Preparation","Rainy Season","Back to School","Home Upgrade","Kitchen Campaign"].map(x=><option key={x}>{x}</option>)}</select></label>
+              
               <label style={labelStyle}>Campaign Budget (₱)<input type="number" style={inputStyle} value={brief.budget} onChange={(e) => setBriefField("budget", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target GMV (₱)<input type="number" style={inputStyle} value={brief.targetGMV} onChange={(e) => setBriefField("targetGMV", e.target.value)} placeholder="Optional" /></label>
               <label style={labelStyle}>Target AOV (₱)<input type="number" style={inputStyle} value={brief.targetAOV} onChange={(e) => setBriefField("targetAOV", e.target.value)} placeholder="Optional" /></label>
@@ -931,12 +947,11 @@ function ExportCard({title,description,button,onClick,disabled}:any){
 
 
 
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
-FIXES:
-- Fixed defaultProductTags ReferenceError causing SKU selector/search crash.
-- SKU selector now loads products correctly.
-- Default product tags use ProductTag type.
-- Draft save keeps productName correctly.
-- Campaign theme wording updated.
+UPDATE:
+- Removed duplicate Campaign Theme field.
+- Campaign Theme dropdown now depends on selected month.
+- Removed Campaign Moments UI.
 */
