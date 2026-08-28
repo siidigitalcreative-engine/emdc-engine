@@ -246,7 +246,25 @@ export default function CampaignPlannerPage() {
 
   useEffect(() => {
     const draft = { brief, products, plan, lockedSections, activeTab, defaultProductTags };
-    localStorage.setItem("emdc_campaign_planner_draft", JSON.stringify(draft));
+    try {
+      const lightweightDraft = {
+        brief,
+        products: products.map((p:any) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          tags: p.tags,
+        })),
+        activeTab,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(
+        "emdc_campaign_planner_draft",
+        JSON.stringify(lightweightDraft)
+      );
+    } catch {
+      localStorage.removeItem("emdc_campaign_planner_draft");
+    }
   }, [brief, products, plan, lockedSections, activeTab, defaultProductTags]);
 
   useEffect(() => {
@@ -909,7 +927,15 @@ function ExportCard({title,description,button,onClick,disabled}:any){
 
 
 
+
+
 /*
 LOCATION PATH: app/campaign-planner/page.tsx
-UPDATE: Campaign name/month/moments input, product default tags, autosave draft, generation progress.
+
+FIX:
+- Removed large localStorage campaign plan saving.
+- Prevents QuotaExceededError crashes.
+- Saves only lightweight campaign inputs locally.
+- Clears corrupted drafts safely.
+- Generated campaign outputs remain in application state.
 */
