@@ -5,13 +5,35 @@ export const dynamic = "force-dynamic";
 
 const MAX_INLINE_IMAGE_BYTES = 8 * 1024 * 1024;
 
+function sanitizeHeaderValue(value: unknown) {
+  return String(value || "")
+    .replace(/[\r\n]+/g, " ")
+    .trim();
+}
+
 function encodeHeader(value: string) {
+  const clean = sanitizeHeaderValue(value);
+
+  // Plain ASCII does not need RFC 2047 encoding.
+  // This avoids unnecessarily long encoded Subject headers.
+  if (/^[\x20-\x7E]*$/.test(clean)) {
+    return clean;
+  }
+
   const encoded = Buffer.from(
-    value || "",
+    clean,
     "utf8"
   ).toString("base64");
 
-  return `=?UTF-8?B?${encoded}?=`;
+  const chunks =
+    encoded.match(/.{1,48}/g) || [];
+
+  return chunks
+    .map(
+      (chunk) =>
+        `=?UTF-8?B?${chunk}?=`
+    )
+    .join("\r\n ");
 }
 
 function base64Url(value: string) {
@@ -22,12 +44,24 @@ function base64Url(value: string) {
     .replace(/=+$/g, "");
 }
 
-function splitRecipients(value: unknown) {
+function splitRecipientList(value: unknown) {
   return String(value || "")
     .split(/[;,]/)
     .map((entry) => entry.trim())
-    .filter(Boolean)
+    .filter(Boolean);
+}
+
+function splitRecipients(value: unknown) {
+  return splitRecipientList(value)
     .join(", ");
+}
+
+function isValidEmailAddress(value: unknown) {
+  const email = String(value || "").trim();
+
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(
+    email
+  );
 }
 
 function escapeHtml(value: unknown) {
@@ -264,6 +298,17 @@ function wrapBase64(
   value: string
 ) {
   return value.match(/.{1,76}/g)?.join("\r\n") || "";
+}
+
+function encodeMimeText(
+  value: string
+) {
+  return wrapBase64(
+    Buffer.from(
+      String(value || ""),
+      "utf8"
+    ).toString("base64")
+  );
 }
 
 function plainTextToHtml(
@@ -1056,6 +1101,44 @@ async function getAccessToken() {
   return String(json.access_token);
 }
 
+async function getGmailProfileEmail(
+  accessToken: string
+) {
+  const response = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+    {
+      method: "GET",
+      headers: {
+        Authorization:
+          `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    }
+  );
+
+  const json =
+    await response
+      .json()
+      .catch(() => ({}));
+
+  const emailAddress =
+    sanitizeHeaderValue(
+      json?.emailAddress
+    );
+
+  if (
+    !response.ok ||
+    !isValidEmailAddress(emailAddress)
+  ) {
+    throw new Error(
+      json?.error?.message ||
+        "Unable to determine the authenticated Gmail sender address."
+    );
+  }
+
+  return emailAddress;
+}
+
 export async function POST(
   req: NextRequest
 ) {
@@ -1070,13 +1153,21 @@ export async function POST(
         ? "send"
         : "draft";
 
-    const to = splitRecipients(
-      requestBody?.to
-    );
+    const toList =
+      splitRecipientList(
+        requestBody?.to
+      );
 
-    const cc = splitRecipients(
-      requestBody?.cc
-    );
+    const ccList =
+      splitRecipientList(
+        requestBody?.cc
+      );
+
+    const to =
+      toList.join(", ");
+
+    const cc =
+      ccList.join(", ");
 
     const emailAudience =
       requestBody?.emailAudience === "internal"
@@ -1148,13 +1239,13 @@ export async function POST(
             youtubeUrl
           );
 
-    const sender = String(
-      process.env.GMAIL_SENDER_EMAIL ||
-        "me"
-    ).trim();
+    const configuredSender =
+      sanitizeHeaderValue(
+        process.env.GMAIL_SENDER_EMAIL
+      );
 
     if (
-      !to ||
+      !toList.length ||
       !subject ||
       (!messageBody && !customHtmlBody)
     ) {
@@ -1168,8 +1259,50 @@ export async function POST(
       );
     }
 
+    const invalidRecipients = [
+      ...toList,
+      ...ccList,
+    ].filter(
+      (email) =>
+        !isValidEmailAddress(email)
+    );
+
+    if (invalidRecipients.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            `Invalid email address${invalidRecipients.length === 1 ? "" : "es"}: ${invalidRecipients.join(", ")}`,
+          code:
+            "INVALID_EMAIL_ADDRESS",
+        },
+        { status: 400 }
+      );
+    }
+
     const accessToken =
       await getAccessToken();
+
+    const sender =
+      configuredSender &&
+      configuredSender.toLowerCase() !== "me"
+        ? configuredSender
+        : await getGmailProfileEmail(
+            accessToken
+          );
+
+    if (!isValidEmailAddress(sender)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "GMAIL_SENDER_EMAIL is not a valid email address.",
+          code:
+            "INVALID_GMAIL_SENDER",
+        },
+        { status: 500 }
+      );
+    }
 
     const [
       headerImageResult,
@@ -1330,14 +1463,14 @@ export async function POST(
     const alternativeParts = [
       `--${alternativeBoundary}`,
       'Content-Type: text/plain; charset="UTF-8"',
-      "Content-Transfer-Encoding: 8bit",
+      "Content-Transfer-Encoding: base64",
       "",
-      messageBody,
+      encodeMimeText(messageBody),
       `--${alternativeBoundary}`,
       'Content-Type: text/html; charset="UTF-8"',
-      "Content-Transfer-Encoding: 8bit",
+      "Content-Transfer-Encoding: base64",
       "",
-      htmlBody,
+      encodeMimeText(htmlBody),
       `--${alternativeBoundary}--`,
     ].join("\r\n");
 
@@ -1444,13 +1577,58 @@ export async function POST(
         .catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(
-        json?.error?.message ||
-          `Unable to ${
-            action === "send"
-              ? "send email"
-              : "create Gmail draft"
-          }.`
+      const gmailMessage =
+        String(
+          json?.error?.message ||
+          ""
+        ).trim();
+
+      const gmailReason =
+        String(
+          json?.error?.errors?.[0]
+            ?.reason ||
+          json?.error?.status ||
+          ""
+        ).trim();
+
+      const friendlyFallback =
+        `Unable to ${
+          action === "send"
+            ? "send email"
+            : "create Gmail draft"
+        }.`;
+
+      const errorText = [
+        gmailMessage ||
+          friendlyFallback,
+        gmailReason &&
+        gmailReason.toLowerCase() !==
+          gmailMessage.toLowerCase()
+          ? `(${gmailReason})`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: errorText,
+          code: "GMAIL_API_ERROR",
+          gmailStatus:
+            response.status,
+          gmailReason:
+            gmailReason || null,
+          gmailError:
+            json?.error || null,
+        },
+        {
+          status:
+            response.status >= 400 &&
+            response.status < 500
+              ? response.status
+              : 502,
+        }
       );
     }
 
