@@ -1091,52 +1091,48 @@ async function getAccessToken() {
     !response.ok ||
     !json?.access_token
   ) {
-    throw new Error(
-      json?.error_description ||
-        json?.error ||
-        "Unable to authenticate with Gmail."
-    );
+    const oauthError =
+      String(
+        json?.error || ""
+      ).trim();
+
+    const oauthDescription =
+      String(
+        json?.error_description || ""
+      ).trim();
+
+    const oauthMessage = [
+      "Gmail OAuth authentication failed.",
+      oauthError
+        ? `Error: ${oauthError}.`
+        : "",
+      oauthDescription
+        ? `Details: ${oauthDescription}.`
+        : "",
+      `HTTP ${response.status}.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const error:any =
+      new Error(oauthMessage);
+
+    error.code =
+      "GMAIL_OAUTH_ERROR";
+
+    error.oauthStatus =
+      response.status;
+
+    error.oauthError =
+      oauthError || null;
+
+    error.oauthDescription =
+      oauthDescription || null;
+
+    throw error;
   }
 
   return String(json.access_token);
-}
-
-async function getGmailProfileEmail(
-  accessToken: string
-) {
-  const response = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
-    {
-      method: "GET",
-      headers: {
-        Authorization:
-          `Bearer ${accessToken}`,
-      },
-      cache: "no-store",
-    }
-  );
-
-  const json =
-    await response
-      .json()
-      .catch(() => ({}));
-
-  const emailAddress =
-    sanitizeHeaderValue(
-      json?.emailAddress
-    );
-
-  if (
-    !response.ok ||
-    !isValidEmailAddress(emailAddress)
-  ) {
-    throw new Error(
-      json?.error?.message ||
-        "Unable to determine the authenticated Gmail sender address."
-    );
-  }
-
-  return emailAddress;
 }
 
 export async function POST(
@@ -1283,13 +1279,24 @@ export async function POST(
     const accessToken =
       await getAccessToken();
 
+    if (
+      !configuredSender ||
+      configuredSender.toLowerCase() === "me"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "GMAIL_SENDER_EMAIL is required. Set it in Vercel to the same Gmail or Google Workspace email address used to create GMAIL_REFRESH_TOKEN.",
+          code:
+            "GMAIL_SENDER_EMAIL_REQUIRED",
+        },
+        { status: 500 }
+      );
+    }
+
     const sender =
-      configuredSender &&
-      configuredSender.toLowerCase() !== "me"
-        ? configuredSender
-        : await getGmailProfileEmail(
-            accessToken
-          );
+      configuredSender;
 
     if (!isValidEmailAddress(sender)) {
       return NextResponse.json(
@@ -1680,14 +1687,39 @@ export async function POST(
         emailAudience === "internal",
     });
   } catch (error: any) {
+    const isOauthError =
+      error?.code ===
+      "GMAIL_OAUTH_ERROR";
+
     return NextResponse.json(
       {
         ok: false,
         error:
           error?.message ||
           "Unexpected Gmail error.",
+        code:
+          error?.code ||
+          "GMAIL_SERVER_ERROR",
+        ...(isOauthError
+          ? {
+              oauthStatus:
+                error?.oauthStatus ||
+                null,
+              oauthError:
+                error?.oauthError ||
+                null,
+              oauthDescription:
+                error?.oauthDescription ||
+                null,
+            }
+          : {}),
       },
-      { status: 500 }
+      {
+        status:
+          isOauthError
+            ? 401
+            : 500,
+      }
     );
   }
 }
