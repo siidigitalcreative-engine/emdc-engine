@@ -41225,6 +41225,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   const [skuColumnDragIndex,setSkuColumnDragIndex] = useState<number|null>(null);
   const [skuRowDragId,setSkuRowDragId] = useState<any>(null);
   const [skuTableEditMode,setSkuTableEditMode] = useState(false);
+  const [exporting,setExporting] = useState(false);
   const SKU_COLUMN_WIDTH_SETTINGS_KEY = "emdc_sku_column_width_settings_v1";
   const DEFAULT_SKU_COLUMN_WIDTHS:any = { brand:160, sku:170, collection:160, tag:150, productName:280, srp:110, imageLink:300, inventory:100, status:140 };
   const loadSkuColumnWidthSettings = () => {
@@ -42156,6 +42157,33 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
   };
 
   const STATUS_OPTS=[{value:"active",label:"Active",color:"#22C55E"},{value:"nostocks",label:"No Stocks",color:"#EF4444"},{value:"custom",label:"Custom",color:"#6B7280"}];
+  const exportSheet = async () => {
+    if(!filteredSkus.length || exporting) return;
+    setExporting(true);
+    try {
+      const cols = skuTableColumns;
+      const headers = cols.map((c:any)=>c.label);
+      const rows = filteredSkus.map((s:any)=>cols.map((c:any)=>getSkuValueForBulkColumn(s,c)));
+      const scope = activeBrandObj ? activeBrandObj.name : "All Brands";
+      const res = await fetch("/api/sku-items/export-excel",{
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ title:"SKU Storage", subtitle:`${scope} \u2014 ${rows.length} SKU${rows.length!==1?"s":""} \u2014 ${new Date().toLocaleDateString()}`, headers, rows }),
+      });
+      if(!res.ok){ const t=await res.text(); throw new Error(t||"Export failed"); }
+      const blob = await res.blob();
+      const scopeSafe = String(scope).replace(/[^a-z0-9]+/gi,"_").replace(/^_+|_+$/g,"") || "All_Brands";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `EMDC_SKU_Storage_${scopeSafe}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    } catch(e:any) {
+      alert(e?.message || "Unable to export sheet.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const getSD = s=>{ if(s.status==="active") return{label:"Active",color:"#22C55E"}; if(s.status==="nostocks") return{label:"No Stocks",color:"#EF4444"}; return{label:s.customStatus||"Custom",color:"#6B7280"}; };
   const bulkColumnWidth = (key:string) => {
     if(isMobile){
@@ -42350,6 +42378,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
           </button>
           <Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done":"Edit"}</Btn>
           <Btn sm onClick={openBulk} variant="outline">Paste</Btn>
+          <Btn sm onClick={exportSheet} variant="outline" disabled={exporting||!filteredSkus.length}>{exporting?"\u2026":"Export"}</Btn>
           <Btn sm onClick={openAdd}>+ Add SKU</Btn>
         </div>
       )}
@@ -42370,7 +42399,7 @@ const SKUStorage = ({ brands, setBrands, skuStorage, setSkuStorage, onStateChang
                 {activeBrandObj&&<div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}><div style={{ width:12,height:12,borderRadius:"50%",background:activeBrandObj.color }} /><span style={{ fontSize:15,fontWeight:700,color:C.text }}>{activeBrandObj.name}</span></div>}
                 <span style={{ fontSize:12,color:C.muted }}>{filteredSkus.length} SKU{filteredSkus.length!==1?"s":""}</span>
               </div>
-              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm variant="outline" onClick={openEditSheet} disabled={!skuStorage.length}>Edit Sheet</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
+              {!isMobile&&(<div style={{ display:"flex",gap:8 }}><Btn sm variant={skuTableEditMode?"primary":"outline"} onClick={toggleSkuTableEditMode}>{skuTableEditMode?"Done Editing":"Edit Table"}</Btn><Btn sm variant="outline" onClick={openBulk}>Paste Sheet</Btn><Btn sm variant="outline" onClick={openEditSheet} disabled={!skuStorage.length}>Edit Sheet</Btn><Btn sm variant="outline" onClick={exportSheet} disabled={exporting||!filteredSkus.length}>{exporting?"Exporting\u2026":"Export Sheet"}</Btn><Btn sm onClick={openAdd}>+ Add SKU</Btn></div>)}
             </div>
 
             <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:12,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px" }}>
